@@ -122,6 +122,8 @@ type Clients struct {
 	BotTokens pb.BotTokenControlServiceClient
 	// Per-user task lifecycle (API-first phase 2).
 	Tasks pb.TaskControlServiceClient
+	// AI private-message auto-reply (schema v28).
+	AutoReply pb.AutoReplyControlServiceClient
 }
 
 // NewClients bundles the core service stubs.
@@ -139,6 +141,7 @@ func NewClients(conn *grpc.ClientConn) *Clients {
 		Audit:     pb.NewAuditControlServiceClient(conn),
 		BotTokens: pb.NewBotTokenControlServiceClient(conn),
 		Tasks:     pb.NewTaskControlServiceClient(conn),
+		AutoReply: pb.NewAutoReplyControlServiceClient(conn),
 	}
 }
 

@@ -22,6 +22,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
+import 'auto_reply_models.dart';
 import 'env.dart';
 import 'models.dart';
 import 'storage.dart';
@@ -1400,6 +1401,312 @@ class ApiClient {
     method: 'POST',
     path: '/api/telegram-login/$challengeId/cancel',
     fromJson: (json) => json,
+    retryable: false,
+  );
+
+  // ------------------------------------------------------------------ //
+  // AI private-message auto-reply (`/api/auto-reply/*`, authenticated)
+  //
+  // The server scopes every read and write to the caller's own tenant from
+  // the bearer token; no owner id is ever sent from here.
+  // ------------------------------------------------------------------ //
+
+  /// The account-wide auto-reply configuration (`GET /api/auto-reply/settings`).
+  Future<AutoReplySettings> autoReplySettings() => _request(
+    method: 'GET',
+    path: '/api/auto-reply/settings',
+    fromJson: (json) => AutoReplySettings.fromJson(
+      (json['settings'] as Map?)?.cast<String, dynamic>() ?? json,
+    ),
+    retryable: true,
+  );
+
+  /// Applies [settings] (`PUT /api/auto-reply/settings`).
+  ///
+  /// [fields] is the `update_mask`: naming only what changed keeps a single
+  /// switch flip from overwriting a concurrent edit to another field. Empty
+  /// means "write the object as sent".
+  Future<AutoReplySettings> saveAutoReplySettings(
+    AutoReplySettings settings, {
+    List<String> fields = const [],
+  }) => _request(
+    method: 'PUT',
+    path: '/api/auto-reply/settings',
+    body: settings.updateBody(fields),
+    fromJson: (json) => AutoReplySettings.fromJson(
+      (json['settings'] as Map?)?.cast<String, dynamic>() ?? json,
+    ),
+    retryable: false,
+  );
+
+  Future<List<AutoReplyPrompt>> listAutoReplyPrompts({
+    String search = '',
+    bool includeArchived = false,
+  }) => _requestList(
+    method: 'GET',
+    path: '/api/auto-reply/prompts',
+    query: {
+      if (search.trim().isNotEmpty) 'search': search.trim(),
+      if (includeArchived) 'include_archived': '1',
+    },
+    fromJson: AutoReplyPrompt.fromJson,
+    listKey: 'prompts',
+  );
+
+  Future<AutoReplyPrompt> createAutoReplyPrompt(AutoReplyPrompt prompt) =>
+      _request(
+        method: 'POST',
+        path: '/api/auto-reply/prompts',
+        body: prompt.toCreateJson(),
+        fromJson: (json) => AutoReplyPrompt.fromJson(
+          (json['prompt'] as Map?)?.cast<String, dynamic>() ?? json,
+        ),
+        retryable: false,
+      );
+
+  Future<AutoReplyPrompt> updateAutoReplyPrompt(
+    String id,
+    AutoReplyPrompt prompt,
+  ) => _request(
+    method: 'PUT',
+    path: '/api/auto-reply/prompts/${Uri.encodeComponent(id)}',
+    body: prompt.toUpdateJson(),
+    fromJson: (json) => AutoReplyPrompt.fromJson(
+      (json['prompt'] as Map?)?.cast<String, dynamic>() ?? json,
+    ),
+    retryable: false,
+  );
+
+  Future<void> deleteAutoReplyPrompt(String id) => _request(
+    method: 'DELETE',
+    path: '/api/auto-reply/prompts/${Uri.encodeComponent(id)}',
+    fromJson: (json) => json,
+    retryable: false,
+  );
+
+  /// Copies a prompt server-side (`POST /api/auto-reply/prompts/{id}/duplicate`).
+  ///
+  /// The name is optional: the server derives "… (copy)" when it is omitted, so
+  /// the client never invents a name in the wrong language.
+  Future<AutoReplyPrompt> duplicateAutoReplyPrompt(
+    String id, {
+    String name = '',
+  }) => _request(
+    method: 'POST',
+    path: '/api/auto-reply/prompts/${Uri.encodeComponent(id)}/duplicate',
+    body: {if (name.trim().isNotEmpty) 'name': name.trim()},
+    fromJson: (json) => AutoReplyPrompt.fromJson(
+      (json['prompt'] as Map?)?.cast<String, dynamic>() ?? json,
+    ),
+    retryable: false,
+  );
+
+  /// Imports prompts from an export document
+  /// (`POST /api/auto-reply/prompts/import`).
+  Future<AutoReplyImportResult> importAutoReplyPrompts(
+    List<AutoReplyPrompt> prompts, {
+    int schemaVersion = 1,
+  }) => _request(
+    method: 'POST',
+    path: '/api/auto-reply/prompts/import',
+    body: {
+      'schema_version': schemaVersion,
+      'prompts': [for (final p in prompts) p.toCreateJson()],
+    },
+    fromJson: AutoReplyImportResult.fromJson,
+    retryable: false,
+  );
+
+  /// Downloads a portable export (`GET /api/auto-reply/prompts/export`).
+  ///
+  /// Returns the document itself: the app has no file-system dependency, so the
+  /// caller copies or shares the JSON text.
+  Future<Map<String, dynamic>> exportAutoReplyPrompts({
+    List<String> ids = const [],
+  }) async {
+    final json = await _request(
+      method: 'GET',
+      path: '/api/auto-reply/prompts/export',
+      query: {if (ids.isNotEmpty) 'ids': ids.join(',')},
+      fromJson: (json) => json,
+      retryable: true,
+    );
+    final document = json['document'];
+    return document is Map ? document.cast<String, dynamic>() : json;
+  }
+
+  Future<AutoReplyTargetPage> listAutoReplyTargets({
+    String search = '',
+    String mode = '',
+    int limit = 200,
+    int offset = 0,
+  }) => _request(
+    method: 'GET',
+    path: '/api/auto-reply/targets',
+    query: {
+      if (search.trim().isNotEmpty) 'search': search.trim(),
+      if (mode.isNotEmpty) 'mode': mode,
+      'limit': '$limit',
+      'offset': '$offset',
+    },
+    fromJson: AutoReplyTargetPage.fromJson,
+    retryable: true,
+  );
+
+  /// Adds chats to the target list (`POST /api/auto-reply/targets`).
+  Future<AutoReplyTargetPage> addAutoReplyTargets(
+    List<AutoReplyTarget> targets,
+  ) => _request(
+    method: 'POST',
+    path: '/api/auto-reply/targets',
+    body: {
+      'targets': [for (final t in targets) t.toAddJson()],
+    },
+    fromJson: AutoReplyTargetPage.fromJson,
+    retryable: false,
+  );
+
+  /// Updates one target (`PUT /api/auto-reply/targets/{chatId}`).
+  Future<AutoReplyTarget> updateAutoReplyTarget(
+    String chatId,
+    AutoReplyTarget target,
+  ) => _request(
+    method: 'PUT',
+    path: '/api/auto-reply/targets/${Uri.encodeComponent(chatId)}',
+    body: target.toUpdateJson(),
+    fromJson: (json) => AutoReplyTarget.fromJson(
+      (json['target'] as Map?)?.cast<String, dynamic>() ?? json,
+    ),
+    retryable: false,
+  );
+
+  /// Removes targets in one call (`DELETE /api/auto-reply/targets`) and reports
+  /// how many the server actually removed.
+  Future<int> deleteAutoReplyTargets(List<String> chatIds) async {
+    final json = await _request(
+      method: 'DELETE',
+      path: '/api/auto-reply/targets',
+      body: {'chat_ids': chatIds},
+      fromJson: (json) => json,
+      retryable: false,
+    );
+    return jsonInt(json['removed']);
+  }
+
+  /// Resolves an @username, t.me link or numeric id against the account behind
+  /// [sessionId] (`POST /api/auto-reply/targets/resolve`).
+  Future<AutoReplyResolveResult> resolveAutoReplyTarget({
+    required String sessionId,
+    required String query,
+  }) => _request(
+    method: 'POST',
+    path: '/api/auto-reply/targets/resolve',
+    body: {'session_id': sessionId, 'query': query.trim()},
+    fromJson: AutoReplyResolveResult.fromJson,
+    retryable: false,
+  );
+
+  Future<List<AutoReplyRule>> listAutoReplyRules() => _requestList(
+    method: 'GET',
+    path: '/api/auto-reply/rules',
+    fromJson: AutoReplyRule.fromJson,
+    listKey: 'rules',
+  );
+
+  Future<AutoReplyRule> createAutoReplyRule(AutoReplyRule rule) => _request(
+    method: 'POST',
+    path: '/api/auto-reply/rules',
+    body: rule.toJson(),
+    fromJson: (json) => AutoReplyRule.fromJson(
+      (json['rule'] as Map?)?.cast<String, dynamic>() ?? json,
+    ),
+    retryable: false,
+  );
+
+  Future<AutoReplyRule> updateAutoReplyRule(String id, AutoReplyRule rule) =>
+      _request(
+        method: 'PUT',
+        path: '/api/auto-reply/rules/${Uri.encodeComponent(id)}',
+        body: rule.toJson(),
+        fromJson: (json) => AutoReplyRule.fromJson(
+          (json['rule'] as Map?)?.cast<String, dynamic>() ?? json,
+        ),
+        retryable: false,
+      );
+
+  Future<void> deleteAutoReplyRule(String id) => _request(
+    method: 'DELETE',
+    path: '/api/auto-reply/rules/${Uri.encodeComponent(id)}',
+    fromJson: (json) => json,
+    retryable: false,
+  );
+
+  /// Persists a new rule order (`POST /api/auto-reply/rules/reorder`). The list
+  /// is sent whole: the server stores priorities, not an index.
+  Future<void> reorderAutoReplyRules(List<String> ruleIds) => _request(
+    method: 'POST',
+    path: '/api/auto-reply/rules/reorder',
+    body: {'rule_ids': ruleIds},
+    fromJson: (json) => json,
+    retryable: false,
+  );
+
+  Future<AutoReplyJobPage> listAutoReplyJobs({
+    String status = '',
+    String chatId = '',
+    int limit = 50,
+    int offset = 0,
+  }) => _request(
+    method: 'GET',
+    path: '/api/auto-reply/jobs',
+    query: {
+      if (status.isNotEmpty) 'status': status,
+      if (chatId.isNotEmpty) 'chat_id': chatId,
+      'limit': '$limit',
+      'offset': '$offset',
+    },
+    fromJson: AutoReplyJobPage.fromJson,
+    retryable: true,
+  );
+
+  Future<Map<String, dynamic>> retryAutoReplyJob(String id) => _request(
+    method: 'POST',
+    path: '/api/auto-reply/jobs/${Uri.encodeComponent(id)}/retry',
+    fromJson: (json) => json,
+    retryable: false,
+  );
+
+  Future<Map<String, dynamic>> cancelAutoReplyJob(String id) => _request(
+    method: 'POST',
+    path: '/api/auto-reply/jobs/${Uri.encodeComponent(id)}/cancel',
+    fromJson: (json) => json,
+    retryable: false,
+  );
+
+  Future<AutoReplyStats> autoReplyStats() => _request(
+    method: 'GET',
+    path: '/api/auto-reply/stats',
+    fromJson: (json) => AutoReplyStats.fromJson(
+      (json['stats'] as Map?)?.cast<String, dynamic>() ?? json,
+    ),
+    retryable: true,
+  );
+
+  /// Dry-runs the reply pipeline for [inboundText]
+  /// (`POST /api/auto-reply/preview`). Nothing is delivered.
+  Future<AutoReplyPreview> previewAutoReply({
+    required String inboundText,
+    String promptId = '',
+    String aiConfigId = '',
+  }) => _request(
+    method: 'POST',
+    path: '/api/auto-reply/preview',
+    body: {
+      'inbound_text': inboundText,
+      if (promptId.isNotEmpty) 'prompt_id': promptId,
+      if (aiConfigId.isNotEmpty) 'ai_config_id': aiConfigId,
+    },
+    fromJson: AutoReplyPreview.fromJson,
     retryable: false,
   );
 

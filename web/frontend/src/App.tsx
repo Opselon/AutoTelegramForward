@@ -17,6 +17,7 @@ import {
   ShieldAlert,
   Sliders,
   HeartPulse,
+  Bot,
 } from 'lucide-react'
 import { api } from './api'
 import { isAccepted, purgedCount, refusalReason } from './actionResult'
@@ -37,6 +38,7 @@ const RulesPanel = lazy(() => import('./panels/RulesPanel'))
 const SimulatorPanel = lazy(() => import('./panels/SimulatorPanel'))
 const AiPanel = lazy(() => import('./panels/AiPanel'))
 const PvPanel = lazy(() => import('./panels/PvPanel'))
+const AutoReplyPanel = lazy(() => import('./panels/AutoReplyPanel'))
 const FiltersPanel = lazy(() => import('./panels/FiltersPanel'))
 const SessionsPanel = lazy(() => import('./panels/SessionsPanel'))
 const QueuePanel = lazy(() => import('./panels/QueuePanel'))
@@ -94,7 +96,7 @@ function useDashboard(me?: MeInfo) {
   useEffect(() => {
     rememberLang(lang)
   }, [lang])
-  const [activeTab, setActiveTab] = useState<'system' | 'rules' | 'simulator' | 'ai' | 'pv' | 'filters' | 'sessions' | 'jobs' | 'queue' | 'devops' | 'audit' | 'admin' | 'settings'>('system')
+  const [activeTab, setActiveTab] = useState<'system' | 'rules' | 'simulator' | 'ai' | 'pv' | 'autoreply' | 'filters' | 'sessions' | 'jobs' | 'queue' | 'devops' | 'audit' | 'admin' | 'settings'>('system')
   // Identity starts from the session-core's verified answer when mounted with one.
   const [currentUser, setCurrentUser] = useState<{ user_id: number; username: string; is_admin: boolean } | null>(
     me ? { user_id: me.user_id, username: me.username, is_admin: me.is_admin } : null,
@@ -1150,6 +1152,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
       { id: 'simulator', label: t('ui_smart_simulator'), icon: <PlayCircle size={18} /> },
       { id: 'ai', label: t('ui_ai_intelligence'), icon: <Sparkles size={18} /> },
       { id: 'pv', label: t('ui_pv_assistant'), icon: <HeartPulse size={18} /> },
+      { id: 'autoreply', label: t('ui_autoreply'), icon: <Bot size={18} /> },
       { id: 'filters', label: t('ui_advanced_filters'), icon: <Filter size={18} /> },
       { id: 'sessions', label: t('ui_telegram_sessions'), icon: <Users size={18} /> },
       { id: 'jobs', label: t('ui_my_jobs'), icon: <ListTodo size={18} />, badge: jobsPending },
@@ -1465,6 +1468,15 @@ export function App({ me }: { me?: MeInfo } = {}) {
         activeTab === 'pv' && (
           <PanelBoundary lang={lang}>
             <PvPanel d={d} />
+          </PanelBoundary>
+        )
+      }
+
+      {/* TAB: AI AUTO-REPLY (v28 subsystem, per-tenant) */}
+      {
+        activeTab === 'autoreply' && (
+          <PanelBoundary lang={lang}>
+            <AutoReplyPanel d={d} />
           </PanelBoundary>
         )
       }

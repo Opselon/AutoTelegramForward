@@ -262,6 +262,53 @@ def build_container(cfg: Config) -> dict:
     except Exception as exc:
         logger.warning("Could not restore account limits: %s", exc)
     sync_engine = SyncEngine(msg_map_repo, rule_repo, pool, filter_repo=filter_repo)
+
+    # ---- AI private-message auto-reply (v27) --------------------------------
+    # Queue + engine + service, all tenant-scoped in SQLite. Construction is
+    # synchronous like the rest of this graph; the worker is started by the
+    # async entry point once the log client exists.
+    from core.application.autoreply.engine import AutoReplyEngine  # noqa: E402
+    from core.application.autoreply.service import AutoReplyService  # noqa: E402
+    from core.application.autoreply.worker import AutoReplyWorker  # noqa: E402
+    from core.infrastructure.persistence.autoreply_repositories import AutoReplyRepository  # noqa: E402
+
+    autoreply_repo = AutoReplyRepository(db)
+    autoreply_worker = AutoReplyWorker(
+        repo=autoreply_repo, ai_repo=ai_repo, provider_factory=factory,
+    )
+    autoreply_engine = AutoReplyEngine(autoreply_repo)
+    # The dispatcher registers a live send transport per session on the worker;
+    # keeping the reference here avoids a second queue instance that would
+    # never be drained.
+    autoreply_engine.attach_worker(autoreply_worker)
+
+    def _owner_for_session(session_id: str) -> int:
+        try:
+            row = db.query_one(
+                "SELECT owner_user_id FROM sessions WHERE id=?", (str(session_id),)
+            )
+            return int(row["owner_user_id"] or 0) if row else 0
+        except Exception:
+            return 0
+
+    async def _resolve_private_chat(session_id: str, query: str):
+        """Resolve a chat through the tenant's own live session."""
+        from core.infrastructure.telegram.autoreply_bridge import resolve_private_chat  # noqa: E402
+
+        client = pool.get(str(session_id)) if session_id else None
+        if client is None:
+            for candidate in pool.list_sessions():
+                client = pool.get(candidate)
+                if client is not None:
+                    break
+        if client is None:
+            return None
+        return await resolve_private_chat(client, query)
+
+    autoreply_service = AutoReplyService(
+        autoreply_repo, ai_repo=ai_repo, resolver=_resolve_private_chat,
+        engine=autoreply_engine, session_owner=_owner_for_session,
+    )
     # LogClient is created later (line ~291); queue_manager receives it via a
     # late attribute set right after the client exists (see below).
     from core.infrastructure.telegram.bot_transport import BotTransportCache  # noqa: E402
@@ -324,6 +371,9 @@ def build_container(cfg: Config) -> dict:
         sync_engine=sync_engine,
         durable_pipeline=durable_pipeline,
         pv_responder=pv_responder,
+        autoreply_engine=autoreply_engine,
+        autoreply_worker=autoreply_worker,
+        owner_lookup=_owner_for_session,
     )
     # The branding hop (A -> C -> B) needs a live client and the transform-aware
     # posting routine, both of which live on the dispatcher; the pipeline decides
@@ -387,6 +437,10 @@ def build_container(cfg: Config) -> dict:
         "ai_transformer": ai_transformer,
         "ai_circuit_registry": ai_circuit_registry,
         "pv_responder": pv_responder,
+        "autoreply_repo": autoreply_repo,
+        "autoreply_engine": autoreply_engine,
+        "autoreply_worker": autoreply_worker,
+        "autoreply_service": autoreply_service,
         "settings": settings_repo,
         # The raw pool (or its deferred coroutine) — awaited by _resolve_pg_pool.
         "pg_pool_holder": pg_pool,
@@ -469,6 +523,17 @@ async def serve_grpc(container: dict, cfg: Config):
             container["ai"],
             prompt_service=container["prompt_service"],
             ai_transformer=container["ai_transformer"],
+        ),
+        server,
+    )
+    # AI private-message auto-reply (v28). Constructed from the same
+    # AutoReplyService the bot UI uses, so a change made on either surface is
+    # the behaviour the worker applies to the next inbound message.
+    from core.infrastructure.grpc_server.autoreply_servicer import AutoReplyControlServicer  # noqa: E402
+
+    pb_grpc.add_AutoReplyControlServiceServicer_to_server(
+        AutoReplyControlServicer(
+            container["autoreply_service"], engine=container.get("autoreply_engine"),
         ),
         server,
     )
@@ -711,6 +776,11 @@ async def main() -> None:
     # Same for the forwarding pipeline's audit emitter (Phase Six telemetry).
     if getattr(container["pipeline"], "_log_client", None) is None:
         container["pipeline"]._log_client = log_client
+    # Auto-reply telemetry: the same client, so an inbound message's
+    # correlation id ties the decision, the generation and the delivery
+    # together in the Log Explorer.
+    container["autoreply_engine"].attach_log(log_client)
+    container["autoreply_worker"].attach_log(log_client)
 
     # TASK 03 / audit D1: persisted auth state machine, so a login in
     # progress survives a restart instead of vanishing without explanation.
@@ -868,8 +938,28 @@ async def main() -> None:
         logger.warning("ProBotUI mount failed: %s", exc)
 
     try:
+        # Drain the auto-reply queue: a pending reply is a promise the user
+        # made to their contact, so it ships rather than being dropped on
+        # restart. The worker's own maintenance loop also recovers any lease
+        # a previous process left dangling.
+        await container["autoreply_worker"].start()
+        from core.infrastructure.telegram.autoreply_bridge import register_pool_senders
+
+        wired = register_pool_senders(container["pool"], container["autoreply_worker"])
+        log_client.info("core", "autoreply", "auto-reply queue worker started",
+                        {"sessions_wired": wired})
+    except Exception as exc:
+        logger.warning("Auto-reply worker failed to start: %s", exc)
+
+    try:
         await asyncio.Event().wait()
     finally:
+        ar_worker = container.get("autoreply_worker")
+        if ar_worker is not None:
+            try:
+                await ar_worker.stop()
+            except Exception:
+                pass
         queue_mgr = container.get("queue_manager")
         if queue_mgr:
             await queue_mgr.stop()

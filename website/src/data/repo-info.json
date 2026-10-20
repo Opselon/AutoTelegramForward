@@ -7,9 +7,9 @@
   "version": "2.2.4",
   "releaseTag": "v2.2.4",
   "releaseDate": "2026-10-16",
-  "gitCommit": "13b37ed",
-  "gitDate": "2026-10-19T12:47:26Z",
-  "syncTimestamp": "2026-10-19T12:48:40.178Z",
+  "gitCommit": "8365c2a",
+  "gitDate": "2026-10-20T19:19:37Z",
+  "syncTimestamp": "2026-10-20T19:36:25.399Z",
   "author": "Opselon",
   "maintainer": {
     "name": "𝐂ap$iz𝗲Ʀ",
@@ -28,20 +28,20 @@
     "uz",
     "zh"
   ],
-  "i18nKeyCount": 1552,
+  "i18nKeyCount": 1634,
   "stats": {
-    "pythonTests": 148,
-    "goTests": 43,
-    "grpcRpcCount": 78,
+    "pythonTests": 161,
+    "goTests": 47,
+    "grpcRpcCount": 100,
     "cliGroups": 29,
-    "featureCatalogEntries": 18,
+    "featureCatalogEntries": 19,
     "services": 4,
     "locales": 10,
-    "i18nKeys": 1552,
-    "implementedFeatures": 14,
+    "i18nKeys": 1634,
+    "implementedFeatures": 15,
     "partialFeatures": 2,
     "plannedFeatures": 2,
-    "apiRoutes": 102
+    "apiRoutes": 126
   },
   "featureCatalog": [
     "Create forwarding rule",
@@ -61,7 +61,8 @@
     "Telegram timeout classified as OUTCOME_UNCONFIRMED (never silent success/failure)",
     "Service topology live health probing",
     "Slow-query threshold monitoring with configurable limits",
-    "Bounded-label metrics aggregation (per-feature latency, error rates)"
+    "Bounded-label metrics aggregation (per-feature latency, error rates)",
+    "Forward every Nth message"
   ],
   "featureCatalogDetail": [
     {
@@ -325,10 +326,35 @@
       "entryPoints": [
         "(new) core/infrastructure/persistence/db_observability.py#metrics"
       ]
+    },
+    {
+      "id": "FWD_FORWARD_EVERY_N",
+      "name": "Forward every Nth message",
+      "status": "IMPLEMENTED",
+      "bucket": "implemented",
+      "clients": [
+        "web",
+        "bot",
+        "mobile"
+      ],
+      "dbTables": [
+        "forward_rules",
+        "rule_counters"
+      ],
+      "completionCondition": "the accepted-message sequence for the rule crosses a multiple of N, exactly one worker owns the slot, and only the owning message is delivered",
+      "entryPoints": [
+        "core/infrastructure/telegram/pro_bot_ui.py#_render_every_n_menu",
+        "core/infrastructure/telegram/pro_bot_ui.py#_cb_rule_every_n_set",
+        "core/infrastructure/telegram/pro_bot_ui.py#_step_set_every_n",
+        "web/frontend/src/components/TaskOverviewModal.tsx#every_n",
+        "mobile/lib/features/rules/rule_editor_screen.dart",
+        "api/internal/handlers/handlers.go#enrichCustomMetadata",
+        "core/application/pipeline.py#FORWARD_INTERVAL"
+      ]
     }
   ],
   "featureCatalogStatus": {
-    "implemented": 14,
+    "implemented": 15,
     "partial": 2,
     "planned": 2
   },
@@ -680,6 +706,14 @@
         },
         {
           "verb": "logout",
+          "aliases": []
+        },
+        {
+          "verb": "servers",
+          "aliases": []
+        },
+        {
+          "verb": "use",
           "aliases": []
         }
       ]
@@ -1846,6 +1880,174 @@
       "method": "GET",
       "path": "/api/audit/events",
       "handler": "h.QueryAuditEvents",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/auto-reply/jobs",
+      "handler": "h.ListAutoReplyJobs",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/auto-reply/jobs/{id}/cancel",
+      "handler": "h.CancelAutoReplyJob",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/auto-reply/jobs/{id}/retry",
+      "handler": "h.RetryAutoReplyJob",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/auto-reply/preview",
+      "handler": "h.PreviewAutoReply",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/auto-reply/prompts",
+      "handler": "h.ListAutoReplyPrompts",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/auto-reply/prompts",
+      "handler": "h.CreateAutoReplyPrompt",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "PUT",
+      "path": "/api/auto-reply/prompts/{id}",
+      "handler": "h.UpdateAutoReplyPrompt",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "DELETE",
+      "path": "/api/auto-reply/prompts/{id}",
+      "handler": "h.DeleteAutoReplyPrompt",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/auto-reply/prompts/{id}/duplicate",
+      "handler": "h.DuplicateAutoReplyPrompt",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/auto-reply/prompts/export",
+      "handler": "h.ExportAutoReplyPrompts",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/auto-reply/prompts/import",
+      "handler": "h.ImportAutoReplyPrompts",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/auto-reply/rules",
+      "handler": "h.ListAutoReplyRules",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/auto-reply/rules",
+      "handler": "h.CreateAutoReplyRule",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "PUT",
+      "path": "/api/auto-reply/rules/{id}",
+      "handler": "h.UpdateAutoReplyRule",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "DELETE",
+      "path": "/api/auto-reply/rules/{id}",
+      "handler": "h.DeleteAutoReplyRule",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/auto-reply/rules/reorder",
+      "handler": "h.ReorderAutoReplyRules",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/auto-reply/settings",
+      "handler": "h.GetAutoReplySettings",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "PUT",
+      "path": "/api/auto-reply/settings",
+      "handler": "h.UpdateAutoReplySettings",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/auto-reply/stats",
+      "handler": "h.GetAutoReplyStats",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/auto-reply/targets",
+      "handler": "h.ListAutoReplyTargets",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/auto-reply/targets",
+      "handler": "h.AddAutoReplyTargets",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "DELETE",
+      "path": "/api/auto-reply/targets",
+      "handler": "h.RemoveAutoReplyTargets",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "PUT",
+      "path": "/api/auto-reply/targets/{chatId}",
+      "handler": "h.UpdateAutoReplyTarget",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/auto-reply/targets/resolve",
+      "handler": "h.ResolveAutoReplyChat",
       "auth": "bearer"
     },
     {

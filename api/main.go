@@ -161,6 +161,39 @@ func main() {
 	dashMux.HandleFunc("POST /tasks/{id}/cancel", h.CancelTask)
 	dashMux.HandleFunc("POST /tasks/{id}/retry", h.RetryTask)
 
+	// AI private-message auto-reply (schema v28). Tenant-scoped via identity():
+	// owner_user_id comes from the verified token, never from the body, and a
+	// by-id route forwards the caller's id so the core can refuse a foreign row
+	// as not-found. Mounted on the authenticated dashboard mux for the same
+	// reason as /prompts: /api/v1/* bypasses RequireAuth, so identity() would be
+	// empty there and every ownership guard would answer 404.
+	dashMux.HandleFunc("GET /auto-reply/settings", h.GetAutoReplySettings)
+	dashMux.HandleFunc("PUT /auto-reply/settings", h.UpdateAutoReplySettings)
+	dashMux.HandleFunc("GET /auto-reply/prompts", h.ListAutoReplyPrompts)
+	dashMux.HandleFunc("POST /auto-reply/prompts", h.CreateAutoReplyPrompt)
+	// Literal segments outrank the {id} wildcard in Go's mux, so /export and
+	// /import are reachable even though /prompts/{id} exists.
+	dashMux.HandleFunc("GET /auto-reply/prompts/export", h.ExportAutoReplyPrompts)
+	dashMux.HandleFunc("POST /auto-reply/prompts/import", h.ImportAutoReplyPrompts)
+	dashMux.HandleFunc("PUT /auto-reply/prompts/{id}", h.UpdateAutoReplyPrompt)
+	dashMux.HandleFunc("DELETE /auto-reply/prompts/{id}", h.DeleteAutoReplyPrompt)
+	dashMux.HandleFunc("POST /auto-reply/prompts/{id}/duplicate", h.DuplicateAutoReplyPrompt)
+	dashMux.HandleFunc("GET /auto-reply/targets", h.ListAutoReplyTargets)
+	dashMux.HandleFunc("POST /auto-reply/targets", h.AddAutoReplyTargets)
+	dashMux.HandleFunc("DELETE /auto-reply/targets", h.RemoveAutoReplyTargets)
+	dashMux.HandleFunc("POST /auto-reply/targets/resolve", h.ResolveAutoReplyChat)
+	dashMux.HandleFunc("PUT /auto-reply/targets/{chatId}", h.UpdateAutoReplyTarget)
+	dashMux.HandleFunc("GET /auto-reply/rules", h.ListAutoReplyRules)
+	dashMux.HandleFunc("POST /auto-reply/rules", h.CreateAutoReplyRule)
+	dashMux.HandleFunc("POST /auto-reply/rules/reorder", h.ReorderAutoReplyRules)
+	dashMux.HandleFunc("PUT /auto-reply/rules/{id}", h.UpdateAutoReplyRule)
+	dashMux.HandleFunc("DELETE /auto-reply/rules/{id}", h.DeleteAutoReplyRule)
+	dashMux.HandleFunc("GET /auto-reply/jobs", h.ListAutoReplyJobs)
+	dashMux.HandleFunc("POST /auto-reply/jobs/{id}/retry", h.RetryAutoReplyJob)
+	dashMux.HandleFunc("POST /auto-reply/jobs/{id}/cancel", h.CancelAutoReplyJob)
+	dashMux.HandleFunc("GET /auto-reply/stats", h.GetAutoReplyStats)
+	dashMux.HandleFunc("POST /auto-reply/preview", h.PreviewAutoReply)
+
 	dashMux.HandleFunc("GET /queue", h.DeliveryStats)
 	dashMux.HandleFunc("GET /dlq", h.ListDeadLetter)
 	dashMux.HandleFunc("POST /dlq/{id}/retry", h.ReplayDeadLetter)

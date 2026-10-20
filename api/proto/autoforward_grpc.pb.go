@@ -3847,3 +3847,904 @@ var TaskControlService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "autoforward.proto",
 }
+
+const (
+	AutoReplyControlService_GetAutoReplySettings_FullMethodName     = "/autoforward.AutoReplyControlService/GetAutoReplySettings"
+	AutoReplyControlService_UpdateAutoReplySettings_FullMethodName  = "/autoforward.AutoReplyControlService/UpdateAutoReplySettings"
+	AutoReplyControlService_ListAutoReplyPrompts_FullMethodName     = "/autoforward.AutoReplyControlService/ListAutoReplyPrompts"
+	AutoReplyControlService_SaveAutoReplyPrompt_FullMethodName      = "/autoforward.AutoReplyControlService/SaveAutoReplyPrompt"
+	AutoReplyControlService_DeleteAutoReplyPrompt_FullMethodName    = "/autoforward.AutoReplyControlService/DeleteAutoReplyPrompt"
+	AutoReplyControlService_DuplicateAutoReplyPrompt_FullMethodName = "/autoforward.AutoReplyControlService/DuplicateAutoReplyPrompt"
+	AutoReplyControlService_ExportAutoReplyPrompts_FullMethodName   = "/autoforward.AutoReplyControlService/ExportAutoReplyPrompts"
+	AutoReplyControlService_ImportAutoReplyPrompts_FullMethodName   = "/autoforward.AutoReplyControlService/ImportAutoReplyPrompts"
+	AutoReplyControlService_ListAutoReplyTargets_FullMethodName     = "/autoforward.AutoReplyControlService/ListAutoReplyTargets"
+	AutoReplyControlService_AddAutoReplyTargets_FullMethodName      = "/autoforward.AutoReplyControlService/AddAutoReplyTargets"
+	AutoReplyControlService_UpdateAutoReplyTarget_FullMethodName    = "/autoforward.AutoReplyControlService/UpdateAutoReplyTarget"
+	AutoReplyControlService_RemoveAutoReplyTargets_FullMethodName   = "/autoforward.AutoReplyControlService/RemoveAutoReplyTargets"
+	AutoReplyControlService_ResolveAutoReplyChat_FullMethodName     = "/autoforward.AutoReplyControlService/ResolveAutoReplyChat"
+	AutoReplyControlService_ListAutoReplyRules_FullMethodName       = "/autoforward.AutoReplyControlService/ListAutoReplyRules"
+	AutoReplyControlService_SaveAutoReplyRule_FullMethodName        = "/autoforward.AutoReplyControlService/SaveAutoReplyRule"
+	AutoReplyControlService_DeleteAutoReplyRule_FullMethodName      = "/autoforward.AutoReplyControlService/DeleteAutoReplyRule"
+	AutoReplyControlService_ReorderAutoReplyRules_FullMethodName    = "/autoforward.AutoReplyControlService/ReorderAutoReplyRules"
+	AutoReplyControlService_ListAutoReplyJobs_FullMethodName        = "/autoforward.AutoReplyControlService/ListAutoReplyJobs"
+	AutoReplyControlService_CancelAutoReplyJob_FullMethodName       = "/autoforward.AutoReplyControlService/CancelAutoReplyJob"
+	AutoReplyControlService_RetryAutoReplyJob_FullMethodName        = "/autoforward.AutoReplyControlService/RetryAutoReplyJob"
+	AutoReplyControlService_GetAutoReplyStats_FullMethodName        = "/autoforward.AutoReplyControlService/GetAutoReplyStats"
+	AutoReplyControlService_PreviewAutoReply_FullMethodName         = "/autoforward.AutoReplyControlService/PreviewAutoReply"
+)
+
+// AutoReplyControlServiceClient is the client API for AutoReplyControlService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type AutoReplyControlServiceClient interface {
+	GetAutoReplySettings(ctx context.Context, in *GetAutoReplySettingsRequest, opts ...grpc.CallOption) (*AutoReplySettings, error)
+	UpdateAutoReplySettings(ctx context.Context, in *UpdateAutoReplySettingsRequest, opts ...grpc.CallOption) (*AutoReplySettings, error)
+	ListAutoReplyPrompts(ctx context.Context, in *ListAutoReplyPromptsRequest, opts ...grpc.CallOption) (*ListAutoReplyPromptsResponse, error)
+	SaveAutoReplyPrompt(ctx context.Context, in *SaveAutoReplyPromptRequest, opts ...grpc.CallOption) (*AutoReplyPrompt, error)
+	DeleteAutoReplyPrompt(ctx context.Context, in *DeleteAutoReplyPromptRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	DuplicateAutoReplyPrompt(ctx context.Context, in *DuplicateAutoReplyPromptRequest, opts ...grpc.CallOption) (*AutoReplyPrompt, error)
+	ExportAutoReplyPrompts(ctx context.Context, in *ExportAutoReplyPromptsRequest, opts ...grpc.CallOption) (*ExportAutoReplyPromptsResponse, error)
+	ImportAutoReplyPrompts(ctx context.Context, in *ImportAutoReplyPromptsRequest, opts ...grpc.CallOption) (*ImportAutoReplyPromptsResponse, error)
+	ListAutoReplyTargets(ctx context.Context, in *ListAutoReplyTargetsRequest, opts ...grpc.CallOption) (*ListAutoReplyTargetsResponse, error)
+	AddAutoReplyTargets(ctx context.Context, in *AddAutoReplyTargetsRequest, opts ...grpc.CallOption) (*ListAutoReplyTargetsResponse, error)
+	UpdateAutoReplyTarget(ctx context.Context, in *UpdateAutoReplyTargetRequest, opts ...grpc.CallOption) (*AutoReplyTarget, error)
+	RemoveAutoReplyTargets(ctx context.Context, in *RemoveAutoReplyTargetsRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	ResolveAutoReplyChat(ctx context.Context, in *ResolveAutoReplyChatRequest, opts ...grpc.CallOption) (*ResolveAutoReplyChatResponse, error)
+	ListAutoReplyRules(ctx context.Context, in *ListAutoReplyRulesRequest, opts ...grpc.CallOption) (*ListAutoReplyRulesResponse, error)
+	SaveAutoReplyRule(ctx context.Context, in *SaveAutoReplyRuleRequest, opts ...grpc.CallOption) (*AutoReplyRule, error)
+	DeleteAutoReplyRule(ctx context.Context, in *DeleteAutoReplyRuleRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	ReorderAutoReplyRules(ctx context.Context, in *ReorderAutoReplyRulesRequest, opts ...grpc.CallOption) (*ListAutoReplyRulesResponse, error)
+	ListAutoReplyJobs(ctx context.Context, in *ListAutoReplyJobsRequest, opts ...grpc.CallOption) (*ListAutoReplyJobsResponse, error)
+	CancelAutoReplyJob(ctx context.Context, in *AutoReplyJobRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	RetryAutoReplyJob(ctx context.Context, in *AutoReplyJobRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	GetAutoReplyStats(ctx context.Context, in *GetAutoReplyStatsRequest, opts ...grpc.CallOption) (*AutoReplyStatsResponse, error)
+	PreviewAutoReply(ctx context.Context, in *PreviewAutoReplyRequest, opts ...grpc.CallOption) (*PreviewAutoReplyResponse, error)
+}
+
+type autoReplyControlServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewAutoReplyControlServiceClient(cc grpc.ClientConnInterface) AutoReplyControlServiceClient {
+	return &autoReplyControlServiceClient{cc}
+}
+
+func (c *autoReplyControlServiceClient) GetAutoReplySettings(ctx context.Context, in *GetAutoReplySettingsRequest, opts ...grpc.CallOption) (*AutoReplySettings, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AutoReplySettings)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_GetAutoReplySettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) UpdateAutoReplySettings(ctx context.Context, in *UpdateAutoReplySettingsRequest, opts ...grpc.CallOption) (*AutoReplySettings, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AutoReplySettings)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_UpdateAutoReplySettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) ListAutoReplyPrompts(ctx context.Context, in *ListAutoReplyPromptsRequest, opts ...grpc.CallOption) (*ListAutoReplyPromptsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAutoReplyPromptsResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_ListAutoReplyPrompts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) SaveAutoReplyPrompt(ctx context.Context, in *SaveAutoReplyPromptRequest, opts ...grpc.CallOption) (*AutoReplyPrompt, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AutoReplyPrompt)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_SaveAutoReplyPrompt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) DeleteAutoReplyPrompt(ctx context.Context, in *DeleteAutoReplyPromptRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StatusResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_DeleteAutoReplyPrompt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) DuplicateAutoReplyPrompt(ctx context.Context, in *DuplicateAutoReplyPromptRequest, opts ...grpc.CallOption) (*AutoReplyPrompt, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AutoReplyPrompt)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_DuplicateAutoReplyPrompt_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) ExportAutoReplyPrompts(ctx context.Context, in *ExportAutoReplyPromptsRequest, opts ...grpc.CallOption) (*ExportAutoReplyPromptsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ExportAutoReplyPromptsResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_ExportAutoReplyPrompts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) ImportAutoReplyPrompts(ctx context.Context, in *ImportAutoReplyPromptsRequest, opts ...grpc.CallOption) (*ImportAutoReplyPromptsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ImportAutoReplyPromptsResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_ImportAutoReplyPrompts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) ListAutoReplyTargets(ctx context.Context, in *ListAutoReplyTargetsRequest, opts ...grpc.CallOption) (*ListAutoReplyTargetsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAutoReplyTargetsResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_ListAutoReplyTargets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) AddAutoReplyTargets(ctx context.Context, in *AddAutoReplyTargetsRequest, opts ...grpc.CallOption) (*ListAutoReplyTargetsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAutoReplyTargetsResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_AddAutoReplyTargets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) UpdateAutoReplyTarget(ctx context.Context, in *UpdateAutoReplyTargetRequest, opts ...grpc.CallOption) (*AutoReplyTarget, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AutoReplyTarget)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_UpdateAutoReplyTarget_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) RemoveAutoReplyTargets(ctx context.Context, in *RemoveAutoReplyTargetsRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StatusResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_RemoveAutoReplyTargets_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) ResolveAutoReplyChat(ctx context.Context, in *ResolveAutoReplyChatRequest, opts ...grpc.CallOption) (*ResolveAutoReplyChatResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveAutoReplyChatResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_ResolveAutoReplyChat_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) ListAutoReplyRules(ctx context.Context, in *ListAutoReplyRulesRequest, opts ...grpc.CallOption) (*ListAutoReplyRulesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAutoReplyRulesResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_ListAutoReplyRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) SaveAutoReplyRule(ctx context.Context, in *SaveAutoReplyRuleRequest, opts ...grpc.CallOption) (*AutoReplyRule, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AutoReplyRule)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_SaveAutoReplyRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) DeleteAutoReplyRule(ctx context.Context, in *DeleteAutoReplyRuleRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StatusResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_DeleteAutoReplyRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) ReorderAutoReplyRules(ctx context.Context, in *ReorderAutoReplyRulesRequest, opts ...grpc.CallOption) (*ListAutoReplyRulesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAutoReplyRulesResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_ReorderAutoReplyRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) ListAutoReplyJobs(ctx context.Context, in *ListAutoReplyJobsRequest, opts ...grpc.CallOption) (*ListAutoReplyJobsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListAutoReplyJobsResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_ListAutoReplyJobs_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) CancelAutoReplyJob(ctx context.Context, in *AutoReplyJobRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StatusResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_CancelAutoReplyJob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) RetryAutoReplyJob(ctx context.Context, in *AutoReplyJobRequest, opts ...grpc.CallOption) (*StatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StatusResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_RetryAutoReplyJob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) GetAutoReplyStats(ctx context.Context, in *GetAutoReplyStatsRequest, opts ...grpc.CallOption) (*AutoReplyStatsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AutoReplyStatsResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_GetAutoReplyStats_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *autoReplyControlServiceClient) PreviewAutoReply(ctx context.Context, in *PreviewAutoReplyRequest, opts ...grpc.CallOption) (*PreviewAutoReplyResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PreviewAutoReplyResponse)
+	err := c.cc.Invoke(ctx, AutoReplyControlService_PreviewAutoReply_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// AutoReplyControlServiceServer is the server API for AutoReplyControlService service.
+// All implementations must embed UnimplementedAutoReplyControlServiceServer
+// for forward compatibility.
+type AutoReplyControlServiceServer interface {
+	GetAutoReplySettings(context.Context, *GetAutoReplySettingsRequest) (*AutoReplySettings, error)
+	UpdateAutoReplySettings(context.Context, *UpdateAutoReplySettingsRequest) (*AutoReplySettings, error)
+	ListAutoReplyPrompts(context.Context, *ListAutoReplyPromptsRequest) (*ListAutoReplyPromptsResponse, error)
+	SaveAutoReplyPrompt(context.Context, *SaveAutoReplyPromptRequest) (*AutoReplyPrompt, error)
+	DeleteAutoReplyPrompt(context.Context, *DeleteAutoReplyPromptRequest) (*StatusResponse, error)
+	DuplicateAutoReplyPrompt(context.Context, *DuplicateAutoReplyPromptRequest) (*AutoReplyPrompt, error)
+	ExportAutoReplyPrompts(context.Context, *ExportAutoReplyPromptsRequest) (*ExportAutoReplyPromptsResponse, error)
+	ImportAutoReplyPrompts(context.Context, *ImportAutoReplyPromptsRequest) (*ImportAutoReplyPromptsResponse, error)
+	ListAutoReplyTargets(context.Context, *ListAutoReplyTargetsRequest) (*ListAutoReplyTargetsResponse, error)
+	AddAutoReplyTargets(context.Context, *AddAutoReplyTargetsRequest) (*ListAutoReplyTargetsResponse, error)
+	UpdateAutoReplyTarget(context.Context, *UpdateAutoReplyTargetRequest) (*AutoReplyTarget, error)
+	RemoveAutoReplyTargets(context.Context, *RemoveAutoReplyTargetsRequest) (*StatusResponse, error)
+	ResolveAutoReplyChat(context.Context, *ResolveAutoReplyChatRequest) (*ResolveAutoReplyChatResponse, error)
+	ListAutoReplyRules(context.Context, *ListAutoReplyRulesRequest) (*ListAutoReplyRulesResponse, error)
+	SaveAutoReplyRule(context.Context, *SaveAutoReplyRuleRequest) (*AutoReplyRule, error)
+	DeleteAutoReplyRule(context.Context, *DeleteAutoReplyRuleRequest) (*StatusResponse, error)
+	ReorderAutoReplyRules(context.Context, *ReorderAutoReplyRulesRequest) (*ListAutoReplyRulesResponse, error)
+	ListAutoReplyJobs(context.Context, *ListAutoReplyJobsRequest) (*ListAutoReplyJobsResponse, error)
+	CancelAutoReplyJob(context.Context, *AutoReplyJobRequest) (*StatusResponse, error)
+	RetryAutoReplyJob(context.Context, *AutoReplyJobRequest) (*StatusResponse, error)
+	GetAutoReplyStats(context.Context, *GetAutoReplyStatsRequest) (*AutoReplyStatsResponse, error)
+	PreviewAutoReply(context.Context, *PreviewAutoReplyRequest) (*PreviewAutoReplyResponse, error)
+	mustEmbedUnimplementedAutoReplyControlServiceServer()
+}
+
+// UnimplementedAutoReplyControlServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedAutoReplyControlServiceServer struct{}
+
+func (UnimplementedAutoReplyControlServiceServer) GetAutoReplySettings(context.Context, *GetAutoReplySettingsRequest) (*AutoReplySettings, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAutoReplySettings not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) UpdateAutoReplySettings(context.Context, *UpdateAutoReplySettingsRequest) (*AutoReplySettings, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateAutoReplySettings not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) ListAutoReplyPrompts(context.Context, *ListAutoReplyPromptsRequest) (*ListAutoReplyPromptsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAutoReplyPrompts not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) SaveAutoReplyPrompt(context.Context, *SaveAutoReplyPromptRequest) (*AutoReplyPrompt, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveAutoReplyPrompt not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) DeleteAutoReplyPrompt(context.Context, *DeleteAutoReplyPromptRequest) (*StatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteAutoReplyPrompt not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) DuplicateAutoReplyPrompt(context.Context, *DuplicateAutoReplyPromptRequest) (*AutoReplyPrompt, error) {
+	return nil, status.Error(codes.Unimplemented, "method DuplicateAutoReplyPrompt not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) ExportAutoReplyPrompts(context.Context, *ExportAutoReplyPromptsRequest) (*ExportAutoReplyPromptsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ExportAutoReplyPrompts not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) ImportAutoReplyPrompts(context.Context, *ImportAutoReplyPromptsRequest) (*ImportAutoReplyPromptsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ImportAutoReplyPrompts not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) ListAutoReplyTargets(context.Context, *ListAutoReplyTargetsRequest) (*ListAutoReplyTargetsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAutoReplyTargets not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) AddAutoReplyTargets(context.Context, *AddAutoReplyTargetsRequest) (*ListAutoReplyTargetsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddAutoReplyTargets not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) UpdateAutoReplyTarget(context.Context, *UpdateAutoReplyTargetRequest) (*AutoReplyTarget, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateAutoReplyTarget not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) RemoveAutoReplyTargets(context.Context, *RemoveAutoReplyTargetsRequest) (*StatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveAutoReplyTargets not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) ResolveAutoReplyChat(context.Context, *ResolveAutoReplyChatRequest) (*ResolveAutoReplyChatResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveAutoReplyChat not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) ListAutoReplyRules(context.Context, *ListAutoReplyRulesRequest) (*ListAutoReplyRulesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAutoReplyRules not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) SaveAutoReplyRule(context.Context, *SaveAutoReplyRuleRequest) (*AutoReplyRule, error) {
+	return nil, status.Error(codes.Unimplemented, "method SaveAutoReplyRule not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) DeleteAutoReplyRule(context.Context, *DeleteAutoReplyRuleRequest) (*StatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteAutoReplyRule not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) ReorderAutoReplyRules(context.Context, *ReorderAutoReplyRulesRequest) (*ListAutoReplyRulesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReorderAutoReplyRules not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) ListAutoReplyJobs(context.Context, *ListAutoReplyJobsRequest) (*ListAutoReplyJobsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListAutoReplyJobs not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) CancelAutoReplyJob(context.Context, *AutoReplyJobRequest) (*StatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CancelAutoReplyJob not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) RetryAutoReplyJob(context.Context, *AutoReplyJobRequest) (*StatusResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RetryAutoReplyJob not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) GetAutoReplyStats(context.Context, *GetAutoReplyStatsRequest) (*AutoReplyStatsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAutoReplyStats not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) PreviewAutoReply(context.Context, *PreviewAutoReplyRequest) (*PreviewAutoReplyResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method PreviewAutoReply not implemented")
+}
+func (UnimplementedAutoReplyControlServiceServer) mustEmbedUnimplementedAutoReplyControlServiceServer() {
+}
+func (UnimplementedAutoReplyControlServiceServer) testEmbeddedByValue() {}
+
+// UnsafeAutoReplyControlServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to AutoReplyControlServiceServer will
+// result in compilation errors.
+type UnsafeAutoReplyControlServiceServer interface {
+	mustEmbedUnimplementedAutoReplyControlServiceServer()
+}
+
+func RegisterAutoReplyControlServiceServer(s grpc.ServiceRegistrar, srv AutoReplyControlServiceServer) {
+	// If the following call panics, it indicates UnimplementedAutoReplyControlServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&AutoReplyControlService_ServiceDesc, srv)
+}
+
+func _AutoReplyControlService_GetAutoReplySettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAutoReplySettingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).GetAutoReplySettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_GetAutoReplySettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).GetAutoReplySettings(ctx, req.(*GetAutoReplySettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_UpdateAutoReplySettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateAutoReplySettingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).UpdateAutoReplySettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_UpdateAutoReplySettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).UpdateAutoReplySettings(ctx, req.(*UpdateAutoReplySettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_ListAutoReplyPrompts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAutoReplyPromptsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).ListAutoReplyPrompts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_ListAutoReplyPrompts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).ListAutoReplyPrompts(ctx, req.(*ListAutoReplyPromptsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_SaveAutoReplyPrompt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveAutoReplyPromptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).SaveAutoReplyPrompt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_SaveAutoReplyPrompt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).SaveAutoReplyPrompt(ctx, req.(*SaveAutoReplyPromptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_DeleteAutoReplyPrompt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteAutoReplyPromptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).DeleteAutoReplyPrompt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_DeleteAutoReplyPrompt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).DeleteAutoReplyPrompt(ctx, req.(*DeleteAutoReplyPromptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_DuplicateAutoReplyPrompt_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DuplicateAutoReplyPromptRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).DuplicateAutoReplyPrompt(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_DuplicateAutoReplyPrompt_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).DuplicateAutoReplyPrompt(ctx, req.(*DuplicateAutoReplyPromptRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_ExportAutoReplyPrompts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExportAutoReplyPromptsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).ExportAutoReplyPrompts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_ExportAutoReplyPrompts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).ExportAutoReplyPrompts(ctx, req.(*ExportAutoReplyPromptsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_ImportAutoReplyPrompts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ImportAutoReplyPromptsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).ImportAutoReplyPrompts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_ImportAutoReplyPrompts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).ImportAutoReplyPrompts(ctx, req.(*ImportAutoReplyPromptsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_ListAutoReplyTargets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAutoReplyTargetsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).ListAutoReplyTargets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_ListAutoReplyTargets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).ListAutoReplyTargets(ctx, req.(*ListAutoReplyTargetsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_AddAutoReplyTargets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddAutoReplyTargetsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).AddAutoReplyTargets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_AddAutoReplyTargets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).AddAutoReplyTargets(ctx, req.(*AddAutoReplyTargetsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_UpdateAutoReplyTarget_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateAutoReplyTargetRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).UpdateAutoReplyTarget(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_UpdateAutoReplyTarget_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).UpdateAutoReplyTarget(ctx, req.(*UpdateAutoReplyTargetRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_RemoveAutoReplyTargets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveAutoReplyTargetsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).RemoveAutoReplyTargets(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_RemoveAutoReplyTargets_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).RemoveAutoReplyTargets(ctx, req.(*RemoveAutoReplyTargetsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_ResolveAutoReplyChat_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveAutoReplyChatRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).ResolveAutoReplyChat(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_ResolveAutoReplyChat_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).ResolveAutoReplyChat(ctx, req.(*ResolveAutoReplyChatRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_ListAutoReplyRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAutoReplyRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).ListAutoReplyRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_ListAutoReplyRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).ListAutoReplyRules(ctx, req.(*ListAutoReplyRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_SaveAutoReplyRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SaveAutoReplyRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).SaveAutoReplyRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_SaveAutoReplyRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).SaveAutoReplyRule(ctx, req.(*SaveAutoReplyRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_DeleteAutoReplyRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteAutoReplyRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).DeleteAutoReplyRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_DeleteAutoReplyRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).DeleteAutoReplyRule(ctx, req.(*DeleteAutoReplyRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_ReorderAutoReplyRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReorderAutoReplyRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).ReorderAutoReplyRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_ReorderAutoReplyRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).ReorderAutoReplyRules(ctx, req.(*ReorderAutoReplyRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_ListAutoReplyJobs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListAutoReplyJobsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).ListAutoReplyJobs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_ListAutoReplyJobs_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).ListAutoReplyJobs(ctx, req.(*ListAutoReplyJobsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_CancelAutoReplyJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AutoReplyJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).CancelAutoReplyJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_CancelAutoReplyJob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).CancelAutoReplyJob(ctx, req.(*AutoReplyJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_RetryAutoReplyJob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AutoReplyJobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).RetryAutoReplyJob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_RetryAutoReplyJob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).RetryAutoReplyJob(ctx, req.(*AutoReplyJobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_GetAutoReplyStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAutoReplyStatsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).GetAutoReplyStats(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_GetAutoReplyStats_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).GetAutoReplyStats(ctx, req.(*GetAutoReplyStatsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AutoReplyControlService_PreviewAutoReply_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PreviewAutoReplyRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AutoReplyControlServiceServer).PreviewAutoReply(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AutoReplyControlService_PreviewAutoReply_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AutoReplyControlServiceServer).PreviewAutoReply(ctx, req.(*PreviewAutoReplyRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// AutoReplyControlService_ServiceDesc is the grpc.ServiceDesc for AutoReplyControlService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var AutoReplyControlService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "autoforward.AutoReplyControlService",
+	HandlerType: (*AutoReplyControlServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetAutoReplySettings",
+			Handler:    _AutoReplyControlService_GetAutoReplySettings_Handler,
+		},
+		{
+			MethodName: "UpdateAutoReplySettings",
+			Handler:    _AutoReplyControlService_UpdateAutoReplySettings_Handler,
+		},
+		{
+			MethodName: "ListAutoReplyPrompts",
+			Handler:    _AutoReplyControlService_ListAutoReplyPrompts_Handler,
+		},
+		{
+			MethodName: "SaveAutoReplyPrompt",
+			Handler:    _AutoReplyControlService_SaveAutoReplyPrompt_Handler,
+		},
+		{
+			MethodName: "DeleteAutoReplyPrompt",
+			Handler:    _AutoReplyControlService_DeleteAutoReplyPrompt_Handler,
+		},
+		{
+			MethodName: "DuplicateAutoReplyPrompt",
+			Handler:    _AutoReplyControlService_DuplicateAutoReplyPrompt_Handler,
+		},
+		{
+			MethodName: "ExportAutoReplyPrompts",
+			Handler:    _AutoReplyControlService_ExportAutoReplyPrompts_Handler,
+		},
+		{
+			MethodName: "ImportAutoReplyPrompts",
+			Handler:    _AutoReplyControlService_ImportAutoReplyPrompts_Handler,
+		},
+		{
+			MethodName: "ListAutoReplyTargets",
+			Handler:    _AutoReplyControlService_ListAutoReplyTargets_Handler,
+		},
+		{
+			MethodName: "AddAutoReplyTargets",
+			Handler:    _AutoReplyControlService_AddAutoReplyTargets_Handler,
+		},
+		{
+			MethodName: "UpdateAutoReplyTarget",
+			Handler:    _AutoReplyControlService_UpdateAutoReplyTarget_Handler,
+		},
+		{
+			MethodName: "RemoveAutoReplyTargets",
+			Handler:    _AutoReplyControlService_RemoveAutoReplyTargets_Handler,
+		},
+		{
+			MethodName: "ResolveAutoReplyChat",
+			Handler:    _AutoReplyControlService_ResolveAutoReplyChat_Handler,
+		},
+		{
+			MethodName: "ListAutoReplyRules",
+			Handler:    _AutoReplyControlService_ListAutoReplyRules_Handler,
+		},
+		{
+			MethodName: "SaveAutoReplyRule",
+			Handler:    _AutoReplyControlService_SaveAutoReplyRule_Handler,
+		},
+		{
+			MethodName: "DeleteAutoReplyRule",
+			Handler:    _AutoReplyControlService_DeleteAutoReplyRule_Handler,
+		},
+		{
+			MethodName: "ReorderAutoReplyRules",
+			Handler:    _AutoReplyControlService_ReorderAutoReplyRules_Handler,
+		},
+		{
+			MethodName: "ListAutoReplyJobs",
+			Handler:    _AutoReplyControlService_ListAutoReplyJobs_Handler,
+		},
+		{
+			MethodName: "CancelAutoReplyJob",
+			Handler:    _AutoReplyControlService_CancelAutoReplyJob_Handler,
+		},
+		{
+			MethodName: "RetryAutoReplyJob",
+			Handler:    _AutoReplyControlService_RetryAutoReplyJob_Handler,
+		},
+		{
+			MethodName: "GetAutoReplyStats",
+			Handler:    _AutoReplyControlService_GetAutoReplyStats_Handler,
+		},
+		{
+			MethodName: "PreviewAutoReply",
+			Handler:    _AutoReplyControlService_PreviewAutoReply_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "autoforward.proto",
+}

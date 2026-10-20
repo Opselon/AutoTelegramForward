@@ -850,6 +850,26 @@ class AppMessagesFr {
     'ar_typing_delay_max': 'Délai de saisie maximum (s)',
     'ar_typing_delay_min': 'Délai de saisie minimum (s)',
     'ar_typing_hint': 'Affiche l\'indicateur de saisie avant l\'envoi',
+    'ar_job_cancelled': 'Livraison annulée',
+    'ar_job_retried': 'Remis en file pour une nouvelle tentative',
+    'ar_prompt_archive': 'Archiver',
+    'ar_prompt_deleted': 'Prompt supprimé',
+    'ar_prompt_import_done': '{imported} importés, {skipped} ignorés',
+    'ar_prompt_saved': 'Prompt enregistré',
+    'ar_rule_cooldown_value': 'Délai {seconds}s',
+    'ar_rule_exclude_keywords': 'Sauf : {keywords}',
+    'ar_rule_edit': 'Modifier la règle',
+    'ar_targets_count': '{enabled} conversations sur {total} répondues',
+    'ar_target_selection': 'Sélection : {n}',
+    'ar_targets_empty': 'Aucune conversation',
+    'ar_prompt_duplicate_done': 'Prompt dupliqué',
+    'ar_prompt_edit': 'Modifier le prompt',
+    'ar_prompts_empty': 'Aucun prompt',
+    'ar_prompts_no_match': 'Aucun prompt ne correspond à cette recherche',
+    'ar_targets_no_match':
+        'Aucune conversation ne correspond à cette recherche',
+    'ar_job_attempt': 'Tentative {n} sur {max}',
+    'ar_prompt_unarchive': 'Restaurer',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare

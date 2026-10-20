@@ -399,7 +399,10 @@ SEV_ICON = diagnostics.SEVERITY_ICON
 
 
 
-class ProBotUI:
+from core.infrastructure.telegram.autoreply_bot_ui import AutoReplyBotMixin
+
+
+class ProBotUI(AutoReplyBotMixin):
     """Renders and routes the entire button-based control panel."""
 
     def __init__(
@@ -429,6 +432,7 @@ class ProBotUI:
         prompt_service=None,
         ai_transformer=None,
         pv_responder=None,
+        autoreply=None,
         web_url: str = "",
         account_servicer=None,
         backup_service=None,
@@ -475,6 +479,9 @@ class ProBotUI:
         self._prompts = prompt_service
         self._ai_transformer = ai_transformer
         self._pv_responder = pv_responder
+        #: AutoReplyService (v28): the same instance the gRPC surface uses, so
+        #: a switch flipped here is what the worker applies to the next message.
+        self._autoreply = autoreply
         self._web_url = (web_url or "").rstrip("/")
         self._accounts = account_servicer
         self._backup = backup_service
@@ -4001,6 +4008,9 @@ class ProBotUI:
                 label = f"{status} {c.name or 'AI'} [{prov} • {c.model}]"
                 rows.append([(label, f"aid:{c.id}")])
         rows.append([(self._t("ui_btn_ai_pv_assistant"), "pv:menu")])
+        # The v28 subsystem: same state as the web dashboard, driven from the
+        # bot so a phone-only user has the full surface, not a status line.
+        rows.append([(self._t("ui_btn_ar_assistant"), "ar:menu")])
         rows.append([(self._btn("ui_ai_add"), CB["ai_add"])])
         rows.append([(self._btn("ui_back"), CB["main"])])
         return self._kbd(rows)
@@ -4233,6 +4243,9 @@ class ProBotUI:
     # ------------------------------------------------------------------ #
     def _register(self) -> None:
         b = self.bot
+
+        # v28 auto-reply panel: a mixin so its ~20 callbacks stay in one file.
+        self.register_autoreply_handlers()
 
         # Trace all callback queries across the UI
         @b.on_callback_query(group=-1)
@@ -10407,6 +10420,9 @@ class ProBotUI:
                 self._t("ui_use_menu"), reply_markup=self._main_menu()
             )
 
+        if st.step.startswith("ar_"):
+            if await self.ar_route_text(message, st, text):
+                return
         if st.step.startswith("rename_rule_"):
             rule_id = st.step.split("rename_rule_", 1)[1]
             return await self._step_rename_rule(message, st, text, rule_id)

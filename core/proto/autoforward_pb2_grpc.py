@@ -3799,3 +3799,978 @@ class TaskControlService:
             timeout,
             metadata,
             _registered_method=True)
+
+
+class AutoReplyControlServiceStub:
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.GetAutoReplySettings = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/GetAutoReplySettings',
+                request_serializer=autoforward__pb2.GetAutoReplySettingsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.AutoReplySettings.FromString,
+                _registered_method=True)
+        self.UpdateAutoReplySettings = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/UpdateAutoReplySettings',
+                request_serializer=autoforward__pb2.UpdateAutoReplySettingsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.AutoReplySettings.FromString,
+                _registered_method=True)
+        self.ListAutoReplyPrompts = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/ListAutoReplyPrompts',
+                request_serializer=autoforward__pb2.ListAutoReplyPromptsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ListAutoReplyPromptsResponse.FromString,
+                _registered_method=True)
+        self.SaveAutoReplyPrompt = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/SaveAutoReplyPrompt',
+                request_serializer=autoforward__pb2.SaveAutoReplyPromptRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.AutoReplyPrompt.FromString,
+                _registered_method=True)
+        self.DeleteAutoReplyPrompt = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/DeleteAutoReplyPrompt',
+                request_serializer=autoforward__pb2.DeleteAutoReplyPromptRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.StatusResponse.FromString,
+                _registered_method=True)
+        self.DuplicateAutoReplyPrompt = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/DuplicateAutoReplyPrompt',
+                request_serializer=autoforward__pb2.DuplicateAutoReplyPromptRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.AutoReplyPrompt.FromString,
+                _registered_method=True)
+        self.ExportAutoReplyPrompts = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/ExportAutoReplyPrompts',
+                request_serializer=autoforward__pb2.ExportAutoReplyPromptsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ExportAutoReplyPromptsResponse.FromString,
+                _registered_method=True)
+        self.ImportAutoReplyPrompts = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/ImportAutoReplyPrompts',
+                request_serializer=autoforward__pb2.ImportAutoReplyPromptsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ImportAutoReplyPromptsResponse.FromString,
+                _registered_method=True)
+        self.ListAutoReplyTargets = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/ListAutoReplyTargets',
+                request_serializer=autoforward__pb2.ListAutoReplyTargetsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ListAutoReplyTargetsResponse.FromString,
+                _registered_method=True)
+        self.AddAutoReplyTargets = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/AddAutoReplyTargets',
+                request_serializer=autoforward__pb2.AddAutoReplyTargetsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ListAutoReplyTargetsResponse.FromString,
+                _registered_method=True)
+        self.UpdateAutoReplyTarget = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/UpdateAutoReplyTarget',
+                request_serializer=autoforward__pb2.UpdateAutoReplyTargetRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.AutoReplyTarget.FromString,
+                _registered_method=True)
+        self.RemoveAutoReplyTargets = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/RemoveAutoReplyTargets',
+                request_serializer=autoforward__pb2.RemoveAutoReplyTargetsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.StatusResponse.FromString,
+                _registered_method=True)
+        self.ResolveAutoReplyChat = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/ResolveAutoReplyChat',
+                request_serializer=autoforward__pb2.ResolveAutoReplyChatRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ResolveAutoReplyChatResponse.FromString,
+                _registered_method=True)
+        self.ListAutoReplyRules = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/ListAutoReplyRules',
+                request_serializer=autoforward__pb2.ListAutoReplyRulesRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ListAutoReplyRulesResponse.FromString,
+                _registered_method=True)
+        self.SaveAutoReplyRule = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/SaveAutoReplyRule',
+                request_serializer=autoforward__pb2.SaveAutoReplyRuleRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.AutoReplyRule.FromString,
+                _registered_method=True)
+        self.DeleteAutoReplyRule = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/DeleteAutoReplyRule',
+                request_serializer=autoforward__pb2.DeleteAutoReplyRuleRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.StatusResponse.FromString,
+                _registered_method=True)
+        self.ReorderAutoReplyRules = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/ReorderAutoReplyRules',
+                request_serializer=autoforward__pb2.ReorderAutoReplyRulesRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ListAutoReplyRulesResponse.FromString,
+                _registered_method=True)
+        self.ListAutoReplyJobs = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/ListAutoReplyJobs',
+                request_serializer=autoforward__pb2.ListAutoReplyJobsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ListAutoReplyJobsResponse.FromString,
+                _registered_method=True)
+        self.CancelAutoReplyJob = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/CancelAutoReplyJob',
+                request_serializer=autoforward__pb2.AutoReplyJobRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.StatusResponse.FromString,
+                _registered_method=True)
+        self.RetryAutoReplyJob = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/RetryAutoReplyJob',
+                request_serializer=autoforward__pb2.AutoReplyJobRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.StatusResponse.FromString,
+                _registered_method=True)
+        self.GetAutoReplyStats = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/GetAutoReplyStats',
+                request_serializer=autoforward__pb2.GetAutoReplyStatsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.AutoReplyStatsResponse.FromString,
+                _registered_method=True)
+        self.PreviewAutoReply = channel.unary_unary(
+                '/autoforward.AutoReplyControlService/PreviewAutoReply',
+                request_serializer=autoforward__pb2.PreviewAutoReplyRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.PreviewAutoReplyResponse.FromString,
+                _registered_method=True)
+
+
+class AutoReplyControlServiceServicer:
+    """Missing associated documentation comment in .proto file."""
+
+    def GetAutoReplySettings(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateAutoReplySettings(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListAutoReplyPrompts(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SaveAutoReplyPrompt(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteAutoReplyPrompt(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DuplicateAutoReplyPrompt(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ExportAutoReplyPrompts(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ImportAutoReplyPrompts(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListAutoReplyTargets(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AddAutoReplyTargets(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateAutoReplyTarget(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RemoveAutoReplyTargets(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ResolveAutoReplyChat(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListAutoReplyRules(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SaveAutoReplyRule(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteAutoReplyRule(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ReorderAutoReplyRules(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListAutoReplyJobs(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CancelAutoReplyJob(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RetryAutoReplyJob(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetAutoReplyStats(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def PreviewAutoReply(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_AutoReplyControlServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'GetAutoReplySettings': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetAutoReplySettings,
+                    request_deserializer=autoforward__pb2.GetAutoReplySettingsRequest.FromString,
+                    response_serializer=autoforward__pb2.AutoReplySettings.SerializeToString,
+            ),
+            'UpdateAutoReplySettings': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateAutoReplySettings,
+                    request_deserializer=autoforward__pb2.UpdateAutoReplySettingsRequest.FromString,
+                    response_serializer=autoforward__pb2.AutoReplySettings.SerializeToString,
+            ),
+            'ListAutoReplyPrompts': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListAutoReplyPrompts,
+                    request_deserializer=autoforward__pb2.ListAutoReplyPromptsRequest.FromString,
+                    response_serializer=autoforward__pb2.ListAutoReplyPromptsResponse.SerializeToString,
+            ),
+            'SaveAutoReplyPrompt': grpc.unary_unary_rpc_method_handler(
+                    servicer.SaveAutoReplyPrompt,
+                    request_deserializer=autoforward__pb2.SaveAutoReplyPromptRequest.FromString,
+                    response_serializer=autoforward__pb2.AutoReplyPrompt.SerializeToString,
+            ),
+            'DeleteAutoReplyPrompt': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteAutoReplyPrompt,
+                    request_deserializer=autoforward__pb2.DeleteAutoReplyPromptRequest.FromString,
+                    response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'DuplicateAutoReplyPrompt': grpc.unary_unary_rpc_method_handler(
+                    servicer.DuplicateAutoReplyPrompt,
+                    request_deserializer=autoforward__pb2.DuplicateAutoReplyPromptRequest.FromString,
+                    response_serializer=autoforward__pb2.AutoReplyPrompt.SerializeToString,
+            ),
+            'ExportAutoReplyPrompts': grpc.unary_unary_rpc_method_handler(
+                    servicer.ExportAutoReplyPrompts,
+                    request_deserializer=autoforward__pb2.ExportAutoReplyPromptsRequest.FromString,
+                    response_serializer=autoforward__pb2.ExportAutoReplyPromptsResponse.SerializeToString,
+            ),
+            'ImportAutoReplyPrompts': grpc.unary_unary_rpc_method_handler(
+                    servicer.ImportAutoReplyPrompts,
+                    request_deserializer=autoforward__pb2.ImportAutoReplyPromptsRequest.FromString,
+                    response_serializer=autoforward__pb2.ImportAutoReplyPromptsResponse.SerializeToString,
+            ),
+            'ListAutoReplyTargets': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListAutoReplyTargets,
+                    request_deserializer=autoforward__pb2.ListAutoReplyTargetsRequest.FromString,
+                    response_serializer=autoforward__pb2.ListAutoReplyTargetsResponse.SerializeToString,
+            ),
+            'AddAutoReplyTargets': grpc.unary_unary_rpc_method_handler(
+                    servicer.AddAutoReplyTargets,
+                    request_deserializer=autoforward__pb2.AddAutoReplyTargetsRequest.FromString,
+                    response_serializer=autoforward__pb2.ListAutoReplyTargetsResponse.SerializeToString,
+            ),
+            'UpdateAutoReplyTarget': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateAutoReplyTarget,
+                    request_deserializer=autoforward__pb2.UpdateAutoReplyTargetRequest.FromString,
+                    response_serializer=autoforward__pb2.AutoReplyTarget.SerializeToString,
+            ),
+            'RemoveAutoReplyTargets': grpc.unary_unary_rpc_method_handler(
+                    servicer.RemoveAutoReplyTargets,
+                    request_deserializer=autoforward__pb2.RemoveAutoReplyTargetsRequest.FromString,
+                    response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'ResolveAutoReplyChat': grpc.unary_unary_rpc_method_handler(
+                    servicer.ResolveAutoReplyChat,
+                    request_deserializer=autoforward__pb2.ResolveAutoReplyChatRequest.FromString,
+                    response_serializer=autoforward__pb2.ResolveAutoReplyChatResponse.SerializeToString,
+            ),
+            'ListAutoReplyRules': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListAutoReplyRules,
+                    request_deserializer=autoforward__pb2.ListAutoReplyRulesRequest.FromString,
+                    response_serializer=autoforward__pb2.ListAutoReplyRulesResponse.SerializeToString,
+            ),
+            'SaveAutoReplyRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.SaveAutoReplyRule,
+                    request_deserializer=autoforward__pb2.SaveAutoReplyRuleRequest.FromString,
+                    response_serializer=autoforward__pb2.AutoReplyRule.SerializeToString,
+            ),
+            'DeleteAutoReplyRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteAutoReplyRule,
+                    request_deserializer=autoforward__pb2.DeleteAutoReplyRuleRequest.FromString,
+                    response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'ReorderAutoReplyRules': grpc.unary_unary_rpc_method_handler(
+                    servicer.ReorderAutoReplyRules,
+                    request_deserializer=autoforward__pb2.ReorderAutoReplyRulesRequest.FromString,
+                    response_serializer=autoforward__pb2.ListAutoReplyRulesResponse.SerializeToString,
+            ),
+            'ListAutoReplyJobs': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListAutoReplyJobs,
+                    request_deserializer=autoforward__pb2.ListAutoReplyJobsRequest.FromString,
+                    response_serializer=autoforward__pb2.ListAutoReplyJobsResponse.SerializeToString,
+            ),
+            'CancelAutoReplyJob': grpc.unary_unary_rpc_method_handler(
+                    servicer.CancelAutoReplyJob,
+                    request_deserializer=autoforward__pb2.AutoReplyJobRequest.FromString,
+                    response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'RetryAutoReplyJob': grpc.unary_unary_rpc_method_handler(
+                    servicer.RetryAutoReplyJob,
+                    request_deserializer=autoforward__pb2.AutoReplyJobRequest.FromString,
+                    response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'GetAutoReplyStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetAutoReplyStats,
+                    request_deserializer=autoforward__pb2.GetAutoReplyStatsRequest.FromString,
+                    response_serializer=autoforward__pb2.AutoReplyStatsResponse.SerializeToString,
+            ),
+            'PreviewAutoReply': grpc.unary_unary_rpc_method_handler(
+                    servicer.PreviewAutoReply,
+                    request_deserializer=autoforward__pb2.PreviewAutoReplyRequest.FromString,
+                    response_serializer=autoforward__pb2.PreviewAutoReplyResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'autoforward.AutoReplyControlService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('autoforward.AutoReplyControlService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class AutoReplyControlService:
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def GetAutoReplySettings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/GetAutoReplySettings',
+            autoforward__pb2.GetAutoReplySettingsRequest.SerializeToString,
+            autoforward__pb2.AutoReplySettings.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateAutoReplySettings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/UpdateAutoReplySettings',
+            autoforward__pb2.UpdateAutoReplySettingsRequest.SerializeToString,
+            autoforward__pb2.AutoReplySettings.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListAutoReplyPrompts(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/ListAutoReplyPrompts',
+            autoforward__pb2.ListAutoReplyPromptsRequest.SerializeToString,
+            autoforward__pb2.ListAutoReplyPromptsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SaveAutoReplyPrompt(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/SaveAutoReplyPrompt',
+            autoforward__pb2.SaveAutoReplyPromptRequest.SerializeToString,
+            autoforward__pb2.AutoReplyPrompt.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteAutoReplyPrompt(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/DeleteAutoReplyPrompt',
+            autoforward__pb2.DeleteAutoReplyPromptRequest.SerializeToString,
+            autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DuplicateAutoReplyPrompt(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/DuplicateAutoReplyPrompt',
+            autoforward__pb2.DuplicateAutoReplyPromptRequest.SerializeToString,
+            autoforward__pb2.AutoReplyPrompt.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ExportAutoReplyPrompts(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/ExportAutoReplyPrompts',
+            autoforward__pb2.ExportAutoReplyPromptsRequest.SerializeToString,
+            autoforward__pb2.ExportAutoReplyPromptsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ImportAutoReplyPrompts(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/ImportAutoReplyPrompts',
+            autoforward__pb2.ImportAutoReplyPromptsRequest.SerializeToString,
+            autoforward__pb2.ImportAutoReplyPromptsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListAutoReplyTargets(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/ListAutoReplyTargets',
+            autoforward__pb2.ListAutoReplyTargetsRequest.SerializeToString,
+            autoforward__pb2.ListAutoReplyTargetsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AddAutoReplyTargets(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/AddAutoReplyTargets',
+            autoforward__pb2.AddAutoReplyTargetsRequest.SerializeToString,
+            autoforward__pb2.ListAutoReplyTargetsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateAutoReplyTarget(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/UpdateAutoReplyTarget',
+            autoforward__pb2.UpdateAutoReplyTargetRequest.SerializeToString,
+            autoforward__pb2.AutoReplyTarget.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RemoveAutoReplyTargets(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/RemoveAutoReplyTargets',
+            autoforward__pb2.RemoveAutoReplyTargetsRequest.SerializeToString,
+            autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ResolveAutoReplyChat(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/ResolveAutoReplyChat',
+            autoforward__pb2.ResolveAutoReplyChatRequest.SerializeToString,
+            autoforward__pb2.ResolveAutoReplyChatResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListAutoReplyRules(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/ListAutoReplyRules',
+            autoforward__pb2.ListAutoReplyRulesRequest.SerializeToString,
+            autoforward__pb2.ListAutoReplyRulesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SaveAutoReplyRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/SaveAutoReplyRule',
+            autoforward__pb2.SaveAutoReplyRuleRequest.SerializeToString,
+            autoforward__pb2.AutoReplyRule.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteAutoReplyRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/DeleteAutoReplyRule',
+            autoforward__pb2.DeleteAutoReplyRuleRequest.SerializeToString,
+            autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ReorderAutoReplyRules(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/ReorderAutoReplyRules',
+            autoforward__pb2.ReorderAutoReplyRulesRequest.SerializeToString,
+            autoforward__pb2.ListAutoReplyRulesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListAutoReplyJobs(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/ListAutoReplyJobs',
+            autoforward__pb2.ListAutoReplyJobsRequest.SerializeToString,
+            autoforward__pb2.ListAutoReplyJobsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CancelAutoReplyJob(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/CancelAutoReplyJob',
+            autoforward__pb2.AutoReplyJobRequest.SerializeToString,
+            autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RetryAutoReplyJob(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/RetryAutoReplyJob',
+            autoforward__pb2.AutoReplyJobRequest.SerializeToString,
+            autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetAutoReplyStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/GetAutoReplyStats',
+            autoforward__pb2.GetAutoReplyStatsRequest.SerializeToString,
+            autoforward__pb2.AutoReplyStatsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def PreviewAutoReply(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.AutoReplyControlService/PreviewAutoReply',
+            autoforward__pb2.PreviewAutoReplyRequest.SerializeToString,
+            autoforward__pb2.PreviewAutoReplyResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)

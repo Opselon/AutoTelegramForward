@@ -1024,3 +1024,224 @@ export interface UserTaskPage {
   limit: number
   offset: number
 }
+
+// ---------------------------------------------------------------------------
+// AI auto-reply (v28)
+//
+// The tenant-scoped subsystem behind /api/auto-reply/*: one settings row per
+// account, a personal prompt library, the per-chat contact switches, ranked
+// rules and the durable job queue the worker drains. Every field here is what
+// the API actually returns — the Go layer maps the gRPC messages field by field
+// (see api/internal/handlers/autoreply.go) and nothing is invented client-side.
+// ---------------------------------------------------------------------------
+
+/** Who receives an automatic reply. */
+export type AutoReplyTargetMode = 'EVERYONE' | 'SELECTED_ONLY' | 'ALL_EXCEPT' | 'MANUAL'
+
+/** A queued reply's lifecycle. */
+export type AutoReplyJobStatus =
+  | 'PENDING'
+  | 'RUNNING'
+  | 'SENT'
+  | 'FAILED'
+  | 'RETRY_WAIT'
+  | 'DEAD_LETTER'
+  | 'CANCELLED'
+
+export interface AutoReplySettings {
+  enabled: boolean
+  /** AI provider config to generate with; "" means none linked. */
+  ai_config_id: string
+  /** Default prompt; "" falls back to the built-in persona. */
+  prompt_id: string
+  target_mode: AutoReplyTargetMode
+  /** "" or "auto" mirrors the contact's script. */
+  language: string
+  tone: string
+  response_length: string
+  temperature: number
+  max_tokens: number
+  context_messages: number
+  memory_enabled: boolean
+  memory_max_facts: number
+  extra_instructions: string
+  max_reply_chars: number
+  typing_simulation: boolean
+  typing_delay_min: number
+  typing_delay_max: number
+  /** Per-chat gap between two replies, seconds. */
+  cooldown_seconds: number
+  /** 0 = unlimited. */
+  daily_limit_per_chat: number
+  rate_limit_per_minute: number
+  max_concurrency: number
+  max_attempts: number
+  retry_backoff_seconds: number
+  /** Hour of day 0-23, -1 = off. */
+  quiet_hours_start: number
+  quiet_hours_end: number
+  timezone_offset_minutes: number
+  /** 0 = Monday … 6 = Sunday; empty = every day. */
+  active_days: number[]
+  /** Sent when generation keeps failing and the retries are spent. */
+  fallback_text: string
+  ignore_bots: boolean
+  /** Optimistic-concurrency token, echoed back on save. */
+  version: number
+  created_at: number
+  updated_at: number
+}
+
+export interface AutoReplyPrompt {
+  id: string
+  name: string
+  description: string
+  system_prompt: string
+  /** Defaults to `{text}` when the prompt only steers the system message. */
+  user_prompt_template: string
+  language: string
+  tone: string
+  response_length: string
+  tags: string[]
+  category: string
+  is_default: boolean
+  is_archived: boolean
+  usage_count: number
+  created_at: number
+  updated_at: number
+}
+
+export interface SaveAutoReplyPromptRequest {
+  id?: string
+  name: string
+  description?: string
+  system_prompt: string
+  user_prompt_template?: string
+  language?: string
+  tone?: string
+  response_length?: string
+  tags?: string[]
+  category?: string
+  is_archived?: boolean
+}
+
+export interface AutoReplyTarget {
+  chat_id: string
+  title: string
+  username: string
+  is_enabled: boolean
+  /** Per-contact prompt override. */
+  prompt_id: string
+  note: string
+  priority: number
+  added_at: number
+}
+
+export interface AutoReplyRule {
+  id: string
+  name: string
+  is_enabled: boolean
+  /** Higher wins; ties break on creation order (deterministic). */
+  priority: number
+  /** REPLY | SKIP | use a prompt / provider override. */
+  action: string
+  conditions: Record<string, any>
+  exclusions: Record<string, any>
+  prompt_id: string
+  ai_config_id: string
+  cooldown_seconds: number
+  language: string
+  tone: string
+  response_length: string
+  temperature: number
+  max_tokens: number
+  created_at: number
+  updated_at: number
+}
+
+export interface SaveAutoReplyRuleRequest {
+  id?: string
+  name: string
+  is_enabled?: boolean
+  priority?: number
+  action?: string
+  conditions?: Record<string, any>
+  exclusions?: Record<string, any>
+  prompt_id?: string
+  ai_config_id?: string
+  cooldown_seconds?: number
+  language?: string
+  tone?: string
+  response_length?: string
+  temperature?: number
+  max_tokens?: number
+}
+
+export interface AutoReplyJob {
+  id: string
+  chat_id: string
+  chat_title: string
+  status: AutoReplyJobStatus
+  attempt: number
+  max_attempts: number
+  error: string
+  error_code: string
+  inbound_text: string
+  reply_text: string
+  correlation_id: string
+  latency_ms: number
+  created_at: number
+  sent_at: number
+  source_message_id: number
+}
+
+export interface AutoReplyJobPage {
+  jobs: AutoReplyJob[]
+  total: number
+}
+
+export interface AutoReplyStats {
+  sent_today: number
+  sent_total: number
+  pending: number
+  retrying: number
+  dead_letter: number
+  chats_enabled: number
+  prompts: number
+  rules: number
+  average_latency_ms: number
+  last_sent_at: number
+  statuses: Record<string, number>
+}
+
+/** One generated reply, mirroring the handler's `result` object. */
+export interface AutoReplyPreviewResponse {
+  ok: boolean
+  reply_text: string
+  error: string
+  error_code: string
+  provider: string
+  model: string
+  latency_ms: number
+  tokens: number
+}
+
+/**
+ * One prompt-library export bundle: the unit `/prompts/import` accepts back.
+ * The API transports it as an opaque JSON string so a future schema version can
+ * add keys without an API change, so the client keeps it as text.
+ */
+export interface AutoReplyPromptBundle {
+  version: number
+  exported_at: number
+  prompts: AutoReplyPrompt[]
+}
+
+/** A resolved private chat offered by the contact picker. */
+export interface AutoReplyResolvedChat {
+  chat_id: string
+  title: string
+  username: string
+  chat_type: string
+  resolved: boolean
+}

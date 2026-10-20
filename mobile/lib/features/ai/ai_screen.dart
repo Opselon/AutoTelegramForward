@@ -11,11 +11,14 @@ import 'package:provider/provider.dart';
 
 import '../../core/api_client.dart';
 import '../../core/app_state.dart';
+import '../../core/layout.dart';
 import '../../core/models.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
+import '../../widgets/app_card.dart';
 import '../../widgets/app_ui.dart';
 import '../../widgets/loading_list.dart';
+import '../auto_reply/auto_reply_screen.dart';
 import 'ai_config_editor_dialog.dart';
 
 class AiScreen extends StatefulWidget {
@@ -233,6 +236,55 @@ class _AiScreenState extends State<AiScreen> {
                   retryLabel: t.get('action_retry'),
                 ),
               ),
+            // One entry point for the whole auto-reply feature: settings,
+            // prompt library, targeting, rules and activity live behind it, so
+            // the navigation rail does not grow a tenth destination.
+            AppCard(
+              key: const ValueKey<String>('ai_auto_reply_entry'),
+              accent: AppColors.of(context).primary,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const AutoReplyScreen(),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.of(context).primary
+                          .withValues(alpha: 0.14),
+                      borderRadius: AppRadii.allMd,
+                    ),
+                    child: Icon(
+                      Icons.smart_toy_outlined,
+                      color: AppColors.of(context).primary,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          t.get('ar_entry'),
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          t.get('ar_entry_sub'),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  Icon(AppIcons.forward(context)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
             // Notice about API keys security
             Container(
               padding: const EdgeInsets.all(12),

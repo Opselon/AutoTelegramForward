@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-10-19T12:48:40.487Z",
-  "commit": "13b37ed",
-  "gitDate": "2026-10-19T12:47:26Z",
+  "generatedAt": "2026-10-20T19:36:25.800Z",
+  "commit": "8365c2a",
+  "gitDate": "2026-10-20T19:19:37Z",
   "granularity": {
     "python": "module (file)",
     "go": "package (directory)",
@@ -21,41 +21,41 @@
       "role": "Forwarding engine",
       "tech": "Python 3 · Pyrogram · gRPC",
       "blurb": "Domain model, rule engine and the durable delivery pipeline. Owns the Telegram sessions and the database.",
-      "files": 234,
-      "sourceFiles": 233,
-      "loc": 76502,
+      "files": 263,
+      "sourceFiles": 262,
+      "loc": 86687,
       "langs": [
         "python"
       ],
       "areas": [
         {
           "id": "tests",
-          "files": 150,
-          "loc": 33640,
+          "files": 163,
+          "loc": 36913,
           "langs": [
             "python"
           ]
         },
         {
           "id": "infrastructure",
-          "files": 52,
-          "loc": 28628,
+          "files": 58,
+          "loc": 31880,
           "langs": [
             "python"
           ]
         },
         {
           "id": "application",
-          "files": 13,
-          "loc": 4870,
+          "files": 19,
+          "loc": 6297,
           "langs": [
             "python"
           ]
         },
         {
           "id": "domain",
-          "files": 9,
-          "loc": 4482,
+          "files": 13,
+          "loc": 5674,
           "langs": [
             "python"
           ]
@@ -63,7 +63,7 @@
         {
           "id": "proto",
           "files": 3,
-          "loc": 3698,
+          "loc": 4663,
           "langs": [
             "python"
           ]
@@ -71,7 +71,7 @@
         {
           "id": "(root)",
           "files": 4,
-          "loc": 869,
+          "loc": 945,
           "langs": [
             "python"
           ]
@@ -94,17 +94,17 @@
       "role": "Control plane",
       "tech": "Go · net/http · gRPC client",
       "blurb": "Stateless REST control plane. Authenticates clients, applies tenant scoping, and speaks gRPC to the core and the logger.",
-      "files": 75,
-      "sourceFiles": 73,
-      "loc": 29043,
+      "files": 82,
+      "sourceFiles": 80,
+      "loc": 35129,
       "langs": [
         "go"
       ],
       "areas": [
         {
           "id": "internal",
-          "files": 70,
-          "loc": 15541,
+          "files": 77,
+          "loc": 18163,
           "langs": [
             "go"
           ]
@@ -112,7 +112,7 @@
         {
           "id": "proto",
           "files": 2,
-          "loc": 13298,
+          "loc": 16738,
           "langs": [
             "go"
           ]
@@ -120,7 +120,7 @@
         {
           "id": "(root)",
           "files": 1,
-          "loc": 204,
+          "loc": 228,
           "langs": [
             "go"
           ]
@@ -160,25 +160,41 @@
       "role": "Operator console",
       "tech": "TypeScript · React · Vite",
       "blurb": "Task control, log explorer, diagnostics and admin surfaces for a signed-in tenant.",
-      "files": 26,
-      "sourceFiles": 21,
-      "loc": 13096,
+      "files": 56,
+      "sourceFiles": 51,
+      "loc": 26698,
       "langs": [
         "typescript"
       ],
       "areas": [
         {
-          "id": "(root)",
-          "files": 9,
-          "loc": 6943,
+          "id": "locales",
+          "files": 13,
+          "loc": 10371,
           "langs": [
             "typescript"
           ]
         },
         {
           "id": "components",
+          "files": 16,
+          "loc": 6966,
+          "langs": [
+            "typescript"
+          ]
+        },
+        {
+          "id": "(root)",
           "files": 11,
-          "loc": 5893,
+          "loc": 5213,
+          "langs": [
+            "typescript"
+          ]
+        },
+        {
+          "id": "panels",
+          "files": 9,
+          "loc": 3789,
           "langs": [
             "typescript"
           ]
@@ -186,7 +202,15 @@
         {
           "id": "pages",
           "files": 1,
-          "loc": 260,
+          "loc": 252,
+          "langs": [
+            "typescript"
+          ]
+        },
+        {
+          "id": "dashboard",
+          "files": 1,
+          "loc": 107,
           "langs": [
             "typescript"
           ]
@@ -201,17 +225,17 @@
       "role": "Client",
       "tech": "Dart · Flutter",
       "blurb": "Native client with its own 10-locale catalog and the same REST contract as the dashboard.",
-      "files": 44,
-      "sourceFiles": 44,
-      "loc": 20982,
+      "files": 64,
+      "sourceFiles": 64,
+      "loc": 30255,
       "langs": [
         "dart"
       ],
       "areas": [
         {
           "id": "features",
-          "files": 19,
-          "loc": 9744,
+          "files": 27,
+          "loc": 13623,
           "langs": [
             "dart"
           ]
@@ -219,23 +243,23 @@
         {
           "id": "l10n",
           "files": 10,
-          "loc": 6039,
+          "loc": 8907,
           "langs": [
             "dart"
           ]
         },
         {
           "id": "core",
-          "files": 9,
-          "loc": 3998,
+          "files": 12,
+          "loc": 5615,
           "langs": [
             "dart"
           ]
         },
         {
           "id": "widgets",
-          "files": 4,
-          "loc": 1132,
+          "files": 13,
+          "loc": 2030,
           "langs": [
             "dart"
           ]
@@ -243,7 +267,7 @@
         {
           "id": "(root)",
           "files": 2,
-          "loc": 69,
+          "loc": 80,
           "langs": [
             "dart"
           ]
@@ -260,7 +284,7 @@
       "blurb": "Install, validate, diagnose and upgrade the stack from one command surface.",
       "files": 78,
       "sourceFiles": 78,
-      "loc": 12004,
+      "loc": 12485,
       "langs": [
         "python"
       ],
@@ -268,7 +292,7 @@
         {
           "id": "commands",
           "files": 32,
-          "loc": 5243,
+          "loc": 5305,
           "langs": [
             "python"
           ]
@@ -276,7 +300,7 @@
         {
           "id": "infrastructure",
           "files": 10,
-          "loc": 2855,
+          "loc": 3129,
           "langs": [
             "python"
           ]
@@ -284,7 +308,7 @@
         {
           "id": "domain",
           "files": 8,
-          "loc": 1548,
+          "loc": 1590,
           "langs": [
             "python"
           ]
@@ -300,7 +324,7 @@
         {
           "id": "(root)",
           "files": 13,
-          "loc": 841,
+          "loc": 944,
           "langs": [
             "python"
           ]
@@ -317,7 +341,7 @@
       "blurb": "The gRPC service definitions, the generated Go stubs and the cross-language JSON fixtures that pin the wire format.",
       "files": 1,
       "sourceFiles": 1,
-      "loc": 1032,
+      "loc": 1302,
       "langs": [
         "proto"
       ],
@@ -325,7 +349,7 @@
         {
           "id": "(root)",
           "files": 1,
-          "loc": 1032,
+          "loc": 1302,
           "langs": [
             "proto"
           ]
@@ -340,9 +364,9 @@
       "role": "Documentation",
       "tech": "Astro · TypeScript",
       "blurb": "The site you are reading, generated from the same checkout it documents.",
-      "files": 93,
-      "sourceFiles": 84,
-      "loc": 16474,
+      "files": 96,
+      "sourceFiles": 86,
+      "loc": 16803,
       "langs": [
         "astro",
         "typescript"
@@ -350,8 +374,8 @@
       "areas": [
         {
           "id": "pages",
-          "files": 49,
-          "loc": 9868,
+          "files": 51,
+          "loc": 10001,
           "langs": [
             "astro",
             "typescript"
@@ -360,7 +384,7 @@
         {
           "id": "components",
           "files": 27,
-          "loc": 4000,
+          "loc": 4021,
           "langs": [
             "astro"
           ]
@@ -368,7 +392,7 @@
         {
           "id": "data",
           "files": 5,
-          "loc": 2166,
+          "loc": 2283,
           "langs": [
             "typescript"
           ]
@@ -376,7 +400,7 @@
         {
           "id": "layouts",
           "files": 2,
-          "loc": 412,
+          "loc": 470,
           "langs": [
             "astro"
           ]
@@ -393,51 +417,51 @@
     }
   ],
   "totals": {
-    "files": 556,
-    "sourceFiles": 536,
-    "loc": 170442,
-    "nodes": 471,
-    "edges": 1684,
+    "files": 645,
+    "sourceFiles": 624,
+    "loc": 210668,
+    "nodes": 552,
+    "edges": 2018,
     "generatedFiles": 2,
-    "testFiles": 193,
+    "testFiles": 210,
     "subsystems": 8
   },
   "languages": [
     {
       "lang": "python",
-      "files": 312,
-      "loc": 89563,
-      "bytes": 4876375
+      "files": 341,
+      "loc": 100229,
+      "bytes": 5463291
     },
     {
       "lang": "go",
-      "files": 73,
-      "loc": 29043,
-      "bytes": 1262851
+      "files": 80,
+      "loc": 35129,
+      "bytes": 1530266
     },
     {
       "lang": "dart",
-      "files": 44,
-      "loc": 20982,
-      "bytes": 925306
+      "files": 64,
+      "loc": 30255,
+      "bytes": 1309681
     },
     {
       "lang": "typescript",
-      "files": 30,
-      "loc": 15493,
-      "bytes": 694467
+      "files": 61,
+      "loc": 29264,
+      "bytes": 1524436
     },
     {
       "lang": "astro",
-      "files": 75,
-      "loc": 14077,
-      "bytes": 728626
+      "files": 76,
+      "loc": 14237,
+      "bytes": 738177
     },
     {
       "lang": "proto",
       "files": 1,
-      "loc": 1032,
-      "bytes": 49174
+      "loc": 1302,
+      "bytes": 59207
     },
     {
       "lang": "rust",
@@ -485,6 +509,126 @@
       "isTest": false,
       "fanIn": 4,
       "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "core/application/autoreply/__init__.py",
+      "label": "__init__",
+      "path": "core/application/autoreply/__init__.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 25,
+      "generated": false,
+      "areas": [
+        "application"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "core/application/autoreply/context.py",
+      "label": "context",
+      "path": "core/application/autoreply/context.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 139,
+      "generated": false,
+      "areas": [
+        "application"
+      ],
+      "isTest": false,
+      "fanIn": 5,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "core/application/autoreply/engine.py",
+      "label": "engine",
+      "path": "core/application/autoreply/engine.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 238,
+      "generated": false,
+      "areas": [
+        "application"
+      ],
+      "isTest": false,
+      "fanIn": 5,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "core/application/autoreply/service.py",
+      "label": "service",
+      "path": "core/application/autoreply/service.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 424,
+      "generated": false,
+      "areas": [
+        "application"
+      ],
+      "isTest": false,
+      "fanIn": 5,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "core/application/autoreply/targeting.py",
+      "label": "targeting",
+      "path": "core/application/autoreply/targeting.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 34,
+      "generated": false,
+      "areas": [
+        "application"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "core/application/autoreply/worker.py",
+      "label": "worker",
+      "path": "core/application/autoreply/worker.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 446,
+      "generated": false,
+      "areas": [
+        "application"
+      ],
+      "isTest": false,
+      "fanIn": 6,
+      "fanOut": 3,
       "isEntry": false
     },
     {
@@ -597,14 +741,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 1121,
+      "loc": 1159,
       "generated": false,
       "areas": [
         "application"
       ],
       "isTest": false,
-      "fanIn": 24,
-      "fanOut": 10,
+      "fanIn": 27,
+      "fanOut": 12,
       "isEntry": false
     },
     {
@@ -637,7 +781,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 669,
+      "loc": 696,
       "generated": false,
       "areas": [
         "application"
@@ -657,14 +801,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 698,
+      "loc": 754,
       "generated": false,
       "areas": [
         "application"
       ],
       "isTest": false,
-      "fanIn": 23,
-      "fanOut": 6,
+      "fanIn": 24,
+      "fanOut": 8,
       "isEntry": false
     },
     {
@@ -763,7 +907,7 @@
         "domain"
       ],
       "isTest": false,
-      "fanIn": 12,
+      "fanIn": 14,
       "fanOut": 0,
       "isEntry": false
     },
@@ -785,6 +929,26 @@
       "isTest": false,
       "fanIn": 2,
       "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "core/domain/autoreply.py",
+      "label": "autoreply",
+      "path": "core/domain/autoreply.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 850,
+      "generated": false,
+      "areas": [
+        "domain"
+      ],
+      "isTest": false,
+      "fanIn": 10,
+      "fanOut": 0,
       "isEntry": false
     },
     {
@@ -843,7 +1007,7 @@
         "domain"
       ],
       "isTest": false,
-      "fanIn": 5,
+      "fanIn": 6,
       "fanOut": 1,
       "isEntry": false
     },
@@ -857,14 +1021,74 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 1754,
+      "loc": 1866,
       "generated": false,
       "areas": [
         "domain"
       ],
       "isTest": false,
-      "fanIn": 101,
-      "fanOut": 4,
+      "fanIn": 107,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "core/domain/forward_interval.py",
+      "label": "forward_interval",
+      "path": "core/domain/forward_interval.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 72,
+      "generated": false,
+      "areas": [
+        "domain"
+      ],
+      "isTest": false,
+      "fanIn": 4,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "core/domain/media_filter.py",
+      "label": "media_filter",
+      "path": "core/domain/media_filter.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 70,
+      "generated": false,
+      "areas": [
+        "domain"
+      ],
+      "isTest": false,
+      "fanIn": 4,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "core/domain/profile_recovery.py",
+      "label": "profile_recovery",
+      "path": "core/domain/profile_recovery.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 81,
+      "generated": false,
+      "areas": [
+        "domain"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 0,
       "isEntry": false
     },
     {
@@ -877,13 +1101,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 419,
+      "loc": 426,
       "generated": false,
       "areas": [
         "domain"
       ],
       "isTest": false,
-      "fanIn": 19,
+      "fanIn": 22,
       "fanOut": 0,
       "isEntry": false
     },
@@ -903,8 +1127,8 @@
         "domain"
       ],
       "isTest": false,
-      "fanIn": 24,
-      "fanOut": 5,
+      "fanIn": 26,
+      "fanOut": 6,
       "isEntry": false
     },
     {
@@ -923,7 +1147,7 @@
         "domain"
       ],
       "isTest": false,
-      "fanIn": 49,
+      "fanIn": 52,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1003,7 +1227,7 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 10,
+      "fanIn": 12,
       "fanOut": 2,
       "isEntry": false
     },
@@ -1108,6 +1332,26 @@
       "isEntry": false
     },
     {
+      "id": "core/infrastructure/grpc_server/autoreply_servicer.py",
+      "label": "autoreply_servicer",
+      "path": "core/infrastructure/grpc_server/autoreply_servicer.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 504,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
       "id": "core/infrastructure/grpc_server/internal_auth.py",
       "label": "internal_auth",
       "path": "core/infrastructure/grpc_server/internal_auth.py",
@@ -1188,6 +1432,26 @@
       "isEntry": false
     },
     {
+      "id": "core/infrastructure/persistence/account_limits.py",
+      "label": "account_limits",
+      "path": "core/infrastructure/persistence/account_limits.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 97,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
       "id": "core/infrastructure/persistence/audit_events.py",
       "label": "audit_events",
       "path": "core/infrastructure/persistence/audit_events.py",
@@ -1197,7 +1461,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 214,
+      "loc": 215,
       "generated": false,
       "areas": [
         "infrastructure"
@@ -1224,6 +1488,26 @@
       ],
       "isTest": false,
       "fanIn": 2,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/infrastructure/persistence/autoreply_repositories.py",
+      "label": "autoreply_repositories",
+      "path": "core/infrastructure/persistence/autoreply_repositories.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 929,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 4,
       "fanOut": 2,
       "isEntry": false
     },
@@ -1257,13 +1541,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 985,
+      "loc": 1204,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 69,
+      "fanIn": 76,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1337,13 +1621,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 2254,
+      "loc": 2390,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 56,
+      "fanIn": 60,
       "fanOut": 7,
       "isEntry": false
     },
@@ -1423,7 +1707,7 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 36,
+      "fanIn": 40,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1488,6 +1772,46 @@
       "isEntry": false
     },
     {
+      "id": "core/infrastructure/telegram/autoreply_bot_ui.py",
+      "label": "autoreply_bot_ui",
+      "path": "core/infrastructure/telegram/autoreply_bot_ui.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 510,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "core/infrastructure/telegram/autoreply_bridge.py",
+      "label": "autoreply_bridge",
+      "path": "core/infrastructure/telegram/autoreply_bridge.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 147,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
       "id": "core/infrastructure/telegram/bot_manager.py",
       "label": "bot_manager",
       "path": "core/infrastructure/telegram/bot_manager.py",
@@ -1497,7 +1821,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 448,
+      "loc": 461,
       "generated": false,
       "areas": [
         "infrastructure"
@@ -1597,13 +1921,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 433,
+      "loc": 513,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 6,
+      "fanIn": 7,
       "fanOut": 3,
       "isEntry": false
     },
@@ -1637,14 +1961,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 729,
+      "loc": 751,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
       "fanIn": 10,
-      "fanOut": 11,
+      "fanOut": 13,
       "isEntry": false
     },
     {
@@ -1657,14 +1981,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 1192,
+      "loc": 1335,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 23,
-      "fanOut": 7,
+      "fanIn": 25,
+      "fanOut": 8,
       "isEntry": false
     },
     {
@@ -1683,8 +2007,28 @@
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 9,
+      "fanIn": 10,
       "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "core/infrastructure/telegram/failure_policy.py",
+      "label": "failure_policy",
+      "path": "core/infrastructure/telegram/failure_policy.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 148,
+      "generated": false,
+      "areas": [
+        "infrastructure"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 1,
       "isEntry": false
     },
     {
@@ -1697,13 +2041,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 57,
+      "loc": 90,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 47,
+      "fanIn": 50,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1757,14 +2101,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 10343,
+      "loc": 10598,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 42,
-      "fanOut": 27,
+      "fanIn": 44,
+      "fanOut": 29,
       "isEntry": false
     },
     {
@@ -1937,13 +2281,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 382,
+      "loc": 383,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 4,
+      "fanIn": 5,
       "fanOut": 1,
       "isEntry": false
     },
@@ -1957,13 +2301,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 200,
+      "loc": 214,
       "generated": false,
       "areas": [
         "infrastructure"
       ],
       "isTest": false,
-      "fanIn": 3,
+      "fanIn": 4,
       "fanOut": 0,
       "isEntry": false
     },
@@ -1977,14 +2321,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 694,
+      "loc": 770,
       "generated": false,
       "areas": [
         "(root)"
       ],
       "isTest": false,
       "fanIn": 3,
-      "fanOut": 42,
+      "fanOut": 49,
       "isEntry": true
     },
     {
@@ -2043,7 +2387,7 @@
         "proto"
       ],
       "isTest": false,
-      "fanIn": 20,
+      "fanIn": 23,
       "fanOut": 2,
       "isEntry": false
     },
@@ -2057,13 +2401,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 357,
+      "loc": 429,
       "generated": false,
       "areas": [
         "proto"
       ],
       "isTest": false,
-      "fanIn": 12,
+      "fanIn": 15,
       "fanOut": 0,
       "isEntry": false
     },
@@ -2077,14 +2421,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 3333,
+      "loc": 4226,
       "generated": false,
       "areas": [
         "proto"
       ],
       "isTest": false,
-      "fanIn": 4,
-      "fanOut": 0,
+      "fanIn": 6,
+      "fanOut": 2,
       "isEntry": false
     },
     {
@@ -2137,7 +2481,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 300,
+      "loc": 307,
       "generated": false,
       "areas": [
         "tests"
@@ -2145,6 +2489,26 @@
       "isTest": true,
       "fanIn": 5,
       "fanOut": 8,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_account_time_limits.py",
+      "label": "test_account_time_limits",
+      "path": "core/tests/test_account_time_limits.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 193,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 10,
       "isEntry": false
     },
     {
@@ -2468,6 +2832,66 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_autoreply_bot_ui.py",
+      "label": "test_autoreply_bot_ui",
+      "path": "core/tests/test_autoreply_bot_ui.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 367,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 6,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_autoreply_core.py",
+      "label": "test_autoreply_core",
+      "path": "core/tests/test_autoreply_core.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 449,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 8,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_autoreply_grpc.py",
+      "label": "test_autoreply_grpc",
+      "path": "core/tests/test_autoreply_grpc.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 314,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 9,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_backup_grpc_integration.py",
       "label": "test_backup_grpc_integration",
       "path": "core/tests/test_backup_grpc_integration.py",
@@ -2648,6 +3072,66 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_bot_every_n_panel.py",
+      "label": "test_bot_every_n_panel",
+      "path": "core/tests/test_bot_every_n_panel.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 151,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_bot_locale_matrix.py",
+      "label": "test_bot_locale_matrix",
+      "path": "core/tests/test_bot_locale_matrix.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 233,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_bot_menu_render_perf.py",
+      "label": "test_bot_menu_render_perf",
+      "path": "core/tests/test_bot_menu_render_perf.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 150,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_bot_registry_editor.py",
       "label": "test_bot_registry_editor",
       "path": "core/tests/test_bot_registry_editor.py",
@@ -2723,7 +3207,7 @@
         "tests"
       ],
       "isTest": true,
-      "fanIn": 1,
+      "fanIn": 2,
       "fanOut": 4,
       "isEntry": false
     },
@@ -2885,6 +3369,26 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_cleaner_and_profile_parity.py",
+      "label": "test_cleaner_and_profile_parity",
+      "path": "core/tests/test_cleaner_and_profile_parity.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 173,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 4,
       "isEntry": false
     },
     {
@@ -3328,6 +3832,26 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_forward_every_n.py",
+      "label": "test_forward_every_n",
+      "path": "core/tests/test_forward_every_n.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 530,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 9,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_forwarding_pipeline.py",
       "label": "test_forwarding_pipeline",
       "path": "core/tests/test_forwarding_pipeline.py",
@@ -3428,6 +3952,26 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_i18n_audit_engine.py",
+      "label": "test_i18n_audit_engine",
+      "path": "core/tests/test_i18n_audit_engine.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 254,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
       "id": "core/tests/test_identity_fields_are_not_inheritable.py",
       "label": "test_identity_fields_are_not_inheritable",
       "path": "core/tests/test_identity_fields_are_not_inheritable.py",
@@ -3485,6 +4029,26 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_invalid_chat_autopause.py",
+      "label": "test_invalid_chat_autopause",
+      "path": "core/tests/test_invalid_chat_autopause.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 207,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 6,
       "isEntry": false
     },
     {
@@ -3685,6 +4249,26 @@
       "isTest": true,
       "fanIn": 0,
       "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "core/tests/test_media_type_filters.py",
+      "label": "test_media_type_filters",
+      "path": "core/tests/test_media_type_filters.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 171,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 9,
       "isEntry": false
     },
     {
@@ -4517,7 +5101,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 97,
+      "loc": 128,
       "generated": false,
       "areas": [
         "tests"
@@ -4977,7 +5561,7 @@
       "lang": "python",
       "files": 1,
       "testFiles": 1,
-      "loc": 162,
+      "loc": 163,
       "generated": false,
       "areas": [
         "tests"
@@ -5108,6 +5692,26 @@
       "isEntry": false
     },
     {
+      "id": "core/tests/test_web_setting_labels_generated.py",
+      "label": "test_web_setting_labels_generated",
+      "path": "core/tests/test_web_setting_labels_generated.py",
+      "subsystem": "core",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "python",
+      "files": 1,
+      "testFiles": 1,
+      "loc": 42,
+      "generated": false,
+      "areas": [
+        "tests"
+      ],
+      "isTest": true,
+      "fanIn": 0,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
       "id": "api/internal/grpcclient",
       "label": "grpcclient",
       "path": "api/internal/grpcclient",
@@ -5117,7 +5721,7 @@
       "lang": "go",
       "files": 2,
       "testFiles": 1,
-      "loc": 226,
+      "loc": 228,
       "generated": false,
       "areas": [
         "internal"
@@ -5135,9 +5739,9 @@
       "granularity": "package",
       "granularityLabel": "package (directory)",
       "lang": "go",
-      "files": 41,
-      "testFiles": 28,
-      "loc": 10708,
+      "files": 48,
+      "testFiles": 32,
+      "loc": 13328,
       "generated": false,
       "areas": [
         "internal"
@@ -5237,7 +5841,7 @@
       "lang": "go",
       "files": 1,
       "testFiles": 0,
-      "loc": 204,
+      "loc": 228,
       "generated": false,
       "areas": [
         "(root)"
@@ -5257,7 +5861,7 @@
       "lang": "go",
       "files": 2,
       "testFiles": 0,
-      "loc": 13298,
+      "loc": 16738,
       "generated": true,
       "areas": [
         "(root)"
@@ -5297,14 +5901,14 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 4701,
+      "loc": 2142,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
-      "fanIn": 1,
-      "fanOut": 13,
+      "fanIn": 10,
+      "fanOut": 27,
       "isEntry": false
     },
     {
@@ -5328,6 +5932,26 @@
       "isEntry": false
     },
     {
+      "id": "web/frontend/src/addons.ts",
+      "label": "addons",
+      "path": "web/frontend/src/addons.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 132,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
       "id": "web/frontend/src/api.ts",
       "label": "api",
       "path": "web/frontend/src/api.ts",
@@ -5337,13 +5961,13 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 653,
+      "loc": 765,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
-      "fanIn": 13,
+      "fanIn": 16,
       "fanOut": 2,
       "isEntry": false
     },
@@ -5357,14 +5981,14 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 646,
+      "loc": 642,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 1,
+      "fanOut": 2,
       "isEntry": false
     },
     {
@@ -5377,14 +6001,14 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 270,
+      "loc": 269,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 2,
+      "fanOut": 3,
       "isEntry": false
     },
     {
@@ -5397,14 +6021,14 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 224,
+      "loc": 228,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 2,
+      "fanOut": 3,
       "isEntry": false
     },
     {
@@ -5417,14 +6041,14 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 231,
+      "loc": 229,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 1,
+      "fanOut": 2,
       "isEntry": false
     },
     {
@@ -5437,14 +6061,14 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 116,
+      "loc": 108,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 1,
+      "fanOut": 2,
       "isEntry": false
     },
     {
@@ -5457,14 +6081,34 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 244,
+      "loc": 242,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 2,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/components/LanguagePicker.tsx",
+      "label": "LanguagePicker",
+      "path": "web/frontend/src/components/LanguagePicker.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 65,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 1,
       "isEntry": false
     },
     {
@@ -5477,7 +6121,47 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 334,
+      "loc": 319,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/components/Navigation.tsx",
+      "label": "Navigation",
+      "path": "web/frontend/src/components/Navigation.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 208,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/components/PanelBoundary.tsx",
+      "label": "PanelBoundary",
+      "path": "web/frontend/src/components/PanelBoundary.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 68,
       "generated": false,
       "areas": [
         "web"
@@ -5485,6 +6169,26 @@
       "isTest": false,
       "fanIn": 1,
       "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/components/ShellWidgets.tsx",
+      "label": "ShellWidgets",
+      "path": "web/frontend/src/components/ShellWidgets.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 377,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 5,
       "isEntry": false
     },
     {
@@ -5497,14 +6201,14 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 213,
+      "loc": 205,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 2,
+      "fanOut": 3,
       "isEntry": false
     },
     {
@@ -5517,14 +6221,14 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 1033,
+      "loc": 1061,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 4,
+      "fanOut": 6,
       "isEntry": false
     },
     {
@@ -5544,7 +6248,7 @@
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 2,
+      "fanOut": 3,
       "isEntry": false
     },
     {
@@ -5557,14 +6261,314 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 2176,
+      "loc": 2281,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 3,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/components/ui/Primitives.tsx",
+      "label": "Primitives",
+      "path": "web/frontend/src/components/ui/Primitives.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 258,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 7,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/dashboard/branding.ts",
+      "label": "branding",
+      "path": "web/frontend/src/dashboard/branding.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 107,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/locales/en.ts",
+      "label": "en",
+      "path": "web/frontend/src/locales/en.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 1007,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/locales/engine.ts",
+      "label": "engine",
+      "path": "web/frontend/src/locales/engine.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 154,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 20,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/locales/es.ts",
+      "label": "es",
+      "path": "web/frontend/src/locales/es.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 1007,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/locales/fa.ts",
+      "label": "fa",
+      "path": "web/frontend/src/locales/fa.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 1007,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/locales/fr.ts",
+      "label": "fr",
+      "path": "web/frontend/src/locales/fr.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 1007,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/locales/id.ts",
+      "label": "id",
+      "path": "web/frontend/src/locales/id.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 1007,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/locales/index.ts",
+      "label": "index",
+      "path": "web/frontend/src/locales/index.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 53,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 0,
+      "isEntry": true
+    },
+    {
+      "id": "web/frontend/src/locales/it.ts",
+      "label": "it",
+      "path": "web/frontend/src/locales/it.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 1007,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/locales/pt.ts",
+      "label": "pt",
+      "path": "web/frontend/src/locales/pt.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 1007,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/locales/ru.ts",
+      "label": "ru",
+      "path": "web/frontend/src/locales/ru.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 1007,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/locales/types.ts",
+      "label": "types",
+      "path": "web/frontend/src/locales/types.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 94,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 10,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/locales/uz.ts",
+      "label": "uz",
+      "path": "web/frontend/src/locales/uz.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 1007,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/locales/zh.ts",
+      "label": "zh",
+      "path": "web/frontend/src/locales/zh.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 1007,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 1,
       "isEntry": false
     },
     {
@@ -5577,14 +6581,14 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 248,
+      "loc": 265,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
       "fanIn": 0,
-      "fanOut": 5,
+      "fanOut": 6,
       "isEntry": true
     },
     {
@@ -5597,7 +6601,67 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 260,
+      "loc": 252,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/panels/AiPanel.tsx",
+      "label": "AiPanel",
+      "path": "web/frontend/src/panels/AiPanel.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 132,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/panels/AutoReplyPanel.tsx",
+      "label": "AutoReplyPanel",
+      "path": "web/frontend/src/panels/AutoReplyPanel.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 1430,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/panels/DevopsPanel.tsx",
+      "label": "DevopsPanel",
+      "path": "web/frontend/src/panels/DevopsPanel.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 883,
       "generated": false,
       "areas": [
         "web"
@@ -5605,6 +6669,126 @@
       "isTest": false,
       "fanIn": 1,
       "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/panels/FiltersPanel.tsx",
+      "label": "FiltersPanel",
+      "path": "web/frontend/src/panels/FiltersPanel.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 113,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/panels/PvPanel.tsx",
+      "label": "PvPanel",
+      "path": "web/frontend/src/panels/PvPanel.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 248,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/panels/QueuePanel.tsx",
+      "label": "QueuePanel",
+      "path": "web/frontend/src/panels/QueuePanel.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 137,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/panels/RulesPanel.tsx",
+      "label": "RulesPanel",
+      "path": "web/frontend/src/panels/RulesPanel.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 491,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/panels/SessionsPanel.tsx",
+      "label": "SessionsPanel",
+      "path": "web/frontend/src/panels/SessionsPanel.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 88,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "web/frontend/src/panels/SimulatorPanel.tsx",
+      "label": "SimulatorPanel",
+      "path": "web/frontend/src/panels/SimulatorPanel.tsx",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 267,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 1,
       "isEntry": false
     },
     {
@@ -5617,13 +6801,13 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 85,
+      "loc": 280,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
-      "fanIn": 1,
+      "fanIn": 2,
       "fanOut": 0,
       "isEntry": false
     },
@@ -5643,7 +6827,7 @@
         "web"
       ],
       "isTest": false,
-      "fanIn": 4,
+      "fanIn": 5,
       "fanOut": 2,
       "isEntry": false
     },
@@ -5668,6 +6852,26 @@
       "isEntry": false
     },
     {
+      "id": "web/frontend/src/settingLabels.generated.ts",
+      "label": "settingLabels.generated",
+      "path": "web/frontend/src/settingLabels.generated.ts",
+      "subsystem": "web-frontend",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 159,
+      "generated": false,
+      "areas": [
+        "web"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
       "id": "web/frontend/src/settingProvenance.ts",
       "label": "settingProvenance",
       "path": "web/frontend/src/settingProvenance.ts",
@@ -5677,7 +6881,7 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 89,
+      "loc": 102,
       "generated": false,
       "areas": [
         "web"
@@ -5697,13 +6901,13 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 903,
+      "loc": 1104,
       "generated": false,
       "areas": [
         "web"
       ],
       "isTest": false,
-      "fanIn": 13,
+      "fanIn": 15,
       "fanOut": 0,
       "isEntry": false
     },
@@ -5717,7 +6921,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 44,
+      "loc": 55,
       "generated": false,
       "areas": [
         "lib"
@@ -5737,14 +6941,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 1212,
+      "loc": 1462,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
-      "fanIn": 19,
-      "fanOut": 4,
+      "fanIn": 24,
+      "fanOut": 5,
       "isEntry": false
     },
     {
@@ -5763,8 +6967,48 @@
         "lib"
       ],
       "isTest": false,
-      "fanIn": 19,
+      "fanIn": 24,
       "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/core/auto_reply_models.dart",
+      "label": "auto_reply_models",
+      "path": "mobile/lib/core/auto_reply_models.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 824,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 8,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/core/design_tokens.dart",
+      "label": "design_tokens",
+      "path": "mobile/lib/core/design_tokens.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 219,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 19,
+      "fanOut": 0,
       "isEntry": false
     },
     {
@@ -5797,14 +7041,34 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 22,
+      "loc": 29,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
-      "fanIn": 4,
+      "fanIn": 6,
       "fanOut": 0,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/core/layout.dart",
+      "label": "layout",
+      "path": "mobile/lib/core/layout.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 207,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 12,
+      "fanOut": 1,
       "isEntry": false
     },
     {
@@ -5817,13 +7081,13 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 1737,
+      "loc": 1769,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
-      "fanIn": 18,
+      "fanIn": 23,
       "fanOut": 2,
       "isEntry": false
     },
@@ -5897,14 +7161,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 431,
+      "loc": 509,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
-      "fanIn": 13,
-      "fanOut": 0,
+      "fanIn": 17,
+      "fanOut": 1,
       "isEntry": false
     },
     {
@@ -5917,7 +7181,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 306,
+      "loc": 307,
       "generated": false,
       "areas": [
         "lib"
@@ -5937,14 +7201,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 271,
+      "loc": 328,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 5,
+      "fanOut": 11,
       "isEntry": false
     },
     {
@@ -5968,6 +7232,166 @@
       "isEntry": false
     },
     {
+      "id": "mobile/lib/features/auto_reply/activity_view.dart",
+      "label": "activity_view",
+      "path": "mobile/lib/features/auto_reply/activity_view.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 423,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 9,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/features/auto_reply/auto_reply_screen.dart",
+      "label": "auto_reply_screen",
+      "path": "mobile/lib/features/auto_reply/auto_reply_screen.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 47,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 6,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/features/auto_reply/auto_reply_widgets.dart",
+      "label": "auto_reply_widgets",
+      "path": "mobile/lib/features/auto_reply/auto_reply_widgets.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 232,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 4,
+      "fanOut": 4,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/features/auto_reply/prompt_editor_dialog.dart",
+      "label": "prompt_editor_dialog",
+      "path": "mobile/lib/features/auto_reply/prompt_editor_dialog.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 187,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 5,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/features/auto_reply/prompts_view.dart",
+      "label": "prompts_view",
+      "path": "mobile/lib/features/auto_reply/prompts_view.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 524,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 10,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/features/auto_reply/rules_view.dart",
+      "label": "rules_view",
+      "path": "mobile/lib/features/auto_reply/rules_view.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 620,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 11,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/features/auto_reply/settings_view.dart",
+      "label": "settings_view",
+      "path": "mobile/lib/features/auto_reply/settings_view.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 611,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 10,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/features/auto_reply/targets_view.dart",
+      "label": "targets_view",
+      "path": "mobile/lib/features/auto_reply/targets_view.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 608,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 1,
+      "fanOut": 11,
+      "isEntry": false
+    },
+    {
       "id": "mobile/lib/features/chats/chat_picker_sheet.dart",
       "label": "chat_picker_sheet",
       "path": "mobile/lib/features/chats/chat_picker_sheet.dart",
@@ -5977,7 +7401,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 516,
+      "loc": 521,
       "generated": false,
       "areas": [
         "lib"
@@ -5997,14 +7421,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 604,
+      "loc": 639,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 8,
+      "fanOut": 10,
       "isEntry": false
     },
     {
@@ -6017,14 +7441,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 391,
+      "loc": 437,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 7,
+      "fanOut": 11,
       "isEntry": false
     },
     {
@@ -6037,14 +7461,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 612,
+      "loc": 613,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 6,
+      "fanOut": 7,
       "isEntry": false
     },
     {
@@ -6057,14 +7481,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 261,
+      "loc": 275,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 4,
+      "fanOut": 7,
       "isEntry": false
     },
     {
@@ -6077,14 +7501,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 313,
+      "loc": 311,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 11,
+      "fanOut": 12,
       "isEntry": false
     },
     {
@@ -6117,14 +7541,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 998,
+      "loc": 1255,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 2,
-      "fanOut": 6,
+      "fanOut": 14,
       "isEntry": false
     },
     {
@@ -6137,14 +7561,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 1419,
+      "loc": 1506,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 2,
-      "fanOut": 11,
+      "fanOut": 13,
       "isEntry": false
     },
     {
@@ -6157,14 +7581,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 1218,
+      "loc": 1239,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 2,
-      "fanOut": 4,
+      "fanOut": 5,
       "isEntry": false
     },
     {
@@ -6177,7 +7601,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 336,
+      "loc": 337,
       "generated": false,
       "areas": [
         "lib"
@@ -6197,14 +7621,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 645,
+      "loc": 735,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 7,
+      "fanOut": 16,
       "isEntry": false
     },
     {
@@ -6217,14 +7641,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 170,
+      "loc": 178,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 4,
+      "fanOut": 5,
       "isEntry": false
     },
     {
@@ -6237,14 +7661,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 312,
+      "loc": 315,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 6,
+      "fanOut": 8,
       "isEntry": false
     },
     {
@@ -6257,14 +7681,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 224,
+      "loc": 227,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
       "fanIn": 1,
-      "fanOut": 5,
+      "fanOut": 8,
       "isEntry": false
     },
     {
@@ -6297,7 +7721,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 590,
+      "loc": 880,
       "generated": false,
       "areas": [
         "lib"
@@ -6317,7 +7741,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 591,
+      "loc": 876,
       "generated": false,
       "areas": [
         "lib"
@@ -6337,7 +7761,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 590,
+      "loc": 881,
       "generated": false,
       "areas": [
         "lib"
@@ -6357,7 +7781,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 586,
+      "loc": 872,
       "generated": false,
       "areas": [
         "lib"
@@ -6377,7 +7801,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 594,
+      "loc": 880,
       "generated": false,
       "areas": [
         "lib"
@@ -6397,13 +7821,13 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 758,
+      "loc": 1046,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
-      "fanIn": 21,
+      "fanIn": 33,
       "fanOut": 10,
       "isEntry": false
     },
@@ -6417,7 +7841,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 596,
+      "loc": 887,
       "generated": false,
       "areas": [
         "lib"
@@ -6437,7 +7861,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 588,
+      "loc": 875,
       "generated": false,
       "areas": [
         "lib"
@@ -6457,7 +7881,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 588,
+      "loc": 876,
       "generated": false,
       "areas": [
         "lib"
@@ -6477,7 +7901,7 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 558,
+      "loc": 834,
       "generated": false,
       "areas": [
         "lib"
@@ -6508,6 +7932,86 @@
       "isEntry": true
     },
     {
+      "id": "mobile/lib/widgets/app_button.dart",
+      "label": "app_button",
+      "path": "mobile/lib/widgets/app_button.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 203,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 5,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/widgets/app_card.dart",
+      "label": "app_card",
+      "path": "mobile/lib/widgets/app_card.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 107,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 8,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/widgets/app_field.dart",
+      "label": "app_field",
+      "path": "mobile/lib/widgets/app_field.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 85,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 5,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/widgets/app_toast.dart",
+      "label": "app_toast",
+      "path": "mobile/lib/widgets/app_toast.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 60,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 2,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
       "id": "mobile/lib/widgets/app_ui.dart",
       "label": "app_ui",
       "path": "mobile/lib/widgets/app_ui.dart",
@@ -6517,14 +8021,14 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 681,
+      "loc": 635,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
-      "fanIn": 6,
-      "fanOut": 1,
+      "fanIn": 15,
+      "fanOut": 6,
       "isEntry": false
     },
     {
@@ -6548,6 +8052,46 @@
       "isEntry": false
     },
     {
+      "id": "mobile/lib/widgets/empty_state.dart",
+      "label": "empty_state",
+      "path": "mobile/lib/widgets/empty_state.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 123,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/widgets/error_state.dart",
+      "label": "error_state",
+      "path": "mobile/lib/widgets/error_state.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 79,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 3,
+      "isEntry": false
+    },
+    {
       "id": "mobile/lib/widgets/list_state_view.dart",
       "label": "list_state_view",
       "path": "mobile/lib/widgets/list_state_view.dart",
@@ -6557,14 +8101,54 @@
       "lang": "dart",
       "files": 1,
       "testFiles": 0,
-      "loc": 106,
+      "loc": 108,
       "generated": false,
       "areas": [
         "lib"
       ],
       "isTest": false,
-      "fanIn": 1,
-      "fanOut": 0,
+      "fanIn": 0,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/widgets/loading_list.dart",
+      "label": "loading_list",
+      "path": "mobile/lib/widgets/loading_list.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 125,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 14,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "mobile/lib/widgets/section_header.dart",
+      "label": "section_header",
+      "path": "mobile/lib/widgets/section_header.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 67,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 1,
       "isEntry": false
     },
     {
@@ -6588,6 +8172,26 @@
       "isEntry": false
     },
     {
+      "id": "mobile/lib/widgets/status_badge.dart",
+      "label": "status_badge",
+      "path": "mobile/lib/widgets/status_badge.dart",
+      "subsystem": "mobile",
+      "granularity": "file",
+      "granularityLabel": "library (file)",
+      "lang": "dart",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 93,
+      "generated": false,
+      "areas": [
+        "lib"
+      ],
+      "isTest": false,
+      "fanIn": 3,
+      "fanOut": 1,
+      "isEntry": false
+    },
+    {
       "id": "atfcli/__init__.py",
       "label": "__init__",
       "path": "atfcli/__init__.py",
@@ -6603,7 +8207,7 @@
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 16,
+      "fanIn": 17,
       "fanOut": 1,
       "isEntry": false
     },
@@ -6643,7 +8247,7 @@
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 2,
+      "fanIn": 3,
       "fanOut": 1,
       "isEntry": false
     },
@@ -6957,14 +8561,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 271,
+      "loc": 358,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
       "fanIn": 8,
-      "fanOut": 7,
+      "fanOut": 10,
       "isEntry": false
     },
     {
@@ -7017,13 +8621,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 198,
+      "loc": 205,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 28,
+      "fanIn": 29,
       "fanOut": 3,
       "isEntry": false
     },
@@ -7097,14 +8701,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 86,
+      "loc": 141,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
       "fanIn": 0,
-      "fanOut": 3,
+      "fanOut": 7,
       "isEntry": false
     },
     {
@@ -7617,13 +9221,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 189,
+      "loc": 205,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 9,
+      "fanIn": 10,
       "fanOut": 0,
       "isEntry": false
     },
@@ -7663,7 +9267,7 @@
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 2,
+      "fanIn": 4,
       "fanOut": 1,
       "isEntry": false
     },
@@ -7797,13 +9401,13 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 511,
+      "loc": 553,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
-      "fanIn": 11,
+      "fanIn": 14,
       "fanOut": 1,
       "isEntry": false
     },
@@ -8017,14 +9621,14 @@
       "lang": "python",
       "files": 1,
       "testFiles": 0,
-      "loc": 457,
+      "loc": 731,
       "generated": false,
       "areas": [
         "atfcli"
       ],
       "isTest": false,
       "fanIn": 4,
-      "fanOut": 3,
+      "fanOut": 5,
       "isEntry": false
     },
     {
@@ -8157,7 +9761,7 @@
       "lang": "proto",
       "files": 1,
       "testFiles": 0,
-      "loc": 1032,
+      "loc": 1302,
       "generated": false,
       "areas": [
         "proto"
@@ -8317,7 +9921,7 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 70,
+      "loc": 73,
       "generated": false,
       "areas": [
         "src"
@@ -8417,7 +10021,7 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 422,
+      "loc": 428,
       "generated": false,
       "areas": [
         "src"
@@ -8577,7 +10181,7 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 223,
+      "loc": 235,
       "generated": false,
       "areas": [
         "src"
@@ -8717,7 +10321,7 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 699,
+      "loc": 809,
       "generated": false,
       "areas": [
         "src"
@@ -8737,7 +10341,7 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 101,
+      "loc": 102,
       "generated": false,
       "areas": [
         "src"
@@ -8777,7 +10381,7 @@
       "lang": "typescript",
       "files": 1,
       "testFiles": 0,
-      "loc": 187,
+      "loc": 193,
       "generated": false,
       "areas": [
         "src"
@@ -8817,7 +10421,7 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 152,
+      "loc": 154,
       "generated": false,
       "areas": [
         "src"
@@ -8837,13 +10441,13 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 260,
+      "loc": 316,
       "generated": false,
       "areas": [
         "src"
       ],
       "isTest": false,
-      "fanIn": 44,
+      "fanIn": 45,
       "fanOut": 5,
       "isEntry": false
     },
@@ -8997,7 +10601,7 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 234,
+      "loc": 235,
       "generated": false,
       "areas": [
         "src"
@@ -9037,7 +10641,7 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 252,
+      "loc": 253,
       "generated": false,
       "areas": [
         "src"
@@ -9098,6 +10702,26 @@
       "files": 1,
       "testFiles": 0,
       "loc": 52,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 2,
+      "isEntry": false
+    },
+    {
+      "id": "website/src/pages/features/forward-every-n.astro",
+      "label": "forward-every-n",
+      "path": "website/src/pages/features/forward-every-n.astro",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "route/component (file)",
+      "lang": "astro",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 77,
       "generated": false,
       "areas": [
         "src"
@@ -9477,7 +11101,7 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 698,
+      "loc": 699,
       "generated": false,
       "areas": [
         "src"
@@ -9708,6 +11332,26 @@
       "isEntry": false
     },
     {
+      "id": "website/src/pages/site.webmanifest.ts",
+      "label": "site.webmanifest",
+      "path": "website/src/pages/site.webmanifest.ts",
+      "subsystem": "website",
+      "granularity": "file",
+      "granularityLabel": "module (file)",
+      "lang": "typescript",
+      "files": 1,
+      "testFiles": 0,
+      "loc": 52,
+      "generated": false,
+      "areas": [
+        "src"
+      ],
+      "isTest": false,
+      "fanIn": 0,
+      "fanOut": 0,
+      "isEntry": false
+    },
+    {
       "id": "website/src/pages/status/index.astro",
       "label": "index",
       "path": "website/src/pages/status/index.astro",
@@ -9777,7 +11421,7 @@
       "lang": "astro",
       "files": 1,
       "testFiles": 0,
-      "loc": 292,
+      "loc": 293,
       "generated": false,
       "areas": [
         "src"
@@ -9843,7 +11487,7 @@
         "src"
       ],
       "isTest": false,
-      "fanIn": 57,
+      "fanIn": 58,
       "fanOut": 0,
       "isEntry": false
     },
@@ -9869,6 +11513,96 @@
     }
   ],
   "edges": [
+    {
+      "source": "core/application/autoreply/__init__.py",
+      "target": "core/application/autoreply/context.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/__init__.py",
+      "target": "core/application/autoreply/engine.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/__init__.py",
+      "target": "core/application/autoreply/service.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/__init__.py",
+      "target": "core/application/autoreply/targeting.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/__init__.py",
+      "target": "core/application/autoreply/worker.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/context.py",
+      "target": "core/domain/autoreply.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/engine.py",
+      "target": "core/domain/autoreply.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/engine.py",
+      "target": "core/application/autoreply/context.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/engine.py",
+      "target": "core/application/autoreply/targeting.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/service.py",
+      "target": "core/domain/autoreply.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/service.py",
+      "target": "core/application/autoreply/context.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/service.py",
+      "target": "core/application/autoreply/engine.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/service.py",
+      "target": "core/application/autoreply/worker.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/service.py",
+      "target": "core/infrastructure/ai/providers.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/targeting.py",
+      "target": "core/domain/autoreply.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/worker.py",
+      "target": "core/domain/autoreply.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/worker.py",
+      "target": "core/application/autoreply/context.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/autoreply/worker.py",
+      "target": "core/infrastructure/ai/providers.py",
+      "kind": "import"
+    },
     {
       "source": "core/application/backup_service.py",
       "target": "core/domain/entities.py",
@@ -9931,6 +11665,16 @@
     },
     {
       "source": "core/application/pipeline.py",
+      "target": "core/domain/forward_interval.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/pipeline.py",
+      "target": "core/domain/media_filter.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/pipeline.py",
       "target": "core/domain/services.py",
       "kind": "import"
     },
@@ -9987,6 +11731,16 @@
     {
       "source": "core/application/use_cases.py",
       "target": "core/domain/services.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/use_cases.py",
+      "target": "core/domain/media_filter.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/application/use_cases.py",
+      "target": "core/domain/forward_interval.py",
       "kind": "import"
     },
     {
@@ -10056,6 +11810,11 @@
     },
     {
       "source": "core/domain/entities.py",
+      "target": "core/domain/forward_interval.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/domain/entities.py",
       "target": "core/domain/__init__.py",
       "kind": "import"
     },
@@ -10066,6 +11825,11 @@
     },
     {
       "source": "core/domain/entities.py",
+      "target": "core/domain/content_policy.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/domain/media_filter.py",
       "target": "core/domain/content_policy.py",
       "kind": "import"
     },
@@ -10092,6 +11856,11 @@
     {
       "source": "core/domain/services.py",
       "target": "core/domain/content_policy.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/domain/services.py",
+      "target": "core/domain/media_filter.py",
       "kind": "import"
     },
     {
@@ -10166,6 +11935,21 @@
     },
     {
       "source": "core/infrastructure/grpc_server/admin_servicer.py",
+      "target": "core/proto/autoforward_pb2_grpc.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/grpc_server/autoreply_servicer.py",
+      "target": "core/proto/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/grpc_server/autoreply_servicer.py",
+      "target": "core/proto/autoforward_pb2.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/grpc_server/autoreply_servicer.py",
       "target": "core/proto/autoforward_pb2_grpc.py",
       "kind": "import"
     },
@@ -10270,6 +12054,16 @@
       "kind": "import"
     },
     {
+      "source": "core/infrastructure/persistence/autoreply_repositories.py",
+      "target": "core/domain/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/persistence/autoreply_repositories.py",
+      "target": "core/domain/autoreply.py",
+      "kind": "import"
+    },
+    {
       "source": "core/infrastructure/persistence/db_observability.py",
       "target": "core/infrastructure/persistence/audit_events.py",
       "kind": "import"
@@ -10342,6 +12136,16 @@
     {
       "source": "core/infrastructure/telegram/auth_state.py",
       "target": "core/application/repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/autoreply_bridge.py",
+      "target": "core/domain/autoreply.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/autoreply_bridge.py",
+      "target": "core/application/autoreply/worker.py",
       "kind": "import"
     },
     {
@@ -10460,6 +12264,16 @@
       "kind": "import"
     },
     {
+      "source": "core/infrastructure/telegram/dispatcher.py",
+      "target": "core/infrastructure/telegram/autoreply_bridge.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/dispatcher.py",
+      "target": "core/application/autoreply/worker.py",
+      "kind": "import"
+    },
+    {
       "source": "core/infrastructure/telegram/durable_queue.py",
       "target": "core/application/repositories.py",
       "kind": "import"
@@ -10486,12 +12300,22 @@
     },
     {
       "source": "core/infrastructure/telegram/durable_queue.py",
+      "target": "core/infrastructure/telegram/failure_policy.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/durable_queue.py",
       "target": "core/infrastructure/telegram/bot_transport.py",
       "kind": "import"
     },
     {
       "source": "core/infrastructure/telegram/durable_queue.py",
       "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/failure_policy.py",
+      "target": "core/infrastructure/telegram/errors.py",
       "kind": "import"
     },
     {
@@ -10512,6 +12336,11 @@
     {
       "source": "core/infrastructure/telegram/pro_bot_ui.py",
       "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/pro_bot_ui.py",
+      "target": "core/domain/profile_recovery.py",
       "kind": "import"
     },
     {
@@ -10626,6 +12455,11 @@
     },
     {
       "source": "core/infrastructure/telegram/pro_bot_ui.py",
+      "target": "core/infrastructure/telegram/autoreply_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/infrastructure/telegram/pro_bot_ui.py",
       "target": "core/infrastructure/ai/providers.py",
       "kind": "import"
     },
@@ -10722,6 +12556,11 @@
     {
       "source": "core/main.py",
       "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
+      "target": "core/infrastructure/persistence/account_limits.py",
       "kind": "import"
     },
     {
@@ -10826,6 +12665,31 @@
     },
     {
       "source": "core/main.py",
+      "target": "core/application/autoreply/engine.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
+      "target": "core/application/autoreply/service.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
+      "target": "core/application/autoreply/worker.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
+      "target": "core/infrastructure/persistence/autoreply_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
+      "target": "core/infrastructure/telegram/autoreply_bridge.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
       "target": "core/infrastructure/telegram/bot_transport.py",
       "kind": "import"
     },
@@ -10871,6 +12735,11 @@
     },
     {
       "source": "core/main.py",
+      "target": "core/infrastructure/grpc_server/autoreply_servicer.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/main.py",
       "target": "core/infrastructure/grpc_server/task_servicer.py",
       "kind": "import"
     },
@@ -10912,6 +12781,16 @@
     {
       "source": "core/proto/__init__.py",
       "target": "core/proto/autoforward_pb2_grpc.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/proto/autoforward_pb2_grpc.py",
+      "target": "core/proto/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/proto/autoforward_pb2_grpc.py",
+      "target": "core/proto/autoforward_pb2.py",
       "kind": "import"
     },
     {
@@ -10967,6 +12846,56 @@
     {
       "source": "core/tests/bot_dispatch.py",
       "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_account_time_limits.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_account_time_limits.py",
+      "target": "core/domain/value_objects.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_account_time_limits.py",
+      "target": "core/infrastructure/persistence/account_limits.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_account_time_limits.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_account_time_limits.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_account_time_limits.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_account_time_limits.py",
+      "target": "core/infrastructure/telegram/client_pool.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_account_time_limits.py",
+      "target": "core/infrastructure/telegram/durable_queue.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_account_time_limits.py",
+      "target": "core/infrastructure/telegram/failure_policy.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_account_time_limits.py",
+      "target": "core/application/pipeline.py",
       "kind": "import"
     },
     {
@@ -11490,6 +13419,121 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_autoreply_bot_ui.py",
+      "target": "core/application/autoreply/service.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_bot_ui.py",
+      "target": "core/infrastructure/persistence/autoreply_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_bot_ui.py",
+      "target": "core/infrastructure/telegram/autoreply_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_bot_ui.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_bot_ui.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_bot_ui.py",
+      "target": "core/domain/autoreply.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_core.py",
+      "target": "core/application/autoreply/context.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_core.py",
+      "target": "core/application/autoreply/engine.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_core.py",
+      "target": "core/application/autoreply/service.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_core.py",
+      "target": "core/application/autoreply/targeting.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_core.py",
+      "target": "core/application/autoreply/worker.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_core.py",
+      "target": "core/domain/autoreply.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_core.py",
+      "target": "core/infrastructure/persistence/autoreply_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_core.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_grpc.py",
+      "target": "core/application/autoreply/engine.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_grpc.py",
+      "target": "core/application/autoreply/service.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_grpc.py",
+      "target": "core/domain/autoreply.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_grpc.py",
+      "target": "core/infrastructure/grpc_server/autoreply_servicer.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_grpc.py",
+      "target": "core/infrastructure/persistence/autoreply_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_grpc.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_grpc.py",
+      "target": "core/proto/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_grpc.py",
+      "target": "core/proto/autoforward_pb2.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_autoreply_grpc.py",
+      "target": "core/proto/autoforward_pb2_grpc.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_backup_grpc_integration.py",
       "target": "core/infrastructure/grpc_server/__init__.py",
       "kind": "import"
@@ -11762,6 +13806,46 @@
     {
       "source": "core/tests/test_bot_diagnostics.py",
       "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_every_n_panel.py",
+      "target": "core/tests/test_bot_route_panel.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_every_n_panel.py",
+      "target": "core/infrastructure/telegram/ui_state_manager.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_locale_matrix.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_locale_matrix.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_locale_matrix.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_menu_render_perf.py",
+      "target": "core/infrastructure/telegram/i18n.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_menu_render_perf.py",
+      "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_bot_menu_render_perf.py",
+      "target": "core/infrastructure/telegram/ui_styles.py",
       "kind": "import"
     },
     {
@@ -12047,6 +14131,26 @@
     {
       "source": "core/tests/test_channel_cursor_persistence.py",
       "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_cleaner_and_profile_parity.py",
+      "target": "core/application/use_cases.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_cleaner_and_profile_parity.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_cleaner_and_profile_parity.py",
+      "target": "core/domain/profile_recovery.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_cleaner_and_profile_parity.py",
+      "target": "core/domain/value_objects.py",
       "kind": "import"
     },
     {
@@ -12465,6 +14569,51 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_forward_every_n.py",
+      "target": "core/application/pipeline.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_every_n.py",
+      "target": "core/domain/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_every_n.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_every_n.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_every_n.py",
+      "target": "core/domain/forward_interval.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_every_n.py",
+      "target": "core/domain/services.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_every_n.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_every_n.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_forward_every_n.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_forwarding_pipeline.py",
       "target": "core/domain/entities.py",
       "kind": "import"
@@ -12670,6 +14819,36 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_invalid_chat_autopause.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_invalid_chat_autopause.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_invalid_chat_autopause.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_invalid_chat_autopause.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_invalid_chat_autopause.py",
+      "target": "core/infrastructure/telegram/durable_queue.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_invalid_chat_autopause.py",
+      "target": "core/infrastructure/telegram/failure_policy.py",
+      "kind": "import"
+    },
+    {
       "source": "core/tests/test_jwt_secret_hardening.py",
       "target": "core/infrastructure/grpc_server/account_servicer.py",
       "kind": "import"
@@ -12822,6 +15001,51 @@
     {
       "source": "core/tests/test_match_logic_is_named_not_coded.py",
       "target": "core/infrastructure/telegram/pro_bot_ui.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_media_type_filters.py",
+      "target": "core/application/pipeline.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_media_type_filters.py",
+      "target": "core/domain/entities.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_media_type_filters.py",
+      "target": "core/domain/media_filter.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_media_type_filters.py",
+      "target": "core/domain/services.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_media_type_filters.py",
+      "target": "core/domain/value_objects.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_media_type_filters.py",
+      "target": "core/infrastructure/persistence/database.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_media_type_filters.py",
+      "target": "core/infrastructure/persistence/sqlite_repositories.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_media_type_filters.py",
+      "target": "core/infrastructure/security/crypto.py",
+      "kind": "import"
+    },
+    {
+      "source": "core/tests/test_media_type_filters.py",
+      "target": "core/domain/rule_settings.py",
       "kind": "import"
     },
     {
@@ -14530,6 +16754,11 @@
       "kind": "import"
     },
     {
+      "source": "core/tests/test_web_setting_labels_generated.py",
+      "target": "core/domain/rule_settings.py",
+      "kind": "import"
+    },
+    {
       "source": "api/internal/grpcclient",
       "target": "api/internal/middleware",
       "kind": "import"
@@ -14626,7 +16855,107 @@
     },
     {
       "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/components/LanguagePicker.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/session.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/components/PanelBoundary.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/components/Navigation.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/components/ShellWidgets.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/components/ui/Primitives.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/dashboard/branding.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/panels/RulesPanel.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/panels/SimulatorPanel.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/panels/AiPanel.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/panels/PvPanel.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/panels/AutoReplyPanel.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/panels/FiltersPanel.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/panels/SessionsPanel.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/panels/QueuePanel.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/panels/DevopsPanel.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/components/TaskOverviewModal.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
       "target": "web/frontend/src/components/AdminPanel.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/App.tsx",
+      "target": "web/frontend/src/components/JobsPanel.tsx",
       "kind": "import"
     },
     {
@@ -14641,37 +16970,7 @@
     },
     {
       "source": "web/frontend/src/App.tsx",
-      "target": "web/frontend/src/components/TaskOverviewModal.tsx",
-      "kind": "import"
-    },
-    {
-      "source": "web/frontend/src/App.tsx",
-      "target": "web/frontend/src/components/DiagnosticsPanel.tsx",
-      "kind": "import"
-    },
-    {
-      "source": "web/frontend/src/App.tsx",
-      "target": "web/frontend/src/components/JobsPanel.tsx",
-      "kind": "import"
-    },
-    {
-      "source": "web/frontend/src/App.tsx",
-      "target": "web/frontend/src/components/LogPolicyPanel.tsx",
-      "kind": "import"
-    },
-    {
-      "source": "web/frontend/src/App.tsx",
       "target": "web/frontend/src/components/SystemPanel.tsx",
-      "kind": "import"
-    },
-    {
-      "source": "web/frontend/src/App.tsx",
-      "target": "web/frontend/src/types.ts",
-      "kind": "import"
-    },
-    {
-      "source": "web/frontend/src/App.tsx",
-      "target": "web/frontend/src/session.ts",
       "kind": "import"
     },
     {
@@ -14690,6 +16989,11 @@
       "kind": "import"
     },
     {
+      "source": "web/frontend/src/components/AdminPanel.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
       "source": "web/frontend/src/components/AuditEventsPanel.tsx",
       "target": "web/frontend/src/api.ts",
       "kind": "import"
@@ -14700,6 +17004,11 @@
       "kind": "import"
     },
     {
+      "source": "web/frontend/src/components/AuditEventsPanel.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
       "source": "web/frontend/src/components/BotRouteField.tsx",
       "target": "web/frontend/src/api.ts",
       "kind": "import"
@@ -14707,6 +17016,11 @@
     {
       "source": "web/frontend/src/components/BotRouteField.tsx",
       "target": "web/frontend/src/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/BotRouteField.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
       "kind": "import"
     },
     {
@@ -14715,11 +17029,21 @@
       "kind": "import"
     },
     {
+      "source": "web/frontend/src/components/ClientSettings.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
       "source": "web/frontend/src/components/DiagnosticsPanel.tsx",
       "target": "web/frontend/src/types.ts",
       "kind": "import"
     },
     {
+      "source": "web/frontend/src/components/DiagnosticsPanel.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
       "source": "web/frontend/src/components/JobsPanel.tsx",
       "target": "web/frontend/src/api.ts",
       "kind": "import"
@@ -14727,6 +17051,16 @@
     {
       "source": "web/frontend/src/components/JobsPanel.tsx",
       "target": "web/frontend/src/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/JobsPanel.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/LanguagePicker.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
       "kind": "import"
     },
     {
@@ -14740,6 +17074,51 @@
       "kind": "import"
     },
     {
+      "source": "web/frontend/src/components/LogPolicyPanel.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/Navigation.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/PanelBoundary.tsx",
+      "target": "web/frontend/src/components/ui/Primitives.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/PanelBoundary.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/ShellWidgets.tsx",
+      "target": "web/frontend/src/api.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/ShellWidgets.tsx",
+      "target": "web/frontend/src/session.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/ShellWidgets.tsx",
+      "target": "web/frontend/src/providerKey.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/ShellWidgets.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/ShellWidgets.tsx",
+      "target": "web/frontend/src/types.ts",
+      "kind": "import"
+    },
+    {
       "source": "web/frontend/src/components/SystemPanel.tsx",
       "target": "web/frontend/src/api.ts",
       "kind": "import"
@@ -14747,6 +17126,11 @@
     {
       "source": "web/frontend/src/components/SystemPanel.tsx",
       "target": "web/frontend/src/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/SystemPanel.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
       "kind": "import"
     },
     {
@@ -14770,6 +17154,16 @@
       "kind": "import"
     },
     {
+      "source": "web/frontend/src/components/TaskControlPanel.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/TaskControlPanel.tsx",
+      "target": "web/frontend/src/settingLabels.generated.ts",
+      "kind": "import"
+    },
+    {
       "source": "web/frontend/src/components/TaskLogsPanel.tsx",
       "target": "web/frontend/src/api.ts",
       "kind": "import"
@@ -14780,8 +17174,23 @@
       "kind": "import"
     },
     {
+      "source": "web/frontend/src/components/TaskLogsPanel.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
       "source": "web/frontend/src/components/TaskOverviewModal.tsx",
       "target": "web/frontend/src/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/TaskOverviewModal.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/TaskOverviewModal.tsx",
+      "target": "web/frontend/src/addons.ts",
       "kind": "import"
     },
     {
@@ -14792,6 +17201,66 @@
     {
       "source": "web/frontend/src/components/TaskOverviewModal.tsx",
       "target": "web/frontend/src/components/TaskLogsPanel.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/components/ui/Primitives.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/dashboard/branding.ts",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/locales/en.ts",
+      "target": "web/frontend/src/locales/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/locales/es.ts",
+      "target": "web/frontend/src/locales/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/locales/fa.ts",
+      "target": "web/frontend/src/locales/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/locales/fr.ts",
+      "target": "web/frontend/src/locales/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/locales/id.ts",
+      "target": "web/frontend/src/locales/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/locales/it.ts",
+      "target": "web/frontend/src/locales/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/locales/pt.ts",
+      "target": "web/frontend/src/locales/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/locales/ru.ts",
+      "target": "web/frontend/src/locales/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/locales/uz.ts",
+      "target": "web/frontend/src/locales/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/locales/zh.ts",
+      "target": "web/frontend/src/locales/types.ts",
       "kind": "import"
     },
     {
@@ -14820,13 +17289,133 @@
       "kind": "import"
     },
     {
+      "source": "web/frontend/src/main.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
       "source": "web/frontend/src/pages/Auth.tsx",
       "target": "web/frontend/src/api.ts",
       "kind": "import"
     },
     {
       "source": "web/frontend/src/pages/Auth.tsx",
+      "target": "web/frontend/src/components/LanguagePicker.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/pages/Auth.tsx",
       "target": "web/frontend/src/session.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/pages/Auth.tsx",
+      "target": "web/frontend/src/locales/engine.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/AiPanel.tsx",
+      "target": "web/frontend/src/components/ShellWidgets.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/AiPanel.tsx",
+      "target": "web/frontend/src/api.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/AiPanel.tsx",
+      "target": "web/frontend/src/components/ui/Primitives.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/AiPanel.tsx",
+      "target": "web/frontend/src/App.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/AutoReplyPanel.tsx",
+      "target": "web/frontend/src/App.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/AutoReplyPanel.tsx",
+      "target": "web/frontend/src/api.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/AutoReplyPanel.tsx",
+      "target": "web/frontend/src/types.ts",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/DevopsPanel.tsx",
+      "target": "web/frontend/src/App.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/DevopsPanel.tsx",
+      "target": "web/frontend/src/components/LogPolicyPanel.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/FiltersPanel.tsx",
+      "target": "web/frontend/src/components/ui/Primitives.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/FiltersPanel.tsx",
+      "target": "web/frontend/src/App.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/PvPanel.tsx",
+      "target": "web/frontend/src/App.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/QueuePanel.tsx",
+      "target": "web/frontend/src/components/ui/Primitives.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/QueuePanel.tsx",
+      "target": "web/frontend/src/App.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/RulesPanel.tsx",
+      "target": "web/frontend/src/components/ShellWidgets.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/RulesPanel.tsx",
+      "target": "web/frontend/src/components/DiagnosticsPanel.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/RulesPanel.tsx",
+      "target": "web/frontend/src/components/ui/Primitives.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/RulesPanel.tsx",
+      "target": "web/frontend/src/App.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/SessionsPanel.tsx",
+      "target": "web/frontend/src/components/ui/Primitives.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/SessionsPanel.tsx",
+      "target": "web/frontend/src/App.tsx",
+      "kind": "import"
+    },
+    {
+      "source": "web/frontend/src/panels/SimulatorPanel.tsx",
+      "target": "web/frontend/src/App.tsx",
       "kind": "import"
     },
     {
@@ -14876,6 +17465,11 @@
     },
     {
       "source": "mobile/lib/core/api_client.dart",
+      "target": "mobile/lib/core/auto_reply_models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/core/api_client.dart",
       "target": "mobile/lib/core/env.dart",
       "kind": "import"
     },
@@ -14910,6 +17504,16 @@
       "kind": "import"
     },
     {
+      "source": "mobile/lib/core/auto_reply_models.dart",
+      "target": "mobile/lib/core/json_cast.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/core/layout.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
       "source": "mobile/lib/core/models.dart",
       "target": "mobile/lib/core/json_cast.dart",
       "kind": "import"
@@ -14927,6 +17531,11 @@
     {
       "source": "mobile/lib/core/storage.dart",
       "target": "mobile/lib/core/json_cast.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/core/theme.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
       "kind": "import"
     },
     {
@@ -14956,12 +17565,42 @@
     },
     {
       "source": "mobile/lib/features/ai/ai_screen.dart",
+      "target": "mobile/lib/core/layout.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/ai/ai_screen.dart",
       "target": "mobile/lib/core/models.dart",
       "kind": "import"
     },
     {
       "source": "mobile/lib/features/ai/ai_screen.dart",
+      "target": "mobile/lib/core/theme.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/ai/ai_screen.dart",
       "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/ai/ai_screen.dart",
+      "target": "mobile/lib/widgets/app_card.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/ai/ai_screen.dart",
+      "target": "mobile/lib/widgets/app_ui.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/ai/ai_screen.dart",
+      "target": "mobile/lib/widgets/loading_list.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/ai/ai_screen.dart",
+      "target": "mobile/lib/features/auto_reply/auto_reply_screen.dart",
       "kind": "import"
     },
     {
@@ -14995,6 +17634,336 @@
       "kind": "import"
     },
     {
+      "source": "mobile/lib/features/auto_reply/activity_view.dart",
+      "target": "mobile/lib/core/api_client.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/activity_view.dart",
+      "target": "mobile/lib/core/app_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/activity_view.dart",
+      "target": "mobile/lib/core/auto_reply_models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/activity_view.dart",
+      "target": "mobile/lib/core/models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/activity_view.dart",
+      "target": "mobile/lib/core/theme.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/activity_view.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/activity_view.dart",
+      "target": "mobile/lib/widgets/app_card.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/activity_view.dart",
+      "target": "mobile/lib/widgets/app_ui.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/activity_view.dart",
+      "target": "mobile/lib/widgets/loading_list.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/auto_reply_screen.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/auto_reply_screen.dart",
+      "target": "mobile/lib/features/auto_reply/activity_view.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/auto_reply_screen.dart",
+      "target": "mobile/lib/features/auto_reply/prompts_view.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/auto_reply_screen.dart",
+      "target": "mobile/lib/features/auto_reply/rules_view.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/auto_reply_screen.dart",
+      "target": "mobile/lib/features/auto_reply/settings_view.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/auto_reply_screen.dart",
+      "target": "mobile/lib/features/auto_reply/targets_view.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/auto_reply_widgets.dart",
+      "target": "mobile/lib/core/auto_reply_models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/auto_reply_widgets.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/auto_reply_widgets.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/auto_reply_widgets.dart",
+      "target": "mobile/lib/widgets/app_field.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/prompt_editor_dialog.dart",
+      "target": "mobile/lib/core/auto_reply_models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/prompt_editor_dialog.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/prompt_editor_dialog.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/prompt_editor_dialog.dart",
+      "target": "mobile/lib/widgets/app_field.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/prompt_editor_dialog.dart",
+      "target": "mobile/lib/features/auto_reply/auto_reply_widgets.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/prompts_view.dart",
+      "target": "mobile/lib/core/api_client.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/prompts_view.dart",
+      "target": "mobile/lib/core/app_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/prompts_view.dart",
+      "target": "mobile/lib/core/auto_reply_models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/prompts_view.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/prompts_view.dart",
+      "target": "mobile/lib/core/models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/prompts_view.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/prompts_view.dart",
+      "target": "mobile/lib/widgets/app_card.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/prompts_view.dart",
+      "target": "mobile/lib/widgets/app_ui.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/prompts_view.dart",
+      "target": "mobile/lib/widgets/loading_list.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/prompts_view.dart",
+      "target": "mobile/lib/features/auto_reply/prompt_editor_dialog.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/rules_view.dart",
+      "target": "mobile/lib/core/api_client.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/rules_view.dart",
+      "target": "mobile/lib/core/app_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/rules_view.dart",
+      "target": "mobile/lib/core/auto_reply_models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/rules_view.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/rules_view.dart",
+      "target": "mobile/lib/core/models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/rules_view.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/rules_view.dart",
+      "target": "mobile/lib/widgets/app_card.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/rules_view.dart",
+      "target": "mobile/lib/widgets/app_field.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/rules_view.dart",
+      "target": "mobile/lib/widgets/app_ui.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/rules_view.dart",
+      "target": "mobile/lib/widgets/loading_list.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/rules_view.dart",
+      "target": "mobile/lib/features/auto_reply/auto_reply_widgets.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/settings_view.dart",
+      "target": "mobile/lib/core/api_client.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/settings_view.dart",
+      "target": "mobile/lib/core/app_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/settings_view.dart",
+      "target": "mobile/lib/core/auto_reply_models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/settings_view.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/settings_view.dart",
+      "target": "mobile/lib/core/models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/settings_view.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/settings_view.dart",
+      "target": "mobile/lib/widgets/app_card.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/settings_view.dart",
+      "target": "mobile/lib/widgets/app_ui.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/settings_view.dart",
+      "target": "mobile/lib/widgets/loading_list.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/settings_view.dart",
+      "target": "mobile/lib/features/auto_reply/auto_reply_widgets.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/targets_view.dart",
+      "target": "mobile/lib/core/api_client.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/targets_view.dart",
+      "target": "mobile/lib/core/app_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/targets_view.dart",
+      "target": "mobile/lib/core/auto_reply_models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/targets_view.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/targets_view.dart",
+      "target": "mobile/lib/core/models.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/targets_view.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/targets_view.dart",
+      "target": "mobile/lib/widgets/app_card.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/targets_view.dart",
+      "target": "mobile/lib/widgets/app_field.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/targets_view.dart",
+      "target": "mobile/lib/widgets/app_ui.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/targets_view.dart",
+      "target": "mobile/lib/widgets/loading_list.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/auto_reply/targets_view.dart",
+      "target": "mobile/lib/features/auto_reply/auto_reply_widgets.dart",
+      "kind": "import"
+    },
+    {
       "source": "mobile/lib/features/chats/chat_picker_sheet.dart",
       "target": "mobile/lib/core/api_client.dart",
       "kind": "import"
@@ -15036,6 +18005,11 @@
     },
     {
       "source": "mobile/lib/features/chats/chats_screen.dart",
+      "target": "mobile/lib/core/layout.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chats_screen.dart",
       "target": "mobile/lib/core/app_state.dart",
       "kind": "import"
     },
@@ -15057,6 +18031,11 @@
     {
       "source": "mobile/lib/features/chats/chats_screen.dart",
       "target": "mobile/lib/widgets/app_ui.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/chats/chats_screen.dart",
+      "target": "mobile/lib/widgets/loading_list.dart",
       "kind": "import"
     },
     {
@@ -15081,6 +18060,11 @@
     },
     {
       "source": "mobile/lib/features/dashboard/dashboard_screen.dart",
+      "target": "mobile/lib/core/layout.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/dashboard/dashboard_screen.dart",
       "target": "mobile/lib/core/models.dart",
       "kind": "import"
     },
@@ -15096,7 +18080,22 @@
     },
     {
       "source": "mobile/lib/features/dashboard/dashboard_screen.dart",
+      "target": "mobile/lib/widgets/app_button.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/dashboard/dashboard_screen.dart",
       "target": "mobile/lib/widgets/app_ui.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/dashboard/dashboard_screen.dart",
+      "target": "mobile/lib/widgets/error_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/dashboard/dashboard_screen.dart",
+      "target": "mobile/lib/widgets/loading_list.dart",
       "kind": "import"
     },
     {
@@ -15135,6 +18134,11 @@
       "kind": "import"
     },
     {
+      "source": "mobile/lib/features/delivery/delivery_screen.dart",
+      "target": "mobile/lib/widgets/loading_list.dart",
+      "kind": "import"
+    },
+    {
       "source": "mobile/lib/features/filters/filters_screen.dart",
       "target": "mobile/lib/core/api_client.dart",
       "kind": "import"
@@ -15151,7 +18155,27 @@
     },
     {
       "source": "mobile/lib/features/filters/filters_screen.dart",
+      "target": "mobile/lib/core/theme.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/filters/filters_screen.dart",
       "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/filters/filters_screen.dart",
+      "target": "mobile/lib/widgets/app_ui.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/filters/filters_screen.dart",
+      "target": "mobile/lib/widgets/loading_list.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/home/home_screen.dart",
+      "target": "mobile/lib/core/layout.dart",
       "kind": "import"
     },
     {
@@ -15256,12 +18280,52 @@
     },
     {
       "source": "mobile/lib/features/logs/logs_screen.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/logs/logs_screen.dart",
+      "target": "mobile/lib/core/layout.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/logs/logs_screen.dart",
       "target": "mobile/lib/l10n/app_messages.dart",
       "kind": "import"
     },
     {
       "source": "mobile/lib/features/logs/logs_screen.dart",
-      "target": "mobile/lib/widgets/list_state_view.dart",
+      "target": "mobile/lib/widgets/app_button.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/logs/logs_screen.dart",
+      "target": "mobile/lib/widgets/app_field.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/logs/logs_screen.dart",
+      "target": "mobile/lib/widgets/app_toast.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/logs/logs_screen.dart",
+      "target": "mobile/lib/widgets/app_ui.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/logs/logs_screen.dart",
+      "target": "mobile/lib/widgets/empty_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/logs/logs_screen.dart",
+      "target": "mobile/lib/widgets/error_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/logs/logs_screen.dart",
+      "target": "mobile/lib/widgets/loading_list.dart",
       "kind": "import"
     },
     {
@@ -15282,6 +18346,16 @@
     {
       "source": "mobile/lib/features/rules/rule_editor_screen.dart",
       "target": "mobile/lib/core/api_client.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rule_editor_screen.dart",
+      "target": "mobile/lib/core/json_cast.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rule_editor_screen.dart",
+      "target": "mobile/lib/core/layout.dart",
       "kind": "import"
     },
     {
@@ -15331,6 +18405,11 @@
     },
     {
       "source": "mobile/lib/features/rules/rule_settings_sheet.dart",
+      "target": "mobile/lib/core/layout.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rule_settings_sheet.dart",
       "target": "mobile/lib/core/app_state.dart",
       "kind": "import"
     },
@@ -15381,12 +18460,57 @@
     },
     {
       "source": "mobile/lib/features/rules/rules_screen.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rules_screen.dart",
+      "target": "mobile/lib/core/layout.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rules_screen.dart",
       "target": "mobile/lib/core/models.dart",
       "kind": "import"
     },
     {
       "source": "mobile/lib/features/rules/rules_screen.dart",
       "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rules_screen.dart",
+      "target": "mobile/lib/widgets/app_button.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rules_screen.dart",
+      "target": "mobile/lib/widgets/app_card.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rules_screen.dart",
+      "target": "mobile/lib/widgets/app_toast.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rules_screen.dart",
+      "target": "mobile/lib/widgets/empty_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rules_screen.dart",
+      "target": "mobile/lib/widgets/error_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rules_screen.dart",
+      "target": "mobile/lib/widgets/loading_list.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/rules/rules_screen.dart",
+      "target": "mobile/lib/widgets/status_badge.dart",
       "kind": "import"
     },
     {
@@ -15411,6 +18535,11 @@
     },
     {
       "source": "mobile/lib/features/settings/settings_screen.dart",
+      "target": "mobile/lib/core/layout.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/settings/settings_screen.dart",
       "target": "mobile/lib/core/theme.dart",
       "kind": "import"
     },
@@ -15427,6 +18556,11 @@
     {
       "source": "mobile/lib/features/system/system_status_screen.dart",
       "target": "mobile/lib/core/api_client.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/system/system_status_screen.dart",
+      "target": "mobile/lib/core/layout.dart",
       "kind": "import"
     },
     {
@@ -15455,6 +18589,11 @@
       "kind": "import"
     },
     {
+      "source": "mobile/lib/features/system/system_status_screen.dart",
+      "target": "mobile/lib/widgets/loading_list.dart",
+      "kind": "import"
+    },
+    {
       "source": "mobile/lib/features/telegram_sessions/sessions_screen.dart",
       "target": "mobile/lib/core/api_client.dart",
       "kind": "import"
@@ -15471,7 +18610,22 @@
     },
     {
       "source": "mobile/lib/features/telegram_sessions/sessions_screen.dart",
+      "target": "mobile/lib/core/theme.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/telegram_sessions/sessions_screen.dart",
       "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/telegram_sessions/sessions_screen.dart",
+      "target": "mobile/lib/widgets/app_ui.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/features/telegram_sessions/sessions_screen.dart",
+      "target": "mobile/lib/widgets/loading_list.dart",
       "kind": "import"
     },
     {
@@ -15565,8 +18719,58 @@
       "kind": "import"
     },
     {
+      "source": "mobile/lib/widgets/app_button.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/app_button.dart",
+      "target": "mobile/lib/core/layout.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/app_card.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/app_field.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/app_toast.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/app_ui.dart",
+      "target": "mobile/lib/core/layout.dart",
+      "kind": "import"
+    },
+    {
       "source": "mobile/lib/widgets/app_ui.dart",
       "target": "mobile/lib/core/theme.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/app_ui.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/app_ui.dart",
+      "target": "mobile/lib/widgets/app_card.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/app_ui.dart",
+      "target": "mobile/lib/widgets/empty_state.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/app_ui.dart",
+      "target": "mobile/lib/widgets/status_badge.dart",
       "kind": "import"
     },
     {
@@ -15582,6 +18786,61 @@
     {
       "source": "mobile/lib/widgets/chat_id_list_field.dart",
       "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/empty_state.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/empty_state.dart",
+      "target": "mobile/lib/widgets/app_button.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/empty_state.dart",
+      "target": "mobile/lib/widgets/status_badge.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/error_state.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/error_state.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/error_state.dart",
+      "target": "mobile/lib/widgets/app_button.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/list_state_view.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/loading_list.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/loading_list.dart",
+      "target": "mobile/lib/l10n/app_messages.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/section_header.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
+      "kind": "import"
+    },
+    {
+      "source": "mobile/lib/widgets/status_badge.dart",
+      "target": "mobile/lib/core/design_tokens.dart",
       "kind": "import"
     },
     {
@@ -15941,12 +19200,27 @@
     },
     {
       "source": "atfcli/cli.py",
+      "target": "atfcli/commands/_shared.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/cli.py",
       "target": "atfcli/console.py",
       "kind": "import"
     },
     {
       "source": "atfcli/cli.py",
       "target": "atfcli/context.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/cli.py",
+      "target": "atfcli/domain/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/cli.py",
+      "target": "atfcli/domain/validators.py",
       "kind": "import"
     },
     {
@@ -16057,6 +19331,26 @@
     {
       "source": "atfcli/commands/audit.py",
       "target": "atfcli/commands/_shared.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/auth.py",
+      "target": "atfcli/api.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/auth.py",
+      "target": "atfcli/console.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/auth.py",
+      "target": "atfcli/domain/__init__.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/commands/auth.py",
+      "target": "atfcli/domain/validators.py",
       "kind": "import"
     },
     {
@@ -16820,6 +20114,16 @@
       "kind": "import"
     },
     {
+      "source": "atfcli/infrastructure/http/transport.py",
+      "target": "atfcli/domain/validators.py",
+      "kind": "import"
+    },
+    {
+      "source": "atfcli/infrastructure/http/transport.py",
+      "target": "atfcli/__init__.py",
+      "kind": "import"
+    },
+    {
       "source": "atfcli/platforms.py",
       "target": "atfcli/infrastructure/host/__init__.py",
       "kind": "import"
@@ -17471,6 +20775,16 @@
     },
     {
       "source": "website/src/pages/features/backup-clone-migration.astro",
+      "target": "website/src/utils/paths.ts",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/features/forward-every-n.astro",
+      "target": "website/src/layouts/DocsLayout.astro",
+      "kind": "import"
+    },
+    {
+      "source": "website/src/pages/features/forward-every-n.astro",
       "target": "website/src/utils/paths.ts",
       "kind": "import"
     },
@@ -18296,30 +21610,40 @@
       "label": "entities",
       "subsystem": "core",
       "lang": "python",
-      "loc": 1754,
-      "fanIn": 101,
-      "fanOut": 4,
-      "score": 206
+      "loc": 1866,
+      "fanIn": 107,
+      "fanOut": 5,
+      "score": 219
     },
     {
       "id": "core/infrastructure/persistence/database.py",
       "label": "database",
       "subsystem": "core",
       "lang": "python",
-      "loc": 985,
-      "fanIn": 69,
+      "loc": 1204,
+      "fanIn": 76,
       "fanOut": 0,
-      "score": 138
+      "score": 152
     },
     {
       "id": "core/infrastructure/persistence/sqlite_repositories.py",
       "label": "sqlite_repositories",
       "subsystem": "core",
       "lang": "python",
-      "loc": 2254,
-      "fanIn": 56,
+      "loc": 2390,
+      "fanIn": 60,
       "fanOut": 7,
-      "score": 119
+      "score": 127
+    },
+    {
+      "id": "core/infrastructure/telegram/pro_bot_ui.py",
+      "label": "pro_bot_ui",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 10598,
+      "fanIn": 44,
+      "fanOut": 29,
+      "score": 117
     },
     {
       "id": "website/src/utils/paths.ts",
@@ -18327,19 +21651,9 @@
       "subsystem": "website",
       "lang": "typescript",
       "loc": 28,
-      "fanIn": 57,
+      "fanIn": 58,
       "fanOut": 0,
-      "score": 114
-    },
-    {
-      "id": "core/infrastructure/telegram/pro_bot_ui.py",
-      "label": "pro_bot_ui",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 10343,
-      "fanIn": 42,
-      "fanOut": 27,
-      "score": 111
+      "score": 116
     },
     {
       "id": "core/domain/value_objects.py",
@@ -18347,29 +21661,29 @@
       "subsystem": "core",
       "lang": "python",
       "loc": 102,
-      "fanIn": 49,
+      "fanIn": 52,
       "fanOut": 0,
-      "score": 98
+      "score": 104
     },
     {
       "id": "core/infrastructure/telegram/i18n.py",
       "label": "i18n",
       "subsystem": "core",
       "lang": "python",
-      "loc": 57,
-      "fanIn": 47,
+      "loc": 90,
+      "fanIn": 50,
       "fanOut": 0,
-      "score": 94
+      "score": 100
     },
     {
       "id": "website/src/layouts/DocsLayout.astro",
       "label": "DocsLayout",
       "subsystem": "website",
       "lang": "astro",
-      "loc": 260,
-      "fanIn": 44,
+      "loc": 316,
+      "fanIn": 45,
       "fanOut": 5,
-      "score": 93
+      "score": 95
     },
     {
       "id": "website/src/components/Icon.astro",
@@ -18387,9 +21701,29 @@
       "subsystem": "core",
       "lang": "python",
       "loc": 18,
-      "fanIn": 36,
+      "fanIn": 40,
       "fanOut": 0,
-      "score": 72
+      "score": 80
+    },
+    {
+      "id": "mobile/lib/l10n/app_messages.dart",
+      "label": "app_messages",
+      "subsystem": "mobile",
+      "lang": "dart",
+      "loc": 1046,
+      "fanIn": 33,
+      "fanOut": 10,
+      "score": 76
+    },
+    {
+      "id": "core/application/pipeline.py",
+      "label": "pipeline",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 1159,
+      "fanIn": 27,
+      "fanOut": 12,
+      "score": 66
     },
     {
       "id": "atfcli/commands/__init__.py",
@@ -18406,20 +21740,50 @@
       "label": "_shared",
       "subsystem": "cli",
       "lang": "python",
-      "loc": 198,
-      "fanIn": 28,
+      "loc": 205,
+      "fanIn": 29,
       "fanOut": 3,
-      "score": 59
+      "score": 61
     },
     {
-      "id": "core/application/pipeline.py",
-      "label": "pipeline",
+      "id": "core/infrastructure/telegram/durable_queue.py",
+      "label": "durable_queue",
       "subsystem": "core",
       "lang": "python",
-      "loc": 1121,
-      "fanIn": 24,
-      "fanOut": 10,
+      "loc": 1335,
+      "fanIn": 25,
+      "fanOut": 8,
       "score": 58
+    },
+    {
+      "id": "core/domain/services.py",
+      "label": "services",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 1185,
+      "fanIn": 26,
+      "fanOut": 6,
+      "score": 58
+    },
+    {
+      "id": "core/application/use_cases.py",
+      "label": "use_cases",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 754,
+      "fanIn": 24,
+      "fanOut": 8,
+      "score": 56
+    },
+    {
+      "id": "core/main.py",
+      "label": "main",
+      "subsystem": "core",
+      "lang": "python",
+      "loc": 770,
+      "fanIn": 3,
+      "fanOut": 49,
+      "score": 55
     },
     {
       "id": "website/src/components/Callout.astro",
@@ -18432,21 +21796,11 @@
       "score": 55
     },
     {
-      "id": "core/infrastructure/telegram/durable_queue.py",
-      "label": "durable_queue",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 1192,
-      "fanIn": 23,
-      "fanOut": 7,
-      "score": 53
-    },
-    {
-      "id": "core/domain/services.py",
-      "label": "services",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 1185,
+      "id": "mobile/lib/core/api_client.dart",
+      "label": "api_client",
+      "subsystem": "mobile",
+      "lang": "dart",
+      "loc": 1462,
       "fanIn": 24,
       "fanOut": 5,
       "score": 53
@@ -18456,60 +21810,10 @@
       "label": "repositories",
       "subsystem": "core",
       "lang": "python",
-      "loc": 669,
+      "loc": 696,
       "fanIn": 26,
       "fanOut": 1,
       "score": 53
-    },
-    {
-      "id": "mobile/lib/l10n/app_messages.dart",
-      "label": "app_messages",
-      "subsystem": "mobile",
-      "lang": "dart",
-      "loc": 758,
-      "fanIn": 21,
-      "fanOut": 10,
-      "score": 52
-    },
-    {
-      "id": "core/application/use_cases.py",
-      "label": "use_cases",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 698,
-      "fanIn": 23,
-      "fanOut": 6,
-      "score": 52
-    },
-    {
-      "id": "core/main.py",
-      "label": "main",
-      "subsystem": "core",
-      "lang": "python",
-      "loc": 694,
-      "fanIn": 3,
-      "fanOut": 42,
-      "score": 48
-    },
-    {
-      "id": "website/src/components/SpecTable.astro",
-      "label": "SpecTable",
-      "subsystem": "website",
-      "lang": "astro",
-      "loc": 57,
-      "fanIn": 23,
-      "fanOut": 1,
-      "score": 47
-    },
-    {
-      "id": "mobile/lib/core/api_client.dart",
-      "label": "api_client",
-      "subsystem": "mobile",
-      "lang": "dart",
-      "loc": 1212,
-      "fanIn": 19,
-      "fanOut": 4,
-      "score": 42
     },
     {
       "id": "mobile/lib/core/app_state.dart",
@@ -18517,19 +21821,29 @@
       "subsystem": "mobile",
       "lang": "dart",
       "loc": 198,
-      "fanIn": 19,
+      "fanIn": 24,
       "fanOut": 4,
-      "score": 42
+      "score": 52
     },
     {
-      "id": "atfcli/domain/errors.py",
-      "label": "errors",
-      "subsystem": "cli",
+      "id": "mobile/lib/core/models.dart",
+      "label": "models",
+      "subsystem": "mobile",
+      "lang": "dart",
+      "loc": 1769,
+      "fanIn": 23,
+      "fanOut": 2,
+      "score": 48
+    },
+    {
+      "id": "core/proto/__init__.py",
+      "label": "__init__",
+      "subsystem": "core",
       "lang": "python",
-      "loc": 48,
-      "fanIn": 21,
-      "fanOut": 0,
-      "score": 42
+      "loc": 8,
+      "fanIn": 23,
+      "fanOut": 2,
+      "score": 48
     }
   ],
   "largest": [
@@ -18538,8 +21852,8 @@
       "label": "handlers",
       "subsystem": "api",
       "lang": "go",
-      "files": 41,
-      "loc": 10708,
+      "files": 48,
+      "loc": 13328,
       "fanIn": 1,
       "fanOut": 5
     },
@@ -18549,19 +21863,9 @@
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 10343,
-      "fanIn": 42,
-      "fanOut": 27
-    },
-    {
-      "id": "web/frontend/src/App.tsx",
-      "label": "App",
-      "subsystem": "web-frontend",
-      "lang": "typescript",
-      "files": 1,
-      "loc": 4701,
-      "fanIn": 1,
-      "fanOut": 13
+      "loc": 10598,
+      "fanIn": 44,
+      "fanOut": 29
     },
     {
       "id": "core/proto/autoforward_pb2_grpc.py",
@@ -18569,9 +21873,9 @@
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 3333,
-      "fanIn": 4,
-      "fanOut": 0
+      "loc": 4226,
+      "fanIn": 6,
+      "fanOut": 2
     },
     {
       "id": "api/internal/ratelimit",
@@ -18589,8 +21893,8 @@
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 2254,
-      "fanIn": 56,
+      "loc": 2390,
+      "fanIn": 60,
       "fanOut": 7
     },
     {
@@ -18599,9 +21903,9 @@
       "subsystem": "web-frontend",
       "lang": "typescript",
       "files": 1,
-      "loc": 2176,
+      "loc": 2281,
       "fanIn": 1,
-      "fanOut": 3
+      "fanOut": 5
     },
     {
       "id": "core/infrastructure/grpc_server/servicers.py",
@@ -18614,6 +21918,26 @@
       "fanOut": 14
     },
     {
+      "id": "web/frontend/src/App.tsx",
+      "label": "App",
+      "subsystem": "web-frontend",
+      "lang": "typescript",
+      "files": 1,
+      "loc": 2142,
+      "fanIn": 10,
+      "fanOut": 27
+    },
+    {
+      "id": "core/domain/entities.py",
+      "label": "entities",
+      "subsystem": "core",
+      "lang": "python",
+      "files": 1,
+      "loc": 1866,
+      "fanIn": 107,
+      "fanOut": 5
+    },
+    {
       "id": "core/infrastructure/persistence/postgres_repositories.py",
       "label": "postgres_repositories",
       "subsystem": "core",
@@ -18624,23 +21948,13 @@
       "fanOut": 4
     },
     {
-      "id": "core/domain/entities.py",
-      "label": "entities",
-      "subsystem": "core",
-      "lang": "python",
-      "files": 1,
-      "loc": 1754,
-      "fanIn": 101,
-      "fanOut": 4
-    },
-    {
       "id": "mobile/lib/core/models.dart",
       "label": "models",
       "subsystem": "mobile",
       "lang": "dart",
       "files": 1,
-      "loc": 1737,
-      "fanIn": 18,
+      "loc": 1769,
+      "fanIn": 23,
       "fanOut": 2
     },
     {
@@ -18649,19 +21963,9 @@
       "subsystem": "mobile",
       "lang": "dart",
       "files": 1,
-      "loc": 1419,
+      "loc": 1506,
       "fanIn": 2,
-      "fanOut": 11
-    },
-    {
-      "id": "mobile/lib/features/rules/rule_settings_sheet.dart",
-      "label": "rule_settings_sheet",
-      "subsystem": "mobile",
-      "lang": "dart",
-      "files": 1,
-      "loc": 1218,
-      "fanIn": 2,
-      "fanOut": 4
+      "fanOut": 13
     },
     {
       "id": "mobile/lib/core/api_client.dart",
@@ -18669,18 +21973,18 @@
       "subsystem": "mobile",
       "lang": "dart",
       "files": 1,
-      "loc": 1212,
-      "fanIn": 19,
-      "fanOut": 4
+      "loc": 1462,
+      "fanIn": 24,
+      "fanOut": 5
     },
     {
-      "id": "api/internal/middleware",
-      "label": "middleware",
-      "subsystem": "api",
-      "lang": "go",
-      "files": 10,
-      "loc": 1197,
-      "fanIn": 3,
+      "id": "web/frontend/src/panels/AutoReplyPanel.tsx",
+      "label": "AutoReplyPanel",
+      "subsystem": "web-frontend",
+      "lang": "typescript",
+      "files": 1,
+      "loc": 1430,
+      "fanIn": 1,
       "fanOut": 3
     },
     {
@@ -18689,38 +21993,60 @@
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 1192,
-      "fanIn": 23,
-      "fanOut": 7
+      "loc": 1335,
+      "fanIn": 25,
+      "fanOut": 8
     },
     {
-      "id": "core/domain/services.py",
-      "label": "services",
-      "subsystem": "core",
-      "lang": "python",
+      "id": "mobile/lib/features/logs/logs_screen.dart",
+      "label": "logs_screen",
+      "subsystem": "mobile",
+      "lang": "dart",
       "files": 1,
-      "loc": 1185,
-      "fanIn": 24,
+      "loc": 1255,
+      "fanIn": 2,
+      "fanOut": 14
+    },
+    {
+      "id": "mobile/lib/features/rules/rule_settings_sheet.dart",
+      "label": "rule_settings_sheet",
+      "subsystem": "mobile",
+      "lang": "dart",
+      "files": 1,
+      "loc": 1239,
+      "fanIn": 2,
       "fanOut": 5
     },
     {
-      "id": "core/application/pipeline.py",
-      "label": "pipeline",
+      "id": "core/infrastructure/persistence/database.py",
+      "label": "database",
       "subsystem": "core",
       "lang": "python",
       "files": 1,
-      "loc": 1121,
-      "fanIn": 24,
-      "fanOut": 10
+      "loc": 1204,
+      "fanIn": 76,
+      "fanOut": 0
     }
   ],
-  "orphans": [],
+  "orphans": [
+    {
+      "id": "website/src/pages/site.webmanifest.ts",
+      "label": "site.webmanifest",
+      "subsystem": "website",
+      "loc": 52
+    }
+  ],
   "cycles": [
     [
       "core/domain/branding.py",
       "core/domain/content_policy.py",
       "core/domain/entities.py",
+      "core/domain/media_filter.py",
       "core/domain/services.py"
+    ],
+    [
+      "core/proto/__init__.py",
+      "core/proto/autoforward_pb2_grpc.py"
     ],
     [
       "atfcli/application/use_cases/__init__.py",
@@ -18732,11 +22058,26 @@
     ],
     [
       "atfcli/__init__.py",
-      "atfcli/cli.py"
+      "atfcli/api.py",
+      "atfcli/cli.py",
+      "atfcli/infrastructure/http/gateways.py",
+      "atfcli/infrastructure/http/transport.py"
     ],
     [
       "web/frontend/src/api.ts",
       "web/frontend/src/session.ts"
+    ],
+    [
+      "web/frontend/src/App.tsx",
+      "web/frontend/src/panels/AiPanel.tsx",
+      "web/frontend/src/panels/AutoReplyPanel.tsx",
+      "web/frontend/src/panels/DevopsPanel.tsx",
+      "web/frontend/src/panels/FiltersPanel.tsx",
+      "web/frontend/src/panels/PvPanel.tsx",
+      "web/frontend/src/panels/QueuePanel.tsx",
+      "web/frontend/src/panels/RulesPanel.tsx",
+      "web/frontend/src/panels/SessionsPanel.tsx",
+      "web/frontend/src/panels/SimulatorPanel.tsx"
     ]
   ],
   "crossSubsystem": [
@@ -18774,8 +22115,8 @@
         "api/internal/grpcclient/rpc_auth_test.go",
         "api/internal/handlers/system.go",
         "core/infrastructure/grpc_server/account_servicer.py",
-        "core/infrastructure/grpc_server/internal_auth.py",
-        "core/infrastructure/grpc_server/servicers.py"
+        "core/infrastructure/grpc_server/autoreply_servicer.py",
+        "core/infrastructure/grpc_server/internal_auth.py"
       ]
     },
     {
@@ -18824,7 +22165,9 @@
       "protocol": "HTTP reverse proxy + SSE",
       "detail": "Server-side proxy keeps the API key out of the browser and streams the live log feed.",
       "evidence": [
-        "web/backend/src/main.rs"
+        "web/backend/src/main.rs",
+        "web/frontend/.catalog-build/fr.js",
+        "web/frontend/src/locales/fr.ts"
       ]
     },
     {
@@ -18897,7 +22240,7 @@
       "evidence": [
         "core/infrastructure/grpc_server/account_servicer.py",
         "core/infrastructure/grpc_server/admin_servicer.py",
-        "core/infrastructure/grpc_server/internal_auth.py"
+        "core/infrastructure/grpc_server/autoreply_servicer.py"
       ]
     },
     {
@@ -18963,8 +22306,8 @@
       "langs": [],
       "evidence": [
         "core/infrastructure/telegram/auth_state.py",
-        "core/infrastructure/telegram/bot_manager.py",
-        "core/infrastructure/telegram/bot_transport.py"
+        "core/infrastructure/telegram/autoreply_bot_ui.py",
+        "core/infrastructure/telegram/autoreply_bridge.py"
       ],
       "external": true
     },
@@ -18976,15 +22319,15 @@
       "tech": "Pyrogram client pool",
       "role": "Authorised user/bot sessions, update stream, album aggregation",
       "color": "#38bdf8",
-      "files": 27,
-      "loc": 18456,
+      "files": 30,
+      "loc": 19822,
       "langs": [
         "python"
       ],
       "evidence": [
         "core/infrastructure/telegram/album_aggregator.py",
         "core/infrastructure/telegram/auth_state.py",
-        "core/infrastructure/telegram/bot_manager.py",
+        "core/infrastructure/telegram/autoreply_bot_ui.py",
         "core/infrastructure/telegram/pro_bot_ui.py"
       ],
       "external": false
@@ -18997,8 +22340,8 @@
       "tech": "Python · domain model",
       "role": "Policy resolution, cleaning, shortcodes, replacements, AI pass",
       "color": "#22d3ee",
-      "files": 22,
-      "loc": 9352,
+      "files": 32,
+      "loc": 11971,
       "langs": [
         "python"
       ],
@@ -19006,7 +22349,7 @@
         "core/domain/entities.py",
         "core/domain/services.py",
         "core/application/pipeline.py",
-        "core/application/use_cases.py"
+        "core/domain/autoreply.py"
       ],
       "external": false
     },
@@ -19018,15 +22361,15 @@
       "tech": "SQLite-backed queue",
       "role": "Ordered delivery, retries with backoff, dead-letter control",
       "color": "#818cf8",
-      "files": 22,
-      "loc": 10623,
+      "files": 30,
+      "loc": 13432,
       "langs": [
         "python"
       ],
       "evidence": [
+        "core/application/autoreply/worker.py",
         "core/application/backup_service.py",
         "core/application/pipeline.py",
-        "core/application/repositories.py",
         "core/infrastructure/persistence/sqlite_repositories.py"
       ],
       "external": false
@@ -19039,15 +22382,15 @@
       "tech": "SQLite WAL · PostgreSQL",
       "role": "Tasks, queue, sessions, audit outbox",
       "color": "#a3e635",
-      "files": 9,
-      "loc": 5753,
+      "files": 11,
+      "loc": 7135,
       "langs": [
         "python"
       ],
       "evidence": [
         "core/infrastructure/persistence/audit_events.py",
         "core/infrastructure/persistence/audit_outbox.py",
-        "core/infrastructure/persistence/coercion.py",
+        "core/infrastructure/persistence/autoreply_repositories.py",
         "core/infrastructure/persistence/sqlite_repositories.py"
       ],
       "external": false
@@ -19060,15 +22403,15 @@
       "tech": "grpc.aio :50051",
       "role": "Eleven servicers exposing the engine to the control plane",
       "color": "#34d399",
-      "files": 9,
-      "loc": 6832,
+      "files": 10,
+      "loc": 8301,
       "langs": [
         "python"
       ],
       "evidence": [
         "core/infrastructure/grpc_server/account_servicer.py",
         "core/infrastructure/grpc_server/admin_servicer.py",
-        "core/infrastructure/grpc_server/servicers.py",
+        "core/infrastructure/grpc_server/autoreply_servicer.py",
         "core/proto/autoforward_pb2_grpc.py"
       ],
       "external": false
@@ -19138,16 +22481,16 @@
       "tech": "Go net/http :8080",
       "role": "Auth, tenant scoping, rules, delivery, logs, diagnostics",
       "color": "#34d399",
-      "files": 42,
-      "loc": 10912,
+      "files": 49,
+      "loc": 13556,
       "langs": [
         "go"
       ],
       "evidence": [
         "api/internal/handlers/handlers.go",
-        "api/internal/handlers/logging_policy.go",
-        "api/internal/handlers/logging_policy_test.go",
-        "api/internal/handlers/log_control_api_test.go"
+        "api/internal/handlers/autoreply.go",
+        "api/internal/handlers/autoreply_test.go",
+        "api/internal/handlers/logging_policy.go"
       ],
       "external": false
     },
@@ -19199,8 +22542,8 @@
       "tech": "React · TypeScript",
       "role": "Tasks, log explorer, diagnostics, admin",
       "color": "#fb923c",
-      "files": 21,
-      "loc": 13096,
+      "files": 51,
+      "loc": 26698,
       "langs": [
         "typescript"
       ],
@@ -19220,15 +22563,15 @@
       "tech": "Flutter · Dart",
       "role": "Same contract, native surfaces, 10 locales",
       "color": "#a78bfa",
-      "files": 44,
-      "loc": 20982,
+      "files": 64,
+      "loc": 30255,
       "langs": [
         "dart"
       ],
       "evidence": [
         "mobile/lib/app.dart",
+        "mobile/lib/core/design_tokens.dart",
         "mobile/lib/core/theme.dart",
-        "mobile/lib/features/chats/chat_picker_sheet.dart",
         "mobile/lib/core/models.dart"
       ],
       "external": false
@@ -19242,7 +22585,7 @@
       "role": "Install, validate, diagnose, upgrade",
       "color": "#22d3ee",
       "files": 79,
-      "loc": 13061,
+      "loc": 13542,
       "langs": [
         "python"
       ],
@@ -19335,7 +22678,7 @@
       "kind": "event",
       "label": "Commands in",
       "protocol": "in-process",
-      "metric": "78 RPCs"
+      "metric": "100 RPCs"
     },
     {
       "source": "core-grpc",
@@ -19383,7 +22726,7 @@
       "kind": "grpc",
       "label": "Control calls",
       "protocol": "gRPC",
-      "metric": "78 RPCs"
+      "metric": "100 RPCs"
     },
     {
       "source": "api-rest",
@@ -19964,10 +23307,39 @@
         ],
         "count": 5,
         "domain": "Task"
+      },
+      {
+        "name": "AutoReplyControlService",
+        "rpcs": [
+          "GetAutoReplySettings",
+          "UpdateAutoReplySettings",
+          "ListAutoReplyPrompts",
+          "SaveAutoReplyPrompt",
+          "DeleteAutoReplyPrompt",
+          "DuplicateAutoReplyPrompt",
+          "ExportAutoReplyPrompts",
+          "ImportAutoReplyPrompts",
+          "ListAutoReplyTargets",
+          "AddAutoReplyTargets",
+          "UpdateAutoReplyTarget",
+          "RemoveAutoReplyTargets",
+          "ResolveAutoReplyChat",
+          "ListAutoReplyRules",
+          "SaveAutoReplyRule",
+          "DeleteAutoReplyRule",
+          "ReorderAutoReplyRules",
+          "ListAutoReplyJobs",
+          "CancelAutoReplyJob",
+          "RetryAutoReplyJob",
+          "GetAutoReplyStats",
+          "PreviewAutoReply"
+        ],
+        "count": 22,
+        "domain": "AutoReply"
       }
     ],
-    "rpcCount": 78,
-    "messageCount": 141,
+    "rpcCount": 100,
+    "messageCount": 176,
     "path": "proto/autoforward.proto"
   },
   "pipeline": {
@@ -19989,20 +23361,16 @@
         "count": 8
       },
       {
-        "tag": "FILTER",
-        "count": 8
-      },
-      {
         "tag": "DELIVERED",
         "count": 7
       },
       {
-        "tag": "ROUTE",
+        "tag": "DROP",
         "count": 6
       },
       {
-        "tag": "DROP",
-        "count": 5
+        "tag": "ROUTE",
+        "count": 6
       },
       {
         "tag": "FILTER_DROP",
@@ -20011,6 +23379,10 @@
       {
         "tag": "TRANSFORM",
         "count": 5
+      },
+      {
+        "tag": "AUTO_PAUSE",
+        "count": 4
       },
       {
         "tag": "CLEANER",
@@ -20022,6 +23394,14 @@
       },
       {
         "tag": "DUP_FILTER",
+        "count": 3
+      },
+      {
+        "tag": "FILTER",
+        "count": 3
+      },
+      {
+        "tag": "INTERVAL",
         "count": 3
       },
       {
@@ -20069,6 +23449,10 @@
         "count": 2
       },
       {
+        "tag": "NOTIFY",
+        "count": 2
+      },
+      {
         "tag": "POLICY_TARGET",
         "count": 2
       },
@@ -20081,7 +23465,7 @@
         "count": 2
       },
       {
-        "tag": "AUTO_DISABLE",
+        "tag": "ACCOUNT_BLOCKED",
         "count": 1
       },
       {
@@ -20217,6 +23601,6 @@
         "count": 1
       }
     ],
-    "total": 173
+    "total": 178
   }
 }

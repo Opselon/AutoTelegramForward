@@ -527,6 +527,116 @@ export const endpointDetail: Record<string, EndpointDetail> = {
     note: 'The endpoint guard refuses loopback, link-local and metadata addresses unless the operator has explicitly allowed private AI peers.',
     statuses: ['200', '400', '401'],
   },
+  'GET /api/auto-reply/settings': {
+    summary:
+      'The caller’s auto-reply configuration: master switch, target mode, tone, language, response length, context depth, cooldown, daily cap and quiet hours.',
+    statuses: auth,
+  },
+  'PUT /api/auto-reply/settings': {
+    summary:
+      'Replaces the configuration. The owner is taken from the verified token, never from the body.',
+    note: 'Tone, length and target mode are validated against their enumerations; an unknown value is refused rather than stored as a default.',
+    statuses: write,
+  },
+  'GET /api/auto-reply/prompts': {
+    summary: 'The caller’s prompt library, including the built-in default the settings fall back to.',
+    statuses: auth,
+  },
+  'POST /api/auto-reply/prompts': {
+    summary: 'Creates a personal prompt template.',
+    note: 'A prompt owned by another tenant is never updated: the id is re-issued for the caller instead.',
+    statuses: ['201', '400', '401'],
+  },
+  'GET /api/auto-reply/prompts/export': {
+    summary: 'The prompt library as a portable bundle, for import on another installation.',
+    statuses: auth,
+  },
+  'POST /api/auto-reply/prompts/import': {
+    summary: 'Imports a previously exported bundle into the caller’s library.',
+    note: 'Ids owned by someone else are re-issued, so an import can never adopt or overwrite another tenant’s prompt.',
+    statuses: ['200', '400', '401'],
+  },
+  'PUT /api/auto-reply/prompts/{id}': {
+    summary: 'Updates one of the caller’s prompt templates.',
+    statuses: write,
+  },
+  'DELETE /api/auto-reply/prompts/{id}': {
+    summary: 'Deletes one of the caller’s prompt templates.',
+    note: 'Another tenant’s id answers 404, not 403: the refusal does not confirm that the id exists.',
+    statuses: owner,
+  },
+  'POST /api/auto-reply/prompts/{id}/duplicate': {
+    summary: 'Copies one of the caller’s prompts into a new one, keeping the body and name suffix.',
+    statuses: ['201', '401', '404'],
+  },
+  'GET /api/auto-reply/targets': {
+    summary: 'The caller’s contact targets, each with its own enabled flag.',
+    statuses: auth,
+  },
+  'POST /api/auto-reply/targets': {
+    summary: 'Adds contact targets in bulk; a chat that already exists is updated in place.',
+    statuses: ['201', '400', '401'],
+  },
+  'DELETE /api/auto-reply/targets': {
+    summary: 'Removes contact targets in bulk.',
+    statuses: ['200', '400', '401'],
+  },
+  'POST /api/auto-reply/targets/resolve': {
+    summary:
+      'Resolves chat ids to titles and types through the caller’s live sessions, for the contact picker.',
+    note: 'A session id owned by someone else is refused as not found; the ids that could not be resolved are returned in unresolved.',
+    statuses: ['200', '400', '401'],
+  },
+  'PUT /api/auto-reply/targets/{chatId}': {
+    summary: 'Updates one target, including its per-chat enabled flag.',
+    statuses: write,
+  },
+  'GET /api/auto-reply/rules': {
+    summary: 'The caller’s rules in the order the engine applies them: highest priority first.',
+    statuses: auth,
+  },
+  'POST /api/auto-reply/rules': {
+    summary: 'Creates or updates a rule with conditions, exclusions, a cooldown and an action.',
+    note: 'Regex conditions are compiled and length-capped when they are stored, so an invalid pattern fails here instead of on every inbound message.',
+    statuses: ['200', '400', '401'],
+  },
+  'POST /api/auto-reply/rules/reorder': {
+    summary: 'Persists an explicit priority order for the caller’s rules.',
+    statuses: ['200', '400', '401'],
+  },
+  'PUT /api/auto-reply/rules/{id}': {
+    summary: 'Updates one of the caller’s rules.',
+    statuses: write,
+  },
+  'DELETE /api/auto-reply/rules/{id}': {
+    summary: 'Deletes one of the caller’s rules.',
+    note: 'Replies already queued against that rule are cancelled rather than sent without it.',
+    statuses: owner,
+  },
+  'GET /api/auto-reply/jobs': {
+    summary: 'A page of the caller’s reply jobs, filterable by status and chat.',
+    note: 'Every job row carries the correlation id used by the structured logs, so a delivered reply can be traced back to the message that caused it.',
+    statuses: auth,
+  },
+  'POST /api/auto-reply/jobs/{id}/cancel': {
+    summary: 'Cancels one of the caller’s queued or retrying jobs.',
+    statuses: owner,
+  },
+  'POST /api/auto-reply/jobs/{id}/retry': {
+    summary: 'Requeues one of the caller’s dead-lettered jobs for another attempt.',
+    statuses: owner,
+  },
+  'GET /api/auto-reply/stats': {
+    summary:
+      'Counters for the caller: replies sent, failures in the last day, queue depth by status, enabled chats and mean send latency.',
+    statuses: auth,
+  },
+  'POST /api/auto-reply/preview': {
+    summary:
+      'Runs the configured provider once for a sample message and returns the reply without sending it.',
+    note: 'The reply is generated by the same prompt assembly the worker uses, so the preview cannot disagree with what would be sent.',
+    statuses: ['200', '400', '401'],
+  },
   'GET /api/pv-responder': {
     summary: 'The private-chat auto-responder configuration: persona, typing delay, cooldown, history depth.',
     statuses: auth,

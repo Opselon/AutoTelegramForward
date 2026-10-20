@@ -617,6 +617,10 @@ const keystones = nodes
 
 const largest = nodes
   .filter((n) => !n.generated && !n.isTest)
+  // A proto contract file is the same case the orphans list already excludes:
+  // this graph's `import` parser reads code modules, not protobuf imports, so a
+  // `.proto` file would always look link-less no matter how central it is.
+  .filter((n) => !/\.proto$/.test(n.id))
   .map((n) => ({
     id: n.id,
     label: n.label,
