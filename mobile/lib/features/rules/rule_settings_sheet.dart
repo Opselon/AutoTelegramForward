@@ -1010,7 +1010,10 @@ class _RuleSettingsSheetState extends State<RuleSettingsSheet> {
         title: Row(
           children: <Widget>[
             Flexible(
-              child: Text(_label(t, spec), style: const TextStyle(fontSize: 13)),
+              child: Text(
+                _label(t, spec),
+                style: const TextStyle(fontSize: 13),
+              ),
             ),
             ?chip,
           ],
