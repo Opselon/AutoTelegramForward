@@ -227,9 +227,11 @@ class BotManager:
                 return await message.reply_text(self.i18n.t("no_sessions", lang=lang))
             items = "\n".join(
                 self.i18n.t(
-                    "session_item",
+                    "session_item", lang=lang,
                     id=s.id[:8], phone=s.phone_number,
-                    status=self.i18n.t("session_active" if s.is_active else "session_inactive"),
+                    status=self.i18n.t(
+                        "session_active" if s.is_active else "session_inactive", lang=lang
+                    ),
                 )
                 for s in sessions
             )
@@ -249,7 +251,7 @@ class BotManager:
                 return await self._prompt_rule_add(message)
             items = "\n".join(
                 self.i18n.t(
-                    "rule_item",
+                    "rule_item", lang=lang,
                     id=r.id[:8], source=r.source_chat_name or r.source_chat_id,
                     target=r.target_chat_name or r.target_chat_id,
                     mode=r.forward_mode.value,
@@ -274,7 +276,7 @@ class BotManager:
                 return await self._prompt_ai_add(message)
             items = "\n".join(
                 self.i18n.t(
-                    "ai_item", id=c.id[:8], name=c.name or c.id[:8],
+                    "ai_item", lang=lang, id=c.id[:8], name=c.name or c.id[:8],
                     provider=c.provider.value, model=c.model,
                     status="🟢" if c.is_enabled else "🔴",
                 )
@@ -285,12 +287,13 @@ class BotManager:
 
         @b.on_message(filters.command("stats") & filters.private)
         async def _stats(client, message: Message):
+            lang = self._resolve_lang(message.from_user.id, message.from_user) if message.from_user else "en"
             if self._ui_owns(message.from_user.id):
                 return
             s = self._pipeline.stats
             await message.reply_text(
                 self.i18n.t(
-                    "stats", processed=s.processed, forwarded=s.forwarded,
+                    "stats", lang=lang, processed=s.processed, forwarded=s.forwarded,
                     filtered=s.filtered, rewritten=s.rewritten, errors=s.errors,
                     uptime=int(time.time()) - s.started_at,
                 )
@@ -539,9 +542,18 @@ class BotManager:
             await message.reply_text(self.i18n.t("login_success", lang=lang, phone=phone))
         elif ":" in result:
             key, _, detail = result.partition(":")
-            await message.reply_text(self.i18n.t(key, error=detail))
+            # The result code is the engine's vocabulary, not a guarantee that
+            # the catalog has a sentence for it; an unknown key renders as the
+            # key itself, so fall back to the generic login failure instead.
+            if self.i18n.contains(key):
+                await message.reply_text(self.i18n.t(key, lang=lang, error=detail))
+            else:
+                await message.reply_text(self.i18n.t("login_failed", lang=lang, error=detail))
         else:
-            await message.reply_text(self.i18n.t(result, error=""))
+            if self.i18n.contains(result):
+                await message.reply_text(self.i18n.t(result, lang=lang, error=""))
+            else:
+                await message.reply_text(self.i18n.t("login_failed", lang=lang, error=""))
 
     # ------------------------------------------------------------------ #
     async def start(self):

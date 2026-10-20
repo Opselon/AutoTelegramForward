@@ -65,6 +65,15 @@ jobs:
         # separately; this guard is change-scoped and fail-closed.
         run: python scripts/audit_telegram_i18n.py
 
+      - name: i18n audit (catalog, render paths, callback data)
+        # Whole-tree, deterministic: parity and placeholders in all ten locales,
+        # literal copy in send/edit/answer and keyboard tuples, keys assembled
+        # from a prefix, callback data built from translated text, a handler
+        # that renders without a user language, and values left untranslated.
+        # Fails on any new critical OR major finding; dead keys stay reported
+        # but do not fail.
+        run: python scripts/i18n_audit.py --fail-on major
+
       - name: Mobile UI hardcoded-copy guard
         # The two guards above cover the bot. The Flutter client had ~40 widget
         # labels ('Retry', 'Task Name', 'HEADER EMPTY') that never reached

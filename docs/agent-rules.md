@@ -149,7 +149,20 @@ Before pushing changes or submitting PRs, agents must run and pass the following
    ```
    *Scans git diff against base branch (`origin/master` or `origin/main`) for any newly introduced hardcoded string literals in UI code.*
 
-3. **Web Dashboard UI-Copy Gate (JSX-aware):**
+3. **Whole-tree i18n Audit (catalog + render path):**
+   ```bash
+   python scripts/i18n_audit.py --fail-on major
+   ```
+   *Deterministic, whole-tree pass over the Telegram surface: parity and
+   placeholders in ten locales, literal copy in
+   `reply_text`/`answer`/`InlineKeyboardButton`/`_kbd` tuples (including the
+   constant part of an f-string), keys assembled from a prefix, callback data
+   built from a translation, handlers that render without the user's language,
+   and values left untranslated. Reports dead keys as minor. A new critical or
+   major finding fails the job; `--json` writes the machine report and
+   `--update-baseline` re-pins reviewed debt. Details: `docs/i18n-audit.md`.*
+
+4. **Web Dashboard UI-Copy Gate (JSX-aware):**
    ```bash
    node scripts/audit_web_ui_copy.js
    ```
@@ -176,7 +189,7 @@ Before pushing changes or submitting PRs, agents must run and pass the following
    `web/frontend/node_modules/typescript` (`npm ci`), and exits 2 rather than
    reporting a pass when it cannot find it.*
 
-4. **Mobile UI-Copy Gate (Dart):**
+5. **Mobile UI-Copy Gate (Dart):**
    ```bash
    python scripts/audit_mobile_ui_copy.py
    ```
@@ -195,17 +208,17 @@ Before pushing changes or submitting PRs, agents must run and pass the following
    in the python CI job, which has no Dart SDK — `flutter analyze` cannot catch
    a hardcoded label. Same `--report` / `--update-baseline` / shrink notice.*
 
-5. **Core & Logger Pytest Suites:**
+6. **Core & Logger Pytest Suites:**
    ```bash
    pytest -q core/tests scripts/tests
    ```
 
-6. **Go API Test Suite:**
+7. **Go API Test Suite:**
    ```bash
    cd api && go test ./...
    ```
 
-7. **Flutter Formatting & Analysis (if modifying `mobile/`):**
+8. **Flutter Formatting & Analysis (if modifying `mobile/`):**
    ```bash
    cd mobile && dart format --output=none --set-exit-if-changed lib test && flutter test
    ```
