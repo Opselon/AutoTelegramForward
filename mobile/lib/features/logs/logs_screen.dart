@@ -608,27 +608,36 @@ class _LogsScreenState extends State<LogsScreen> {
                     },
                   ),
                   const SizedBox(width: AppSpacing.xs),
-                  DropdownButton<int>(
-                    value: _pageSize,
-                    underline: const SizedBox.shrink(),
-                    style: const TextStyle(fontSize: AppType.xs),
-                    items: [
-                      for (final n in const [25, 50, 100, 200])
-                        DropdownMenuItem(
-                          value: n,
-                          child: Text(
-                            t.get('logs_page_size', params: {'n': '$n'}),
+                  // At 2x text the page-size label ("Page size: 25") is wider
+                  // than the space left between two icon buttons, and the row
+                  // overflowed by 36 px. A flexible, expanding dropdown lets the
+                  // label ellipsize instead of pushing the row past its edge.
+                  Flexible(
+                    child: DropdownButton<int>(
+                      value: _pageSize,
+                      isExpanded: true,
+                      underline: const SizedBox.shrink(),
+                      style: const TextStyle(fontSize: AppType.xs),
+                      items: [
+                        for (final n in const [25, 50, 100, 200])
+                          DropdownMenuItem(
+                            value: n,
+                            child: Text(
+                              t.get('logs_page_size', params: {'n': '$n'}),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
-                        ),
-                    ],
-                    onChanged: (v) {
-                      if (v == null) return;
-                      setState(() {
-                        _pageSize = v;
-                        _offset = 0;
-                      });
-                      _load(offset: 0);
-                    },
+                      ],
+                      onChanged: (v) {
+                        if (v == null) return;
+                        setState(() {
+                          _pageSize = v;
+                          _offset = 0;
+                        });
+                        _load(offset: 0);
+                      },
+                    ),
                   ),
                   const Spacer(),
                   AppIconButton(

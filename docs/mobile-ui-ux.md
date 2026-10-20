@@ -32,7 +32,12 @@ contrast, so filled surfaces stop assuming white.
 
 `test/widgets/adaptive_accessibility_test.dart` walks **every destination**:
 
-- text scale 0.8 → 1.3 renders without overflow, phone and tablet;
+- text scale 0.8 → **2.0** (Android's maximum) renders without overflow, phone
+  and tablet. Pushing past 1.3 is what found two real defects: the dashboard's
+  metric grid pinned a tile height with `childAspectRatio` (9 px clipped at
+  1.6×), and the logs toolbar's page-size dropdown pushed its row 36 px past the
+  edge at 2.0×. Both are fixed — the grid's tile height now grows with the text
+  scale and the dropdown is flexible and ellipsizes;
 - a right-to-left locale mirrors the layout (first destination on the right,
   no overflow);
 - interactive targets are ≥ 48 dp and icon-only buttons carry a tooltip, which
@@ -67,7 +72,7 @@ with the failure announced through a live region rather than a raw exception.
 
 - `flutter analyze` — no issues.
 - `dart format lib test` — 0 changed.
-- `flutter test` — **231 passed** (was 210): 19 new tests for the shell, the
+- `flutter test` — **233 passed** (was 210): new tests for the shell, the
   palette contrast, RTL/text-scale/a11y and list virtualization.
 - `python3 scripts/audit_mobile_ui_copy.py` PASS (0 offenders, 0 baselined);
   `audit_cross_language.py --report` PASS (1:1, no cross-leak, placeholders

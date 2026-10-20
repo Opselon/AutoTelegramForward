@@ -2,15 +2,18 @@
 ///
 /// The UI contract asks for three things this file pins down:
 ///
-///   * text scale 0.8–1.3 must render every screen without clipping or an
-///     overflow, on a phone in portrait and on a tablet;
+///   * text scale 0.8–2.0 must render every screen without clipping or an
+///     overflow, on a phone in portrait and on a tablet. 2.0 is Android's
+///     maximum font size, and it is what found two real defects: the dashboard's
+///     metric grid had a fixed tile height (9 px clipped at 1.6×) and the logs
+///     toolbar's page-size dropdown pushed its row 36 px past the edge;
 ///   * a right-to-left locale must mirror the layout (the first destination
 ///     sits on the right, the last on the left) without overflowing;
 ///   * interactive targets are at least 48 dp and icon-only buttons carry a
 ///     tooltip, which is what gives them a semantics label.
 ///
 /// Each test walks every destination, because a single unwrapped row in one
-/// screen is enough to make the app unusable at 1.3× on a tablet.
+/// screen is enough to make the app unusable at 2.0× on a phone.
 library;
 
 import 'package:autoforward_mobile/core/api_client.dart';
@@ -36,7 +39,7 @@ AppEnv _testEnv() => const AppEnv(
 );
 
 /// Every endpoint answers `{}` with a JSON content type: screens that cannot
-/// parse it show their error state, which is itself worth rendering at 1.3×.
+/// parse it show their error state, which is itself worth rendering at 2.0×.
 HttpTransport _quietTransport() =>
     (
       Uri url, {
@@ -142,7 +145,7 @@ const _labels = [
 ];
 
 void main() {
-  for (final scale in [0.8, 1.3]) {
+  for (final scale in [0.8, 1.3, 1.6, 2.0]) {
     testWidgets(
       'a phone renders every destination at ${scale}x text scale without '
       'overflow',

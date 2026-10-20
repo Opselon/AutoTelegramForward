@@ -248,13 +248,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     final columns = constraints.maxWidth >= 880
                         ? 4
                         : (constraints.maxWidth >= 620 ? 3 : 2);
+                    // A fixed aspect ratio gives a tile a fixed *height*, so at
+                    // 1.6x the label/value/caption column overflowed by ~9px and
+                    // its bottom line was clipped. The tile grows with the text
+                    // scale instead: the ratio is only the shape at 1.0.
+                    final tileWidth =
+                        (constraints.maxWidth - (columns - 1) * AppSpacing.md) /
+                        columns;
+                    final scale = MediaQuery.textScalerOf(context).scale(1.0);
+                    final growth = (scale - 1).clamp(0.0, 1.5);
+                    final tileHeight = tileWidth / 1.45 + growth * 46;
                     return GridView.count(
                       crossAxisCount: columns,
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
                       crossAxisSpacing: AppSpacing.md,
                       mainAxisSpacing: AppSpacing.md,
-                      childAspectRatio: 1.45,
+                      childAspectRatio: tileWidth / tileHeight,
                       children: [
                         StatTile(
                           label: t.get('dash_total_rules'),
