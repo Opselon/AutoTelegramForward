@@ -48,6 +48,7 @@ from core.infrastructure.persistence.sqlite_repositories import (  # noqa: E402
     SqliteMetricsRepository,
     SqliteProcessedMessageRepository,
     SqlitePromptRepository,
+    SqliteRuleCounterRepository,
     SqliteRuleStatsRepository,
     SqliteSessionRepository,
     SqliteUserTaskRepository,
@@ -182,6 +183,10 @@ def build_container(cfg: Config) -> dict:
     cred_repo = SqliteApiCredentialRepository(db, crypto)
     token_repo = SqliteBotTokenRepository(db, crypto)
     processed_repo = SqliteProcessedMessageRepository(db)
+    # "Forward every Nth message" cadence, beside the dedupe store it is
+    # written with (and for the same reason: it is this worker's own
+    # bookkeeping, and it must outlive a restart).
+    counter_repo = SqliteRuleCounterRepository(db)
     ui_state_repo = SqliteUiStateRepository(db)
     auth_flow_repo = SqliteAuthFlowRepository(db)
     error_log_repo = SqliteErrorLogRepository(db)
@@ -247,6 +252,7 @@ def build_container(cfg: Config) -> dict:
         # Same inheritance rule as the durable pipeline below; this path is the
         # one the Telegram bot and the reply/PV flows run through.
         bot_tokens=token_repo,
+        counters=counter_repo,
     )
     pool = ClientPool(cfg.api_id, cfg.api_hash, limit_store=AccountLimitStore(db))
     # A restriction that outlives the process must outlive the process: load
@@ -305,6 +311,7 @@ def build_container(cfg: Config) -> dict:
         # here means the transform and the delivery job it enqueues both use the
         # effective settings.
         bot_tokens=token_repo,
+        counters=counter_repo,
     )
     from core.infrastructure.telegram.pv_responder import AIPVResponder  # noqa: E402
     pv_responder = AIPVResponder(ai_repo=ai_repo, ai_factory=factory, db=db)

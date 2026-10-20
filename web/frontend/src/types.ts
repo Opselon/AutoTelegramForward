@@ -118,6 +118,8 @@ export interface ForwardRule {
   auto_posting?: boolean
   power_control?: boolean
   forward_delay_seconds?: number
+  /** Forward every Nth accepted message (1–1000). 1 or absent = every message. */
+  forward_every_n?: number
   edit_time_limit_seconds?: number
   process_raw_text?: boolean
   button_to_text?: boolean
@@ -224,6 +226,8 @@ export interface SaveRuleRequest {
   auto_posting?: boolean
   power_control?: boolean
   forward_delay_seconds?: number
+  /** Forward every Nth accepted message (1–1000). 1 or absent = every message. */
+  forward_every_n?: number
   edit_time_limit_seconds?: number
   process_raw_text?: boolean
   button_to_text?: boolean

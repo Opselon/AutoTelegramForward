@@ -22,6 +22,7 @@ from ..domain.media_filter import (
     media_block_reason,
     normalise_media_type,
 )
+from ..domain.forward_interval import owns_slot
 from .repositories import (
     IAIConfigRepository,
     IFilterRuleRepository,
@@ -787,6 +788,7 @@ class MessageForwardingUseCase:
         routing_policy: Optional[RoutingPolicy] = None,
         processed_repo=None,
         bot_tokens=None,
+        counters=None,
     ) -> None:
         self._rule_repo = rule_repo
         self._filter_repo = filter_repo
@@ -795,6 +797,9 @@ class MessageForwardingUseCase:
         self._filter_engine = filter_engine or FilterEngine()
         self._routing = routing_policy or RoutingPolicy()
         self._processed = processed_repo
+        # "Forward every Nth message" (IRuleCounterRepository). Optional: this
+        # path is the reply/PV one, and without the port the setting is inert.
+        self._counters = counters
         # Per-bot defaults, resolved per message (see core.application
         # .effective_settings). The resolved values travel with the rule this
         # use case hands to its sender, so nothing downstream has to know.
@@ -826,7 +831,7 @@ class MessageForwardingUseCase:
                 if payload.is_edit:
                     self.stats.edits_forwarded += 1
             else:
-                if outcome.reason in ("duplicate", "too_old", "edit_ignored"):
+                if outcome.reason in ("duplicate", "too_old", "edit_ignored", "every_n_skip"):
                     self.stats.duplicates_skipped += 1
                 else:
                     self.stats.filtered += 1
@@ -879,6 +884,40 @@ class MessageForwardingUseCase:
                 rule.id[:8], payload.message_id, media_reason,
             )
             return PipelineOutcome(False, media_reason, evaluation)
+
+        # --- forward every Nth message --------------------------------
+        # Same gate as the durable pipeline, in the same place (after every
+        # filter, before the rewrite) and against the same per-task counter, so
+        # a task that forwards reply/PV traffic obeys one cadence rather than
+        # two independent ones.
+        every_n = int(getattr(rule, "forward_every_n", 1) or 1)
+        # An edit is not a new message (see the durable pipeline's gate).
+        if every_n > 1 and not payload.is_edit and self._counters is not None:
+            sequence = 0
+            try:
+                sequence = int(await self._counters.advance(
+                    rule.id, every_n, int(getattr(rule, "owner_user_id", 0) or 0)
+                ))
+            except Exception as exc:
+                # Fail open: forwarding must survive a bookkeeping failure.
+                logger.error(
+                    "Use case: Rule %s counter advance failed (%s) — forwarding msg %s anyway",
+                    rule.id[:8], exc, payload.message_id,
+                )
+            if sequence and not owns_slot(sequence, every_n):
+                if self._processed is not None:
+                    try:
+                        await self._processed.mark_processed(
+                            rule.id, payload.chat_id, payload.message_id,
+                            payload.media_group_id or "",
+                        )
+                    except Exception:
+                        logger.debug("dedupe mark failed", exc_info=True)
+                logger.info(
+                    "Use case: Rule %s skipped msg %s: accepted #%s, forwarding every %s",
+                    rule.id[:8], payload.message_id, sequence, every_n,
+                )
+                return PipelineOutcome(False, "every_n_skip", evaluation)
 
         text = payload.effective_text
         # The per-task cleaner must run on *every* forwarding path. It was only

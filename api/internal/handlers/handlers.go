@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"strconv"
@@ -461,6 +462,10 @@ func enrichCustomMetadata(rawBody []byte, rule *pb.ForwardRule) {
 		"duplicate_filters", "crypto_mode", "auto_posting", "power_control",
 		"forward_delay_seconds", "edit_time_limit_seconds", "process_raw_text", "button_to_text",
 		"keyword_confirmation", "keyword_reply", "auto_delete_seconds",
+		// "Forward every Nth message": the web and mobile creation forms send it
+		// flat like every other advanced setting, so it has to be copied into the
+		// rule's metadata or the task is created with the feature silently off.
+		"forward_every_n",
 		"ocr_image_ai", "smart_ai_rewrite", "news_digest", "watermark", "watermark_text",
 		"ai_creativity", "ai_max_tokens", "paid_addons",
 		"whitelist_keywords", "blacklist_keywords", "link_buttons", "affiliate_kit",
@@ -509,6 +514,11 @@ const maxWatermarkLen = 200
 const maxKeywordReplyLen = 4096
 const maxDelaySeconds = 3600.0
 
+// maxForwardEveryN mirrors the setting registry: 1 = every message, 1000 is the
+// documented ceiling. Intervals outside it are clamped, never rejected, so a
+// stale client cannot make a task refuse to save.
+const maxForwardEveryN = 1000
+
 // normalizeAdvancedMetadata coerces known advanced fields into their canonical
 // types and rejects out-of-range or oversized values by substituting a safe
 // default. It never deletes unknown keys: they survive for forward
@@ -533,6 +543,26 @@ func normalizeAdvancedMetadata(meta map[string]any) {
 				// Not a number: treat as "unset" rather than persisting garbage.
 				delete(meta, k)
 			}
+		}
+	}
+
+	// "Forward every Nth message": a whole number of messages, never a float and
+	// never zero. Unlike the fields above, 0 is not a legal value — it would
+	// silence the task — so it means "off" (1) rather than being persisted.
+	if v, ok := meta["forward_every_n"]; ok {
+		if f, err := toFloat(v); err == nil && !math.IsNaN(f) && !math.IsInf(f, 0) {
+			n := int(f)
+			if n < 1 {
+				n = 1
+			}
+			if n > maxForwardEveryN {
+				n = maxForwardEveryN
+			}
+			meta["forward_every_n"] = n
+		} else {
+			// Not a number: treat as "unset" rather than persisting garbage. Core
+			// reads a missing key as 1, so the task keeps forwarding everything.
+			delete(meta, "forward_every_n")
 		}
 	}
 
@@ -608,6 +638,7 @@ func normalizeAdvancedMetadata(meta map[string]any) {
 			"auto_posting", "power_control", "forward_delay_seconds",
 			"edit_time_limit_seconds", "process_raw_text", "button_to_text",
 			"keyword_confirmation", "keyword_reply", "auto_delete_seconds",
+			"forward_every_n",
 			"watermark_text", "ai_creativity", "ai_max_tokens", "paid_addons",
 		} {
 			if v, ok := meta[k]; ok {

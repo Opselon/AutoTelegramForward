@@ -45,6 +45,7 @@ type TabType =
   | 'cleaner'
   | 'filters'
   | 'delay'
+  | 'every_n'
 type FeatureGroupType = 'all' | 'crypto' | 'mmo' | 'content'
 
 export function TaskOverviewModal({
@@ -94,6 +95,14 @@ export function TaskOverviewModal({
   }
 
   const handleAddonToggle = (addonKey: string) => {
+    // "Forward Every N" is a number, not a switch: the catalogue row opens the
+    // interval screen, exactly as the bot's add-on row does. Flipping a boolean
+    // here would set a flag the engine does not read and leave the panel
+    // claiming "On" while every message still goes through.
+    if (addonKey === 'every_n') {
+      setCurrentTab('every_n')
+      return
+    }
     setDraft((prev) => {
       const currentAddons = { ...(prev.paid_addons || {}) }
       currentAddons[addonKey] = !currentAddons[addonKey]
@@ -102,6 +111,24 @@ export function TaskOverviewModal({
         paid_addons: currentAddons,
       }
     })
+  }
+
+  /** The draft's interval, clamped the way the server clamps it. */
+  const everyN = (() => {
+    const raw = Number(draft.forward_every_n ?? draft.settings?.forward_every_n ?? 1)
+    if (!Number.isFinite(raw)) return 1
+    return Math.min(1000, Math.max(1, Math.trunc(raw)))
+  })()
+
+  const setEveryN = (value: number) => {
+    const n = Number.isFinite(value) ? Math.min(1000, Math.max(1, Math.trunc(value))) : 1
+    setDraft((prev) => ({
+      ...prev,
+      forward_every_n: n,
+      // The add-on flag mirrors the number so an older client that only reads
+      // `paid_addons` still shows the feature as on — and off again at 1.
+      paid_addons: { ...(prev.paid_addons || {}), every_n: n > 1 },
+    }))
   }
 
   const handleSaveAndClose = async () => {
@@ -732,6 +759,16 @@ export function TaskOverviewModal({
                       iconColor: '#eab308',
                       status: `${t('ui_delay_current')} ${draft.forward_delay_seconds || draft.delay_seconds || 0}s`,
                       onClick: () => setCurrentTab('delay'),
+                    },
+                    {
+                      title: t('ui_set_every_n'),
+                      icon: '🔢',
+                      iconColor: '#a78bfa',
+                      status:
+                        everyN > 1
+                          ? `${t('ui_every_n_current')} ${everyN}`
+                          : t('ui_every_n_every_message'),
+                      onClick: () => setCurrentTab('every_n'),
                     },
                   ].map((card) => (
                     <div
@@ -2149,6 +2186,111 @@ export function TaskOverviewModal({
                       {preset.label}
                     </button>
                   ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 7. FORWARD EVERY N VIEW (🔢) */}
+          {currentTab === 'every_n' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <button
+                  type="button"
+                  onClick={() => setCurrentTab('overview')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#38bdf8',
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  {t('ui_back_to_task_overview')}
+                </button>
+                <span style={{ fontSize: '12px', color: '#a78bfa', fontWeight: 600 }}>
+                  {t('ui_every_n_current')} {everyN}
+                </span>
+              </div>
+
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '6px' }}>
+                  {t('ui_configure_every_n')}
+                </div>
+                <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '14px' }}>
+                  {t('ui_every_n_help')}
+                </div>
+
+                <div style={{ marginBottom: '16px' }}>
+                  <label style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginBottom: '6px' }}>
+                    {t('ui_every_n_range')}
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="1000"
+                    step="1"
+                    inputMode="numeric"
+                    value={everyN}
+                    onChange={(e) => setEveryN(parseInt(e.target.value, 10))}
+                    style={{
+                      width: '100%',
+                      backgroundColor: '#0f172a',
+                      border: '1px solid #334155',
+                      borderRadius: '10px',
+                      padding: '10px 12px',
+                      color: '#f1f5f9',
+                      fontSize: '14px',
+                      fontWeight: 700,
+                    }}
+                  />
+                </div>
+
+                <div style={{ fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '8px' }}>
+                  {t('ui_quick_presets')}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                  {[
+                    { label: t('ui_every_n_every_message'), n: 1 },
+                    { label: '🔢 2', n: 2 },
+                    { label: '🔢 3', n: 3 },
+                    { label: '🔢 5', n: 5 },
+                    { label: '🔢 10', n: 10 },
+                    { label: '🔢 25', n: 25 },
+                    { label: '🔢 50', n: 50 },
+                    { label: '🔢 100', n: 100 },
+                  ].map((preset) => (
+                    <button
+                      key={preset.n}
+                      type="button"
+                      onClick={() => setEveryN(preset.n)}
+                      style={{
+                        backgroundColor: everyN === preset.n ? '#a78bfa' : '#0f172a',
+                        color: everyN === preset.n ? '#000000' : '#f1f5f9',
+                        border: '1px solid #334155',
+                        borderRadius: '8px',
+                        padding: '8px 4px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '12px' }}>
+                  {t('ui_every_n_example')}
                 </div>
               </div>
             </div>

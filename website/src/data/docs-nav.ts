@@ -54,6 +54,7 @@ export const docsNav: DocSection[] = [
       { title: 'Header & footer shortcodes', path: '/features/headers-footers-shortcodes/', desc: 'Twelve validated shortcodes for attribution.' },
       { title: 'Replacements & regex', path: '/features/replacements-and-regex/', desc: 'Literal and pattern replacements.' },
       { title: 'Scheduling & delays', path: '/features/scheduling-and-delays/', desc: 'Delays, windows and the edit guard.' },
+      { title: 'Forward every N messages', path: '/features/forward-every-n/', desc: 'Sample a busy source: 1, 6, 11, 16 …', isNew: true },
       { title: 'Media, albums & copy bypass', path: '/features/media-and-albums/', desc: 'Albums and protected-channel re-upload.' },
       { title: 'Backup, clone & migration', path: '/features/backup-clone-migration/', desc: 'Encrypted .atf bundles.' },
       { title: 'Multi-tenant security', path: '/features/multi-tenant-security/', desc: 'Fail-closed isolation and encryption.' },

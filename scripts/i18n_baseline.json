@@ -1939,6 +1939,20 @@
       "path": "core/infrastructure/telegram/locales/translations.json",
       "detail": "unknown_command",
       "evidence": ""
+    },
+    {
+      "fingerprint": "0bebbd39059a1bb4",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_forward_every_n",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "da869fdbc24576b7",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_forward_every_n",
+      "evidence": ""
     }
   ]
 }

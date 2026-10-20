@@ -382,6 +382,47 @@ class IProcessedMessageRepository(ABC):
         ...
 
 
+class IRuleCounterRepository(ABC):
+    """Persisted position of a task in its "forward every Nth message" cadence.
+
+    One row per task, holding how many filtered messages the task has accepted.
+    It is deliberately not derived from anything else: the dedupe store forgets
+    messages on a retention sweep, the delivery jobs are per-target, and
+    ``processed_messages`` is keyed by message rather than by count. Losing this
+    row would restart the cadence at message 1 — forwarding a message the owner
+    had configured away — so it is written once per accepted message and never
+    trimmed.
+
+    The single method is one atomic statement on purpose. A read-then-write pair
+    lets two workers that process two messages at the same time both read the
+    same count and both decide they own the slot, which delivers two messages
+    where one was asked for. The store, not the caller, is the serialisation
+    point.
+    """
+
+    @abstractmethod
+    async def advance(self, rule_id: str, every_n: int, owner_user_id: int = 0) -> int:
+        """Count one accepted message and return the new sequence number.
+
+        The returned number is 1-based and unique per task: concurrent callers
+        get distinct values. When ``every_n`` differs from the interval the row
+        was last advanced with, the count restarts at 1 — an owner who changes
+        the setting starts a fresh cycle, and the first message of the new cycle
+        is forwarded.
+        """
+        ...
+
+    @abstractmethod
+    async def peek(self, rule_id: str) -> Optional[dict]:
+        """The stored row without advancing it, for UI and tests (or None)."""
+        ...
+
+    @abstractmethod
+    async def reset(self, rule_id: str) -> bool:
+        """Drop a task's row, so its next message is sequence 1 again."""
+        ...
+
+
 class IAuthFlowRepository(ABC):
     """Persisted authentication state machine storage (audit D1 / TASK 03).
 

@@ -677,6 +677,23 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_delivery_jobs_lane
         ON delivery_jobs(target_chat_id, status, source_chat_id, source_message_id);
     """,
+    27: """
+    -- v27: "Forward every Nth message" needs to know where a task is in its
+    -- cadence, and that position is state, not a statistic: deriving it from
+    -- processed_messages would lose it on the 30-day retention sweep (and a
+    -- sweep between two messages would forward two in a row). One row per task,
+    -- one UPSERT per accepted message. `every_n` is stored beside the count so a
+    -- settings change can be detected inside the same statement and restart the
+    -- cycle, without a second read or a lock held across two calls.
+    CREATE TABLE IF NOT EXISTS rule_counters (
+        rule_id TEXT PRIMARY KEY,
+        owner_user_id INTEGER NOT NULL DEFAULT 0,
+        every_n INTEGER NOT NULL DEFAULT 1,
+        accepted INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_rule_counters_owner ON rule_counters(owner_user_id);
+    """,
 }
 
 
