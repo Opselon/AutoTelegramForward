@@ -1416,3 +1416,330 @@ service TaskControlService {
   rpc CancelTask(CancelTaskRequest) returns (TaskResponse);
   rpc RetryTask(RetryTaskRequest) returns (TaskResponse);
 }
+
+// ---------------------------------------------------------------------------
+// AI private-message auto-reply (schema v28)
+//
+// One tenant-owned subsystem behind every surface: the Telegram bot, the web
+// dashboard and the mobile app all call these RPCs, so a setting changed on one
+// is the setting the worker reads on the next inbound message.
+//
+// Conventions, matching the rest of this file:
+//   * `owner_user_id` is never trusted from the client; the API fills it from
+//     the authenticated identity before calling Core.
+//   * Empty string means "unset"; booleans are explicit; timestamps are unix
+//     seconds.
+// ---------------------------------------------------------------------------
+
+message AutoReplySettings {
+  int64 owner_user_id = 1;
+  bool enabled = 2;
+  string ai_config_id = 3;          // provider/model to generate with ("" = none)
+  string prompt_id = 4;             // default prompt ("" = built-in persona)
+  string target_mode = 5;           // EVERYONE | SELECTED_ONLY | ALL_EXCEPT | MANUAL
+  string language = 6;              // "" / "auto" = mirror the contact's script
+  string tone = 7;                  // friendly, casual, professional, formal, playful, empathetic, direct
+  string response_length = 8;       // short, medium, long
+  double temperature = 9;
+  int32 max_tokens = 10;
+  int32 context_messages = 11;      // how many previous turns the model sees
+  bool memory_enabled = 12;
+  int32 memory_max_facts = 13;
+  string extra_instructions = 14;   // appended to every prompt
+  int32 max_reply_chars = 15;
+  bool typing_simulation = 16;
+  double typing_delay_min = 17;
+  double typing_delay_max = 18;
+  int32 cooldown_seconds = 19;      // per-chat gap between replies
+  int32 daily_limit_per_chat = 20;  // 0 = unlimited
+  int32 rate_limit_per_minute = 21;
+  int32 max_concurrency = 22;
+  int32 max_attempts = 23;
+  double retry_backoff_seconds = 24;
+  int32 quiet_hours_start = 25;     // -1 = off
+  int32 quiet_hours_end = 26;       // -1 = off
+  int32 timezone_offset_minutes = 27;
+  repeated int32 active_days = 28;  // 0=Monday .. 6=Sunday, empty = every day
+  string fallback_text = 29;        // sent when generation fails and retries are spent
+  bool ignore_bots = 30;
+  int32 version = 31;               // optimistic concurrency token
+  int64 created_at = 32;
+  int64 updated_at = 33;
+}
+
+message GetAutoReplySettingsRequest {
+  int64 owner_user_id = 1;
+}
+
+message UpdateAutoReplySettingsRequest {
+  int64 owner_user_id = 1;
+  AutoReplySettings settings = 2;
+  // Field names present in this list are the only ones written, so a client
+  // that only flips `enabled` cannot reset the rest to zero values.
+  repeated string update_mask = 3;
+}
+
+message AutoReplyPrompt {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string system_prompt = 4;
+  string user_prompt_template = 5;   // must contain {text}
+  string language = 6;
+  string tone = 7;
+  string response_length = 8;
+  repeated string tags = 9;
+  string category = 10;
+  bool is_default = 11;
+  bool is_archived = 12;
+  int32 usage_count = 13;
+  int64 created_at = 14;
+  int64 updated_at = 15;
+}
+
+message ListAutoReplyPromptsRequest {
+  int64 owner_user_id = 1;
+  string search = 2;
+  bool include_archived = 3;
+}
+
+message ListAutoReplyPromptsResponse {
+  repeated AutoReplyPrompt prompts = 1;
+}
+
+message SaveAutoReplyPromptRequest {
+  int64 owner_user_id = 1;
+  AutoReplyPrompt prompt = 2;
+}
+
+message DeleteAutoReplyPromptRequest {
+  int64 owner_user_id = 1;
+  string prompt_id = 2;
+}
+
+message DuplicateAutoReplyPromptRequest {
+  int64 owner_user_id = 1;
+  string prompt_id = 2;
+  string name = 3;
+}
+
+message ExportAutoReplyPromptsRequest {
+  int64 owner_user_id = 1;
+  repeated string prompt_ids = 2;
+}
+
+message ExportAutoReplyPromptsResponse {
+  string document_json = 1;   // portable: no ids, no owner, no credentials
+}
+
+message ImportAutoReplyPromptsRequest {
+  int64 owner_user_id = 1;
+  string document_json = 2;
+}
+
+message ImportAutoReplyPromptsResponse {
+  int32 imported = 1;
+  int32 skipped = 2;
+  repeated AutoReplyPrompt prompts = 3;
+}
+
+message AutoReplyTarget {
+  string chat_id = 1;
+  string title = 2;
+  string username = 3;
+  bool is_enabled = 4;
+  string prompt_id = 5;
+  string note = 6;
+  int32 priority = 7;
+  int64 added_at = 8;
+}
+
+message ListAutoReplyTargetsRequest {
+  int64 owner_user_id = 1;
+  string session_id = 2;
+  string search = 3;
+  string mode = 4;          // "enabled" | "disabled" | "" (all)
+  int32 limit = 5;
+  int32 offset = 6;
+}
+
+message ListAutoReplyTargetsResponse {
+  repeated AutoReplyTarget targets = 1;
+  int32 total = 2;
+  int32 enabled = 3;
+}
+
+message AddAutoReplyTargetsRequest {
+  int64 owner_user_id = 1;
+  repeated AutoReplyTarget targets = 2;
+}
+
+message UpdateAutoReplyTargetRequest {
+  int64 owner_user_id = 1;
+  AutoReplyTarget target = 2;
+  repeated string update_mask = 3;
+}
+
+message RemoveAutoReplyTargetsRequest {
+  int64 owner_user_id = 1;
+  repeated string chat_ids = 2;
+}
+
+message ResolveAutoReplyChatRequest {
+  int64 owner_user_id = 1;
+  string session_id = 2;
+  string query = 3;         // numeric id, @username, or a name fragment
+}
+
+message ResolveAutoReplyChatResponse {
+  bool found = 1;
+  AutoReplyTarget target = 2;
+  string error_code = 3;
+}
+
+message AutoReplyRule {
+  string id = 1;
+  string name = 2;
+  bool is_enabled = 3;
+  int32 priority = 4;                 // higher wins; ties broken by id
+  string action = 5;                  // REPLY | SKIP
+  string conditions_json = 6;         // {"keywords_any":[],"chat_ids":[],...}
+  string exclusions_json = 7;
+  string prompt_id = 8;
+  string ai_config_id = 9;
+  int32 cooldown_seconds = 10;        // -1 = inherit
+  string language = 11;
+  string tone = 12;
+  string response_length = 13;
+  double temperature = 14;            // 0 = inherit
+  int32 max_tokens = 15;
+  int64 created_at = 16;
+  int64 updated_at = 17;
+}
+
+message ListAutoReplyRulesRequest {
+  int64 owner_user_id = 1;
+}
+
+message ListAutoReplyRulesResponse {
+  repeated AutoReplyRule rules = 1;
+}
+
+message SaveAutoReplyRuleRequest {
+  int64 owner_user_id = 1;
+  AutoReplyRule rule = 2;
+}
+
+message DeleteAutoReplyRuleRequest {
+  int64 owner_user_id = 1;
+  string rule_id = 2;
+}
+
+message ReorderAutoReplyRulesRequest {
+  int64 owner_user_id = 1;
+  repeated string rule_ids = 2;   // highest priority first
+}
+
+message AutoReplyJob {
+  string id = 1;
+  string chat_id = 2;
+  string chat_title = 3;
+  string status = 4;              // PENDING, RUNNING, RETRY_WAIT, SENT, FAILED, DEAD_LETTER, SKIPPED, CANCELLED
+  int32 attempt = 5;
+  int32 max_attempts = 6;
+  string error = 7;
+  string error_code = 8;
+  string inbound_text = 9;
+  string reply_text = 10;
+  string correlation_id = 11;
+  int32 latency_ms = 12;
+  int64 created_at = 13;
+  int64 sent_at = 14;
+  int64 source_message_id = 15;
+}
+
+message ListAutoReplyJobsRequest {
+  int64 owner_user_id = 1;
+  string status = 2;      // "" = all, "DEAD_LETTER" = the dead-letter queue
+  string chat_id = 3;
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+message ListAutoReplyJobsResponse {
+  repeated AutoReplyJob jobs = 1;
+  int32 total = 2;
+}
+
+message AutoReplyJobRequest {
+  int64 owner_user_id = 1;
+  string job_id = 2;
+}
+
+message GetAutoReplyStatsRequest {
+  int64 owner_user_id = 1;
+}
+
+message AutoReplyStatsResponse {
+  int32 sent_today = 1;
+  int32 sent_total = 2;
+  int32 pending = 3;
+  int32 retrying = 4;
+  int32 dead_letter = 5;
+  int32 chats_enabled = 6;
+  int32 prompts = 7;
+  int32 rules = 8;
+  double average_latency_ms = 9;
+  int64 last_sent_at = 10;
+  string status_json = 11;   // per-status counters, for the dashboard chart
+}
+
+message PreviewAutoReplyRequest {
+  int64 owner_user_id = 1;
+  string chat_id = 2;
+  string inbound_text = 3;
+  string prompt_id = 4;
+  string ai_config_id = 5;
+}
+
+message PreviewAutoReplyResponse {
+  bool ok = 1;
+  string reply_text = 2;
+  string error = 3;
+  string error_code = 4;
+  string system_prompt = 5;     // exactly what the model would receive
+  string provider = 6;
+  string model = 7;
+  int32 latency_ms = 8;
+  int32 tokens = 9;
+}
+
+service AutoReplyControlService {
+  rpc GetAutoReplySettings(GetAutoReplySettingsRequest) returns (AutoReplySettings);
+  rpc UpdateAutoReplySettings(UpdateAutoReplySettingsRequest) returns (AutoReplySettings);
+
+  rpc ListAutoReplyPrompts(ListAutoReplyPromptsRequest) returns (ListAutoReplyPromptsResponse);
+  rpc SaveAutoReplyPrompt(SaveAutoReplyPromptRequest) returns (AutoReplyPrompt);
+  rpc DeleteAutoReplyPrompt(DeleteAutoReplyPromptRequest) returns (StatusResponse);
+  rpc DuplicateAutoReplyPrompt(DuplicateAutoReplyPromptRequest) returns (AutoReplyPrompt);
+  rpc ExportAutoReplyPrompts(ExportAutoReplyPromptsRequest) returns (ExportAutoReplyPromptsResponse);
+  rpc ImportAutoReplyPrompts(ImportAutoReplyPromptsRequest) returns (ImportAutoReplyPromptsResponse);
+
+  rpc ListAutoReplyTargets(ListAutoReplyTargetsRequest) returns (ListAutoReplyTargetsResponse);
+  rpc AddAutoReplyTargets(AddAutoReplyTargetsRequest) returns (ListAutoReplyTargetsResponse);
+  rpc UpdateAutoReplyTarget(UpdateAutoReplyTargetRequest) returns (AutoReplyTarget);
+  rpc RemoveAutoReplyTargets(RemoveAutoReplyTargetsRequest) returns (StatusResponse);
+  rpc ResolveAutoReplyChat(ResolveAutoReplyChatRequest) returns (ResolveAutoReplyChatResponse);
+
+  rpc ListAutoReplyRules(ListAutoReplyRulesRequest) returns (ListAutoReplyRulesResponse);
+  rpc SaveAutoReplyRule(SaveAutoReplyRuleRequest) returns (AutoReplyRule);
+  rpc DeleteAutoReplyRule(DeleteAutoReplyRuleRequest) returns (StatusResponse);
+  rpc ReorderAutoReplyRules(ReorderAutoReplyRulesRequest) returns (ListAutoReplyRulesResponse);
+
+  rpc ListAutoReplyJobs(ListAutoReplyJobsRequest) returns (ListAutoReplyJobsResponse);
+  rpc CancelAutoReplyJob(AutoReplyJobRequest) returns (StatusResponse);
+  rpc RetryAutoReplyJob(AutoReplyJobRequest) returns (StatusResponse);
+
+  rpc GetAutoReplyStats(GetAutoReplyStatsRequest) returns (AutoReplyStatsResponse);
+  rpc PreviewAutoReply(PreviewAutoReplyRequest) returns (PreviewAutoReplyResponse);
+}

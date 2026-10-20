@@ -120,7 +120,8 @@ class MessageDispatcher:
         self, pool: ClientPool, use_case, send_queue_size: int = 2000,
         error_log=None, metrics=None, rule_stats=None, log_client=None,
         queue_manager=None, sync_engine=None, durable_pipeline=None,
-        pv_responder=None,
+        pv_responder=None, autoreply_engine=None, owner_lookup=None,
+        autoreply_worker=None,
     ) -> None:
         self._pool = pool
         self._use_case = use_case
@@ -130,6 +131,11 @@ class MessageDispatcher:
         self._queue_manager = queue_manager
         self._sync_engine = sync_engine
         self._pv_responder = pv_responder
+        # The v27 auto-reply engine supersedes the legacy PV responder; the old
+        # one stays wired only as a fallback for a container that has no engine.
+        self._autoreply = autoreply_engine
+        self._autoreply_worker = autoreply_worker
+        self._owner_lookup = owner_lookup
         # Album aggregation with bounded LRU & TTL
         self._album_aggregator = AlbumAggregator(flush_callback=self._flush_album, ttl_seconds=2.0, max_active_albums=500)
         # send-rate bookkeeping: target -> deque of timestamps
@@ -365,7 +371,27 @@ class MessageDispatcher:
 
             # AI PV Auto-Reply for direct messages on user accounts
             if trigger == "NEW_MESSAGE" and getattr(message, "chat", None) and str(getattr(message.chat, "type", "")).lower().endswith("private"):
-                if self._pv_responder is not None:
+                if self._autoreply is not None:
+                    try:
+                        from core.infrastructure.telegram.autoreply_bridge import (
+                            inbound_from_pyrogram, make_sender, make_typing,
+                        )
+                        owner = 0
+                        if self._owner_lookup is not None:
+                            owner = int(self._owner_lookup(sid) or 0)
+                        inbound = inbound_from_pyrogram(message, session_id=sid, owner_user_id=owner)
+                        if inbound is not None and owner:
+                            # The worker replies later; this call only decides and
+                            # enqueues, so a slow provider never blocks ingestion.
+                            await self._autoreply.handle_incoming(inbound)
+                            if self._autoreply_worker is not None:
+                                from core.application.autoreply.worker import OutboundSender
+                                self._autoreply_worker.register_session_sender(
+                                    sid, OutboundSender(make_sender(client), make_typing(client))
+                                )
+                    except Exception as exc:
+                        logger.warning("autoreply enqueue failed: %s", exc)
+                elif self._pv_responder is not None:
                     try:
                         replied = await self._pv_responder.handle_message(client, message)
                         if replied:

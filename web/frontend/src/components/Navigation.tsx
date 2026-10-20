@@ -29,6 +29,7 @@ export type TabId =
   | 'simulator'
   | 'ai'
   | 'pv'
+  | 'autoreply'
   | 'filters'
   | 'sessions'
   | 'jobs'

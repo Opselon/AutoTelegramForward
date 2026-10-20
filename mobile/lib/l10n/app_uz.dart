@@ -845,6 +845,26 @@ class AppMessagesUz {
     'ar_typing_delay_max': 'Yozish kechikishi, maksimum (s)',
     'ar_typing_delay_min': 'Yozish kechikishi, minimum (s)',
     'ar_typing_hint': 'Javobdan oldin yozish indikatorini ko\'rsatadi',
+    'ar_job_cancelled': 'Yetkazish bekor qilindi',
+    'ar_job_retried': 'Yana bir urinish uchun navbatga qo\'yildi',
+    'ar_prompt_archive': 'Arxivlash',
+    'ar_prompt_deleted': 'Prompt o\'chirildi',
+    'ar_prompt_import_done':
+        '{imported} import qilindi, {skipped} o\'tkazib yuborildi',
+    'ar_prompt_saved': 'Prompt saqlandi',
+    'ar_rule_cooldown_value': 'Pauza {seconds}s',
+    'ar_rule_exclude_keywords': 'Bundan tashqari: {keywords}',
+    'ar_rule_edit': 'Qoidani tahrirlash',
+    'ar_targets_count': '{total} suhbatdan {enabled} tasiga javob beriladi',
+    'ar_target_selection': 'Tanlandi: {n}',
+    'ar_targets_empty': 'Hozircha suhbatlar yo\'q',
+    'ar_prompt_duplicate_done': 'Prompt nusxalandi',
+    'ar_prompt_edit': 'Promptni tahrirlash',
+    'ar_prompts_empty': 'Hozircha promptlar yo\'q',
+    'ar_prompts_no_match': 'Bu qidiruvga mos prompt yo\'q',
+    'ar_targets_no_match': 'Bu qidiruvga mos suhbat yo\'q',
+    'ar_job_attempt': '{max} dan {n}-urinish',
+    'ar_prompt_unarchive': 'Tiklash',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare

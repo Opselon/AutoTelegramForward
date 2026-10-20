@@ -19,6 +19,7 @@ It is deliberately framework-shaped, not framework-dependent:
 
 from __future__ import annotations
 
+import importlib
 import re
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -282,8 +283,17 @@ class BotHarness:
 
         self.bot = FakeBot()
         self.log_client = _LogClient()
+        # Two modules register callbacks: the UI itself and the auto-reply
+        # mixin it inherits. Both must see the fake filter object, or the
+        # mixin's pyrogram `RegexFilter` (which exposes only `.p`) is treated as
+        # "matches everything" and every press runs every panel handler.
+        ar_module = importlib.import_module(
+            "core.infrastructure.telegram.autoreply_bot_ui"
+        )
         original_filters = ui_module.filters
+        original_ar_filters = ar_module.filters
         ui_module.filters = self.bot.filters
+        ar_module.filters = self.bot.filters
         try:
             self.ui = ui_module.ProBotUI(
                 bot=self.bot,
@@ -313,6 +323,7 @@ class BotHarness:
             # handler and make a test press the same button twice.
         finally:
             ui_module.filters = original_filters
+            ar_module.filters = original_ar_filters
 
     # ------------------------------------------------------------------ #
     # The store

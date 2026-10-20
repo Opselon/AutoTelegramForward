@@ -10435,6 +10435,2676 @@ func (x *RetryTaskRequest) GetOwnerUserId() int64 {
 	return 0
 }
 
+type AutoReplySettings struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId           int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Enabled               bool                   `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	AiConfigId            string                 `protobuf:"bytes,3,opt,name=ai_config_id,json=aiConfigId,proto3" json:"ai_config_id,omitempty"`           // provider/model to generate with ("" = none)
+	PromptId              string                 `protobuf:"bytes,4,opt,name=prompt_id,json=promptId,proto3" json:"prompt_id,omitempty"`                   // default prompt ("" = built-in persona)
+	TargetMode            string                 `protobuf:"bytes,5,opt,name=target_mode,json=targetMode,proto3" json:"target_mode,omitempty"`             // EVERYONE | SELECTED_ONLY | ALL_EXCEPT | MANUAL
+	Language              string                 `protobuf:"bytes,6,opt,name=language,proto3" json:"language,omitempty"`                                   // "" / "auto" = mirror the contact's script
+	Tone                  string                 `protobuf:"bytes,7,opt,name=tone,proto3" json:"tone,omitempty"`                                           // friendly, casual, professional, formal, playful, empathetic, direct
+	ResponseLength        string                 `protobuf:"bytes,8,opt,name=response_length,json=responseLength,proto3" json:"response_length,omitempty"` // short, medium, long
+	Temperature           float64                `protobuf:"fixed64,9,opt,name=temperature,proto3" json:"temperature,omitempty"`
+	MaxTokens             int32                  `protobuf:"varint,10,opt,name=max_tokens,json=maxTokens,proto3" json:"max_tokens,omitempty"`
+	ContextMessages       int32                  `protobuf:"varint,11,opt,name=context_messages,json=contextMessages,proto3" json:"context_messages,omitempty"` // how many previous turns the model sees
+	MemoryEnabled         bool                   `protobuf:"varint,12,opt,name=memory_enabled,json=memoryEnabled,proto3" json:"memory_enabled,omitempty"`
+	MemoryMaxFacts        int32                  `protobuf:"varint,13,opt,name=memory_max_facts,json=memoryMaxFacts,proto3" json:"memory_max_facts,omitempty"`
+	ExtraInstructions     string                 `protobuf:"bytes,14,opt,name=extra_instructions,json=extraInstructions,proto3" json:"extra_instructions,omitempty"` // appended to every prompt
+	MaxReplyChars         int32                  `protobuf:"varint,15,opt,name=max_reply_chars,json=maxReplyChars,proto3" json:"max_reply_chars,omitempty"`
+	TypingSimulation      bool                   `protobuf:"varint,16,opt,name=typing_simulation,json=typingSimulation,proto3" json:"typing_simulation,omitempty"`
+	TypingDelayMin        float64                `protobuf:"fixed64,17,opt,name=typing_delay_min,json=typingDelayMin,proto3" json:"typing_delay_min,omitempty"`
+	TypingDelayMax        float64                `protobuf:"fixed64,18,opt,name=typing_delay_max,json=typingDelayMax,proto3" json:"typing_delay_max,omitempty"`
+	CooldownSeconds       int32                  `protobuf:"varint,19,opt,name=cooldown_seconds,json=cooldownSeconds,proto3" json:"cooldown_seconds,omitempty"`           // per-chat gap between replies
+	DailyLimitPerChat     int32                  `protobuf:"varint,20,opt,name=daily_limit_per_chat,json=dailyLimitPerChat,proto3" json:"daily_limit_per_chat,omitempty"` // 0 = unlimited
+	RateLimitPerMinute    int32                  `protobuf:"varint,21,opt,name=rate_limit_per_minute,json=rateLimitPerMinute,proto3" json:"rate_limit_per_minute,omitempty"`
+	MaxConcurrency        int32                  `protobuf:"varint,22,opt,name=max_concurrency,json=maxConcurrency,proto3" json:"max_concurrency,omitempty"`
+	MaxAttempts           int32                  `protobuf:"varint,23,opt,name=max_attempts,json=maxAttempts,proto3" json:"max_attempts,omitempty"`
+	RetryBackoffSeconds   float64                `protobuf:"fixed64,24,opt,name=retry_backoff_seconds,json=retryBackoffSeconds,proto3" json:"retry_backoff_seconds,omitempty"`
+	QuietHoursStart       int32                  `protobuf:"varint,25,opt,name=quiet_hours_start,json=quietHoursStart,proto3" json:"quiet_hours_start,omitempty"` // -1 = off
+	QuietHoursEnd         int32                  `protobuf:"varint,26,opt,name=quiet_hours_end,json=quietHoursEnd,proto3" json:"quiet_hours_end,omitempty"`       // -1 = off
+	TimezoneOffsetMinutes int32                  `protobuf:"varint,27,opt,name=timezone_offset_minutes,json=timezoneOffsetMinutes,proto3" json:"timezone_offset_minutes,omitempty"`
+	ActiveDays            []int32                `protobuf:"varint,28,rep,packed,name=active_days,json=activeDays,proto3" json:"active_days,omitempty"` // 0=Monday .. 6=Sunday, empty = every day
+	FallbackText          string                 `protobuf:"bytes,29,opt,name=fallback_text,json=fallbackText,proto3" json:"fallback_text,omitempty"`   // sent when generation fails and retries are spent
+	IgnoreBots            bool                   `protobuf:"varint,30,opt,name=ignore_bots,json=ignoreBots,proto3" json:"ignore_bots,omitempty"`
+	Version               int32                  `protobuf:"varint,31,opt,name=version,proto3" json:"version,omitempty"` // optimistic concurrency token
+	CreatedAt             int64                  `protobuf:"varint,32,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt             int64                  `protobuf:"varint,33,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
+}
+
+func (x *AutoReplySettings) Reset() {
+	*x = AutoReplySettings{}
+	mi := &file_autoforward_proto_msgTypes[141]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AutoReplySettings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AutoReplySettings) ProtoMessage() {}
+
+func (x *AutoReplySettings) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[141]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AutoReplySettings.ProtoReflect.Descriptor instead.
+func (*AutoReplySettings) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{141}
+}
+
+func (x *AutoReplySettings) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *AutoReplySettings) GetAiConfigId() string {
+	if x != nil {
+		return x.AiConfigId
+	}
+	return ""
+}
+
+func (x *AutoReplySettings) GetPromptId() string {
+	if x != nil {
+		return x.PromptId
+	}
+	return ""
+}
+
+func (x *AutoReplySettings) GetTargetMode() string {
+	if x != nil {
+		return x.TargetMode
+	}
+	return ""
+}
+
+func (x *AutoReplySettings) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+
+func (x *AutoReplySettings) GetTone() string {
+	if x != nil {
+		return x.Tone
+	}
+	return ""
+}
+
+func (x *AutoReplySettings) GetResponseLength() string {
+	if x != nil {
+		return x.ResponseLength
+	}
+	return ""
+}
+
+func (x *AutoReplySettings) GetTemperature() float64 {
+	if x != nil {
+		return x.Temperature
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetMaxTokens() int32 {
+	if x != nil {
+		return x.MaxTokens
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetContextMessages() int32 {
+	if x != nil {
+		return x.ContextMessages
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetMemoryEnabled() bool {
+	if x != nil {
+		return x.MemoryEnabled
+	}
+	return false
+}
+
+func (x *AutoReplySettings) GetMemoryMaxFacts() int32 {
+	if x != nil {
+		return x.MemoryMaxFacts
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetExtraInstructions() string {
+	if x != nil {
+		return x.ExtraInstructions
+	}
+	return ""
+}
+
+func (x *AutoReplySettings) GetMaxReplyChars() int32 {
+	if x != nil {
+		return x.MaxReplyChars
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetTypingSimulation() bool {
+	if x != nil {
+		return x.TypingSimulation
+	}
+	return false
+}
+
+func (x *AutoReplySettings) GetTypingDelayMin() float64 {
+	if x != nil {
+		return x.TypingDelayMin
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetTypingDelayMax() float64 {
+	if x != nil {
+		return x.TypingDelayMax
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetCooldownSeconds() int32 {
+	if x != nil {
+		return x.CooldownSeconds
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetDailyLimitPerChat() int32 {
+	if x != nil {
+		return x.DailyLimitPerChat
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetRateLimitPerMinute() int32 {
+	if x != nil {
+		return x.RateLimitPerMinute
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetMaxConcurrency() int32 {
+	if x != nil {
+		return x.MaxConcurrency
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetMaxAttempts() int32 {
+	if x != nil {
+		return x.MaxAttempts
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetRetryBackoffSeconds() float64 {
+	if x != nil {
+		return x.RetryBackoffSeconds
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetQuietHoursStart() int32 {
+	if x != nil {
+		return x.QuietHoursStart
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetQuietHoursEnd() int32 {
+	if x != nil {
+		return x.QuietHoursEnd
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetTimezoneOffsetMinutes() int32 {
+	if x != nil {
+		return x.TimezoneOffsetMinutes
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetActiveDays() []int32 {
+	if x != nil {
+		return x.ActiveDays
+	}
+	return nil
+}
+
+func (x *AutoReplySettings) GetFallbackText() string {
+	if x != nil {
+		return x.FallbackText
+	}
+	return ""
+}
+
+func (x *AutoReplySettings) GetIgnoreBots() bool {
+	if x != nil {
+		return x.IgnoreBots
+	}
+	return false
+}
+
+func (x *AutoReplySettings) GetVersion() int32 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *AutoReplySettings) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+type GetAutoReplySettingsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAutoReplySettingsRequest) Reset() {
+	*x = GetAutoReplySettingsRequest{}
+	mi := &file_autoforward_proto_msgTypes[142]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAutoReplySettingsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAutoReplySettingsRequest) ProtoMessage() {}
+
+func (x *GetAutoReplySettingsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[142]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAutoReplySettingsRequest.ProtoReflect.Descriptor instead.
+func (*GetAutoReplySettingsRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{142}
+}
+
+func (x *GetAutoReplySettingsRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+type UpdateAutoReplySettingsRequest struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Settings    *AutoReplySettings     `protobuf:"bytes,2,opt,name=settings,proto3" json:"settings,omitempty"`
+	// Field names present in this list are the only ones written, so a client
+	// that only flips `enabled` cannot reset the rest to zero values.
+	UpdateMask    []string `protobuf:"bytes,3,rep,name=update_mask,json=updateMask,proto3" json:"update_mask,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateAutoReplySettingsRequest) Reset() {
+	*x = UpdateAutoReplySettingsRequest{}
+	mi := &file_autoforward_proto_msgTypes[143]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateAutoReplySettingsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateAutoReplySettingsRequest) ProtoMessage() {}
+
+func (x *UpdateAutoReplySettingsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[143]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateAutoReplySettingsRequest.ProtoReflect.Descriptor instead.
+func (*UpdateAutoReplySettingsRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{143}
+}
+
+func (x *UpdateAutoReplySettingsRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *UpdateAutoReplySettingsRequest) GetSettings() *AutoReplySettings {
+	if x != nil {
+		return x.Settings
+	}
+	return nil
+}
+
+func (x *UpdateAutoReplySettingsRequest) GetUpdateMask() []string {
+	if x != nil {
+		return x.UpdateMask
+	}
+	return nil
+}
+
+type AutoReplyPrompt struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Id                 string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name               string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description        string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	SystemPrompt       string                 `protobuf:"bytes,4,opt,name=system_prompt,json=systemPrompt,proto3" json:"system_prompt,omitempty"`
+	UserPromptTemplate string                 `protobuf:"bytes,5,opt,name=user_prompt_template,json=userPromptTemplate,proto3" json:"user_prompt_template,omitempty"` // must contain {text}
+	Language           string                 `protobuf:"bytes,6,opt,name=language,proto3" json:"language,omitempty"`
+	Tone               string                 `protobuf:"bytes,7,opt,name=tone,proto3" json:"tone,omitempty"`
+	ResponseLength     string                 `protobuf:"bytes,8,opt,name=response_length,json=responseLength,proto3" json:"response_length,omitempty"`
+	Tags               []string               `protobuf:"bytes,9,rep,name=tags,proto3" json:"tags,omitempty"`
+	Category           string                 `protobuf:"bytes,10,opt,name=category,proto3" json:"category,omitempty"`
+	IsDefault          bool                   `protobuf:"varint,11,opt,name=is_default,json=isDefault,proto3" json:"is_default,omitempty"`
+	IsArchived         bool                   `protobuf:"varint,12,opt,name=is_archived,json=isArchived,proto3" json:"is_archived,omitempty"`
+	UsageCount         int32                  `protobuf:"varint,13,opt,name=usage_count,json=usageCount,proto3" json:"usage_count,omitempty"`
+	CreatedAt          int64                  `protobuf:"varint,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt          int64                  `protobuf:"varint,15,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *AutoReplyPrompt) Reset() {
+	*x = AutoReplyPrompt{}
+	mi := &file_autoforward_proto_msgTypes[144]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AutoReplyPrompt) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AutoReplyPrompt) ProtoMessage() {}
+
+func (x *AutoReplyPrompt) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[144]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AutoReplyPrompt.ProtoReflect.Descriptor instead.
+func (*AutoReplyPrompt) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{144}
+}
+
+func (x *AutoReplyPrompt) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *AutoReplyPrompt) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AutoReplyPrompt) GetDescription() string {
+	if x != nil {
+		return x.Description
+	}
+	return ""
+}
+
+func (x *AutoReplyPrompt) GetSystemPrompt() string {
+	if x != nil {
+		return x.SystemPrompt
+	}
+	return ""
+}
+
+func (x *AutoReplyPrompt) GetUserPromptTemplate() string {
+	if x != nil {
+		return x.UserPromptTemplate
+	}
+	return ""
+}
+
+func (x *AutoReplyPrompt) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+
+func (x *AutoReplyPrompt) GetTone() string {
+	if x != nil {
+		return x.Tone
+	}
+	return ""
+}
+
+func (x *AutoReplyPrompt) GetResponseLength() string {
+	if x != nil {
+		return x.ResponseLength
+	}
+	return ""
+}
+
+func (x *AutoReplyPrompt) GetTags() []string {
+	if x != nil {
+		return x.Tags
+	}
+	return nil
+}
+
+func (x *AutoReplyPrompt) GetCategory() string {
+	if x != nil {
+		return x.Category
+	}
+	return ""
+}
+
+func (x *AutoReplyPrompt) GetIsDefault() bool {
+	if x != nil {
+		return x.IsDefault
+	}
+	return false
+}
+
+func (x *AutoReplyPrompt) GetIsArchived() bool {
+	if x != nil {
+		return x.IsArchived
+	}
+	return false
+}
+
+func (x *AutoReplyPrompt) GetUsageCount() int32 {
+	if x != nil {
+		return x.UsageCount
+	}
+	return 0
+}
+
+func (x *AutoReplyPrompt) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *AutoReplyPrompt) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+type ListAutoReplyPromptsRequest struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId     int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Search          string                 `protobuf:"bytes,2,opt,name=search,proto3" json:"search,omitempty"`
+	IncludeArchived bool                   `protobuf:"varint,3,opt,name=include_archived,json=includeArchived,proto3" json:"include_archived,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ListAutoReplyPromptsRequest) Reset() {
+	*x = ListAutoReplyPromptsRequest{}
+	mi := &file_autoforward_proto_msgTypes[145]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAutoReplyPromptsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAutoReplyPromptsRequest) ProtoMessage() {}
+
+func (x *ListAutoReplyPromptsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[145]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAutoReplyPromptsRequest.ProtoReflect.Descriptor instead.
+func (*ListAutoReplyPromptsRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{145}
+}
+
+func (x *ListAutoReplyPromptsRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *ListAutoReplyPromptsRequest) GetSearch() string {
+	if x != nil {
+		return x.Search
+	}
+	return ""
+}
+
+func (x *ListAutoReplyPromptsRequest) GetIncludeArchived() bool {
+	if x != nil {
+		return x.IncludeArchived
+	}
+	return false
+}
+
+type ListAutoReplyPromptsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Prompts       []*AutoReplyPrompt     `protobuf:"bytes,1,rep,name=prompts,proto3" json:"prompts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAutoReplyPromptsResponse) Reset() {
+	*x = ListAutoReplyPromptsResponse{}
+	mi := &file_autoforward_proto_msgTypes[146]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAutoReplyPromptsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAutoReplyPromptsResponse) ProtoMessage() {}
+
+func (x *ListAutoReplyPromptsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[146]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAutoReplyPromptsResponse.ProtoReflect.Descriptor instead.
+func (*ListAutoReplyPromptsResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{146}
+}
+
+func (x *ListAutoReplyPromptsResponse) GetPrompts() []*AutoReplyPrompt {
+	if x != nil {
+		return x.Prompts
+	}
+	return nil
+}
+
+type SaveAutoReplyPromptRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Prompt        *AutoReplyPrompt       `protobuf:"bytes,2,opt,name=prompt,proto3" json:"prompt,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveAutoReplyPromptRequest) Reset() {
+	*x = SaveAutoReplyPromptRequest{}
+	mi := &file_autoforward_proto_msgTypes[147]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveAutoReplyPromptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveAutoReplyPromptRequest) ProtoMessage() {}
+
+func (x *SaveAutoReplyPromptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[147]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveAutoReplyPromptRequest.ProtoReflect.Descriptor instead.
+func (*SaveAutoReplyPromptRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{147}
+}
+
+func (x *SaveAutoReplyPromptRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *SaveAutoReplyPromptRequest) GetPrompt() *AutoReplyPrompt {
+	if x != nil {
+		return x.Prompt
+	}
+	return nil
+}
+
+type DeleteAutoReplyPromptRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	PromptId      string                 `protobuf:"bytes,2,opt,name=prompt_id,json=promptId,proto3" json:"prompt_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteAutoReplyPromptRequest) Reset() {
+	*x = DeleteAutoReplyPromptRequest{}
+	mi := &file_autoforward_proto_msgTypes[148]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteAutoReplyPromptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteAutoReplyPromptRequest) ProtoMessage() {}
+
+func (x *DeleteAutoReplyPromptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[148]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteAutoReplyPromptRequest.ProtoReflect.Descriptor instead.
+func (*DeleteAutoReplyPromptRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{148}
+}
+
+func (x *DeleteAutoReplyPromptRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *DeleteAutoReplyPromptRequest) GetPromptId() string {
+	if x != nil {
+		return x.PromptId
+	}
+	return ""
+}
+
+type DuplicateAutoReplyPromptRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	PromptId      string                 `protobuf:"bytes,2,opt,name=prompt_id,json=promptId,proto3" json:"prompt_id,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DuplicateAutoReplyPromptRequest) Reset() {
+	*x = DuplicateAutoReplyPromptRequest{}
+	mi := &file_autoforward_proto_msgTypes[149]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DuplicateAutoReplyPromptRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DuplicateAutoReplyPromptRequest) ProtoMessage() {}
+
+func (x *DuplicateAutoReplyPromptRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[149]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DuplicateAutoReplyPromptRequest.ProtoReflect.Descriptor instead.
+func (*DuplicateAutoReplyPromptRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{149}
+}
+
+func (x *DuplicateAutoReplyPromptRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *DuplicateAutoReplyPromptRequest) GetPromptId() string {
+	if x != nil {
+		return x.PromptId
+	}
+	return ""
+}
+
+func (x *DuplicateAutoReplyPromptRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type ExportAutoReplyPromptsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	PromptIds     []string               `protobuf:"bytes,2,rep,name=prompt_ids,json=promptIds,proto3" json:"prompt_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExportAutoReplyPromptsRequest) Reset() {
+	*x = ExportAutoReplyPromptsRequest{}
+	mi := &file_autoforward_proto_msgTypes[150]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExportAutoReplyPromptsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExportAutoReplyPromptsRequest) ProtoMessage() {}
+
+func (x *ExportAutoReplyPromptsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[150]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExportAutoReplyPromptsRequest.ProtoReflect.Descriptor instead.
+func (*ExportAutoReplyPromptsRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{150}
+}
+
+func (x *ExportAutoReplyPromptsRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *ExportAutoReplyPromptsRequest) GetPromptIds() []string {
+	if x != nil {
+		return x.PromptIds
+	}
+	return nil
+}
+
+type ExportAutoReplyPromptsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DocumentJson  string                 `protobuf:"bytes,1,opt,name=document_json,json=documentJson,proto3" json:"document_json,omitempty"` // portable: no ids, no owner, no credentials
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ExportAutoReplyPromptsResponse) Reset() {
+	*x = ExportAutoReplyPromptsResponse{}
+	mi := &file_autoforward_proto_msgTypes[151]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ExportAutoReplyPromptsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ExportAutoReplyPromptsResponse) ProtoMessage() {}
+
+func (x *ExportAutoReplyPromptsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[151]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ExportAutoReplyPromptsResponse.ProtoReflect.Descriptor instead.
+func (*ExportAutoReplyPromptsResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{151}
+}
+
+func (x *ExportAutoReplyPromptsResponse) GetDocumentJson() string {
+	if x != nil {
+		return x.DocumentJson
+	}
+	return ""
+}
+
+type ImportAutoReplyPromptsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	DocumentJson  string                 `protobuf:"bytes,2,opt,name=document_json,json=documentJson,proto3" json:"document_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportAutoReplyPromptsRequest) Reset() {
+	*x = ImportAutoReplyPromptsRequest{}
+	mi := &file_autoforward_proto_msgTypes[152]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportAutoReplyPromptsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportAutoReplyPromptsRequest) ProtoMessage() {}
+
+func (x *ImportAutoReplyPromptsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[152]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportAutoReplyPromptsRequest.ProtoReflect.Descriptor instead.
+func (*ImportAutoReplyPromptsRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{152}
+}
+
+func (x *ImportAutoReplyPromptsRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *ImportAutoReplyPromptsRequest) GetDocumentJson() string {
+	if x != nil {
+		return x.DocumentJson
+	}
+	return ""
+}
+
+type ImportAutoReplyPromptsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Imported      int32                  `protobuf:"varint,1,opt,name=imported,proto3" json:"imported,omitempty"`
+	Skipped       int32                  `protobuf:"varint,2,opt,name=skipped,proto3" json:"skipped,omitempty"`
+	Prompts       []*AutoReplyPrompt     `protobuf:"bytes,3,rep,name=prompts,proto3" json:"prompts,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ImportAutoReplyPromptsResponse) Reset() {
+	*x = ImportAutoReplyPromptsResponse{}
+	mi := &file_autoforward_proto_msgTypes[153]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ImportAutoReplyPromptsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ImportAutoReplyPromptsResponse) ProtoMessage() {}
+
+func (x *ImportAutoReplyPromptsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[153]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ImportAutoReplyPromptsResponse.ProtoReflect.Descriptor instead.
+func (*ImportAutoReplyPromptsResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{153}
+}
+
+func (x *ImportAutoReplyPromptsResponse) GetImported() int32 {
+	if x != nil {
+		return x.Imported
+	}
+	return 0
+}
+
+func (x *ImportAutoReplyPromptsResponse) GetSkipped() int32 {
+	if x != nil {
+		return x.Skipped
+	}
+	return 0
+}
+
+func (x *ImportAutoReplyPromptsResponse) GetPrompts() []*AutoReplyPrompt {
+	if x != nil {
+		return x.Prompts
+	}
+	return nil
+}
+
+type AutoReplyTarget struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ChatId        string                 `protobuf:"bytes,1,opt,name=chat_id,json=chatId,proto3" json:"chat_id,omitempty"`
+	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	Username      string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`
+	IsEnabled     bool                   `protobuf:"varint,4,opt,name=is_enabled,json=isEnabled,proto3" json:"is_enabled,omitempty"`
+	PromptId      string                 `protobuf:"bytes,5,opt,name=prompt_id,json=promptId,proto3" json:"prompt_id,omitempty"`
+	Note          string                 `protobuf:"bytes,6,opt,name=note,proto3" json:"note,omitempty"`
+	Priority      int32                  `protobuf:"varint,7,opt,name=priority,proto3" json:"priority,omitempty"`
+	AddedAt       int64                  `protobuf:"varint,8,opt,name=added_at,json=addedAt,proto3" json:"added_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AutoReplyTarget) Reset() {
+	*x = AutoReplyTarget{}
+	mi := &file_autoforward_proto_msgTypes[154]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AutoReplyTarget) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AutoReplyTarget) ProtoMessage() {}
+
+func (x *AutoReplyTarget) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[154]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AutoReplyTarget.ProtoReflect.Descriptor instead.
+func (*AutoReplyTarget) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{154}
+}
+
+func (x *AutoReplyTarget) GetChatId() string {
+	if x != nil {
+		return x.ChatId
+	}
+	return ""
+}
+
+func (x *AutoReplyTarget) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *AutoReplyTarget) GetUsername() string {
+	if x != nil {
+		return x.Username
+	}
+	return ""
+}
+
+func (x *AutoReplyTarget) GetIsEnabled() bool {
+	if x != nil {
+		return x.IsEnabled
+	}
+	return false
+}
+
+func (x *AutoReplyTarget) GetPromptId() string {
+	if x != nil {
+		return x.PromptId
+	}
+	return ""
+}
+
+func (x *AutoReplyTarget) GetNote() string {
+	if x != nil {
+		return x.Note
+	}
+	return ""
+}
+
+func (x *AutoReplyTarget) GetPriority() int32 {
+	if x != nil {
+		return x.Priority
+	}
+	return 0
+}
+
+func (x *AutoReplyTarget) GetAddedAt() int64 {
+	if x != nil {
+		return x.AddedAt
+	}
+	return 0
+}
+
+type ListAutoReplyTargetsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Search        string                 `protobuf:"bytes,3,opt,name=search,proto3" json:"search,omitempty"`
+	Mode          string                 `protobuf:"bytes,4,opt,name=mode,proto3" json:"mode,omitempty"` // "enabled" | "disabled" | "" (all)
+	Limit         int32                  `protobuf:"varint,5,opt,name=limit,proto3" json:"limit,omitempty"`
+	Offset        int32                  `protobuf:"varint,6,opt,name=offset,proto3" json:"offset,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAutoReplyTargetsRequest) Reset() {
+	*x = ListAutoReplyTargetsRequest{}
+	mi := &file_autoforward_proto_msgTypes[155]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAutoReplyTargetsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAutoReplyTargetsRequest) ProtoMessage() {}
+
+func (x *ListAutoReplyTargetsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[155]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAutoReplyTargetsRequest.ProtoReflect.Descriptor instead.
+func (*ListAutoReplyTargetsRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{155}
+}
+
+func (x *ListAutoReplyTargetsRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *ListAutoReplyTargetsRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *ListAutoReplyTargetsRequest) GetSearch() string {
+	if x != nil {
+		return x.Search
+	}
+	return ""
+}
+
+func (x *ListAutoReplyTargetsRequest) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *ListAutoReplyTargetsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListAutoReplyTargetsRequest) GetOffset() int32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+type ListAutoReplyTargetsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Targets       []*AutoReplyTarget     `protobuf:"bytes,1,rep,name=targets,proto3" json:"targets,omitempty"`
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	Enabled       int32                  `protobuf:"varint,3,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAutoReplyTargetsResponse) Reset() {
+	*x = ListAutoReplyTargetsResponse{}
+	mi := &file_autoforward_proto_msgTypes[156]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAutoReplyTargetsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAutoReplyTargetsResponse) ProtoMessage() {}
+
+func (x *ListAutoReplyTargetsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[156]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAutoReplyTargetsResponse.ProtoReflect.Descriptor instead.
+func (*ListAutoReplyTargetsResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{156}
+}
+
+func (x *ListAutoReplyTargetsResponse) GetTargets() []*AutoReplyTarget {
+	if x != nil {
+		return x.Targets
+	}
+	return nil
+}
+
+func (x *ListAutoReplyTargetsResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *ListAutoReplyTargetsResponse) GetEnabled() int32 {
+	if x != nil {
+		return x.Enabled
+	}
+	return 0
+}
+
+type AddAutoReplyTargetsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Targets       []*AutoReplyTarget     `protobuf:"bytes,2,rep,name=targets,proto3" json:"targets,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AddAutoReplyTargetsRequest) Reset() {
+	*x = AddAutoReplyTargetsRequest{}
+	mi := &file_autoforward_proto_msgTypes[157]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AddAutoReplyTargetsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AddAutoReplyTargetsRequest) ProtoMessage() {}
+
+func (x *AddAutoReplyTargetsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[157]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AddAutoReplyTargetsRequest.ProtoReflect.Descriptor instead.
+func (*AddAutoReplyTargetsRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{157}
+}
+
+func (x *AddAutoReplyTargetsRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *AddAutoReplyTargetsRequest) GetTargets() []*AutoReplyTarget {
+	if x != nil {
+		return x.Targets
+	}
+	return nil
+}
+
+type UpdateAutoReplyTargetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Target        *AutoReplyTarget       `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	UpdateMask    []string               `protobuf:"bytes,3,rep,name=update_mask,json=updateMask,proto3" json:"update_mask,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateAutoReplyTargetRequest) Reset() {
+	*x = UpdateAutoReplyTargetRequest{}
+	mi := &file_autoforward_proto_msgTypes[158]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateAutoReplyTargetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateAutoReplyTargetRequest) ProtoMessage() {}
+
+func (x *UpdateAutoReplyTargetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[158]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateAutoReplyTargetRequest.ProtoReflect.Descriptor instead.
+func (*UpdateAutoReplyTargetRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{158}
+}
+
+func (x *UpdateAutoReplyTargetRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *UpdateAutoReplyTargetRequest) GetTarget() *AutoReplyTarget {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *UpdateAutoReplyTargetRequest) GetUpdateMask() []string {
+	if x != nil {
+		return x.UpdateMask
+	}
+	return nil
+}
+
+type RemoveAutoReplyTargetsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	ChatIds       []string               `protobuf:"bytes,2,rep,name=chat_ids,json=chatIds,proto3" json:"chat_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveAutoReplyTargetsRequest) Reset() {
+	*x = RemoveAutoReplyTargetsRequest{}
+	mi := &file_autoforward_proto_msgTypes[159]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveAutoReplyTargetsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveAutoReplyTargetsRequest) ProtoMessage() {}
+
+func (x *RemoveAutoReplyTargetsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[159]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveAutoReplyTargetsRequest.ProtoReflect.Descriptor instead.
+func (*RemoveAutoReplyTargetsRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{159}
+}
+
+func (x *RemoveAutoReplyTargetsRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *RemoveAutoReplyTargetsRequest) GetChatIds() []string {
+	if x != nil {
+		return x.ChatIds
+	}
+	return nil
+}
+
+type ResolveAutoReplyChatRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Query         string                 `protobuf:"bytes,3,opt,name=query,proto3" json:"query,omitempty"` // numeric id, @username, or a name fragment
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveAutoReplyChatRequest) Reset() {
+	*x = ResolveAutoReplyChatRequest{}
+	mi := &file_autoforward_proto_msgTypes[160]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveAutoReplyChatRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveAutoReplyChatRequest) ProtoMessage() {}
+
+func (x *ResolveAutoReplyChatRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[160]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveAutoReplyChatRequest.ProtoReflect.Descriptor instead.
+func (*ResolveAutoReplyChatRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{160}
+}
+
+func (x *ResolveAutoReplyChatRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *ResolveAutoReplyChatRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *ResolveAutoReplyChatRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+type ResolveAutoReplyChatResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Found         bool                   `protobuf:"varint,1,opt,name=found,proto3" json:"found,omitempty"`
+	Target        *AutoReplyTarget       `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	ErrorCode     string                 `protobuf:"bytes,3,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResolveAutoReplyChatResponse) Reset() {
+	*x = ResolveAutoReplyChatResponse{}
+	mi := &file_autoforward_proto_msgTypes[161]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResolveAutoReplyChatResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResolveAutoReplyChatResponse) ProtoMessage() {}
+
+func (x *ResolveAutoReplyChatResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[161]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResolveAutoReplyChatResponse.ProtoReflect.Descriptor instead.
+func (*ResolveAutoReplyChatResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{161}
+}
+
+func (x *ResolveAutoReplyChatResponse) GetFound() bool {
+	if x != nil {
+		return x.Found
+	}
+	return false
+}
+
+func (x *ResolveAutoReplyChatResponse) GetTarget() *AutoReplyTarget {
+	if x != nil {
+		return x.Target
+	}
+	return nil
+}
+
+func (x *ResolveAutoReplyChatResponse) GetErrorCode() string {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ""
+}
+
+type AutoReplyRule struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name            string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	IsEnabled       bool                   `protobuf:"varint,3,opt,name=is_enabled,json=isEnabled,proto3" json:"is_enabled,omitempty"`
+	Priority        int32                  `protobuf:"varint,4,opt,name=priority,proto3" json:"priority,omitempty"`                                  // higher wins; ties broken by id
+	Action          string                 `protobuf:"bytes,5,opt,name=action,proto3" json:"action,omitempty"`                                       // REPLY | SKIP
+	ConditionsJson  string                 `protobuf:"bytes,6,opt,name=conditions_json,json=conditionsJson,proto3" json:"conditions_json,omitempty"` // {"keywords_any":[],"chat_ids":[],...}
+	ExclusionsJson  string                 `protobuf:"bytes,7,opt,name=exclusions_json,json=exclusionsJson,proto3" json:"exclusions_json,omitempty"`
+	PromptId        string                 `protobuf:"bytes,8,opt,name=prompt_id,json=promptId,proto3" json:"prompt_id,omitempty"`
+	AiConfigId      string                 `protobuf:"bytes,9,opt,name=ai_config_id,json=aiConfigId,proto3" json:"ai_config_id,omitempty"`
+	CooldownSeconds int32                  `protobuf:"varint,10,opt,name=cooldown_seconds,json=cooldownSeconds,proto3" json:"cooldown_seconds,omitempty"` // -1 = inherit
+	Language        string                 `protobuf:"bytes,11,opt,name=language,proto3" json:"language,omitempty"`
+	Tone            string                 `protobuf:"bytes,12,opt,name=tone,proto3" json:"tone,omitempty"`
+	ResponseLength  string                 `protobuf:"bytes,13,opt,name=response_length,json=responseLength,proto3" json:"response_length,omitempty"`
+	Temperature     float64                `protobuf:"fixed64,14,opt,name=temperature,proto3" json:"temperature,omitempty"` // 0 = inherit
+	MaxTokens       int32                  `protobuf:"varint,15,opt,name=max_tokens,json=maxTokens,proto3" json:"max_tokens,omitempty"`
+	CreatedAt       int64                  `protobuf:"varint,16,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt       int64                  `protobuf:"varint,17,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *AutoReplyRule) Reset() {
+	*x = AutoReplyRule{}
+	mi := &file_autoforward_proto_msgTypes[162]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AutoReplyRule) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AutoReplyRule) ProtoMessage() {}
+
+func (x *AutoReplyRule) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[162]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AutoReplyRule.ProtoReflect.Descriptor instead.
+func (*AutoReplyRule) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{162}
+}
+
+func (x *AutoReplyRule) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *AutoReplyRule) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AutoReplyRule) GetIsEnabled() bool {
+	if x != nil {
+		return x.IsEnabled
+	}
+	return false
+}
+
+func (x *AutoReplyRule) GetPriority() int32 {
+	if x != nil {
+		return x.Priority
+	}
+	return 0
+}
+
+func (x *AutoReplyRule) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *AutoReplyRule) GetConditionsJson() string {
+	if x != nil {
+		return x.ConditionsJson
+	}
+	return ""
+}
+
+func (x *AutoReplyRule) GetExclusionsJson() string {
+	if x != nil {
+		return x.ExclusionsJson
+	}
+	return ""
+}
+
+func (x *AutoReplyRule) GetPromptId() string {
+	if x != nil {
+		return x.PromptId
+	}
+	return ""
+}
+
+func (x *AutoReplyRule) GetAiConfigId() string {
+	if x != nil {
+		return x.AiConfigId
+	}
+	return ""
+}
+
+func (x *AutoReplyRule) GetCooldownSeconds() int32 {
+	if x != nil {
+		return x.CooldownSeconds
+	}
+	return 0
+}
+
+func (x *AutoReplyRule) GetLanguage() string {
+	if x != nil {
+		return x.Language
+	}
+	return ""
+}
+
+func (x *AutoReplyRule) GetTone() string {
+	if x != nil {
+		return x.Tone
+	}
+	return ""
+}
+
+func (x *AutoReplyRule) GetResponseLength() string {
+	if x != nil {
+		return x.ResponseLength
+	}
+	return ""
+}
+
+func (x *AutoReplyRule) GetTemperature() float64 {
+	if x != nil {
+		return x.Temperature
+	}
+	return 0
+}
+
+func (x *AutoReplyRule) GetMaxTokens() int32 {
+	if x != nil {
+		return x.MaxTokens
+	}
+	return 0
+}
+
+func (x *AutoReplyRule) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *AutoReplyRule) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+type ListAutoReplyRulesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAutoReplyRulesRequest) Reset() {
+	*x = ListAutoReplyRulesRequest{}
+	mi := &file_autoforward_proto_msgTypes[163]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAutoReplyRulesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAutoReplyRulesRequest) ProtoMessage() {}
+
+func (x *ListAutoReplyRulesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[163]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAutoReplyRulesRequest.ProtoReflect.Descriptor instead.
+func (*ListAutoReplyRulesRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{163}
+}
+
+func (x *ListAutoReplyRulesRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+type ListAutoReplyRulesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Rules         []*AutoReplyRule       `protobuf:"bytes,1,rep,name=rules,proto3" json:"rules,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAutoReplyRulesResponse) Reset() {
+	*x = ListAutoReplyRulesResponse{}
+	mi := &file_autoforward_proto_msgTypes[164]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAutoReplyRulesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAutoReplyRulesResponse) ProtoMessage() {}
+
+func (x *ListAutoReplyRulesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[164]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAutoReplyRulesResponse.ProtoReflect.Descriptor instead.
+func (*ListAutoReplyRulesResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{164}
+}
+
+func (x *ListAutoReplyRulesResponse) GetRules() []*AutoReplyRule {
+	if x != nil {
+		return x.Rules
+	}
+	return nil
+}
+
+type SaveAutoReplyRuleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Rule          *AutoReplyRule         `protobuf:"bytes,2,opt,name=rule,proto3" json:"rule,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SaveAutoReplyRuleRequest) Reset() {
+	*x = SaveAutoReplyRuleRequest{}
+	mi := &file_autoforward_proto_msgTypes[165]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SaveAutoReplyRuleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SaveAutoReplyRuleRequest) ProtoMessage() {}
+
+func (x *SaveAutoReplyRuleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[165]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SaveAutoReplyRuleRequest.ProtoReflect.Descriptor instead.
+func (*SaveAutoReplyRuleRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{165}
+}
+
+func (x *SaveAutoReplyRuleRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *SaveAutoReplyRuleRequest) GetRule() *AutoReplyRule {
+	if x != nil {
+		return x.Rule
+	}
+	return nil
+}
+
+type DeleteAutoReplyRuleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	RuleId        string                 `protobuf:"bytes,2,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteAutoReplyRuleRequest) Reset() {
+	*x = DeleteAutoReplyRuleRequest{}
+	mi := &file_autoforward_proto_msgTypes[166]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteAutoReplyRuleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteAutoReplyRuleRequest) ProtoMessage() {}
+
+func (x *DeleteAutoReplyRuleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[166]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteAutoReplyRuleRequest.ProtoReflect.Descriptor instead.
+func (*DeleteAutoReplyRuleRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{166}
+}
+
+func (x *DeleteAutoReplyRuleRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *DeleteAutoReplyRuleRequest) GetRuleId() string {
+	if x != nil {
+		return x.RuleId
+	}
+	return ""
+}
+
+type ReorderAutoReplyRulesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	RuleIds       []string               `protobuf:"bytes,2,rep,name=rule_ids,json=ruleIds,proto3" json:"rule_ids,omitempty"` // highest priority first
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReorderAutoReplyRulesRequest) Reset() {
+	*x = ReorderAutoReplyRulesRequest{}
+	mi := &file_autoforward_proto_msgTypes[167]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReorderAutoReplyRulesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReorderAutoReplyRulesRequest) ProtoMessage() {}
+
+func (x *ReorderAutoReplyRulesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[167]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReorderAutoReplyRulesRequest.ProtoReflect.Descriptor instead.
+func (*ReorderAutoReplyRulesRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{167}
+}
+
+func (x *ReorderAutoReplyRulesRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *ReorderAutoReplyRulesRequest) GetRuleIds() []string {
+	if x != nil {
+		return x.RuleIds
+	}
+	return nil
+}
+
+type AutoReplyJob struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	ChatId          string                 `protobuf:"bytes,2,opt,name=chat_id,json=chatId,proto3" json:"chat_id,omitempty"`
+	ChatTitle       string                 `protobuf:"bytes,3,opt,name=chat_title,json=chatTitle,proto3" json:"chat_title,omitempty"`
+	Status          string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"` // PENDING, RUNNING, RETRY_WAIT, SENT, FAILED, DEAD_LETTER, SKIPPED, CANCELLED
+	Attempt         int32                  `protobuf:"varint,5,opt,name=attempt,proto3" json:"attempt,omitempty"`
+	MaxAttempts     int32                  `protobuf:"varint,6,opt,name=max_attempts,json=maxAttempts,proto3" json:"max_attempts,omitempty"`
+	Error           string                 `protobuf:"bytes,7,opt,name=error,proto3" json:"error,omitempty"`
+	ErrorCode       string                 `protobuf:"bytes,8,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	InboundText     string                 `protobuf:"bytes,9,opt,name=inbound_text,json=inboundText,proto3" json:"inbound_text,omitempty"`
+	ReplyText       string                 `protobuf:"bytes,10,opt,name=reply_text,json=replyText,proto3" json:"reply_text,omitempty"`
+	CorrelationId   string                 `protobuf:"bytes,11,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
+	LatencyMs       int32                  `protobuf:"varint,12,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
+	CreatedAt       int64                  `protobuf:"varint,13,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	SentAt          int64                  `protobuf:"varint,14,opt,name=sent_at,json=sentAt,proto3" json:"sent_at,omitempty"`
+	SourceMessageId int64                  `protobuf:"varint,15,opt,name=source_message_id,json=sourceMessageId,proto3" json:"source_message_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *AutoReplyJob) Reset() {
+	*x = AutoReplyJob{}
+	mi := &file_autoforward_proto_msgTypes[168]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AutoReplyJob) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AutoReplyJob) ProtoMessage() {}
+
+func (x *AutoReplyJob) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[168]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AutoReplyJob.ProtoReflect.Descriptor instead.
+func (*AutoReplyJob) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{168}
+}
+
+func (x *AutoReplyJob) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *AutoReplyJob) GetChatId() string {
+	if x != nil {
+		return x.ChatId
+	}
+	return ""
+}
+
+func (x *AutoReplyJob) GetChatTitle() string {
+	if x != nil {
+		return x.ChatTitle
+	}
+	return ""
+}
+
+func (x *AutoReplyJob) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *AutoReplyJob) GetAttempt() int32 {
+	if x != nil {
+		return x.Attempt
+	}
+	return 0
+}
+
+func (x *AutoReplyJob) GetMaxAttempts() int32 {
+	if x != nil {
+		return x.MaxAttempts
+	}
+	return 0
+}
+
+func (x *AutoReplyJob) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *AutoReplyJob) GetErrorCode() string {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ""
+}
+
+func (x *AutoReplyJob) GetInboundText() string {
+	if x != nil {
+		return x.InboundText
+	}
+	return ""
+}
+
+func (x *AutoReplyJob) GetReplyText() string {
+	if x != nil {
+		return x.ReplyText
+	}
+	return ""
+}
+
+func (x *AutoReplyJob) GetCorrelationId() string {
+	if x != nil {
+		return x.CorrelationId
+	}
+	return ""
+}
+
+func (x *AutoReplyJob) GetLatencyMs() int32 {
+	if x != nil {
+		return x.LatencyMs
+	}
+	return 0
+}
+
+func (x *AutoReplyJob) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *AutoReplyJob) GetSentAt() int64 {
+	if x != nil {
+		return x.SentAt
+	}
+	return 0
+}
+
+func (x *AutoReplyJob) GetSourceMessageId() int64 {
+	if x != nil {
+		return x.SourceMessageId
+	}
+	return 0
+}
+
+type ListAutoReplyJobsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Status        string                 `protobuf:"bytes,2,opt,name=status,proto3" json:"status,omitempty"` // "" = all, "DEAD_LETTER" = the dead-letter queue
+	ChatId        string                 `protobuf:"bytes,3,opt,name=chat_id,json=chatId,proto3" json:"chat_id,omitempty"`
+	Limit         int32                  `protobuf:"varint,4,opt,name=limit,proto3" json:"limit,omitempty"`
+	Offset        int32                  `protobuf:"varint,5,opt,name=offset,proto3" json:"offset,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAutoReplyJobsRequest) Reset() {
+	*x = ListAutoReplyJobsRequest{}
+	mi := &file_autoforward_proto_msgTypes[169]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAutoReplyJobsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAutoReplyJobsRequest) ProtoMessage() {}
+
+func (x *ListAutoReplyJobsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[169]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAutoReplyJobsRequest.ProtoReflect.Descriptor instead.
+func (*ListAutoReplyJobsRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{169}
+}
+
+func (x *ListAutoReplyJobsRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *ListAutoReplyJobsRequest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ListAutoReplyJobsRequest) GetChatId() string {
+	if x != nil {
+		return x.ChatId
+	}
+	return ""
+}
+
+func (x *ListAutoReplyJobsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+func (x *ListAutoReplyJobsRequest) GetOffset() int32 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+type ListAutoReplyJobsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Jobs          []*AutoReplyJob        `protobuf:"bytes,1,rep,name=jobs,proto3" json:"jobs,omitempty"`
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAutoReplyJobsResponse) Reset() {
+	*x = ListAutoReplyJobsResponse{}
+	mi := &file_autoforward_proto_msgTypes[170]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAutoReplyJobsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAutoReplyJobsResponse) ProtoMessage() {}
+
+func (x *ListAutoReplyJobsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[170]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAutoReplyJobsResponse.ProtoReflect.Descriptor instead.
+func (*ListAutoReplyJobsResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{170}
+}
+
+func (x *ListAutoReplyJobsResponse) GetJobs() []*AutoReplyJob {
+	if x != nil {
+		return x.Jobs
+	}
+	return nil
+}
+
+func (x *ListAutoReplyJobsResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+type AutoReplyJobRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	JobId         string                 `protobuf:"bytes,2,opt,name=job_id,json=jobId,proto3" json:"job_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AutoReplyJobRequest) Reset() {
+	*x = AutoReplyJobRequest{}
+	mi := &file_autoforward_proto_msgTypes[171]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AutoReplyJobRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AutoReplyJobRequest) ProtoMessage() {}
+
+func (x *AutoReplyJobRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[171]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AutoReplyJobRequest.ProtoReflect.Descriptor instead.
+func (*AutoReplyJobRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{171}
+}
+
+func (x *AutoReplyJobRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *AutoReplyJobRequest) GetJobId() string {
+	if x != nil {
+		return x.JobId
+	}
+	return ""
+}
+
+type GetAutoReplyStatsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAutoReplyStatsRequest) Reset() {
+	*x = GetAutoReplyStatsRequest{}
+	mi := &file_autoforward_proto_msgTypes[172]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAutoReplyStatsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAutoReplyStatsRequest) ProtoMessage() {}
+
+func (x *GetAutoReplyStatsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[172]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAutoReplyStatsRequest.ProtoReflect.Descriptor instead.
+func (*GetAutoReplyStatsRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{172}
+}
+
+func (x *GetAutoReplyStatsRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+type AutoReplyStatsResponse struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	SentToday        int32                  `protobuf:"varint,1,opt,name=sent_today,json=sentToday,proto3" json:"sent_today,omitempty"`
+	SentTotal        int32                  `protobuf:"varint,2,opt,name=sent_total,json=sentTotal,proto3" json:"sent_total,omitempty"`
+	Pending          int32                  `protobuf:"varint,3,opt,name=pending,proto3" json:"pending,omitempty"`
+	Retrying         int32                  `protobuf:"varint,4,opt,name=retrying,proto3" json:"retrying,omitempty"`
+	DeadLetter       int32                  `protobuf:"varint,5,opt,name=dead_letter,json=deadLetter,proto3" json:"dead_letter,omitempty"`
+	ChatsEnabled     int32                  `protobuf:"varint,6,opt,name=chats_enabled,json=chatsEnabled,proto3" json:"chats_enabled,omitempty"`
+	Prompts          int32                  `protobuf:"varint,7,opt,name=prompts,proto3" json:"prompts,omitempty"`
+	Rules            int32                  `protobuf:"varint,8,opt,name=rules,proto3" json:"rules,omitempty"`
+	AverageLatencyMs float64                `protobuf:"fixed64,9,opt,name=average_latency_ms,json=averageLatencyMs,proto3" json:"average_latency_ms,omitempty"`
+	LastSentAt       int64                  `protobuf:"varint,10,opt,name=last_sent_at,json=lastSentAt,proto3" json:"last_sent_at,omitempty"`
+	StatusJson       string                 `protobuf:"bytes,11,opt,name=status_json,json=statusJson,proto3" json:"status_json,omitempty"` // per-status counters, for the dashboard chart
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *AutoReplyStatsResponse) Reset() {
+	*x = AutoReplyStatsResponse{}
+	mi := &file_autoforward_proto_msgTypes[173]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AutoReplyStatsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AutoReplyStatsResponse) ProtoMessage() {}
+
+func (x *AutoReplyStatsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[173]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AutoReplyStatsResponse.ProtoReflect.Descriptor instead.
+func (*AutoReplyStatsResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{173}
+}
+
+func (x *AutoReplyStatsResponse) GetSentToday() int32 {
+	if x != nil {
+		return x.SentToday
+	}
+	return 0
+}
+
+func (x *AutoReplyStatsResponse) GetSentTotal() int32 {
+	if x != nil {
+		return x.SentTotal
+	}
+	return 0
+}
+
+func (x *AutoReplyStatsResponse) GetPending() int32 {
+	if x != nil {
+		return x.Pending
+	}
+	return 0
+}
+
+func (x *AutoReplyStatsResponse) GetRetrying() int32 {
+	if x != nil {
+		return x.Retrying
+	}
+	return 0
+}
+
+func (x *AutoReplyStatsResponse) GetDeadLetter() int32 {
+	if x != nil {
+		return x.DeadLetter
+	}
+	return 0
+}
+
+func (x *AutoReplyStatsResponse) GetChatsEnabled() int32 {
+	if x != nil {
+		return x.ChatsEnabled
+	}
+	return 0
+}
+
+func (x *AutoReplyStatsResponse) GetPrompts() int32 {
+	if x != nil {
+		return x.Prompts
+	}
+	return 0
+}
+
+func (x *AutoReplyStatsResponse) GetRules() int32 {
+	if x != nil {
+		return x.Rules
+	}
+	return 0
+}
+
+func (x *AutoReplyStatsResponse) GetAverageLatencyMs() float64 {
+	if x != nil {
+		return x.AverageLatencyMs
+	}
+	return 0
+}
+
+func (x *AutoReplyStatsResponse) GetLastSentAt() int64 {
+	if x != nil {
+		return x.LastSentAt
+	}
+	return 0
+}
+
+func (x *AutoReplyStatsResponse) GetStatusJson() string {
+	if x != nil {
+		return x.StatusJson
+	}
+	return ""
+}
+
+type PreviewAutoReplyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	ChatId        string                 `protobuf:"bytes,2,opt,name=chat_id,json=chatId,proto3" json:"chat_id,omitempty"`
+	InboundText   string                 `protobuf:"bytes,3,opt,name=inbound_text,json=inboundText,proto3" json:"inbound_text,omitempty"`
+	PromptId      string                 `protobuf:"bytes,4,opt,name=prompt_id,json=promptId,proto3" json:"prompt_id,omitempty"`
+	AiConfigId    string                 `protobuf:"bytes,5,opt,name=ai_config_id,json=aiConfigId,proto3" json:"ai_config_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PreviewAutoReplyRequest) Reset() {
+	*x = PreviewAutoReplyRequest{}
+	mi := &file_autoforward_proto_msgTypes[174]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PreviewAutoReplyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PreviewAutoReplyRequest) ProtoMessage() {}
+
+func (x *PreviewAutoReplyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[174]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PreviewAutoReplyRequest.ProtoReflect.Descriptor instead.
+func (*PreviewAutoReplyRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{174}
+}
+
+func (x *PreviewAutoReplyRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *PreviewAutoReplyRequest) GetChatId() string {
+	if x != nil {
+		return x.ChatId
+	}
+	return ""
+}
+
+func (x *PreviewAutoReplyRequest) GetInboundText() string {
+	if x != nil {
+		return x.InboundText
+	}
+	return ""
+}
+
+func (x *PreviewAutoReplyRequest) GetPromptId() string {
+	if x != nil {
+		return x.PromptId
+	}
+	return ""
+}
+
+func (x *PreviewAutoReplyRequest) GetAiConfigId() string {
+	if x != nil {
+		return x.AiConfigId
+	}
+	return ""
+}
+
+type PreviewAutoReplyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	ReplyText     string                 `protobuf:"bytes,2,opt,name=reply_text,json=replyText,proto3" json:"reply_text,omitempty"`
+	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	ErrorCode     string                 `protobuf:"bytes,4,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	SystemPrompt  string                 `protobuf:"bytes,5,opt,name=system_prompt,json=systemPrompt,proto3" json:"system_prompt,omitempty"` // exactly what the model would receive
+	Provider      string                 `protobuf:"bytes,6,opt,name=provider,proto3" json:"provider,omitempty"`
+	Model         string                 `protobuf:"bytes,7,opt,name=model,proto3" json:"model,omitempty"`
+	LatencyMs     int32                  `protobuf:"varint,8,opt,name=latency_ms,json=latencyMs,proto3" json:"latency_ms,omitempty"`
+	Tokens        int32                  `protobuf:"varint,9,opt,name=tokens,proto3" json:"tokens,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PreviewAutoReplyResponse) Reset() {
+	*x = PreviewAutoReplyResponse{}
+	mi := &file_autoforward_proto_msgTypes[175]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PreviewAutoReplyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PreviewAutoReplyResponse) ProtoMessage() {}
+
+func (x *PreviewAutoReplyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[175]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PreviewAutoReplyResponse.ProtoReflect.Descriptor instead.
+func (*PreviewAutoReplyResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{175}
+}
+
+func (x *PreviewAutoReplyResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *PreviewAutoReplyResponse) GetReplyText() string {
+	if x != nil {
+		return x.ReplyText
+	}
+	return ""
+}
+
+func (x *PreviewAutoReplyResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *PreviewAutoReplyResponse) GetErrorCode() string {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ""
+}
+
+func (x *PreviewAutoReplyResponse) GetSystemPrompt() string {
+	if x != nil {
+		return x.SystemPrompt
+	}
+	return ""
+}
+
+func (x *PreviewAutoReplyResponse) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *PreviewAutoReplyResponse) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *PreviewAutoReplyResponse) GetLatencyMs() int32 {
+	if x != nil {
+		return x.LatencyMs
+	}
+	return 0
+}
+
+func (x *PreviewAutoReplyResponse) GetTokens() int32 {
+	if x != nil {
+		return x.Tokens
+	}
+	return 0
+}
+
 var File_autoforward_proto protoreflect.FileDescriptor
 
 const file_autoforward_proto_rawDesc = "" +
@@ -11343,7 +14013,261 @@ const file_autoforward_proto_rawDesc = "" +
 	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\"O\n" +
 	"\x10RetryTaskRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\"\n" +
-	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId*n\n" +
+	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\"\xf9\t\n" +
+	"\x11AutoReplySettings\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x18\n" +
+	"\aenabled\x18\x02 \x01(\bR\aenabled\x12 \n" +
+	"\fai_config_id\x18\x03 \x01(\tR\n" +
+	"aiConfigId\x12\x1b\n" +
+	"\tprompt_id\x18\x04 \x01(\tR\bpromptId\x12\x1f\n" +
+	"\vtarget_mode\x18\x05 \x01(\tR\n" +
+	"targetMode\x12\x1a\n" +
+	"\blanguage\x18\x06 \x01(\tR\blanguage\x12\x12\n" +
+	"\x04tone\x18\a \x01(\tR\x04tone\x12'\n" +
+	"\x0fresponse_length\x18\b \x01(\tR\x0eresponseLength\x12 \n" +
+	"\vtemperature\x18\t \x01(\x01R\vtemperature\x12\x1d\n" +
+	"\n" +
+	"max_tokens\x18\n" +
+	" \x01(\x05R\tmaxTokens\x12)\n" +
+	"\x10context_messages\x18\v \x01(\x05R\x0fcontextMessages\x12%\n" +
+	"\x0ememory_enabled\x18\f \x01(\bR\rmemoryEnabled\x12(\n" +
+	"\x10memory_max_facts\x18\r \x01(\x05R\x0ememoryMaxFacts\x12-\n" +
+	"\x12extra_instructions\x18\x0e \x01(\tR\x11extraInstructions\x12&\n" +
+	"\x0fmax_reply_chars\x18\x0f \x01(\x05R\rmaxReplyChars\x12+\n" +
+	"\x11typing_simulation\x18\x10 \x01(\bR\x10typingSimulation\x12(\n" +
+	"\x10typing_delay_min\x18\x11 \x01(\x01R\x0etypingDelayMin\x12(\n" +
+	"\x10typing_delay_max\x18\x12 \x01(\x01R\x0etypingDelayMax\x12)\n" +
+	"\x10cooldown_seconds\x18\x13 \x01(\x05R\x0fcooldownSeconds\x12/\n" +
+	"\x14daily_limit_per_chat\x18\x14 \x01(\x05R\x11dailyLimitPerChat\x121\n" +
+	"\x15rate_limit_per_minute\x18\x15 \x01(\x05R\x12rateLimitPerMinute\x12'\n" +
+	"\x0fmax_concurrency\x18\x16 \x01(\x05R\x0emaxConcurrency\x12!\n" +
+	"\fmax_attempts\x18\x17 \x01(\x05R\vmaxAttempts\x122\n" +
+	"\x15retry_backoff_seconds\x18\x18 \x01(\x01R\x13retryBackoffSeconds\x12*\n" +
+	"\x11quiet_hours_start\x18\x19 \x01(\x05R\x0fquietHoursStart\x12&\n" +
+	"\x0fquiet_hours_end\x18\x1a \x01(\x05R\rquietHoursEnd\x126\n" +
+	"\x17timezone_offset_minutes\x18\x1b \x01(\x05R\x15timezoneOffsetMinutes\x12\x1f\n" +
+	"\vactive_days\x18\x1c \x03(\x05R\n" +
+	"activeDays\x12#\n" +
+	"\rfallback_text\x18\x1d \x01(\tR\ffallbackText\x12\x1f\n" +
+	"\vignore_bots\x18\x1e \x01(\bR\n" +
+	"ignoreBots\x12\x18\n" +
+	"\aversion\x18\x1f \x01(\x05R\aversion\x12\x1d\n" +
+	"\n" +
+	"created_at\x18  \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18! \x01(\x03R\tupdatedAt\"A\n" +
+	"\x1bGetAutoReplySettingsRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\"\xa1\x01\n" +
+	"\x1eUpdateAutoReplySettingsRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12:\n" +
+	"\bsettings\x18\x02 \x01(\v2\x1e.autoforward.AutoReplySettingsR\bsettings\x12\x1f\n" +
+	"\vupdate_mask\x18\x03 \x03(\tR\n" +
+	"updateMask\"\xd6\x03\n" +
+	"\x0fAutoReplyPrompt\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
+	"\vdescription\x18\x03 \x01(\tR\vdescription\x12#\n" +
+	"\rsystem_prompt\x18\x04 \x01(\tR\fsystemPrompt\x120\n" +
+	"\x14user_prompt_template\x18\x05 \x01(\tR\x12userPromptTemplate\x12\x1a\n" +
+	"\blanguage\x18\x06 \x01(\tR\blanguage\x12\x12\n" +
+	"\x04tone\x18\a \x01(\tR\x04tone\x12'\n" +
+	"\x0fresponse_length\x18\b \x01(\tR\x0eresponseLength\x12\x12\n" +
+	"\x04tags\x18\t \x03(\tR\x04tags\x12\x1a\n" +
+	"\bcategory\x18\n" +
+	" \x01(\tR\bcategory\x12\x1d\n" +
+	"\n" +
+	"is_default\x18\v \x01(\bR\tisDefault\x12\x1f\n" +
+	"\vis_archived\x18\f \x01(\bR\n" +
+	"isArchived\x12\x1f\n" +
+	"\vusage_count\x18\r \x01(\x05R\n" +
+	"usageCount\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x0e \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x0f \x01(\x03R\tupdatedAt\"\x84\x01\n" +
+	"\x1bListAutoReplyPromptsRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x16\n" +
+	"\x06search\x18\x02 \x01(\tR\x06search\x12)\n" +
+	"\x10include_archived\x18\x03 \x01(\bR\x0fincludeArchived\"V\n" +
+	"\x1cListAutoReplyPromptsResponse\x126\n" +
+	"\aprompts\x18\x01 \x03(\v2\x1c.autoforward.AutoReplyPromptR\aprompts\"v\n" +
+	"\x1aSaveAutoReplyPromptRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x124\n" +
+	"\x06prompt\x18\x02 \x01(\v2\x1c.autoforward.AutoReplyPromptR\x06prompt\"_\n" +
+	"\x1cDeleteAutoReplyPromptRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1b\n" +
+	"\tprompt_id\x18\x02 \x01(\tR\bpromptId\"v\n" +
+	"\x1fDuplicateAutoReplyPromptRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1b\n" +
+	"\tprompt_id\x18\x02 \x01(\tR\bpromptId\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\"b\n" +
+	"\x1dExportAutoReplyPromptsRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1d\n" +
+	"\n" +
+	"prompt_ids\x18\x02 \x03(\tR\tpromptIds\"E\n" +
+	"\x1eExportAutoReplyPromptsResponse\x12#\n" +
+	"\rdocument_json\x18\x01 \x01(\tR\fdocumentJson\"h\n" +
+	"\x1dImportAutoReplyPromptsRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12#\n" +
+	"\rdocument_json\x18\x02 \x01(\tR\fdocumentJson\"\x8e\x01\n" +
+	"\x1eImportAutoReplyPromptsResponse\x12\x1a\n" +
+	"\bimported\x18\x01 \x01(\x05R\bimported\x12\x18\n" +
+	"\askipped\x18\x02 \x01(\x05R\askipped\x126\n" +
+	"\aprompts\x18\x03 \x03(\v2\x1c.autoforward.AutoReplyPromptR\aprompts\"\xe3\x01\n" +
+	"\x0fAutoReplyTarget\x12\x17\n" +
+	"\achat_id\x18\x01 \x01(\tR\x06chatId\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12\x1a\n" +
+	"\busername\x18\x03 \x01(\tR\busername\x12\x1d\n" +
+	"\n" +
+	"is_enabled\x18\x04 \x01(\bR\tisEnabled\x12\x1b\n" +
+	"\tprompt_id\x18\x05 \x01(\tR\bpromptId\x12\x12\n" +
+	"\x04note\x18\x06 \x01(\tR\x04note\x12\x1a\n" +
+	"\bpriority\x18\a \x01(\x05R\bpriority\x12\x19\n" +
+	"\badded_at\x18\b \x01(\x03R\aaddedAt\"\xba\x01\n" +
+	"\x1bListAutoReplyTargetsRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x16\n" +
+	"\x06search\x18\x03 \x01(\tR\x06search\x12\x12\n" +
+	"\x04mode\x18\x04 \x01(\tR\x04mode\x12\x14\n" +
+	"\x05limit\x18\x05 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06offset\x18\x06 \x01(\x05R\x06offset\"\x86\x01\n" +
+	"\x1cListAutoReplyTargetsResponse\x126\n" +
+	"\atargets\x18\x01 \x03(\v2\x1c.autoforward.AutoReplyTargetR\atargets\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x18\n" +
+	"\aenabled\x18\x03 \x01(\x05R\aenabled\"x\n" +
+	"\x1aAddAutoReplyTargetsRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x126\n" +
+	"\atargets\x18\x02 \x03(\v2\x1c.autoforward.AutoReplyTargetR\atargets\"\x99\x01\n" +
+	"\x1cUpdateAutoReplyTargetRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x124\n" +
+	"\x06target\x18\x02 \x01(\v2\x1c.autoforward.AutoReplyTargetR\x06target\x12\x1f\n" +
+	"\vupdate_mask\x18\x03 \x03(\tR\n" +
+	"updateMask\"^\n" +
+	"\x1dRemoveAutoReplyTargetsRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x19\n" +
+	"\bchat_ids\x18\x02 \x03(\tR\achatIds\"v\n" +
+	"\x1bResolveAutoReplyChatRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x14\n" +
+	"\x05query\x18\x03 \x01(\tR\x05query\"\x89\x01\n" +
+	"\x1cResolveAutoReplyChatResponse\x12\x14\n" +
+	"\x05found\x18\x01 \x01(\bR\x05found\x124\n" +
+	"\x06target\x18\x02 \x01(\v2\x1c.autoforward.AutoReplyTargetR\x06target\x12\x1d\n" +
+	"\n" +
+	"error_code\x18\x03 \x01(\tR\terrorCode\"\x9a\x04\n" +
+	"\rAutoReplyRule\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"is_enabled\x18\x03 \x01(\bR\tisEnabled\x12\x1a\n" +
+	"\bpriority\x18\x04 \x01(\x05R\bpriority\x12\x16\n" +
+	"\x06action\x18\x05 \x01(\tR\x06action\x12'\n" +
+	"\x0fconditions_json\x18\x06 \x01(\tR\x0econditionsJson\x12'\n" +
+	"\x0fexclusions_json\x18\a \x01(\tR\x0eexclusionsJson\x12\x1b\n" +
+	"\tprompt_id\x18\b \x01(\tR\bpromptId\x12 \n" +
+	"\fai_config_id\x18\t \x01(\tR\n" +
+	"aiConfigId\x12)\n" +
+	"\x10cooldown_seconds\x18\n" +
+	" \x01(\x05R\x0fcooldownSeconds\x12\x1a\n" +
+	"\blanguage\x18\v \x01(\tR\blanguage\x12\x12\n" +
+	"\x04tone\x18\f \x01(\tR\x04tone\x12'\n" +
+	"\x0fresponse_length\x18\r \x01(\tR\x0eresponseLength\x12 \n" +
+	"\vtemperature\x18\x0e \x01(\x01R\vtemperature\x12\x1d\n" +
+	"\n" +
+	"max_tokens\x18\x0f \x01(\x05R\tmaxTokens\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x10 \x01(\x03R\tcreatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\x11 \x01(\x03R\tupdatedAt\"?\n" +
+	"\x19ListAutoReplyRulesRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\"N\n" +
+	"\x1aListAutoReplyRulesResponse\x120\n" +
+	"\x05rules\x18\x01 \x03(\v2\x1a.autoforward.AutoReplyRuleR\x05rules\"n\n" +
+	"\x18SaveAutoReplyRuleRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12.\n" +
+	"\x04rule\x18\x02 \x01(\v2\x1a.autoforward.AutoReplyRuleR\x04rule\"Y\n" +
+	"\x1aDeleteAutoReplyRuleRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x17\n" +
+	"\arule_id\x18\x02 \x01(\tR\x06ruleId\"]\n" +
+	"\x1cReorderAutoReplyRulesRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x19\n" +
+	"\brule_ids\x18\x02 \x03(\tR\aruleIds\"\xcc\x03\n" +
+	"\fAutoReplyJob\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
+	"\achat_id\x18\x02 \x01(\tR\x06chatId\x12\x1d\n" +
+	"\n" +
+	"chat_title\x18\x03 \x01(\tR\tchatTitle\x12\x16\n" +
+	"\x06status\x18\x04 \x01(\tR\x06status\x12\x18\n" +
+	"\aattempt\x18\x05 \x01(\x05R\aattempt\x12!\n" +
+	"\fmax_attempts\x18\x06 \x01(\x05R\vmaxAttempts\x12\x14\n" +
+	"\x05error\x18\a \x01(\tR\x05error\x12\x1d\n" +
+	"\n" +
+	"error_code\x18\b \x01(\tR\terrorCode\x12!\n" +
+	"\finbound_text\x18\t \x01(\tR\vinboundText\x12\x1d\n" +
+	"\n" +
+	"reply_text\x18\n" +
+	" \x01(\tR\treplyText\x12%\n" +
+	"\x0ecorrelation_id\x18\v \x01(\tR\rcorrelationId\x12\x1d\n" +
+	"\n" +
+	"latency_ms\x18\f \x01(\x05R\tlatencyMs\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\r \x01(\x03R\tcreatedAt\x12\x17\n" +
+	"\asent_at\x18\x0e \x01(\x03R\x06sentAt\x12*\n" +
+	"\x11source_message_id\x18\x0f \x01(\x03R\x0fsourceMessageId\"\x9d\x01\n" +
+	"\x18ListAutoReplyJobsRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x16\n" +
+	"\x06status\x18\x02 \x01(\tR\x06status\x12\x17\n" +
+	"\achat_id\x18\x03 \x01(\tR\x06chatId\x12\x14\n" +
+	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x16\n" +
+	"\x06offset\x18\x05 \x01(\x05R\x06offset\"`\n" +
+	"\x19ListAutoReplyJobsResponse\x12-\n" +
+	"\x04jobs\x18\x01 \x03(\v2\x19.autoforward.AutoReplyJobR\x04jobs\x12\x14\n" +
+	"\x05total\x18\x02 \x01(\x05R\x05total\"P\n" +
+	"\x13AutoReplyJobRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x15\n" +
+	"\x06job_id\x18\x02 \x01(\tR\x05jobId\">\n" +
+	"\x18GetAutoReplyStatsRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\"\xf3\x02\n" +
+	"\x16AutoReplyStatsResponse\x12\x1d\n" +
+	"\n" +
+	"sent_today\x18\x01 \x01(\x05R\tsentToday\x12\x1d\n" +
+	"\n" +
+	"sent_total\x18\x02 \x01(\x05R\tsentTotal\x12\x18\n" +
+	"\apending\x18\x03 \x01(\x05R\apending\x12\x1a\n" +
+	"\bretrying\x18\x04 \x01(\x05R\bretrying\x12\x1f\n" +
+	"\vdead_letter\x18\x05 \x01(\x05R\n" +
+	"deadLetter\x12#\n" +
+	"\rchats_enabled\x18\x06 \x01(\x05R\fchatsEnabled\x12\x18\n" +
+	"\aprompts\x18\a \x01(\x05R\aprompts\x12\x14\n" +
+	"\x05rules\x18\b \x01(\x05R\x05rules\x12,\n" +
+	"\x12average_latency_ms\x18\t \x01(\x01R\x10averageLatencyMs\x12 \n" +
+	"\flast_sent_at\x18\n" +
+	" \x01(\x03R\n" +
+	"lastSentAt\x12\x1f\n" +
+	"\vstatus_json\x18\v \x01(\tR\n" +
+	"statusJson\"\xb8\x01\n" +
+	"\x17PreviewAutoReplyRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x17\n" +
+	"\achat_id\x18\x02 \x01(\tR\x06chatId\x12!\n" +
+	"\finbound_text\x18\x03 \x01(\tR\vinboundText\x12\x1b\n" +
+	"\tprompt_id\x18\x04 \x01(\tR\bpromptId\x12 \n" +
+	"\fai_config_id\x18\x05 \x01(\tR\n" +
+	"aiConfigId\"\x8c\x02\n" +
+	"\x18PreviewAutoReplyResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x1d\n" +
+	"\n" +
+	"reply_text\x18\x02 \x01(\tR\treplyText\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\x12\x1d\n" +
+	"\n" +
+	"error_code\x18\x04 \x01(\tR\terrorCode\x12#\n" +
+	"\rsystem_prompt\x18\x05 \x01(\tR\fsystemPrompt\x12\x1a\n" +
+	"\bprovider\x18\x06 \x01(\tR\bprovider\x12\x14\n" +
+	"\x05model\x18\a \x01(\tR\x05model\x12\x1d\n" +
+	"\n" +
+	"latency_ms\x18\b \x01(\x05R\tlatencyMs\x12\x16\n" +
+	"\x06tokens\x18\t \x01(\x05R\x06tokens*n\n" +
 	"\vRoutingType\x12\x13\n" +
 	"\x0fROUTING_UNKNOWN\x10\x00\x12\x16\n" +
 	"\x12CHANNEL_TO_CHANNEL\x10\x01\x12\f\n" +
@@ -11456,7 +14380,30 @@ const file_autoforward_proto_rawDesc = "" +
 	"\tListTasks\x12\x1d.autoforward.ListTasksRequest\x1a\x1e.autoforward.ListTasksResponse\x12G\n" +
 	"\n" +
 	"CancelTask\x12\x1e.autoforward.CancelTaskRequest\x1a\x19.autoforward.TaskResponse\x12E\n" +
-	"\tRetryTask\x12\x1d.autoforward.RetryTaskRequest\x1a\x19.autoforward.TaskResponseB%Z#autoforward/api/proto;autoforwardpbb\x06proto3"
+	"\tRetryTask\x12\x1d.autoforward.RetryTaskRequest\x1a\x19.autoforward.TaskResponse2\xbf\x11\n" +
+	"\x17AutoReplyControlService\x12`\n" +
+	"\x14GetAutoReplySettings\x12(.autoforward.GetAutoReplySettingsRequest\x1a\x1e.autoforward.AutoReplySettings\x12f\n" +
+	"\x17UpdateAutoReplySettings\x12+.autoforward.UpdateAutoReplySettingsRequest\x1a\x1e.autoforward.AutoReplySettings\x12k\n" +
+	"\x14ListAutoReplyPrompts\x12(.autoforward.ListAutoReplyPromptsRequest\x1a).autoforward.ListAutoReplyPromptsResponse\x12\\\n" +
+	"\x13SaveAutoReplyPrompt\x12'.autoforward.SaveAutoReplyPromptRequest\x1a\x1c.autoforward.AutoReplyPrompt\x12_\n" +
+	"\x15DeleteAutoReplyPrompt\x12).autoforward.DeleteAutoReplyPromptRequest\x1a\x1b.autoforward.StatusResponse\x12f\n" +
+	"\x18DuplicateAutoReplyPrompt\x12,.autoforward.DuplicateAutoReplyPromptRequest\x1a\x1c.autoforward.AutoReplyPrompt\x12q\n" +
+	"\x16ExportAutoReplyPrompts\x12*.autoforward.ExportAutoReplyPromptsRequest\x1a+.autoforward.ExportAutoReplyPromptsResponse\x12q\n" +
+	"\x16ImportAutoReplyPrompts\x12*.autoforward.ImportAutoReplyPromptsRequest\x1a+.autoforward.ImportAutoReplyPromptsResponse\x12k\n" +
+	"\x14ListAutoReplyTargets\x12(.autoforward.ListAutoReplyTargetsRequest\x1a).autoforward.ListAutoReplyTargetsResponse\x12i\n" +
+	"\x13AddAutoReplyTargets\x12'.autoforward.AddAutoReplyTargetsRequest\x1a).autoforward.ListAutoReplyTargetsResponse\x12`\n" +
+	"\x15UpdateAutoReplyTarget\x12).autoforward.UpdateAutoReplyTargetRequest\x1a\x1c.autoforward.AutoReplyTarget\x12a\n" +
+	"\x16RemoveAutoReplyTargets\x12*.autoforward.RemoveAutoReplyTargetsRequest\x1a\x1b.autoforward.StatusResponse\x12k\n" +
+	"\x14ResolveAutoReplyChat\x12(.autoforward.ResolveAutoReplyChatRequest\x1a).autoforward.ResolveAutoReplyChatResponse\x12e\n" +
+	"\x12ListAutoReplyRules\x12&.autoforward.ListAutoReplyRulesRequest\x1a'.autoforward.ListAutoReplyRulesResponse\x12V\n" +
+	"\x11SaveAutoReplyRule\x12%.autoforward.SaveAutoReplyRuleRequest\x1a\x1a.autoforward.AutoReplyRule\x12[\n" +
+	"\x13DeleteAutoReplyRule\x12'.autoforward.DeleteAutoReplyRuleRequest\x1a\x1b.autoforward.StatusResponse\x12k\n" +
+	"\x15ReorderAutoReplyRules\x12).autoforward.ReorderAutoReplyRulesRequest\x1a'.autoforward.ListAutoReplyRulesResponse\x12b\n" +
+	"\x11ListAutoReplyJobs\x12%.autoforward.ListAutoReplyJobsRequest\x1a&.autoforward.ListAutoReplyJobsResponse\x12S\n" +
+	"\x12CancelAutoReplyJob\x12 .autoforward.AutoReplyJobRequest\x1a\x1b.autoforward.StatusResponse\x12R\n" +
+	"\x11RetryAutoReplyJob\x12 .autoforward.AutoReplyJobRequest\x1a\x1b.autoforward.StatusResponse\x12_\n" +
+	"\x11GetAutoReplyStats\x12%.autoforward.GetAutoReplyStatsRequest\x1a#.autoforward.AutoReplyStatsResponse\x12_\n" +
+	"\x10PreviewAutoReply\x12$.autoforward.PreviewAutoReplyRequest\x1a%.autoforward.PreviewAutoReplyResponseB%Z#autoforward/api/proto;autoforwardpbb\x06proto3"
 
 var (
 	file_autoforward_proto_rawDescOnce sync.Once
@@ -11471,157 +14418,192 @@ func file_autoforward_proto_rawDescGZIP() []byte {
 }
 
 var file_autoforward_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_autoforward_proto_msgTypes = make([]protoimpl.MessageInfo, 147)
+var file_autoforward_proto_msgTypes = make([]protoimpl.MessageInfo, 182)
 var file_autoforward_proto_goTypes = []any{
-	(RoutingType)(0),                     // 0: autoforward.RoutingType
-	(ForwardMode)(0),                     // 1: autoforward.ForwardMode
-	(*StatusResponse)(nil),               // 2: autoforward.StatusResponse
-	(*SessionInfo)(nil),                  // 3: autoforward.SessionInfo
-	(*ListSessionsRequest)(nil),          // 4: autoforward.ListSessionsRequest
-	(*ListSessionsResponse)(nil),         // 5: autoforward.ListSessionsResponse
-	(*StartLoginRequest)(nil),            // 6: autoforward.StartLoginRequest
-	(*StartLoginResponse)(nil),           // 7: autoforward.StartLoginResponse
-	(*SubmitCodeRequest)(nil),            // 8: autoforward.SubmitCodeRequest
-	(*SubmitCodeResponse)(nil),           // 9: autoforward.SubmitCodeResponse
-	(*SubmitPasswordRequest)(nil),        // 10: autoforward.SubmitPasswordRequest
-	(*SubmitPasswordResponse)(nil),       // 11: autoforward.SubmitPasswordResponse
-	(*BackupSessionRequest)(nil),         // 12: autoforward.BackupSessionRequest
-	(*BackupSessionResponse)(nil),        // 13: autoforward.BackupSessionResponse
-	(*RestoreSessionRequest)(nil),        // 14: autoforward.RestoreSessionRequest
-	(*RestoreSessionResponse)(nil),       // 15: autoforward.RestoreSessionResponse
-	(*TerminateSessionRequest)(nil),      // 16: autoforward.TerminateSessionRequest
-	(*ForwardRule)(nil),                  // 17: autoforward.ForwardRule
-	(*CreateRuleRequest)(nil),            // 18: autoforward.CreateRuleRequest
-	(*ResolveChatRequest)(nil),           // 19: autoforward.ResolveChatRequest
-	(*ResolveChatResponse)(nil),          // 20: autoforward.ResolveChatResponse
-	(*ListChatsRequest)(nil),             // 21: autoforward.ListChatsRequest
-	(*ChatSummary)(nil),                  // 22: autoforward.ChatSummary
-	(*ListChatsResponse)(nil),            // 23: autoforward.ListChatsResponse
-	(*UpdateRuleRequest)(nil),            // 24: autoforward.UpdateRuleRequest
-	(*RuleSettingsRequest)(nil),          // 25: autoforward.RuleSettingsRequest
-	(*RuleSettingsResponse)(nil),         // 26: autoforward.RuleSettingsResponse
-	(*UpdateRuleSettingsRequest)(nil),    // 27: autoforward.UpdateRuleSettingsRequest
-	(*RuleSettingsSchemaRequest)(nil),    // 28: autoforward.RuleSettingsSchemaRequest
-	(*DeleteRuleRequest)(nil),            // 29: autoforward.DeleteRuleRequest
-	(*ListRulesRequest)(nil),             // 30: autoforward.ListRulesRequest
-	(*GetRuleRequest)(nil),               // 31: autoforward.GetRuleRequest
-	(*ListRulesResponse)(nil),            // 32: autoforward.ListRulesResponse
-	(*FilterRule)(nil),                   // 33: autoforward.FilterRule
-	(*CreateFilterRequest)(nil),          // 34: autoforward.CreateFilterRequest
-	(*UpdateFilterRequest)(nil),          // 35: autoforward.UpdateFilterRequest
-	(*DeleteFilterRequest)(nil),          // 36: autoforward.DeleteFilterRequest
-	(*ListFiltersRequest)(nil),           // 37: autoforward.ListFiltersRequest
-	(*ListFiltersResponse)(nil),          // 38: autoforward.ListFiltersResponse
-	(*AIConfig)(nil),                     // 39: autoforward.AIConfig
-	(*CreateAIConfigRequest)(nil),        // 40: autoforward.CreateAIConfigRequest
-	(*UpdateAIConfigRequest)(nil),        // 41: autoforward.UpdateAIConfigRequest
-	(*DeleteAIConfigRequest)(nil),        // 42: autoforward.DeleteAIConfigRequest
-	(*ListAIConfigsRequest)(nil),         // 43: autoforward.ListAIConfigsRequest
-	(*ListAIConfigsResponse)(nil),        // 44: autoforward.ListAIConfigsResponse
-	(*TestAIRewriteRequest)(nil),         // 45: autoforward.TestAIRewriteRequest
-	(*TestAIRewriteResponse)(nil),        // 46: autoforward.TestAIRewriteResponse
-	(*PromptTemplate)(nil),               // 47: autoforward.PromptTemplate
-	(*ListPromptTemplatesRequest)(nil),   // 48: autoforward.ListPromptTemplatesRequest
-	(*ListPromptTemplatesResponse)(nil),  // 49: autoforward.ListPromptTemplatesResponse
-	(*SavePromptTemplateRequest)(nil),    // 50: autoforward.SavePromptTemplateRequest
-	(*DeletePromptTemplateRequest)(nil),  // 51: autoforward.DeletePromptTemplateRequest
-	(*TestPromptRequest)(nil),            // 52: autoforward.TestPromptRequest
-	(*TestPromptResponse)(nil),           // 53: autoforward.TestPromptResponse
-	(*CheckProviderKeyRequest)(nil),      // 54: autoforward.CheckProviderKeyRequest
-	(*CheckProviderKeyResponse)(nil),     // 55: autoforward.CheckProviderKeyResponse
-	(*AIProviderInfo)(nil),               // 56: autoforward.AIProviderInfo
-	(*ListAIProvidersRequest)(nil),       // 57: autoforward.ListAIProvidersRequest
-	(*ListAIProvidersResponse)(nil),      // 58: autoforward.ListAIProvidersResponse
-	(*SystemStatsRequest)(nil),           // 59: autoforward.SystemStatsRequest
-	(*SystemStatsResponse)(nil),          // 60: autoforward.SystemStatsResponse
-	(*LogPolicyRequest)(nil),             // 61: autoforward.LogPolicyRequest
-	(*SetLogPolicyRequest)(nil),          // 62: autoforward.SetLogPolicyRequest
-	(*LogPolicyResponse)(nil),            // 63: autoforward.LogPolicyResponse
-	(*LogEntry)(nil),                     // 64: autoforward.LogEntry
-	(*LogRequest)(nil),                   // 65: autoforward.LogRequest
-	(*QueryLogsRequest)(nil),             // 66: autoforward.QueryLogsRequest
-	(*PurgeLogsRequest)(nil),             // 67: autoforward.PurgeLogsRequest
-	(*PurgeLogsResponse)(nil),            // 68: autoforward.PurgeLogsResponse
-	(*QueryLogsResponse)(nil),            // 69: autoforward.QueryLogsResponse
-	(*LogStatsRequest)(nil),              // 70: autoforward.LogStatsRequest
-	(*LogStatsResponse)(nil),             // 71: autoforward.LogStatsResponse
-	(*TestRuleRequest)(nil),              // 72: autoforward.TestRuleRequest
-	(*TestRuleResponse)(nil),             // 73: autoforward.TestRuleResponse
-	(*ListDeadLetterRequest)(nil),        // 74: autoforward.ListDeadLetterRequest
-	(*DeadLetterEntry)(nil),              // 75: autoforward.DeadLetterEntry
-	(*ListDeadLetterResponse)(nil),       // 76: autoforward.ListDeadLetterResponse
-	(*ReplayDeadLetterRequest)(nil),      // 77: autoforward.ReplayDeadLetterRequest
-	(*PurgeDeadLetterRequest)(nil),       // 78: autoforward.PurgeDeadLetterRequest
-	(*DeliveryStatsRequest)(nil),         // 79: autoforward.DeliveryStatsRequest
-	(*DeliveryStatsResponse)(nil),        // 80: autoforward.DeliveryStatsResponse
-	(*RuleLiveStat)(nil),                 // 81: autoforward.RuleLiveStat
-	(*RecentError)(nil),                  // 82: autoforward.RecentError
-	(*PauseRuleRequest)(nil),             // 83: autoforward.PauseRuleRequest
-	(*RuleActionResponse)(nil),           // 84: autoforward.RuleActionResponse
-	(*QueryAuditEventsRequest)(nil),      // 85: autoforward.QueryAuditEventsRequest
-	(*AuditEventEntry)(nil),              // 86: autoforward.AuditEventEntry
-	(*QueryAuditEventsResponse)(nil),     // 87: autoforward.QueryAuditEventsResponse
-	(*BackupExportRequest)(nil),          // 88: autoforward.BackupExportRequest
-	(*BackupExportResponse)(nil),         // 89: autoforward.BackupExportResponse
-	(*BackupImportRequest)(nil),          // 90: autoforward.BackupImportRequest
-	(*BackupImportResponse)(nil),         // 91: autoforward.BackupImportResponse
-	(*EntityImportStats)(nil),            // 92: autoforward.EntityImportStats
-	(*WebAccount)(nil),                   // 93: autoforward.WebAccount
-	(*RegisterAccountRequest)(nil),       // 94: autoforward.RegisterAccountRequest
-	(*RegisterAccountResponse)(nil),      // 95: autoforward.RegisterAccountResponse
-	(*LoginAccountRequest)(nil),          // 96: autoforward.LoginAccountRequest
-	(*LoginAccountResponse)(nil),         // 97: autoforward.LoginAccountResponse
-	(*ValidateTokenRequest)(nil),         // 98: autoforward.ValidateTokenRequest
-	(*ValidateTokenResponse)(nil),        // 99: autoforward.ValidateTokenResponse
-	(*IssueWebTokenRequest)(nil),         // 100: autoforward.IssueWebTokenRequest
-	(*IssueLoginCodeRequest)(nil),        // 101: autoforward.IssueLoginCodeRequest
-	(*IssueLoginCodeResponse)(nil),       // 102: autoforward.IssueLoginCodeResponse
-	(*ExchangeWebLoginCodeRequest)(nil),  // 103: autoforward.ExchangeWebLoginCodeRequest
-	(*ChangePasswordRequest)(nil),        // 104: autoforward.ChangePasswordRequest
-	(*GetAccountRequest)(nil),            // 105: autoforward.GetAccountRequest
-	(*AdminOverviewRequest)(nil),         // 106: autoforward.AdminOverviewRequest
-	(*AdminOverviewResponse)(nil),        // 107: autoforward.AdminOverviewResponse
-	(*AdminUser)(nil),                    // 108: autoforward.AdminUser
-	(*AdminListUsersRequest)(nil),        // 109: autoforward.AdminListUsersRequest
-	(*AdminListUsersResponse)(nil),       // 110: autoforward.AdminListUsersResponse
-	(*AdminSetUserStatusRequest)(nil),    // 111: autoforward.AdminSetUserStatusRequest
-	(*AdminBroadcastRequest)(nil),        // 112: autoforward.AdminBroadcastRequest
-	(*AdminBroadcastResponse)(nil),       // 113: autoforward.AdminBroadcastResponse
-	(*AdminGetSettingsRequest)(nil),      // 114: autoforward.AdminGetSettingsRequest
-	(*AdminSettingsResponse)(nil),        // 115: autoforward.AdminSettingsResponse
-	(*AdminSaveSettingsRequest)(nil),     // 116: autoforward.AdminSaveSettingsRequest
-	(*AdminAdministrator)(nil),           // 117: autoforward.AdminAdministrator
-	(*AdminListAdminsRequest)(nil),       // 118: autoforward.AdminListAdminsRequest
-	(*AdminListAdminsResponse)(nil),      // 119: autoforward.AdminListAdminsResponse
-	(*AdminAddAdminRequest)(nil),         // 120: autoforward.AdminAddAdminRequest
-	(*AdminRemoveAdminRequest)(nil),      // 121: autoforward.AdminRemoveAdminRequest
-	(*ClientSettingsRequest)(nil),        // 122: autoforward.ClientSettingsRequest
-	(*ClientSettingsResponse)(nil),       // 123: autoforward.ClientSettingsResponse
-	(*ClientSaveCredentialsRequest)(nil), // 124: autoforward.ClientSaveCredentialsRequest
-	(*BotTokenInfo)(nil),                 // 125: autoforward.BotTokenInfo
-	(*ListBotTokensRequest)(nil),         // 126: autoforward.ListBotTokensRequest
-	(*ListBotTokensResponse)(nil),        // 127: autoforward.ListBotTokensResponse
-	(*CreateBotTokenRequest)(nil),        // 128: autoforward.CreateBotTokenRequest
-	(*CreateBotTokenResponse)(nil),       // 129: autoforward.CreateBotTokenResponse
-	(*DeleteBotTokenRequest)(nil),        // 130: autoforward.DeleteBotTokenRequest
-	(*GetBotDefaultsRequest)(nil),        // 131: autoforward.GetBotDefaultsRequest
-	(*SetBotDefaultsRequest)(nil),        // 132: autoforward.SetBotDefaultsRequest
-	(*BotDefaultsResponse)(nil),          // 133: autoforward.BotDefaultsResponse
-	(*UserTask)(nil),                     // 134: autoforward.UserTask
-	(*CreateTaskRequest)(nil),            // 135: autoforward.CreateTaskRequest
-	(*CreateTaskResponse)(nil),           // 136: autoforward.CreateTaskResponse
-	(*GetTaskRequest)(nil),               // 137: autoforward.GetTaskRequest
-	(*TaskResponse)(nil),                 // 138: autoforward.TaskResponse
-	(*ListTasksRequest)(nil),             // 139: autoforward.ListTasksRequest
-	(*ListTasksResponse)(nil),            // 140: autoforward.ListTasksResponse
-	(*CancelTaskRequest)(nil),            // 141: autoforward.CancelTaskRequest
-	(*RetryTaskRequest)(nil),             // 142: autoforward.RetryTaskRequest
-	nil,                                  // 143: autoforward.LogStatsResponse.ByLevelEntry
-	nil,                                  // 144: autoforward.LogStatsResponse.ByCategoryEntry
-	nil,                                  // 145: autoforward.LogStatsResponse.ByRuleEntry
-	nil,                                  // 146: autoforward.LogStatsResponse.ByServiceEntry
-	nil,                                  // 147: autoforward.BackupExportResponse.CountsEntry
-	nil,                                  // 148: autoforward.BackupImportResponse.StatsEntry
+	(RoutingType)(0),                        // 0: autoforward.RoutingType
+	(ForwardMode)(0),                        // 1: autoforward.ForwardMode
+	(*StatusResponse)(nil),                  // 2: autoforward.StatusResponse
+	(*SessionInfo)(nil),                     // 3: autoforward.SessionInfo
+	(*ListSessionsRequest)(nil),             // 4: autoforward.ListSessionsRequest
+	(*ListSessionsResponse)(nil),            // 5: autoforward.ListSessionsResponse
+	(*StartLoginRequest)(nil),               // 6: autoforward.StartLoginRequest
+	(*StartLoginResponse)(nil),              // 7: autoforward.StartLoginResponse
+	(*SubmitCodeRequest)(nil),               // 8: autoforward.SubmitCodeRequest
+	(*SubmitCodeResponse)(nil),              // 9: autoforward.SubmitCodeResponse
+	(*SubmitPasswordRequest)(nil),           // 10: autoforward.SubmitPasswordRequest
+	(*SubmitPasswordResponse)(nil),          // 11: autoforward.SubmitPasswordResponse
+	(*BackupSessionRequest)(nil),            // 12: autoforward.BackupSessionRequest
+	(*BackupSessionResponse)(nil),           // 13: autoforward.BackupSessionResponse
+	(*RestoreSessionRequest)(nil),           // 14: autoforward.RestoreSessionRequest
+	(*RestoreSessionResponse)(nil),          // 15: autoforward.RestoreSessionResponse
+	(*TerminateSessionRequest)(nil),         // 16: autoforward.TerminateSessionRequest
+	(*ForwardRule)(nil),                     // 17: autoforward.ForwardRule
+	(*CreateRuleRequest)(nil),               // 18: autoforward.CreateRuleRequest
+	(*ResolveChatRequest)(nil),              // 19: autoforward.ResolveChatRequest
+	(*ResolveChatResponse)(nil),             // 20: autoforward.ResolveChatResponse
+	(*ListChatsRequest)(nil),                // 21: autoforward.ListChatsRequest
+	(*ChatSummary)(nil),                     // 22: autoforward.ChatSummary
+	(*ListChatsResponse)(nil),               // 23: autoforward.ListChatsResponse
+	(*UpdateRuleRequest)(nil),               // 24: autoforward.UpdateRuleRequest
+	(*RuleSettingsRequest)(nil),             // 25: autoforward.RuleSettingsRequest
+	(*RuleSettingsResponse)(nil),            // 26: autoforward.RuleSettingsResponse
+	(*UpdateRuleSettingsRequest)(nil),       // 27: autoforward.UpdateRuleSettingsRequest
+	(*RuleSettingsSchemaRequest)(nil),       // 28: autoforward.RuleSettingsSchemaRequest
+	(*DeleteRuleRequest)(nil),               // 29: autoforward.DeleteRuleRequest
+	(*ListRulesRequest)(nil),                // 30: autoforward.ListRulesRequest
+	(*GetRuleRequest)(nil),                  // 31: autoforward.GetRuleRequest
+	(*ListRulesResponse)(nil),               // 32: autoforward.ListRulesResponse
+	(*FilterRule)(nil),                      // 33: autoforward.FilterRule
+	(*CreateFilterRequest)(nil),             // 34: autoforward.CreateFilterRequest
+	(*UpdateFilterRequest)(nil),             // 35: autoforward.UpdateFilterRequest
+	(*DeleteFilterRequest)(nil),             // 36: autoforward.DeleteFilterRequest
+	(*ListFiltersRequest)(nil),              // 37: autoforward.ListFiltersRequest
+	(*ListFiltersResponse)(nil),             // 38: autoforward.ListFiltersResponse
+	(*AIConfig)(nil),                        // 39: autoforward.AIConfig
+	(*CreateAIConfigRequest)(nil),           // 40: autoforward.CreateAIConfigRequest
+	(*UpdateAIConfigRequest)(nil),           // 41: autoforward.UpdateAIConfigRequest
+	(*DeleteAIConfigRequest)(nil),           // 42: autoforward.DeleteAIConfigRequest
+	(*ListAIConfigsRequest)(nil),            // 43: autoforward.ListAIConfigsRequest
+	(*ListAIConfigsResponse)(nil),           // 44: autoforward.ListAIConfigsResponse
+	(*TestAIRewriteRequest)(nil),            // 45: autoforward.TestAIRewriteRequest
+	(*TestAIRewriteResponse)(nil),           // 46: autoforward.TestAIRewriteResponse
+	(*PromptTemplate)(nil),                  // 47: autoforward.PromptTemplate
+	(*ListPromptTemplatesRequest)(nil),      // 48: autoforward.ListPromptTemplatesRequest
+	(*ListPromptTemplatesResponse)(nil),     // 49: autoforward.ListPromptTemplatesResponse
+	(*SavePromptTemplateRequest)(nil),       // 50: autoforward.SavePromptTemplateRequest
+	(*DeletePromptTemplateRequest)(nil),     // 51: autoforward.DeletePromptTemplateRequest
+	(*TestPromptRequest)(nil),               // 52: autoforward.TestPromptRequest
+	(*TestPromptResponse)(nil),              // 53: autoforward.TestPromptResponse
+	(*CheckProviderKeyRequest)(nil),         // 54: autoforward.CheckProviderKeyRequest
+	(*CheckProviderKeyResponse)(nil),        // 55: autoforward.CheckProviderKeyResponse
+	(*AIProviderInfo)(nil),                  // 56: autoforward.AIProviderInfo
+	(*ListAIProvidersRequest)(nil),          // 57: autoforward.ListAIProvidersRequest
+	(*ListAIProvidersResponse)(nil),         // 58: autoforward.ListAIProvidersResponse
+	(*SystemStatsRequest)(nil),              // 59: autoforward.SystemStatsRequest
+	(*SystemStatsResponse)(nil),             // 60: autoforward.SystemStatsResponse
+	(*LogPolicyRequest)(nil),                // 61: autoforward.LogPolicyRequest
+	(*SetLogPolicyRequest)(nil),             // 62: autoforward.SetLogPolicyRequest
+	(*LogPolicyResponse)(nil),               // 63: autoforward.LogPolicyResponse
+	(*LogEntry)(nil),                        // 64: autoforward.LogEntry
+	(*LogRequest)(nil),                      // 65: autoforward.LogRequest
+	(*QueryLogsRequest)(nil),                // 66: autoforward.QueryLogsRequest
+	(*PurgeLogsRequest)(nil),                // 67: autoforward.PurgeLogsRequest
+	(*PurgeLogsResponse)(nil),               // 68: autoforward.PurgeLogsResponse
+	(*QueryLogsResponse)(nil),               // 69: autoforward.QueryLogsResponse
+	(*LogStatsRequest)(nil),                 // 70: autoforward.LogStatsRequest
+	(*LogStatsResponse)(nil),                // 71: autoforward.LogStatsResponse
+	(*TestRuleRequest)(nil),                 // 72: autoforward.TestRuleRequest
+	(*TestRuleResponse)(nil),                // 73: autoforward.TestRuleResponse
+	(*ListDeadLetterRequest)(nil),           // 74: autoforward.ListDeadLetterRequest
+	(*DeadLetterEntry)(nil),                 // 75: autoforward.DeadLetterEntry
+	(*ListDeadLetterResponse)(nil),          // 76: autoforward.ListDeadLetterResponse
+	(*ReplayDeadLetterRequest)(nil),         // 77: autoforward.ReplayDeadLetterRequest
+	(*PurgeDeadLetterRequest)(nil),          // 78: autoforward.PurgeDeadLetterRequest
+	(*DeliveryStatsRequest)(nil),            // 79: autoforward.DeliveryStatsRequest
+	(*DeliveryStatsResponse)(nil),           // 80: autoforward.DeliveryStatsResponse
+	(*RuleLiveStat)(nil),                    // 81: autoforward.RuleLiveStat
+	(*RecentError)(nil),                     // 82: autoforward.RecentError
+	(*PauseRuleRequest)(nil),                // 83: autoforward.PauseRuleRequest
+	(*RuleActionResponse)(nil),              // 84: autoforward.RuleActionResponse
+	(*QueryAuditEventsRequest)(nil),         // 85: autoforward.QueryAuditEventsRequest
+	(*AuditEventEntry)(nil),                 // 86: autoforward.AuditEventEntry
+	(*QueryAuditEventsResponse)(nil),        // 87: autoforward.QueryAuditEventsResponse
+	(*BackupExportRequest)(nil),             // 88: autoforward.BackupExportRequest
+	(*BackupExportResponse)(nil),            // 89: autoforward.BackupExportResponse
+	(*BackupImportRequest)(nil),             // 90: autoforward.BackupImportRequest
+	(*BackupImportResponse)(nil),            // 91: autoforward.BackupImportResponse
+	(*EntityImportStats)(nil),               // 92: autoforward.EntityImportStats
+	(*WebAccount)(nil),                      // 93: autoforward.WebAccount
+	(*RegisterAccountRequest)(nil),          // 94: autoforward.RegisterAccountRequest
+	(*RegisterAccountResponse)(nil),         // 95: autoforward.RegisterAccountResponse
+	(*LoginAccountRequest)(nil),             // 96: autoforward.LoginAccountRequest
+	(*LoginAccountResponse)(nil),            // 97: autoforward.LoginAccountResponse
+	(*ValidateTokenRequest)(nil),            // 98: autoforward.ValidateTokenRequest
+	(*ValidateTokenResponse)(nil),           // 99: autoforward.ValidateTokenResponse
+	(*IssueWebTokenRequest)(nil),            // 100: autoforward.IssueWebTokenRequest
+	(*IssueLoginCodeRequest)(nil),           // 101: autoforward.IssueLoginCodeRequest
+	(*IssueLoginCodeResponse)(nil),          // 102: autoforward.IssueLoginCodeResponse
+	(*ExchangeWebLoginCodeRequest)(nil),     // 103: autoforward.ExchangeWebLoginCodeRequest
+	(*ChangePasswordRequest)(nil),           // 104: autoforward.ChangePasswordRequest
+	(*GetAccountRequest)(nil),               // 105: autoforward.GetAccountRequest
+	(*AdminOverviewRequest)(nil),            // 106: autoforward.AdminOverviewRequest
+	(*AdminOverviewResponse)(nil),           // 107: autoforward.AdminOverviewResponse
+	(*AdminUser)(nil),                       // 108: autoforward.AdminUser
+	(*AdminListUsersRequest)(nil),           // 109: autoforward.AdminListUsersRequest
+	(*AdminListUsersResponse)(nil),          // 110: autoforward.AdminListUsersResponse
+	(*AdminSetUserStatusRequest)(nil),       // 111: autoforward.AdminSetUserStatusRequest
+	(*AdminBroadcastRequest)(nil),           // 112: autoforward.AdminBroadcastRequest
+	(*AdminBroadcastResponse)(nil),          // 113: autoforward.AdminBroadcastResponse
+	(*AdminGetSettingsRequest)(nil),         // 114: autoforward.AdminGetSettingsRequest
+	(*AdminSettingsResponse)(nil),           // 115: autoforward.AdminSettingsResponse
+	(*AdminSaveSettingsRequest)(nil),        // 116: autoforward.AdminSaveSettingsRequest
+	(*AdminAdministrator)(nil),              // 117: autoforward.AdminAdministrator
+	(*AdminListAdminsRequest)(nil),          // 118: autoforward.AdminListAdminsRequest
+	(*AdminListAdminsResponse)(nil),         // 119: autoforward.AdminListAdminsResponse
+	(*AdminAddAdminRequest)(nil),            // 120: autoforward.AdminAddAdminRequest
+	(*AdminRemoveAdminRequest)(nil),         // 121: autoforward.AdminRemoveAdminRequest
+	(*ClientSettingsRequest)(nil),           // 122: autoforward.ClientSettingsRequest
+	(*ClientSettingsResponse)(nil),          // 123: autoforward.ClientSettingsResponse
+	(*ClientSaveCredentialsRequest)(nil),    // 124: autoforward.ClientSaveCredentialsRequest
+	(*BotTokenInfo)(nil),                    // 125: autoforward.BotTokenInfo
+	(*ListBotTokensRequest)(nil),            // 126: autoforward.ListBotTokensRequest
+	(*ListBotTokensResponse)(nil),           // 127: autoforward.ListBotTokensResponse
+	(*CreateBotTokenRequest)(nil),           // 128: autoforward.CreateBotTokenRequest
+	(*CreateBotTokenResponse)(nil),          // 129: autoforward.CreateBotTokenResponse
+	(*DeleteBotTokenRequest)(nil),           // 130: autoforward.DeleteBotTokenRequest
+	(*GetBotDefaultsRequest)(nil),           // 131: autoforward.GetBotDefaultsRequest
+	(*SetBotDefaultsRequest)(nil),           // 132: autoforward.SetBotDefaultsRequest
+	(*BotDefaultsResponse)(nil),             // 133: autoforward.BotDefaultsResponse
+	(*UserTask)(nil),                        // 134: autoforward.UserTask
+	(*CreateTaskRequest)(nil),               // 135: autoforward.CreateTaskRequest
+	(*CreateTaskResponse)(nil),              // 136: autoforward.CreateTaskResponse
+	(*GetTaskRequest)(nil),                  // 137: autoforward.GetTaskRequest
+	(*TaskResponse)(nil),                    // 138: autoforward.TaskResponse
+	(*ListTasksRequest)(nil),                // 139: autoforward.ListTasksRequest
+	(*ListTasksResponse)(nil),               // 140: autoforward.ListTasksResponse
+	(*CancelTaskRequest)(nil),               // 141: autoforward.CancelTaskRequest
+	(*RetryTaskRequest)(nil),                // 142: autoforward.RetryTaskRequest
+	(*AutoReplySettings)(nil),               // 143: autoforward.AutoReplySettings
+	(*GetAutoReplySettingsRequest)(nil),     // 144: autoforward.GetAutoReplySettingsRequest
+	(*UpdateAutoReplySettingsRequest)(nil),  // 145: autoforward.UpdateAutoReplySettingsRequest
+	(*AutoReplyPrompt)(nil),                 // 146: autoforward.AutoReplyPrompt
+	(*ListAutoReplyPromptsRequest)(nil),     // 147: autoforward.ListAutoReplyPromptsRequest
+	(*ListAutoReplyPromptsResponse)(nil),    // 148: autoforward.ListAutoReplyPromptsResponse
+	(*SaveAutoReplyPromptRequest)(nil),      // 149: autoforward.SaveAutoReplyPromptRequest
+	(*DeleteAutoReplyPromptRequest)(nil),    // 150: autoforward.DeleteAutoReplyPromptRequest
+	(*DuplicateAutoReplyPromptRequest)(nil), // 151: autoforward.DuplicateAutoReplyPromptRequest
+	(*ExportAutoReplyPromptsRequest)(nil),   // 152: autoforward.ExportAutoReplyPromptsRequest
+	(*ExportAutoReplyPromptsResponse)(nil),  // 153: autoforward.ExportAutoReplyPromptsResponse
+	(*ImportAutoReplyPromptsRequest)(nil),   // 154: autoforward.ImportAutoReplyPromptsRequest
+	(*ImportAutoReplyPromptsResponse)(nil),  // 155: autoforward.ImportAutoReplyPromptsResponse
+	(*AutoReplyTarget)(nil),                 // 156: autoforward.AutoReplyTarget
+	(*ListAutoReplyTargetsRequest)(nil),     // 157: autoforward.ListAutoReplyTargetsRequest
+	(*ListAutoReplyTargetsResponse)(nil),    // 158: autoforward.ListAutoReplyTargetsResponse
+	(*AddAutoReplyTargetsRequest)(nil),      // 159: autoforward.AddAutoReplyTargetsRequest
+	(*UpdateAutoReplyTargetRequest)(nil),    // 160: autoforward.UpdateAutoReplyTargetRequest
+	(*RemoveAutoReplyTargetsRequest)(nil),   // 161: autoforward.RemoveAutoReplyTargetsRequest
+	(*ResolveAutoReplyChatRequest)(nil),     // 162: autoforward.ResolveAutoReplyChatRequest
+	(*ResolveAutoReplyChatResponse)(nil),    // 163: autoforward.ResolveAutoReplyChatResponse
+	(*AutoReplyRule)(nil),                   // 164: autoforward.AutoReplyRule
+	(*ListAutoReplyRulesRequest)(nil),       // 165: autoforward.ListAutoReplyRulesRequest
+	(*ListAutoReplyRulesResponse)(nil),      // 166: autoforward.ListAutoReplyRulesResponse
+	(*SaveAutoReplyRuleRequest)(nil),        // 167: autoforward.SaveAutoReplyRuleRequest
+	(*DeleteAutoReplyRuleRequest)(nil),      // 168: autoforward.DeleteAutoReplyRuleRequest
+	(*ReorderAutoReplyRulesRequest)(nil),    // 169: autoforward.ReorderAutoReplyRulesRequest
+	(*AutoReplyJob)(nil),                    // 170: autoforward.AutoReplyJob
+	(*ListAutoReplyJobsRequest)(nil),        // 171: autoforward.ListAutoReplyJobsRequest
+	(*ListAutoReplyJobsResponse)(nil),       // 172: autoforward.ListAutoReplyJobsResponse
+	(*AutoReplyJobRequest)(nil),             // 173: autoforward.AutoReplyJobRequest
+	(*GetAutoReplyStatsRequest)(nil),        // 174: autoforward.GetAutoReplyStatsRequest
+	(*AutoReplyStatsResponse)(nil),          // 175: autoforward.AutoReplyStatsResponse
+	(*PreviewAutoReplyRequest)(nil),         // 176: autoforward.PreviewAutoReplyRequest
+	(*PreviewAutoReplyResponse)(nil),        // 177: autoforward.PreviewAutoReplyResponse
+	nil,                                     // 178: autoforward.LogStatsResponse.ByLevelEntry
+	nil,                                     // 179: autoforward.LogStatsResponse.ByCategoryEntry
+	nil,                                     // 180: autoforward.LogStatsResponse.ByRuleEntry
+	nil,                                     // 181: autoforward.LogStatsResponse.ByServiceEntry
+	nil,                                     // 182: autoforward.BackupExportResponse.CountsEntry
+	nil,                                     // 183: autoforward.BackupImportResponse.StatsEntry
 }
 var file_autoforward_proto_depIdxs = []int32{
 	3,   // 0: autoforward.ListSessionsResponse.sessions:type_name -> autoforward.SessionInfo
@@ -11643,16 +14625,16 @@ var file_autoforward_proto_depIdxs = []int32{
 	56,  // 16: autoforward.ListAIProvidersResponse.providers:type_name -> autoforward.AIProviderInfo
 	64,  // 17: autoforward.LogRequest.entry:type_name -> autoforward.LogEntry
 	64,  // 18: autoforward.QueryLogsResponse.logs:type_name -> autoforward.LogEntry
-	143, // 19: autoforward.LogStatsResponse.by_level:type_name -> autoforward.LogStatsResponse.ByLevelEntry
-	144, // 20: autoforward.LogStatsResponse.by_category:type_name -> autoforward.LogStatsResponse.ByCategoryEntry
-	145, // 21: autoforward.LogStatsResponse.by_rule:type_name -> autoforward.LogStatsResponse.ByRuleEntry
-	146, // 22: autoforward.LogStatsResponse.by_service:type_name -> autoforward.LogStatsResponse.ByServiceEntry
+	178, // 19: autoforward.LogStatsResponse.by_level:type_name -> autoforward.LogStatsResponse.ByLevelEntry
+	179, // 20: autoforward.LogStatsResponse.by_category:type_name -> autoforward.LogStatsResponse.ByCategoryEntry
+	180, // 21: autoforward.LogStatsResponse.by_rule:type_name -> autoforward.LogStatsResponse.ByRuleEntry
+	181, // 22: autoforward.LogStatsResponse.by_service:type_name -> autoforward.LogStatsResponse.ByServiceEntry
 	75,  // 23: autoforward.ListDeadLetterResponse.entries:type_name -> autoforward.DeadLetterEntry
 	81,  // 24: autoforward.DeliveryStatsResponse.rules:type_name -> autoforward.RuleLiveStat
 	82,  // 25: autoforward.DeliveryStatsResponse.errors:type_name -> autoforward.RecentError
 	86,  // 26: autoforward.QueryAuditEventsResponse.events:type_name -> autoforward.AuditEventEntry
-	147, // 27: autoforward.BackupExportResponse.counts:type_name -> autoforward.BackupExportResponse.CountsEntry
-	148, // 28: autoforward.BackupImportResponse.stats:type_name -> autoforward.BackupImportResponse.StatsEntry
+	182, // 27: autoforward.BackupExportResponse.counts:type_name -> autoforward.BackupExportResponse.CountsEntry
+	183, // 28: autoforward.BackupImportResponse.stats:type_name -> autoforward.BackupImportResponse.StatsEntry
 	93,  // 29: autoforward.RegisterAccountResponse.account:type_name -> autoforward.WebAccount
 	93,  // 30: autoforward.LoginAccountResponse.account:type_name -> autoforward.WebAccount
 	108, // 31: autoforward.AdminListUsersResponse.users:type_name -> autoforward.AdminUser
@@ -11662,168 +14644,223 @@ var file_autoforward_proto_depIdxs = []int32{
 	134, // 35: autoforward.CreateTaskResponse.task:type_name -> autoforward.UserTask
 	134, // 36: autoforward.TaskResponse.task:type_name -> autoforward.UserTask
 	134, // 37: autoforward.ListTasksResponse.tasks:type_name -> autoforward.UserTask
-	92,  // 38: autoforward.BackupImportResponse.StatsEntry.value:type_name -> autoforward.EntityImportStats
-	4,   // 39: autoforward.SessionControlService.ListSessions:input_type -> autoforward.ListSessionsRequest
-	6,   // 40: autoforward.SessionControlService.StartLogin:input_type -> autoforward.StartLoginRequest
-	8,   // 41: autoforward.SessionControlService.SubmitCode:input_type -> autoforward.SubmitCodeRequest
-	10,  // 42: autoforward.SessionControlService.SubmitPassword:input_type -> autoforward.SubmitPasswordRequest
-	12,  // 43: autoforward.SessionControlService.BackupSession:input_type -> autoforward.BackupSessionRequest
-	14,  // 44: autoforward.SessionControlService.RestoreSession:input_type -> autoforward.RestoreSessionRequest
-	16,  // 45: autoforward.SessionControlService.TerminateSession:input_type -> autoforward.TerminateSessionRequest
-	19,  // 46: autoforward.SessionControlService.ResolveChat:input_type -> autoforward.ResolveChatRequest
-	21,  // 47: autoforward.SessionControlService.ListChats:input_type -> autoforward.ListChatsRequest
-	30,  // 48: autoforward.ForwardRuleControlService.ListRules:input_type -> autoforward.ListRulesRequest
-	31,  // 49: autoforward.ForwardRuleControlService.GetRule:input_type -> autoforward.GetRuleRequest
-	18,  // 50: autoforward.ForwardRuleControlService.CreateRule:input_type -> autoforward.CreateRuleRequest
-	24,  // 51: autoforward.ForwardRuleControlService.UpdateRule:input_type -> autoforward.UpdateRuleRequest
-	29,  // 52: autoforward.ForwardRuleControlService.DeleteRule:input_type -> autoforward.DeleteRuleRequest
-	72,  // 53: autoforward.ForwardRuleControlService.TestRule:input_type -> autoforward.TestRuleRequest
-	83,  // 54: autoforward.ForwardRuleControlService.PauseRule:input_type -> autoforward.PauseRuleRequest
-	83,  // 55: autoforward.ForwardRuleControlService.ResumeRule:input_type -> autoforward.PauseRuleRequest
-	25,  // 56: autoforward.ForwardRuleControlService.GetRuleSettings:input_type -> autoforward.RuleSettingsRequest
-	27,  // 57: autoforward.ForwardRuleControlService.UpdateRuleSettings:input_type -> autoforward.UpdateRuleSettingsRequest
-	28,  // 58: autoforward.ForwardRuleControlService.GetRuleSettingsSchema:input_type -> autoforward.RuleSettingsSchemaRequest
-	79,  // 59: autoforward.DeliveryControlService.GetDeliveryStats:input_type -> autoforward.DeliveryStatsRequest
-	74,  // 60: autoforward.DeliveryControlService.ListDeadLetter:input_type -> autoforward.ListDeadLetterRequest
-	77,  // 61: autoforward.DeliveryControlService.ReplayDeadLetter:input_type -> autoforward.ReplayDeadLetterRequest
-	78,  // 62: autoforward.DeliveryControlService.PurgeDeadLetter:input_type -> autoforward.PurgeDeadLetterRequest
-	37,  // 63: autoforward.FilterControlService.ListFilters:input_type -> autoforward.ListFiltersRequest
-	34,  // 64: autoforward.FilterControlService.CreateFilter:input_type -> autoforward.CreateFilterRequest
-	35,  // 65: autoforward.FilterControlService.UpdateFilter:input_type -> autoforward.UpdateFilterRequest
-	36,  // 66: autoforward.FilterControlService.DeleteFilter:input_type -> autoforward.DeleteFilterRequest
-	43,  // 67: autoforward.AIControlService.ListAIConfigs:input_type -> autoforward.ListAIConfigsRequest
-	40,  // 68: autoforward.AIControlService.CreateAIConfig:input_type -> autoforward.CreateAIConfigRequest
-	41,  // 69: autoforward.AIControlService.UpdateAIConfig:input_type -> autoforward.UpdateAIConfigRequest
-	42,  // 70: autoforward.AIControlService.DeleteAIConfig:input_type -> autoforward.DeleteAIConfigRequest
-	45,  // 71: autoforward.AIControlService.TestAIRewrite:input_type -> autoforward.TestAIRewriteRequest
-	54,  // 72: autoforward.AIControlService.CheckProviderKey:input_type -> autoforward.CheckProviderKeyRequest
-	57,  // 73: autoforward.AIControlService.ListAIProviders:input_type -> autoforward.ListAIProvidersRequest
-	48,  // 74: autoforward.AIControlService.ListPromptTemplates:input_type -> autoforward.ListPromptTemplatesRequest
-	50,  // 75: autoforward.AIControlService.SavePromptTemplate:input_type -> autoforward.SavePromptTemplateRequest
-	51,  // 76: autoforward.AIControlService.DeletePromptTemplate:input_type -> autoforward.DeletePromptTemplateRequest
-	52,  // 77: autoforward.AIControlService.TestPrompt:input_type -> autoforward.TestPromptRequest
-	59,  // 78: autoforward.SystemStatusControlService.GetSystemStats:input_type -> autoforward.SystemStatsRequest
-	61,  // 79: autoforward.SystemStatusControlService.GetLogPolicy:input_type -> autoforward.LogPolicyRequest
-	62,  // 80: autoforward.SystemStatusControlService.SetLogPolicy:input_type -> autoforward.SetLogPolicyRequest
-	85,  // 81: autoforward.AuditControlService.QueryAuditEvents:input_type -> autoforward.QueryAuditEventsRequest
-	65,  // 82: autoforward.LogControlService.Log:input_type -> autoforward.LogRequest
-	66,  // 83: autoforward.LogControlService.QueryLogs:input_type -> autoforward.QueryLogsRequest
-	70,  // 84: autoforward.LogControlService.LogStats:input_type -> autoforward.LogStatsRequest
-	67,  // 85: autoforward.LogControlService.PurgeLogs:input_type -> autoforward.PurgeLogsRequest
-	88,  // 86: autoforward.BackupControlService.BackupExport:input_type -> autoforward.BackupExportRequest
-	90,  // 87: autoforward.BackupControlService.BackupImport:input_type -> autoforward.BackupImportRequest
-	94,  // 88: autoforward.AccountControlService.RegisterAccount:input_type -> autoforward.RegisterAccountRequest
-	96,  // 89: autoforward.AccountControlService.LoginAccount:input_type -> autoforward.LoginAccountRequest
-	98,  // 90: autoforward.AccountControlService.ValidateToken:input_type -> autoforward.ValidateTokenRequest
-	100, // 91: autoforward.AccountControlService.IssueWebToken:input_type -> autoforward.IssueWebTokenRequest
-	103, // 92: autoforward.AccountControlService.ExchangeWebLoginCode:input_type -> autoforward.ExchangeWebLoginCodeRequest
-	101, // 93: autoforward.AccountControlService.IssueLoginCode:input_type -> autoforward.IssueLoginCodeRequest
-	104, // 94: autoforward.AccountControlService.ChangePassword:input_type -> autoforward.ChangePasswordRequest
-	105, // 95: autoforward.AccountControlService.GetAccount:input_type -> autoforward.GetAccountRequest
-	106, // 96: autoforward.AdminControlService.GetOverview:input_type -> autoforward.AdminOverviewRequest
-	109, // 97: autoforward.AdminControlService.ListUsers:input_type -> autoforward.AdminListUsersRequest
-	111, // 98: autoforward.AdminControlService.SetUserStatus:input_type -> autoforward.AdminSetUserStatusRequest
-	112, // 99: autoforward.AdminControlService.Broadcast:input_type -> autoforward.AdminBroadcastRequest
-	114, // 100: autoforward.AdminControlService.GetSettings:input_type -> autoforward.AdminGetSettingsRequest
-	116, // 101: autoforward.AdminControlService.SaveSettings:input_type -> autoforward.AdminSaveSettingsRequest
-	118, // 102: autoforward.AdminControlService.ListAdmins:input_type -> autoforward.AdminListAdminsRequest
-	120, // 103: autoforward.AdminControlService.AddAdmin:input_type -> autoforward.AdminAddAdminRequest
-	121, // 104: autoforward.AdminControlService.RemoveAdmin:input_type -> autoforward.AdminRemoveAdminRequest
-	122, // 105: autoforward.AdminControlService.GetClientSettings:input_type -> autoforward.ClientSettingsRequest
-	124, // 106: autoforward.AdminControlService.SaveClientCredentials:input_type -> autoforward.ClientSaveCredentialsRequest
-	126, // 107: autoforward.BotTokenControlService.ListBotTokens:input_type -> autoforward.ListBotTokensRequest
-	128, // 108: autoforward.BotTokenControlService.CreateBotToken:input_type -> autoforward.CreateBotTokenRequest
-	130, // 109: autoforward.BotTokenControlService.DeleteBotToken:input_type -> autoforward.DeleteBotTokenRequest
-	131, // 110: autoforward.BotTokenControlService.GetBotDefaults:input_type -> autoforward.GetBotDefaultsRequest
-	132, // 111: autoforward.BotTokenControlService.SetBotDefaults:input_type -> autoforward.SetBotDefaultsRequest
-	135, // 112: autoforward.TaskControlService.CreateTask:input_type -> autoforward.CreateTaskRequest
-	137, // 113: autoforward.TaskControlService.GetTask:input_type -> autoforward.GetTaskRequest
-	139, // 114: autoforward.TaskControlService.ListTasks:input_type -> autoforward.ListTasksRequest
-	141, // 115: autoforward.TaskControlService.CancelTask:input_type -> autoforward.CancelTaskRequest
-	142, // 116: autoforward.TaskControlService.RetryTask:input_type -> autoforward.RetryTaskRequest
-	5,   // 117: autoforward.SessionControlService.ListSessions:output_type -> autoforward.ListSessionsResponse
-	7,   // 118: autoforward.SessionControlService.StartLogin:output_type -> autoforward.StartLoginResponse
-	9,   // 119: autoforward.SessionControlService.SubmitCode:output_type -> autoforward.SubmitCodeResponse
-	11,  // 120: autoforward.SessionControlService.SubmitPassword:output_type -> autoforward.SubmitPasswordResponse
-	13,  // 121: autoforward.SessionControlService.BackupSession:output_type -> autoforward.BackupSessionResponse
-	15,  // 122: autoforward.SessionControlService.RestoreSession:output_type -> autoforward.RestoreSessionResponse
-	2,   // 123: autoforward.SessionControlService.TerminateSession:output_type -> autoforward.StatusResponse
-	20,  // 124: autoforward.SessionControlService.ResolveChat:output_type -> autoforward.ResolveChatResponse
-	23,  // 125: autoforward.SessionControlService.ListChats:output_type -> autoforward.ListChatsResponse
-	32,  // 126: autoforward.ForwardRuleControlService.ListRules:output_type -> autoforward.ListRulesResponse
-	17,  // 127: autoforward.ForwardRuleControlService.GetRule:output_type -> autoforward.ForwardRule
-	17,  // 128: autoforward.ForwardRuleControlService.CreateRule:output_type -> autoforward.ForwardRule
-	17,  // 129: autoforward.ForwardRuleControlService.UpdateRule:output_type -> autoforward.ForwardRule
-	2,   // 130: autoforward.ForwardRuleControlService.DeleteRule:output_type -> autoforward.StatusResponse
-	73,  // 131: autoforward.ForwardRuleControlService.TestRule:output_type -> autoforward.TestRuleResponse
-	84,  // 132: autoforward.ForwardRuleControlService.PauseRule:output_type -> autoforward.RuleActionResponse
-	84,  // 133: autoforward.ForwardRuleControlService.ResumeRule:output_type -> autoforward.RuleActionResponse
-	26,  // 134: autoforward.ForwardRuleControlService.GetRuleSettings:output_type -> autoforward.RuleSettingsResponse
-	26,  // 135: autoforward.ForwardRuleControlService.UpdateRuleSettings:output_type -> autoforward.RuleSettingsResponse
-	26,  // 136: autoforward.ForwardRuleControlService.GetRuleSettingsSchema:output_type -> autoforward.RuleSettingsResponse
-	80,  // 137: autoforward.DeliveryControlService.GetDeliveryStats:output_type -> autoforward.DeliveryStatsResponse
-	76,  // 138: autoforward.DeliveryControlService.ListDeadLetter:output_type -> autoforward.ListDeadLetterResponse
-	84,  // 139: autoforward.DeliveryControlService.ReplayDeadLetter:output_type -> autoforward.RuleActionResponse
-	84,  // 140: autoforward.DeliveryControlService.PurgeDeadLetter:output_type -> autoforward.RuleActionResponse
-	38,  // 141: autoforward.FilterControlService.ListFilters:output_type -> autoforward.ListFiltersResponse
-	33,  // 142: autoforward.FilterControlService.CreateFilter:output_type -> autoforward.FilterRule
-	33,  // 143: autoforward.FilterControlService.UpdateFilter:output_type -> autoforward.FilterRule
-	2,   // 144: autoforward.FilterControlService.DeleteFilter:output_type -> autoforward.StatusResponse
-	44,  // 145: autoforward.AIControlService.ListAIConfigs:output_type -> autoforward.ListAIConfigsResponse
-	39,  // 146: autoforward.AIControlService.CreateAIConfig:output_type -> autoforward.AIConfig
-	39,  // 147: autoforward.AIControlService.UpdateAIConfig:output_type -> autoforward.AIConfig
-	2,   // 148: autoforward.AIControlService.DeleteAIConfig:output_type -> autoforward.StatusResponse
-	46,  // 149: autoforward.AIControlService.TestAIRewrite:output_type -> autoforward.TestAIRewriteResponse
-	55,  // 150: autoforward.AIControlService.CheckProviderKey:output_type -> autoforward.CheckProviderKeyResponse
-	58,  // 151: autoforward.AIControlService.ListAIProviders:output_type -> autoforward.ListAIProvidersResponse
-	49,  // 152: autoforward.AIControlService.ListPromptTemplates:output_type -> autoforward.ListPromptTemplatesResponse
-	47,  // 153: autoforward.AIControlService.SavePromptTemplate:output_type -> autoforward.PromptTemplate
-	2,   // 154: autoforward.AIControlService.DeletePromptTemplate:output_type -> autoforward.StatusResponse
-	53,  // 155: autoforward.AIControlService.TestPrompt:output_type -> autoforward.TestPromptResponse
-	60,  // 156: autoforward.SystemStatusControlService.GetSystemStats:output_type -> autoforward.SystemStatsResponse
-	63,  // 157: autoforward.SystemStatusControlService.GetLogPolicy:output_type -> autoforward.LogPolicyResponse
-	63,  // 158: autoforward.SystemStatusControlService.SetLogPolicy:output_type -> autoforward.LogPolicyResponse
-	87,  // 159: autoforward.AuditControlService.QueryAuditEvents:output_type -> autoforward.QueryAuditEventsResponse
-	2,   // 160: autoforward.LogControlService.Log:output_type -> autoforward.StatusResponse
-	69,  // 161: autoforward.LogControlService.QueryLogs:output_type -> autoforward.QueryLogsResponse
-	71,  // 162: autoforward.LogControlService.LogStats:output_type -> autoforward.LogStatsResponse
-	68,  // 163: autoforward.LogControlService.PurgeLogs:output_type -> autoforward.PurgeLogsResponse
-	89,  // 164: autoforward.BackupControlService.BackupExport:output_type -> autoforward.BackupExportResponse
-	91,  // 165: autoforward.BackupControlService.BackupImport:output_type -> autoforward.BackupImportResponse
-	95,  // 166: autoforward.AccountControlService.RegisterAccount:output_type -> autoforward.RegisterAccountResponse
-	97,  // 167: autoforward.AccountControlService.LoginAccount:output_type -> autoforward.LoginAccountResponse
-	99,  // 168: autoforward.AccountControlService.ValidateToken:output_type -> autoforward.ValidateTokenResponse
-	97,  // 169: autoforward.AccountControlService.IssueWebToken:output_type -> autoforward.LoginAccountResponse
-	97,  // 170: autoforward.AccountControlService.ExchangeWebLoginCode:output_type -> autoforward.LoginAccountResponse
-	102, // 171: autoforward.AccountControlService.IssueLoginCode:output_type -> autoforward.IssueLoginCodeResponse
-	2,   // 172: autoforward.AccountControlService.ChangePassword:output_type -> autoforward.StatusResponse
-	93,  // 173: autoforward.AccountControlService.GetAccount:output_type -> autoforward.WebAccount
-	107, // 174: autoforward.AdminControlService.GetOverview:output_type -> autoforward.AdminOverviewResponse
-	110, // 175: autoforward.AdminControlService.ListUsers:output_type -> autoforward.AdminListUsersResponse
-	2,   // 176: autoforward.AdminControlService.SetUserStatus:output_type -> autoforward.StatusResponse
-	113, // 177: autoforward.AdminControlService.Broadcast:output_type -> autoforward.AdminBroadcastResponse
-	115, // 178: autoforward.AdminControlService.GetSettings:output_type -> autoforward.AdminSettingsResponse
-	2,   // 179: autoforward.AdminControlService.SaveSettings:output_type -> autoforward.StatusResponse
-	119, // 180: autoforward.AdminControlService.ListAdmins:output_type -> autoforward.AdminListAdminsResponse
-	2,   // 181: autoforward.AdminControlService.AddAdmin:output_type -> autoforward.StatusResponse
-	2,   // 182: autoforward.AdminControlService.RemoveAdmin:output_type -> autoforward.StatusResponse
-	123, // 183: autoforward.AdminControlService.GetClientSettings:output_type -> autoforward.ClientSettingsResponse
-	2,   // 184: autoforward.AdminControlService.SaveClientCredentials:output_type -> autoforward.StatusResponse
-	127, // 185: autoforward.BotTokenControlService.ListBotTokens:output_type -> autoforward.ListBotTokensResponse
-	129, // 186: autoforward.BotTokenControlService.CreateBotToken:output_type -> autoforward.CreateBotTokenResponse
-	2,   // 187: autoforward.BotTokenControlService.DeleteBotToken:output_type -> autoforward.StatusResponse
-	133, // 188: autoforward.BotTokenControlService.GetBotDefaults:output_type -> autoforward.BotDefaultsResponse
-	133, // 189: autoforward.BotTokenControlService.SetBotDefaults:output_type -> autoforward.BotDefaultsResponse
-	136, // 190: autoforward.TaskControlService.CreateTask:output_type -> autoforward.CreateTaskResponse
-	138, // 191: autoforward.TaskControlService.GetTask:output_type -> autoforward.TaskResponse
-	140, // 192: autoforward.TaskControlService.ListTasks:output_type -> autoforward.ListTasksResponse
-	138, // 193: autoforward.TaskControlService.CancelTask:output_type -> autoforward.TaskResponse
-	138, // 194: autoforward.TaskControlService.RetryTask:output_type -> autoforward.TaskResponse
-	117, // [117:195] is the sub-list for method output_type
-	39,  // [39:117] is the sub-list for method input_type
-	39,  // [39:39] is the sub-list for extension type_name
-	39,  // [39:39] is the sub-list for extension extendee
-	0,   // [0:39] is the sub-list for field type_name
+	143, // 38: autoforward.UpdateAutoReplySettingsRequest.settings:type_name -> autoforward.AutoReplySettings
+	146, // 39: autoforward.ListAutoReplyPromptsResponse.prompts:type_name -> autoforward.AutoReplyPrompt
+	146, // 40: autoforward.SaveAutoReplyPromptRequest.prompt:type_name -> autoforward.AutoReplyPrompt
+	146, // 41: autoforward.ImportAutoReplyPromptsResponse.prompts:type_name -> autoforward.AutoReplyPrompt
+	156, // 42: autoforward.ListAutoReplyTargetsResponse.targets:type_name -> autoforward.AutoReplyTarget
+	156, // 43: autoforward.AddAutoReplyTargetsRequest.targets:type_name -> autoforward.AutoReplyTarget
+	156, // 44: autoforward.UpdateAutoReplyTargetRequest.target:type_name -> autoforward.AutoReplyTarget
+	156, // 45: autoforward.ResolveAutoReplyChatResponse.target:type_name -> autoforward.AutoReplyTarget
+	164, // 46: autoforward.ListAutoReplyRulesResponse.rules:type_name -> autoforward.AutoReplyRule
+	164, // 47: autoforward.SaveAutoReplyRuleRequest.rule:type_name -> autoforward.AutoReplyRule
+	170, // 48: autoforward.ListAutoReplyJobsResponse.jobs:type_name -> autoforward.AutoReplyJob
+	92,  // 49: autoforward.BackupImportResponse.StatsEntry.value:type_name -> autoforward.EntityImportStats
+	4,   // 50: autoforward.SessionControlService.ListSessions:input_type -> autoforward.ListSessionsRequest
+	6,   // 51: autoforward.SessionControlService.StartLogin:input_type -> autoforward.StartLoginRequest
+	8,   // 52: autoforward.SessionControlService.SubmitCode:input_type -> autoforward.SubmitCodeRequest
+	10,  // 53: autoforward.SessionControlService.SubmitPassword:input_type -> autoforward.SubmitPasswordRequest
+	12,  // 54: autoforward.SessionControlService.BackupSession:input_type -> autoforward.BackupSessionRequest
+	14,  // 55: autoforward.SessionControlService.RestoreSession:input_type -> autoforward.RestoreSessionRequest
+	16,  // 56: autoforward.SessionControlService.TerminateSession:input_type -> autoforward.TerminateSessionRequest
+	19,  // 57: autoforward.SessionControlService.ResolveChat:input_type -> autoforward.ResolveChatRequest
+	21,  // 58: autoforward.SessionControlService.ListChats:input_type -> autoforward.ListChatsRequest
+	30,  // 59: autoforward.ForwardRuleControlService.ListRules:input_type -> autoforward.ListRulesRequest
+	31,  // 60: autoforward.ForwardRuleControlService.GetRule:input_type -> autoforward.GetRuleRequest
+	18,  // 61: autoforward.ForwardRuleControlService.CreateRule:input_type -> autoforward.CreateRuleRequest
+	24,  // 62: autoforward.ForwardRuleControlService.UpdateRule:input_type -> autoforward.UpdateRuleRequest
+	29,  // 63: autoforward.ForwardRuleControlService.DeleteRule:input_type -> autoforward.DeleteRuleRequest
+	72,  // 64: autoforward.ForwardRuleControlService.TestRule:input_type -> autoforward.TestRuleRequest
+	83,  // 65: autoforward.ForwardRuleControlService.PauseRule:input_type -> autoforward.PauseRuleRequest
+	83,  // 66: autoforward.ForwardRuleControlService.ResumeRule:input_type -> autoforward.PauseRuleRequest
+	25,  // 67: autoforward.ForwardRuleControlService.GetRuleSettings:input_type -> autoforward.RuleSettingsRequest
+	27,  // 68: autoforward.ForwardRuleControlService.UpdateRuleSettings:input_type -> autoforward.UpdateRuleSettingsRequest
+	28,  // 69: autoforward.ForwardRuleControlService.GetRuleSettingsSchema:input_type -> autoforward.RuleSettingsSchemaRequest
+	79,  // 70: autoforward.DeliveryControlService.GetDeliveryStats:input_type -> autoforward.DeliveryStatsRequest
+	74,  // 71: autoforward.DeliveryControlService.ListDeadLetter:input_type -> autoforward.ListDeadLetterRequest
+	77,  // 72: autoforward.DeliveryControlService.ReplayDeadLetter:input_type -> autoforward.ReplayDeadLetterRequest
+	78,  // 73: autoforward.DeliveryControlService.PurgeDeadLetter:input_type -> autoforward.PurgeDeadLetterRequest
+	37,  // 74: autoforward.FilterControlService.ListFilters:input_type -> autoforward.ListFiltersRequest
+	34,  // 75: autoforward.FilterControlService.CreateFilter:input_type -> autoforward.CreateFilterRequest
+	35,  // 76: autoforward.FilterControlService.UpdateFilter:input_type -> autoforward.UpdateFilterRequest
+	36,  // 77: autoforward.FilterControlService.DeleteFilter:input_type -> autoforward.DeleteFilterRequest
+	43,  // 78: autoforward.AIControlService.ListAIConfigs:input_type -> autoforward.ListAIConfigsRequest
+	40,  // 79: autoforward.AIControlService.CreateAIConfig:input_type -> autoforward.CreateAIConfigRequest
+	41,  // 80: autoforward.AIControlService.UpdateAIConfig:input_type -> autoforward.UpdateAIConfigRequest
+	42,  // 81: autoforward.AIControlService.DeleteAIConfig:input_type -> autoforward.DeleteAIConfigRequest
+	45,  // 82: autoforward.AIControlService.TestAIRewrite:input_type -> autoforward.TestAIRewriteRequest
+	54,  // 83: autoforward.AIControlService.CheckProviderKey:input_type -> autoforward.CheckProviderKeyRequest
+	57,  // 84: autoforward.AIControlService.ListAIProviders:input_type -> autoforward.ListAIProvidersRequest
+	48,  // 85: autoforward.AIControlService.ListPromptTemplates:input_type -> autoforward.ListPromptTemplatesRequest
+	50,  // 86: autoforward.AIControlService.SavePromptTemplate:input_type -> autoforward.SavePromptTemplateRequest
+	51,  // 87: autoforward.AIControlService.DeletePromptTemplate:input_type -> autoforward.DeletePromptTemplateRequest
+	52,  // 88: autoforward.AIControlService.TestPrompt:input_type -> autoforward.TestPromptRequest
+	59,  // 89: autoforward.SystemStatusControlService.GetSystemStats:input_type -> autoforward.SystemStatsRequest
+	61,  // 90: autoforward.SystemStatusControlService.GetLogPolicy:input_type -> autoforward.LogPolicyRequest
+	62,  // 91: autoforward.SystemStatusControlService.SetLogPolicy:input_type -> autoforward.SetLogPolicyRequest
+	85,  // 92: autoforward.AuditControlService.QueryAuditEvents:input_type -> autoforward.QueryAuditEventsRequest
+	65,  // 93: autoforward.LogControlService.Log:input_type -> autoforward.LogRequest
+	66,  // 94: autoforward.LogControlService.QueryLogs:input_type -> autoforward.QueryLogsRequest
+	70,  // 95: autoforward.LogControlService.LogStats:input_type -> autoforward.LogStatsRequest
+	67,  // 96: autoforward.LogControlService.PurgeLogs:input_type -> autoforward.PurgeLogsRequest
+	88,  // 97: autoforward.BackupControlService.BackupExport:input_type -> autoforward.BackupExportRequest
+	90,  // 98: autoforward.BackupControlService.BackupImport:input_type -> autoforward.BackupImportRequest
+	94,  // 99: autoforward.AccountControlService.RegisterAccount:input_type -> autoforward.RegisterAccountRequest
+	96,  // 100: autoforward.AccountControlService.LoginAccount:input_type -> autoforward.LoginAccountRequest
+	98,  // 101: autoforward.AccountControlService.ValidateToken:input_type -> autoforward.ValidateTokenRequest
+	100, // 102: autoforward.AccountControlService.IssueWebToken:input_type -> autoforward.IssueWebTokenRequest
+	103, // 103: autoforward.AccountControlService.ExchangeWebLoginCode:input_type -> autoforward.ExchangeWebLoginCodeRequest
+	101, // 104: autoforward.AccountControlService.IssueLoginCode:input_type -> autoforward.IssueLoginCodeRequest
+	104, // 105: autoforward.AccountControlService.ChangePassword:input_type -> autoforward.ChangePasswordRequest
+	105, // 106: autoforward.AccountControlService.GetAccount:input_type -> autoforward.GetAccountRequest
+	106, // 107: autoforward.AdminControlService.GetOverview:input_type -> autoforward.AdminOverviewRequest
+	109, // 108: autoforward.AdminControlService.ListUsers:input_type -> autoforward.AdminListUsersRequest
+	111, // 109: autoforward.AdminControlService.SetUserStatus:input_type -> autoforward.AdminSetUserStatusRequest
+	112, // 110: autoforward.AdminControlService.Broadcast:input_type -> autoforward.AdminBroadcastRequest
+	114, // 111: autoforward.AdminControlService.GetSettings:input_type -> autoforward.AdminGetSettingsRequest
+	116, // 112: autoforward.AdminControlService.SaveSettings:input_type -> autoforward.AdminSaveSettingsRequest
+	118, // 113: autoforward.AdminControlService.ListAdmins:input_type -> autoforward.AdminListAdminsRequest
+	120, // 114: autoforward.AdminControlService.AddAdmin:input_type -> autoforward.AdminAddAdminRequest
+	121, // 115: autoforward.AdminControlService.RemoveAdmin:input_type -> autoforward.AdminRemoveAdminRequest
+	122, // 116: autoforward.AdminControlService.GetClientSettings:input_type -> autoforward.ClientSettingsRequest
+	124, // 117: autoforward.AdminControlService.SaveClientCredentials:input_type -> autoforward.ClientSaveCredentialsRequest
+	126, // 118: autoforward.BotTokenControlService.ListBotTokens:input_type -> autoforward.ListBotTokensRequest
+	128, // 119: autoforward.BotTokenControlService.CreateBotToken:input_type -> autoforward.CreateBotTokenRequest
+	130, // 120: autoforward.BotTokenControlService.DeleteBotToken:input_type -> autoforward.DeleteBotTokenRequest
+	131, // 121: autoforward.BotTokenControlService.GetBotDefaults:input_type -> autoforward.GetBotDefaultsRequest
+	132, // 122: autoforward.BotTokenControlService.SetBotDefaults:input_type -> autoforward.SetBotDefaultsRequest
+	135, // 123: autoforward.TaskControlService.CreateTask:input_type -> autoforward.CreateTaskRequest
+	137, // 124: autoforward.TaskControlService.GetTask:input_type -> autoforward.GetTaskRequest
+	139, // 125: autoforward.TaskControlService.ListTasks:input_type -> autoforward.ListTasksRequest
+	141, // 126: autoforward.TaskControlService.CancelTask:input_type -> autoforward.CancelTaskRequest
+	142, // 127: autoforward.TaskControlService.RetryTask:input_type -> autoforward.RetryTaskRequest
+	144, // 128: autoforward.AutoReplyControlService.GetAutoReplySettings:input_type -> autoforward.GetAutoReplySettingsRequest
+	145, // 129: autoforward.AutoReplyControlService.UpdateAutoReplySettings:input_type -> autoforward.UpdateAutoReplySettingsRequest
+	147, // 130: autoforward.AutoReplyControlService.ListAutoReplyPrompts:input_type -> autoforward.ListAutoReplyPromptsRequest
+	149, // 131: autoforward.AutoReplyControlService.SaveAutoReplyPrompt:input_type -> autoforward.SaveAutoReplyPromptRequest
+	150, // 132: autoforward.AutoReplyControlService.DeleteAutoReplyPrompt:input_type -> autoforward.DeleteAutoReplyPromptRequest
+	151, // 133: autoforward.AutoReplyControlService.DuplicateAutoReplyPrompt:input_type -> autoforward.DuplicateAutoReplyPromptRequest
+	152, // 134: autoforward.AutoReplyControlService.ExportAutoReplyPrompts:input_type -> autoforward.ExportAutoReplyPromptsRequest
+	154, // 135: autoforward.AutoReplyControlService.ImportAutoReplyPrompts:input_type -> autoforward.ImportAutoReplyPromptsRequest
+	157, // 136: autoforward.AutoReplyControlService.ListAutoReplyTargets:input_type -> autoforward.ListAutoReplyTargetsRequest
+	159, // 137: autoforward.AutoReplyControlService.AddAutoReplyTargets:input_type -> autoforward.AddAutoReplyTargetsRequest
+	160, // 138: autoforward.AutoReplyControlService.UpdateAutoReplyTarget:input_type -> autoforward.UpdateAutoReplyTargetRequest
+	161, // 139: autoforward.AutoReplyControlService.RemoveAutoReplyTargets:input_type -> autoforward.RemoveAutoReplyTargetsRequest
+	162, // 140: autoforward.AutoReplyControlService.ResolveAutoReplyChat:input_type -> autoforward.ResolveAutoReplyChatRequest
+	165, // 141: autoforward.AutoReplyControlService.ListAutoReplyRules:input_type -> autoforward.ListAutoReplyRulesRequest
+	167, // 142: autoforward.AutoReplyControlService.SaveAutoReplyRule:input_type -> autoforward.SaveAutoReplyRuleRequest
+	168, // 143: autoforward.AutoReplyControlService.DeleteAutoReplyRule:input_type -> autoforward.DeleteAutoReplyRuleRequest
+	169, // 144: autoforward.AutoReplyControlService.ReorderAutoReplyRules:input_type -> autoforward.ReorderAutoReplyRulesRequest
+	171, // 145: autoforward.AutoReplyControlService.ListAutoReplyJobs:input_type -> autoforward.ListAutoReplyJobsRequest
+	173, // 146: autoforward.AutoReplyControlService.CancelAutoReplyJob:input_type -> autoforward.AutoReplyJobRequest
+	173, // 147: autoforward.AutoReplyControlService.RetryAutoReplyJob:input_type -> autoforward.AutoReplyJobRequest
+	174, // 148: autoforward.AutoReplyControlService.GetAutoReplyStats:input_type -> autoforward.GetAutoReplyStatsRequest
+	176, // 149: autoforward.AutoReplyControlService.PreviewAutoReply:input_type -> autoforward.PreviewAutoReplyRequest
+	5,   // 150: autoforward.SessionControlService.ListSessions:output_type -> autoforward.ListSessionsResponse
+	7,   // 151: autoforward.SessionControlService.StartLogin:output_type -> autoforward.StartLoginResponse
+	9,   // 152: autoforward.SessionControlService.SubmitCode:output_type -> autoforward.SubmitCodeResponse
+	11,  // 153: autoforward.SessionControlService.SubmitPassword:output_type -> autoforward.SubmitPasswordResponse
+	13,  // 154: autoforward.SessionControlService.BackupSession:output_type -> autoforward.BackupSessionResponse
+	15,  // 155: autoforward.SessionControlService.RestoreSession:output_type -> autoforward.RestoreSessionResponse
+	2,   // 156: autoforward.SessionControlService.TerminateSession:output_type -> autoforward.StatusResponse
+	20,  // 157: autoforward.SessionControlService.ResolveChat:output_type -> autoforward.ResolveChatResponse
+	23,  // 158: autoforward.SessionControlService.ListChats:output_type -> autoforward.ListChatsResponse
+	32,  // 159: autoforward.ForwardRuleControlService.ListRules:output_type -> autoforward.ListRulesResponse
+	17,  // 160: autoforward.ForwardRuleControlService.GetRule:output_type -> autoforward.ForwardRule
+	17,  // 161: autoforward.ForwardRuleControlService.CreateRule:output_type -> autoforward.ForwardRule
+	17,  // 162: autoforward.ForwardRuleControlService.UpdateRule:output_type -> autoforward.ForwardRule
+	2,   // 163: autoforward.ForwardRuleControlService.DeleteRule:output_type -> autoforward.StatusResponse
+	73,  // 164: autoforward.ForwardRuleControlService.TestRule:output_type -> autoforward.TestRuleResponse
+	84,  // 165: autoforward.ForwardRuleControlService.PauseRule:output_type -> autoforward.RuleActionResponse
+	84,  // 166: autoforward.ForwardRuleControlService.ResumeRule:output_type -> autoforward.RuleActionResponse
+	26,  // 167: autoforward.ForwardRuleControlService.GetRuleSettings:output_type -> autoforward.RuleSettingsResponse
+	26,  // 168: autoforward.ForwardRuleControlService.UpdateRuleSettings:output_type -> autoforward.RuleSettingsResponse
+	26,  // 169: autoforward.ForwardRuleControlService.GetRuleSettingsSchema:output_type -> autoforward.RuleSettingsResponse
+	80,  // 170: autoforward.DeliveryControlService.GetDeliveryStats:output_type -> autoforward.DeliveryStatsResponse
+	76,  // 171: autoforward.DeliveryControlService.ListDeadLetter:output_type -> autoforward.ListDeadLetterResponse
+	84,  // 172: autoforward.DeliveryControlService.ReplayDeadLetter:output_type -> autoforward.RuleActionResponse
+	84,  // 173: autoforward.DeliveryControlService.PurgeDeadLetter:output_type -> autoforward.RuleActionResponse
+	38,  // 174: autoforward.FilterControlService.ListFilters:output_type -> autoforward.ListFiltersResponse
+	33,  // 175: autoforward.FilterControlService.CreateFilter:output_type -> autoforward.FilterRule
+	33,  // 176: autoforward.FilterControlService.UpdateFilter:output_type -> autoforward.FilterRule
+	2,   // 177: autoforward.FilterControlService.DeleteFilter:output_type -> autoforward.StatusResponse
+	44,  // 178: autoforward.AIControlService.ListAIConfigs:output_type -> autoforward.ListAIConfigsResponse
+	39,  // 179: autoforward.AIControlService.CreateAIConfig:output_type -> autoforward.AIConfig
+	39,  // 180: autoforward.AIControlService.UpdateAIConfig:output_type -> autoforward.AIConfig
+	2,   // 181: autoforward.AIControlService.DeleteAIConfig:output_type -> autoforward.StatusResponse
+	46,  // 182: autoforward.AIControlService.TestAIRewrite:output_type -> autoforward.TestAIRewriteResponse
+	55,  // 183: autoforward.AIControlService.CheckProviderKey:output_type -> autoforward.CheckProviderKeyResponse
+	58,  // 184: autoforward.AIControlService.ListAIProviders:output_type -> autoforward.ListAIProvidersResponse
+	49,  // 185: autoforward.AIControlService.ListPromptTemplates:output_type -> autoforward.ListPromptTemplatesResponse
+	47,  // 186: autoforward.AIControlService.SavePromptTemplate:output_type -> autoforward.PromptTemplate
+	2,   // 187: autoforward.AIControlService.DeletePromptTemplate:output_type -> autoforward.StatusResponse
+	53,  // 188: autoforward.AIControlService.TestPrompt:output_type -> autoforward.TestPromptResponse
+	60,  // 189: autoforward.SystemStatusControlService.GetSystemStats:output_type -> autoforward.SystemStatsResponse
+	63,  // 190: autoforward.SystemStatusControlService.GetLogPolicy:output_type -> autoforward.LogPolicyResponse
+	63,  // 191: autoforward.SystemStatusControlService.SetLogPolicy:output_type -> autoforward.LogPolicyResponse
+	87,  // 192: autoforward.AuditControlService.QueryAuditEvents:output_type -> autoforward.QueryAuditEventsResponse
+	2,   // 193: autoforward.LogControlService.Log:output_type -> autoforward.StatusResponse
+	69,  // 194: autoforward.LogControlService.QueryLogs:output_type -> autoforward.QueryLogsResponse
+	71,  // 195: autoforward.LogControlService.LogStats:output_type -> autoforward.LogStatsResponse
+	68,  // 196: autoforward.LogControlService.PurgeLogs:output_type -> autoforward.PurgeLogsResponse
+	89,  // 197: autoforward.BackupControlService.BackupExport:output_type -> autoforward.BackupExportResponse
+	91,  // 198: autoforward.BackupControlService.BackupImport:output_type -> autoforward.BackupImportResponse
+	95,  // 199: autoforward.AccountControlService.RegisterAccount:output_type -> autoforward.RegisterAccountResponse
+	97,  // 200: autoforward.AccountControlService.LoginAccount:output_type -> autoforward.LoginAccountResponse
+	99,  // 201: autoforward.AccountControlService.ValidateToken:output_type -> autoforward.ValidateTokenResponse
+	97,  // 202: autoforward.AccountControlService.IssueWebToken:output_type -> autoforward.LoginAccountResponse
+	97,  // 203: autoforward.AccountControlService.ExchangeWebLoginCode:output_type -> autoforward.LoginAccountResponse
+	102, // 204: autoforward.AccountControlService.IssueLoginCode:output_type -> autoforward.IssueLoginCodeResponse
+	2,   // 205: autoforward.AccountControlService.ChangePassword:output_type -> autoforward.StatusResponse
+	93,  // 206: autoforward.AccountControlService.GetAccount:output_type -> autoforward.WebAccount
+	107, // 207: autoforward.AdminControlService.GetOverview:output_type -> autoforward.AdminOverviewResponse
+	110, // 208: autoforward.AdminControlService.ListUsers:output_type -> autoforward.AdminListUsersResponse
+	2,   // 209: autoforward.AdminControlService.SetUserStatus:output_type -> autoforward.StatusResponse
+	113, // 210: autoforward.AdminControlService.Broadcast:output_type -> autoforward.AdminBroadcastResponse
+	115, // 211: autoforward.AdminControlService.GetSettings:output_type -> autoforward.AdminSettingsResponse
+	2,   // 212: autoforward.AdminControlService.SaveSettings:output_type -> autoforward.StatusResponse
+	119, // 213: autoforward.AdminControlService.ListAdmins:output_type -> autoforward.AdminListAdminsResponse
+	2,   // 214: autoforward.AdminControlService.AddAdmin:output_type -> autoforward.StatusResponse
+	2,   // 215: autoforward.AdminControlService.RemoveAdmin:output_type -> autoforward.StatusResponse
+	123, // 216: autoforward.AdminControlService.GetClientSettings:output_type -> autoforward.ClientSettingsResponse
+	2,   // 217: autoforward.AdminControlService.SaveClientCredentials:output_type -> autoforward.StatusResponse
+	127, // 218: autoforward.BotTokenControlService.ListBotTokens:output_type -> autoforward.ListBotTokensResponse
+	129, // 219: autoforward.BotTokenControlService.CreateBotToken:output_type -> autoforward.CreateBotTokenResponse
+	2,   // 220: autoforward.BotTokenControlService.DeleteBotToken:output_type -> autoforward.StatusResponse
+	133, // 221: autoforward.BotTokenControlService.GetBotDefaults:output_type -> autoforward.BotDefaultsResponse
+	133, // 222: autoforward.BotTokenControlService.SetBotDefaults:output_type -> autoforward.BotDefaultsResponse
+	136, // 223: autoforward.TaskControlService.CreateTask:output_type -> autoforward.CreateTaskResponse
+	138, // 224: autoforward.TaskControlService.GetTask:output_type -> autoforward.TaskResponse
+	140, // 225: autoforward.TaskControlService.ListTasks:output_type -> autoforward.ListTasksResponse
+	138, // 226: autoforward.TaskControlService.CancelTask:output_type -> autoforward.TaskResponse
+	138, // 227: autoforward.TaskControlService.RetryTask:output_type -> autoforward.TaskResponse
+	143, // 228: autoforward.AutoReplyControlService.GetAutoReplySettings:output_type -> autoforward.AutoReplySettings
+	143, // 229: autoforward.AutoReplyControlService.UpdateAutoReplySettings:output_type -> autoforward.AutoReplySettings
+	148, // 230: autoforward.AutoReplyControlService.ListAutoReplyPrompts:output_type -> autoforward.ListAutoReplyPromptsResponse
+	146, // 231: autoforward.AutoReplyControlService.SaveAutoReplyPrompt:output_type -> autoforward.AutoReplyPrompt
+	2,   // 232: autoforward.AutoReplyControlService.DeleteAutoReplyPrompt:output_type -> autoforward.StatusResponse
+	146, // 233: autoforward.AutoReplyControlService.DuplicateAutoReplyPrompt:output_type -> autoforward.AutoReplyPrompt
+	153, // 234: autoforward.AutoReplyControlService.ExportAutoReplyPrompts:output_type -> autoforward.ExportAutoReplyPromptsResponse
+	155, // 235: autoforward.AutoReplyControlService.ImportAutoReplyPrompts:output_type -> autoforward.ImportAutoReplyPromptsResponse
+	158, // 236: autoforward.AutoReplyControlService.ListAutoReplyTargets:output_type -> autoforward.ListAutoReplyTargetsResponse
+	158, // 237: autoforward.AutoReplyControlService.AddAutoReplyTargets:output_type -> autoforward.ListAutoReplyTargetsResponse
+	156, // 238: autoforward.AutoReplyControlService.UpdateAutoReplyTarget:output_type -> autoforward.AutoReplyTarget
+	2,   // 239: autoforward.AutoReplyControlService.RemoveAutoReplyTargets:output_type -> autoforward.StatusResponse
+	163, // 240: autoforward.AutoReplyControlService.ResolveAutoReplyChat:output_type -> autoforward.ResolveAutoReplyChatResponse
+	166, // 241: autoforward.AutoReplyControlService.ListAutoReplyRules:output_type -> autoforward.ListAutoReplyRulesResponse
+	164, // 242: autoforward.AutoReplyControlService.SaveAutoReplyRule:output_type -> autoforward.AutoReplyRule
+	2,   // 243: autoforward.AutoReplyControlService.DeleteAutoReplyRule:output_type -> autoforward.StatusResponse
+	166, // 244: autoforward.AutoReplyControlService.ReorderAutoReplyRules:output_type -> autoforward.ListAutoReplyRulesResponse
+	172, // 245: autoforward.AutoReplyControlService.ListAutoReplyJobs:output_type -> autoforward.ListAutoReplyJobsResponse
+	2,   // 246: autoforward.AutoReplyControlService.CancelAutoReplyJob:output_type -> autoforward.StatusResponse
+	2,   // 247: autoforward.AutoReplyControlService.RetryAutoReplyJob:output_type -> autoforward.StatusResponse
+	175, // 248: autoforward.AutoReplyControlService.GetAutoReplyStats:output_type -> autoforward.AutoReplyStatsResponse
+	177, // 249: autoforward.AutoReplyControlService.PreviewAutoReply:output_type -> autoforward.PreviewAutoReplyResponse
+	150, // [150:250] is the sub-list for method output_type
+	50,  // [50:150] is the sub-list for method input_type
+	50,  // [50:50] is the sub-list for extension type_name
+	50,  // [50:50] is the sub-list for extension extendee
+	0,   // [0:50] is the sub-list for field type_name
 }
 
 func init() { file_autoforward_proto_init() }
@@ -11838,9 +14875,9 @@ func file_autoforward_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_autoforward_proto_rawDesc), len(file_autoforward_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   147,
+			NumMessages:   182,
 			NumExtensions: 0,
-			NumServices:   13,
+			NumServices:   14,
 		},
 		GoTypes:           file_autoforward_proto_goTypes,
 		DependencyIndexes: file_autoforward_proto_depIdxs,

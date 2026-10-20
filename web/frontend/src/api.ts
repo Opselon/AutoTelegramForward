@@ -43,6 +43,17 @@ import type {
   SaveFilterRuleRequest,
   SavePromptTemplateRequest,
   SaveRuleRequest,
+  AutoReplySettings,
+  AutoReplyPrompt,
+  AutoReplyPromptBundle,
+  AutoReplyTarget,
+  AutoReplyRule,
+  AutoReplyJob,
+  AutoReplyJobPage,
+  AutoReplyStats,
+  AutoReplyPreviewResponse,
+  SaveAutoReplyPromptRequest,
+  SaveAutoReplyRuleRequest,
   ServicesHealthResponse,
   Session,
   SetupReport,
@@ -709,6 +720,112 @@ export const api = {
   retryTask: (taskId: string) =>
     fetchJson<{ task: UserTask }>(`${API_BASE}/tasks/${encodeURIComponent(taskId)}/retry`, { method: 'POST' }),
 
+
+  // --------------------------------------------------- AI auto-reply (v28)
+  // Tenant identity is the bearer token only. The Go layer derives the owner
+  // from the verified JWT and the core refuses every unscoped read, so no
+  // owner id is ever sent or accepted here.
+  getAutoReplySettings: () =>
+    fetchJson<{ settings: AutoReplySettings }>(`${API_BASE}/auto-reply/settings`),
+  updateAutoReplySettings: (req: Partial<AutoReplySettings> & { update_mask?: string[] }) =>
+    fetchJson<{ settings: AutoReplySettings }>(`${API_BASE}/auto-reply/settings`, {
+      method: 'PUT',
+      body: JSON.stringify(req),
+    }),
+  listAutoReplyPrompts: (search = '') =>
+    fetchJson<{ prompts: AutoReplyPrompt[]; total: number }>(
+      `${API_BASE}/auto-reply/prompts${search ? `?search=${encodeURIComponent(search)}` : ''}`,
+    ),
+  saveAutoReplyPrompt: (req: SaveAutoReplyPromptRequest & { id?: string }) =>
+    fetchJson<{ prompt: AutoReplyPrompt }>(
+      req.id
+        ? `${API_BASE}/auto-reply/prompts/${encodeURIComponent(req.id)}`
+        : `${API_BASE}/auto-reply/prompts`,
+      { method: 'POST', body: JSON.stringify(req) },
+    ),
+  deleteAutoReplyPrompt: (id: string) =>
+    fetchJson<{ removed: number }>(`${API_BASE}/auto-reply/prompts/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  duplicateAutoReplyPrompt: (id: string) =>
+    fetchJson<{ prompt: AutoReplyPrompt }>(
+      `${API_BASE}/auto-reply/prompts/${encodeURIComponent(id)}/duplicate`,
+      { method: 'POST' },
+    ),
+  exportAutoReplyPrompts: (ids: string[] = []) =>
+    fetchJson<{ document: AutoReplyPromptBundle }>(
+      `${API_BASE}/auto-reply/prompts/export${ids.length ? `?ids=${ids.map(encodeURIComponent).join(',')}` : ''}`,
+    ),
+  importAutoReplyPrompts: (document: AutoReplyPromptBundle) =>
+    fetchJson<{ imported: number; skipped: number; failed: number }>(
+      `${API_BASE}/auto-reply/prompts/import`,
+      { method: 'POST', body: JSON.stringify(document) },
+    ),
+  listAutoReplyTargets: (search = '', enabledOnly = false) =>
+    fetchJson<{ targets: AutoReplyTarget[] }>(
+      `${API_BASE}/auto-reply/targets?search=${encodeURIComponent(search)}&enabled_only=${enabledOnly ? '1' : '0'}`,
+    ),
+  addAutoReplyTargets: (targets: { chat_id: string; title?: string; username?: string; note?: string }[]) =>
+    fetchJson<{ added: number; targets: AutoReplyTarget[] }>(`${API_BASE}/auto-reply/targets`, {
+      method: 'POST',
+      body: JSON.stringify({ targets }),
+    }),
+  updateAutoReplyTarget: (chatId: string, patch: Partial<AutoReplyTarget>) =>
+    fetchJson<{ target: AutoReplyTarget }>(
+      `${API_BASE}/auto-reply/targets/${encodeURIComponent(chatId)}`,
+      { method: 'PUT', body: JSON.stringify(patch) },
+    ),
+  removeAutoReplyTargets: (chatIds: string[]) =>
+    fetchJson<{ removed: number }>(`${API_BASE}/auto-reply/targets`, {
+      method: 'DELETE',
+      body: JSON.stringify({ chat_ids: chatIds }),
+    }),
+  resolveAutoReplyChat: (query: string, sessionId = '') =>
+    fetchJson<{ found: boolean; target: AutoReplyTarget | null }>(
+      `${API_BASE}/auto-reply/targets/resolve`,
+      { method: 'POST', body: JSON.stringify({ session_id: sessionId, query }) },
+    ),
+  listAutoReplyRules: () =>
+    fetchJson<{ rules: AutoReplyRule[] }>(`${API_BASE}/auto-reply/rules`),
+  saveAutoReplyRule: (req: SaveAutoReplyRuleRequest & { id?: string }) =>
+    fetchJson<{ rule: AutoReplyRule }>(
+      req.id
+        ? `${API_BASE}/auto-reply/rules/${encodeURIComponent(req.id)}`
+        : `${API_BASE}/auto-reply/rules`,
+      { method: 'POST', body: JSON.stringify(req) },
+    ),
+  deleteAutoReplyRule: (id: string) =>
+    fetchJson<{ removed: number }>(`${API_BASE}/auto-reply/rules/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  reorderAutoReplyRules: (ruleIds: string[]) =>
+    fetchJson<{ rules: AutoReplyRule[] }>(`${API_BASE}/auto-reply/rules/reorder`, {
+      method: 'POST',
+      body: JSON.stringify({ rule_ids: ruleIds }),
+    }),
+  listAutoReplyJobs: (params: { status?: string; chat_id?: string; limit?: number; offset?: number } = {}) => {
+    const q = new URLSearchParams()
+    if (params.status) q.set('status', params.status)
+    if (params.chat_id) q.set('chat_id', params.chat_id)
+    if (params.limit !== undefined) q.set('limit', String(params.limit))
+    if (params.offset !== undefined) q.set('offset', String(params.offset))
+    return fetchJson<AutoReplyJobPage>(`${API_BASE}/auto-reply/jobs?${q.toString()}`)
+  },
+  retryAutoReplyJob: (id: string) =>
+    fetchJson<{ job: AutoReplyJob }>(`${API_BASE}/auto-reply/jobs/${encodeURIComponent(id)}/retry`, {
+      method: 'POST',
+    }),
+  cancelAutoReplyJob: (id: string) =>
+    fetchJson<{ job: AutoReplyJob }>(`${API_BASE}/auto-reply/jobs/${encodeURIComponent(id)}/cancel`, {
+      method: 'POST',
+    }),
+  getAutoReplyStats: () =>
+    fetchJson<{ stats: AutoReplyStats }>(`${API_BASE}/auto-reply/stats`),
+  previewAutoReply: (inboundText: string, promptId = '', aiConfigId = '') =>
+    fetchJson<{ result: AutoReplyPreviewResponse }>(`${API_BASE}/auto-reply/preview`, {
+      method: 'POST',
+      body: JSON.stringify({ inbound_text: inboundText, prompt_id: promptId, ai_config_id: aiConfigId }),
+    }),
   // ------------------------------------------------------------ Diagnostics
   diagnostics: () => fetchJson<DiagnosticsResponse>(`${API_BASE}/diagnostics`),
 
