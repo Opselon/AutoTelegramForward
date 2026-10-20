@@ -6,7 +6,7 @@ import Icon from '../../components/Icon.astro';
 import repoInfo from '../../data/repo-info.json';
 import { url } from '../../utils/paths';
 
-const pageTitle = 'FAQ & technical glossary';
+const pageTitle = 'Telegram FAQ & Technical Glossary';
 const pageDesc =
   'Straight answers on forwarding modes, multi-source routing, content rules, AI rewriting, rate limits and tenancy, plus a glossary of the terms used here.';
 
@@ -210,6 +210,7 @@ const allFaq = sections.flatMap((section) => section.items);
 ---
 
 <DocsLayout
+  heading="FAQ & technical glossary"
   title={pageTitle}
   description={pageDesc}
   path="/faq/"

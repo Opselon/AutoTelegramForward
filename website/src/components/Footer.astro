@@ -9,7 +9,7 @@ const year = new Date().getFullYear();
 const localeCount = repoInfo.locales.length;
 ---
 
-<footer class="bg-slate-950 border-t border-slate-900 text-slate-400 text-sm mt-8">
+<footer class="site-footer bg-slate-950 text-slate-400 text-sm mt-8">
   <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-8 lg:gap-10">
       <div class="lg:col-span-2">
@@ -52,7 +52,7 @@ const localeCount = repoInfo.locales.length;
       {
         footerColumns.map((column) => (
           <nav aria-label={column.title}>
-            <h2 class="text-white font-semibold text-xs uppercase tracking-wider mb-3">{column.title}</h2>
+            <p class="footer-heading text-white font-semibold text-xs uppercase tracking-wider mb-3">{column.title}</p>
             <ul class="space-y-2 list-none p-0 m-0">
               {column.links.map((link) => (
                 <li>
@@ -72,7 +72,7 @@ const localeCount = repoInfo.locales.length;
     </div>
 
     <div class="mt-10 pt-8 border-t border-slate-900/80">
-      <h2 class="text-white font-semibold text-xs uppercase tracking-wider mb-3">Interface languages</h2>
+      <p class="footer-heading text-white font-semibold text-xs uppercase tracking-wider mb-3">Interface languages</p>
       <ul class="flex flex-wrap gap-2 text-xs list-none p-0 m-0">
         {
           repoInfo.locales.map((code: string) => {

@@ -25,9 +25,9 @@ const isActive = (href: string) => {
 
 <div id="scroll-progress" class="scroll-progress" aria-hidden="true"></div>
 
-<header class="sticky top-0 z-50 w-full glass border-b border-slate-800/80">
-  <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
-    <div class="flex items-center justify-between gap-2 h-14 lg:h-16">
+<header class="site-header sticky top-0 z-50 w-full glass border-b border-slate-800/80">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="site-header-inner flex items-center justify-between gap-2 h-14 lg:h-16">
       <div class="flex items-center gap-2 shrink-0 min-w-0">
         <a href={url('/')} class="group shrink-0 rounded-xl" aria-label="AutoTelegramForward home">
           <Logo />
@@ -250,11 +250,18 @@ const isActive = (href: string) => {
 
   // ------------------------------------------------------------ scroll progress
   const bar = document.getElementById('scroll-progress');
+  const siteHeader = document.querySelector<HTMLElement>('.site-header');
+  let lastScrolled = false;
   const onScroll = () => {
-    if (!bar) return;
     const doc = document.documentElement;
     const max = doc.scrollHeight - window.innerHeight;
-    bar.style.transform = `scaleX(${max > 0 ? Math.min(doc.scrollTop / max, 1) : 0})`;
+    if (bar) bar.style.transform = `scaleX(${max > 0 ? Math.min(doc.scrollTop / max, 1) : 0})`;
+    // One class flip, only when it changes: the header compacts after the fold.
+    const scrolled = window.scrollY > 8;
+    if (siteHeader && scrolled !== lastScrolled) {
+      lastScrolled = scrolled;
+      siteHeader.classList.toggle('is-scrolled', scrolled);
+    }
   };
   window.addEventListener('scroll', onScroll, { passive: true });
   onScroll();

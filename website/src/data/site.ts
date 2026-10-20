@@ -168,18 +168,24 @@ export const localeLabels: Record<string, { label: string; native: string; rtl?:
 };
 
 export const seoKeywords = [
-  'Telegram auto forwarding',
-  'Telegram forward bot',
-  'automated Telegram forwarder',
+  'Telegram message forwarding',
+  'Telegram auto forward bot',
+  'telegram forwarding bot self-hosted',
+  'Telegram automation',
+  'self-hosted Telegram forwarder',
   'Telegram message routing',
   'multi-source multi-target forwarding',
-  'Telegram content filter rules',
-  'Telegram channel cloning',
-  'Telegram copy protection bypass',
-  'Telegram AI rewrite',
-  'self-hosted Telegram forwarder',
-  'open source Telegram bot',
+  'Telegram forwarding rules and filters',
+  'Telegram channel mirroring and crossposting',
+  'Telegram content filter bot',
+  'Telegram message cleaner',
+  'Telegram AI rewriting and translation',
+  'copy-protected Telegram channel forwarding',
+  'Telegram bot forwarding without admin rights',
+  'open source Telegram automation platform',
   'Telegram multi-tenant isolation',
+  'Telegram forwarding API',
+  'Telegram forwarding queue and retries',
 ];
 
 export const site = {

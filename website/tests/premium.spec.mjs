@@ -163,3 +163,38 @@ test.describe('New documentation routes', () => {
     await expect(page.locator('footer a[href$="/status/"]').first()).toBeAttached();
   });
 });
+
+test.describe('Theme surface integrity', () => {
+  /**
+   * Regression: the v3 light-theme override repainted `.text-gradient` with the
+   * `background` shorthand, which resets `background-clip` to `border-box`.
+   * The headline then rendered as a solid gradient rectangle behind fully
+   * transparent glyphs — invisible in dark mode, obvious once the theme
+   * flipped. Assert the computed clip, not the declaration, in both themes.
+   */
+  test('the gradient headline stays clipped to its glyphs in both themes', async ({ page }) => {
+    await page.goto('/');
+
+    for (const theme of ['dark', 'light']) {
+      await page.evaluate((value) => localStorage.setItem('atf-theme', value), theme);
+      await page.reload();
+
+      const state = await page.locator('h1 .text-gradient').evaluate((el) => {
+        const styles = getComputedStyle(el);
+        return {
+          theme: document.documentElement.dataset.theme,
+          backgroundClip: styles.backgroundClip,
+          webkitClip: styles.webkitBackgroundClip,
+          fill: styles.webkitTextFillColor,
+        };
+      });
+
+      expect(state.theme).toBe(theme);
+      expect(state.backgroundClip).toBe('text');
+      expect(state.webkitClip).toBe('text');
+      expect(state.fill).toBe('rgba(0, 0, 0, 0)');
+    }
+
+    await page.evaluate(() => localStorage.removeItem('atf-theme'));
+  });
+});
