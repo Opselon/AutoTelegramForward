@@ -619,7 +619,16 @@ class ProBotUI:
             if code in SUPPORTED_LANGUAGES:
                 return code
 
-        return "en"
+        # No identity at all, and no stored preference. That is not the same as
+        # "anonymous": several rendered builders (_main_menu,
+        # _client_settings_menu, _upgrade_text, the per-rule renderers) are
+        # called with no uid from inside an already-wrapped update. The update's
+        # own language, isolated on the render ContextVar by
+        # _localized_handler, is exactly the user being rendered for, so a bare
+        # "en" here painted the panel Persian and the keyboard English. The
+        # contextvar lives for ONE update and is reset after it, so this cannot
+        # leak between tenants; background callers see None and keep "en".
+        return _BOT_RENDER_LANGUAGE.get() or "en"
 
     def _lang_for(self, *sources: Any, uid: Optional[int] = None) -> str:
         """Resolve the render language from whatever identity is at hand.

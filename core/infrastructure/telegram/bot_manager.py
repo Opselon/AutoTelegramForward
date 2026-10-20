@@ -29,7 +29,7 @@ from .auth_state import AuthStateMachine
 from .client_pool import ClientPool
 from .i18n import I18n, SUPPORTED_LANGUAGES
 from .login_flow import LoginFlowManager
-from .pro_bot_ui import LANG_FLAG
+from .pro_bot_ui import LANG_FLAG, _BOT_RENDER_LANGUAGE
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,12 @@ class BotManager:
                 return code
         if uid and str(uid) in getattr(self, "_awaiting_lang", {}):
             pass  # a picker is open; the persisted preference still decides
-        return "en"
+        # No identity, no stored row, no client language: fall back to the
+        # language of the update being served rather than to English. This
+        # class is only reached for uid-less renders inside an already-scoped
+        # update (the same shape that painted English buttons under a Persian
+        # panel); the contextvar is per-update and reset afterwards.
+        return _BOT_RENDER_LANGUAGE.get() or "en"
 
     def _ui_owns(self, uid: int) -> bool:
         """True while the button dashboard is driving this user's flow.

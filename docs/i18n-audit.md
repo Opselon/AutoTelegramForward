@@ -36,6 +36,7 @@ The audit closes the gap between "the key exists" and "the user sees it".
 | `HARDCODED_USER_TEXT` | critical | prose literal reaching `reply_text`/`answer`/`InlineKeyboardButton`/`_kbd` tuples, including the constant part of an f-string |
 | `DYNAMIC_KEY_UNVERIFIED` | major | a key assembled from a prefix at runtime; the family must be enumerable |
 | `GLOBAL_LANGUAGE_STATE` | critical | `i18n.current` read on a render path |
+| `BARE_DEFAULT_LANGUAGE` | minor | a language resolver ends in a hardcoded `"en"` with no update-scope fallback — the builder that calls it without a uid then renders English under a localized panel |
 | `UNWRAPPED_HANDLER` | critical | an update handler renders without the user's language |
 | `CALLBACK_DATA_FROM_TEXT` | critical | callback data built from a translation |
 | `VALUE_LEAK` | major | a Latin locale holding Persian/Cyrillic/CJK text |

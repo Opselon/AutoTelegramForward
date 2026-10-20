@@ -35,6 +35,9 @@ Finding classes (stable identifiers, used by the JSON output and the tests):
     CALLBACK_DATA_FROM_TEXT     callback_data built from translated text
     VALUE_LEAK                  a locale's value holds another language's script
     UNTRANSLATED_VALUE          a locale's value is the English prose verbatim
+    BARE_DEFAULT_LANGUAGE       a language resolver answers a hardcoded "en" with
+                                no update-scope fallback, so every builder that
+                                calls it without an identity renders English
 
 Severity is ``critical`` for anything a user can see as the wrong language or
 as a raw key, ``major`` for catalog defects that surface on some paths, and
@@ -79,6 +82,8 @@ SCRIPT_LATIN_WORD = re.compile(r"\b[A-Za-z]{3,}\b")
 PLACEHOLDER = re.compile(r"(?<!\{)\{([a-zA-Z_][a-zA-Z0-9_]*)(?:!([a-zA-Z]))?(?::([^}]+))?\}(?!\})")
 U_FFFD = "\ufffd"
 KEY_SHAPE = re.compile(r"^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$")
+RESOLVER_NAME = re.compile(r"(?:^|_)(?:resolve_lang|lang_for|user_lang|language_for)$")
+SUPPORTED_CATALOG_LANGUAGES = set(SUPPORTED_LANGUAGES)
 TOKEN = re.compile(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)+")
 TECHNICAL_TOKEN = re.compile(
     r"^(?:https?://|tg://|@\w+|[A-Z][A-Z0-9_]{1,}|[a-z0-9_.:/+-]+|\d+(?:[.,]\d+)?|\s*|[\W_]+)$"
@@ -505,7 +510,38 @@ class SourceAudit(ast.NodeVisitor):
                           if isinstance(unbound, list) else "",
                           hint="bind the handler with @self._localized_handler (or pass lang= "
                                "on every _t call) so it renders in the requesting user's language")
+        self._check_resolver_fallback(node)
         self.generic_visit(node)
+
+    def _check_resolver_fallback(self, node) -> None:
+        """A resolver that ends in a hardcoded "en" ignores the update scope.
+
+        This is the shape behind the dashboard whose metrics were Persian and
+        whose buttons were English: the text renderer had the user object, the
+        keyboard builder had only a uid defaulting to 0, and the resolver
+        answered "en" for both. A resolver must answer from the update's own
+        language before defaulting, because the caller may legitimately hold no
+        identity inside an already-scoped update.
+        """
+        if not RESOLVER_NAME.search(node.name):
+            return
+        reads_scope = any(
+            isinstance(child, ast.Attribute) and "RENDER_LANGUAGE" in child.attr
+            or isinstance(child, ast.Name) and "RENDER_LANGUAGE" in child.id
+            for child in ast.walk(node)
+        )
+        if reads_scope:
+            return
+        for child in ast.walk(node):
+            if isinstance(child, ast.Return) and isinstance(child.value, ast.Constant):
+                if child.value.value in SUPPORTED_CATALOG_LANGUAGES:
+                    self._add(
+                        "BARE_DEFAULT_LANGUAGE", "minor", child,
+                        f"{node.name}() returns {child.value.value!r} with no update-scope fallback",
+                        hint="return the render-scope language (contextvar) before the default, "
+                             "so builders called without a uid still render the right locale",
+                    )
+                    return
 
     def _calls_without_lang(self, node: ast.AST) -> List[int]:
         lines: List[int] = []

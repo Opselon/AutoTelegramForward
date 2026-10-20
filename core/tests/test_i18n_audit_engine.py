@@ -352,3 +352,29 @@ def test_a_broken_catalog_exits_two(tmp_path):
     root = build_repo(tmp_path)
     (root / "core/infrastructure/telegram/locales/translations.json").write_text("{}", encoding="utf-8")
     assert audit_mod.main(["--root", str(root)]) == 2
+
+
+def test_a_resolver_that_defaults_to_hardcoded_english_is_reported(tmp_path):
+    """The dashboard defect: a resolver answering "en" with no update scope."""
+    root = build_repo(tmp_path)
+    append(root, '''
+    def _resolve_lang(self, uid=None, user_obj=None):
+        if uid:
+            pass
+        return "en"
+''')
+    hits = findings_for(root, "BARE_DEFAULT_LANGUAGE")
+    assert len(hits) == 1, [h.detail for h in hits]
+    assert "_resolve_lang" in hits[0].detail
+    assert hits[0].severity == "minor"
+
+
+def test_a_resolver_that_reads_the_update_scope_is_not_reported(tmp_path):
+    root = build_repo(tmp_path)
+    append(root, '''
+    def _resolve_lang(self, uid=None, user_obj=None):
+        if uid:
+            pass
+        return _BOT_RENDER_LANGUAGE.get() or "en"
+''')
+    assert findings_for(root, "BARE_DEFAULT_LANGUAGE") == []

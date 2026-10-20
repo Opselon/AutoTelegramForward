@@ -1,0 +1,1944 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "fingerprint": "677868eed1a7bd96",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "cancelled",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "b79190fb23d0b9a6",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "cooldown",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "81a3d378d723c328",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "err_about_too_long",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "b1cfb6115a672c90",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "rule_deleted",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "bf91080edb15d507",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_add_item",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "4fb7c10caadaf5d7",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_addon_view_all",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "7ab47f608fd3ec48",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_ai",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "ddddeed71822468b",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_ai_config_deleted_body",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "0209d915d5b3de33",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_ai_done",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "9f340172f3852ea0",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_ai_policy_short_quarantine",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "c09e932caf335c1f",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_ai_policy_short_retry",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "66e065dfefd8baf2",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_ai_sample",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "708e440b47f9fbdb",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_ai_test_result",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "8aa9ac083ed05ef5",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_ai_test_result_body",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "f9e62606aad2869e",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_ai_testing",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "8ddbe7aad24b311e",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_ai_testing_text",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "d598913c0df7aa79",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_blacklist_menu_title",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "4c8b72d930a71720",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_chip_all",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "e004f76eb068d0c5",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_chip_content",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "4ef7637cc15dc49b",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_chip_crypto",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "d9e7f3cf743604ae",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_chip_mmo",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "f5501d722310cb5a",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_clean_sticker_off",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "14a26fd07d2f57d5",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_clean_sticker_on",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "730e1366699df431",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_clean_voice_off",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "f93c624ac3b39c2b",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_clean_voice_on",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "e91ab10277016d60",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_cleaner_add_pattern",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "90ce493c3d15c7fb",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_cleaner_clear_patterns",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "5ccee2f29902f461",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_cleaner_emojis",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "b43226abb59a0192",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_cleaner_enabled",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "152d42bfd960fc3d",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_cleaner_hashtags",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "0ecf2c5faff7b571",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_cleaner_mentions",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "f1dfbd31a9cc3778",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_cleaner_menu_desc",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "bcd9ca0ac0f8e143",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_cleaner_menu_title",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "93a6c7c8f0016260",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_cleaner_patterns",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "41a569b53ed02d54",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_cleaner_urls",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "20662ad93fabceec",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_clear_all",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "8de03254ffc4cd89",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_click_toggle_hint",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "6d5926b4a4725998",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_counter_errors",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "f096651d09c5a970",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_counter_filtered",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "270de30369169da8",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_counter_processed",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "362f1d3e8850fc84",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_counter_retried",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "426c32e683811eca",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_counter_sent",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "0a35b51aa0f4da0e",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_counter_skipped",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "e92e9f45aa83b09c",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_cred_id",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "9b667a6bb4f46317",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_creds",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "64adec6df328d86e",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_creds_list",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "18c7719de8d92f98",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_dashboard",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "570eb67b1637da6d",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_delay_custom",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "33d4381c27fb5432",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_delay_desc",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "ff8f2fb2cc43e1ea",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_delay_none",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "24c0b8c42ff6015a",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_delay_title",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "3e53083627ae41e6",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_diag_cat_ai",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "f5978965524bedb5",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_diag_cat_auth",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "976c167599c908ae",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_diag_cat_bot",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "f343369bd0491229",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_diag_cat_database",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "f2fe746b807c8478",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_diag_cat_login",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "b8af81b7b70d4d69",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_diag_cat_system",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "4bf931489cb1ac20",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_diag_sev_auth",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "3393c5743de2d8e3",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_diag_sev_fatal",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "2f4d2bb891664b36",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_diag_sev_info",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "96b9a95bef0dbf83",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_draft_ai_pending",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "fef861e44cb2c0dd",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_edit_limit_set",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "22986425312399fa",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_edit_limit_unlimited",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "6ca5fad434c00ac2",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_feature_disabled",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "0099647ae310b06c",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_feature_enabled",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "bf42552a39372a02",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_filter_block_audio",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "41630425857b98f0",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_filter_block_links",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "36a2b19aef96c82f",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_filter_block_stickers",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "21023a584fc3a1ca",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_filter_block_text",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "2fab97483d484953",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_filter_block_video",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "03fd479e98ed95be",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_filter_block_voice",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "e2fa08b45d9f557f",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_filter_links_off",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "7041f785adb89a3d",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_filter_links_on",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "0ac93287f38d4ffe",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_filters_menu_desc",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "cf6d1704da11f2d9",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_filters_menu_title",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "b21713510843634d",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_fmode_custom_header",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "d21e75cd83729dc7",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_hf_del_ftr",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "4ac0d470ef3cbf3e",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_hf_del_hdr",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "0abb939fe57a69cb",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_hf_set_ftr",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "bf66adfd670830fb",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_hf_set_hdr",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "6bf0a3193bbcf3b4",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_kw_add_btn",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "5e5cfdfdd8cb15b2",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_kw_clear_btn",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "0a3f716879320a7b",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_lang_done",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "16b56ecd6ff7d615",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_login_code_display",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "fb6c8231c3fc6a2c",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_login_fail_auth_expired",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "eb86f8056ad5705f",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_login_fail_code_expired",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "191f27aafb0ad48a",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_login_fail_invalid_code",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "d2e818ee93453fdf",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_login_fail_invalid_password",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "ebb73aec406cf308",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_login_fail_login_failed",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "c8a1425b15a63ecb",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_login_fail_too_many_attempts",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "5b129b08ba27e2f4",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_login_phone",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "220beac865dfc3fc",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_logs",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "f2e29ec0ce9b1a1e",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_logs_fail",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "747d343434a6dffa",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_logs_recent_title",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "3b779b298328eb21",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_logs_stats_title",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "50246603a6cd0598",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_overview_dlq",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "27e9d487a8d7c933",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_overview_forwarded",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "e904e0d01776986a",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_overview_rules",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "be4d3bd186ddabca",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_overview_sessions",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "349f09e4580160a6",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_overview_title",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "d15f96858ee61215",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_prompt_reset_config_btn",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "b339db2304f5150f",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_prompt_reset_config_warning",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "91f6427a2b389523",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_ai_creativity",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "4db1f1fed918e5a5",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_album_mode",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "955874a99be3b7ad",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_allowed_media_types",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "63a8848d2a7ccdb6",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_auto_delete_seconds",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "588195865e2456b3",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_auto_posting",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "4764c2a45d50c514",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_blacklist",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "599a52e705824eb1",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_blacklist_users",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "fb8d083e42fd1de3",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_blacklist_words",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "98ecda48e0dbf33c",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_block_links",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "92a47f6d94c16696",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_branding_force_forward",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "6abf35679fe897f7",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_branding_keywords",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "111e09cbc6e41e32",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_branding_match_mode",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "dfdea7fb69997f64",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_branding_origin_ids",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "74dbe5358d3ca2b2",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_branding_origin_titles",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "14f4a30ea7ba32ff",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_branding_require_forward",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "3b73d3f89b72139f",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_branding_triggers_enabled",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "c7a5a3c1566b9f8d",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_clean_custom_words",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "c95369386476b857",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_cleaner_config",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "08ad0e078da5d054",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_cleaner_enabled",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "aae0734c899cce72",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_content_policy_enabled",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "2a1f34e2aca87a5b",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_debug_mode",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "3bdb22e9089c3eda",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_delivery_transport",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "1e53f934c5bd249f",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_duplicate_filters",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "0b71570ff5400265",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_footer",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "84cdf90f485d750c",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_max_time_edit",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "b558bc9f0eaf52e3",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_ocr_image_ai",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "5bf1c2910db09cb8",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_power_control",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "fc29fbab1759c87e",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_process_raw_text",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "8d8680c879e02c18",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_regex_block",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "3c61d96dd70b1a04",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_regex_require",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "fe29c64046ebf655",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_remove_links",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "9630125b61445338",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_replacements",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "7a102a1688c5877e",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_smart_ai_rewrite",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "f706def1d3cfb168",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_source_policies",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "093bcfe550490766",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_strip_words",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "03943f9ba7bf8938",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_sync_replies",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "6c02eacedc2d6faf",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_target_policies",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "8ab4bebb4b6fa011",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_translate_lang",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "5c2b236fa2a0bca5",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_whitelist",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "9eafa76f76f3072e",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_whitelist_mode",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "ae18242bd707df71",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_help_whitelist_words",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "260c851f06a03725",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_affiliate_kit",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "68ae3e0adaa8bea3",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_ai_creativity",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "30bc1ebc0db603ec",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_ai_max_tokens",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "514169371b5084a0",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_album_mode",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "ae58815d0c2b6828",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_allowed_media_types",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "1c9ba9a2fda3f59a",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_auto_delete_seconds",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "bf50d36c07e7c2fb",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_auto_post_scheduler",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "f7c7dc240bda018e",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_auto_posting",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "eecb4d9cc39c4fe6",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_blacklist",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "8592912d3d3f078b",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_blacklist_users",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "ccab99937bf16e27",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_blacklist_words",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "d9cb387d93eb23bd",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_block_audio",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "1b07d2bc528ca380",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_block_links",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "f619694b019e9ea5",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_block_stickers",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "530970464a230379",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_block_text",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "a675b4e8f8e8531b",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_block_video",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "4bda67954bd2fd14",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_block_voice",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "ee10b44bb0f67181",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_bot_token_id",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "932534eb7d1599d9",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_branding_force_forward",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "ec4fc1e3710a948d",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_branding_keywords",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "692f12edc0e133d6",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_branding_match_mode",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "a5a7a0f13377e13b",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_branding_origin_ids",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "063a2b49a4692e2c",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_branding_origin_titles",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "78913e001908ecf6",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_branding_require_forward",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "f2a0107b41625e8a",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_branding_triggers_enabled",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "9669ca4d2e864017",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_button_to_text",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "b735cadbeff111b0",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_clean_buttons",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "49cec249f9969017",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_clean_custom_words",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "5c734f7ddb7c774c",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_clean_empty_lines",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "38afcd0b534a6e25",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_clean_hashtags",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "1e565a73ae15419a",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_clean_phones",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "c63fa9cbdf89a6e4",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_clean_usernames",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "43a0dec60e52f57b",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_cleaner_config",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "e4c5d1a152258f29",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_cleaner_enabled",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "60b7dfc662b7e9c4",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_content_policy_enabled",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "633fa7813b72b386",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_crypto_mode",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "35ec6db225245548",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_debug_mode",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "3163dcd27ba2b007",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_delivery_transport",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "da3d18f5baf00fa4",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_duplicate_filters",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "218e1214ff15d846",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_edit_time_limit_seconds",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "c14e6be3f2e38186",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_feature_group",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "c9e7f5d502ac4bbb",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_footer",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "980c1695e045e3e7",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_forward_delay_seconds",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "7bcf73211ba74ffd",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_keyword_confirmation",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "79f5f749b48771fb",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_keyword_reply",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "b73bf0522e7cd2e5",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_link_buttons",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "c8c4cda2e5a9a40c",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_link_replacement",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "f3d6b3ccec13fd7f",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_max_time_edit",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "18acee6529457bed",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_news_digest",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "446f9e08d2d50214",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_ocr_image_ai",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "31c126ff71382a7e",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_paid_addons",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "985c309f70f0f952",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_power_control",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "5160cf7e4957725e",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_power_schedule",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "fab53b7bcd2d19f3",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_process_raw_text",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "5ea2fd8b735e2335",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_regex_block",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "5609e6aaf6d9abf8",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_regex_require",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "54b23f1c9d9061c0",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_remove_links",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "282087f7bbf68be8",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_replacements",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "22173ca46d9a13ff",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_sender_type",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "1b3ff77da6176c90",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_smart_ai_rewrite",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "5feb93211c474741",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_source_policies",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "511c02931f5ad280",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_strip_words",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "3f881e2737b1bf5c",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_sync_replies",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "98c7882980b1f8ac",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_target_policies",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "d975810f2dbed950",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_translate_lang",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "3e2a2c398d78bffe",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_watermark",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "4ebebfc6cf274209",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_watermark_text",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "9e89f9d4435ae432",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_whitelist",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "ff6208fdbcc58648",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_whitelist_mode",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "f8c466819aab7f41",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_whitelist_users",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "497235786d026d18",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reg_set_whitelist_words",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "c763f53ce2286e16",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_replace_menu_title",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "00c008558c400f21",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_reset_config_done",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "9e011bf640c77d63",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_advanced",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "fdca014819c394cd",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_blacklist",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "d111ca61ce1ddc4a",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_changed_alert",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "e669b471e16b634a",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_cleaner",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "7198d5895d11fec6",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_debug_mode",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "6a61681ebef2d767",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_del_sync",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "058e311a8987c62c",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_delay",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "6d2722c24aee9f1a",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_delete",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "b211abd3d4960bb0",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_done",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "23eff63a474f26bd",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_draft",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "7e7f657ac7e62627",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_dup_filters",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "b1e927e12ca54b69",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_duplicate",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "87c0d67f730ce383",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_edit_sync",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "5ceec22ae1f356d1",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_features",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "4ae1a314514bbea3",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_filters",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "a6e3fedf3f65c5e9",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_fwd_status",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "469d4e34cae00e85",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_header",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "779c6b19996e9d68",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_header_warning",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "2a649f82f626bd34",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_id",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "1250f8998b9c5c02",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_paid_addon",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "9e47e4787e964815",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_rename",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "1bc375f22e0fb71c",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_rep_sync",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "b9010fd28d84f066",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_replace",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "71a8fbc8be94919b",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_sender_type",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "d94604399e4d716c",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_show_header",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "cf76887bf4ed7a7a",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_status",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "d1f96e230ae23001",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_task_mgmt",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "36d33e2f976db1d7",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_task_name",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "a2380d2741488808",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_task_overview",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "eba9b81b75eba587",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_topic",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "5bdc27b1bddeeaa1",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rule_whitelist",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "5b31bf7e9a09f5c0",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_rules",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "52e253dd2ac4a282",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_sessions",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "e1bfd9f291cab2a4",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_setup_reset_success",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "6de06d7955ed7930",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_stats",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "dd33062ad9ffbb9b",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_stats_body",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "52eac266087bff5c",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_status_no",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "916c9ba72bdabdc1",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_status_yes",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "a71f4c5015d8c082",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_step_admin_granted",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "0f9b1601046f3ac4",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_step_ai_host_updated",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "2c5f1810fa7eadfc",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_step_ai_key_updated",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "2bda20186d7cd589",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_step_ai_model_updated",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "10fb1d2841dc3f6b",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_step_bl_words_added",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "39c6b2cd38181671",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_step_broadcast_preview_title",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "681a151a36e7adfb",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_step_creds_saved_banner",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "554394f98d2a2943",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_step_forcesub_saved",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "158abd8761e45b4a",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_step_pv_no_active_ai",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "a58e8f17138153a0",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_step_pv_prompt_registered",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "37474ec5e1bf8a54",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_step_rule_renamed",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "5252b0f29e03fb59",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_step_smart_test_cancelled",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "e62aa9644bf1095a",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_step_topic_id_saved",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "a47e7ff940bad6fe",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_step_wl_words_added",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "4d7307b444e74e8b",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_target_byte",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "d4f50ed245981f29",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_tr_disable",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "ee11498e03304a60",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_translation_status_lang",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "bf570a2790f4e4fb",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_translation_status_off",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "23d4059fdc3dd752",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_whitelist_menu_title",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "c1402ca484d185f2",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_wm_del",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "d8c28f0d93fea524",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_wm_set",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "45c7434b57a083c8",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "ui_words_count",
+      "evidence": ""
+    },
+    {
+      "fingerprint": "9f9ccc367b7746cc",
+      "kind": "UNUSED_KEY",
+      "path": "core/infrastructure/telegram/locales/translations.json",
+      "detail": "unknown_command",
+      "evidence": ""
+    }
+  ]
+}

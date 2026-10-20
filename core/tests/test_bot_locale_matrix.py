@@ -232,3 +232,96 @@ def test_command_handlers_pass_the_users_language_explicitly():
                 if not any(kw.arg == "lang" for kw in node.keywords):
                     naked.append(node.lineno)
     assert naked == [], f"i18n.t() without lang= at lines {naked}"
+
+
+# --------------------------------------------------------------------------- #
+# the keyboard belongs to the panel it sits under
+# --------------------------------------------------------------------------- #
+# The dashboard screenshot that started this: Persian metrics above a row of
+# English buttons. The text came from _main_text(uid, user), which resolves the
+# asker; the keyboard came from _main_menu(), which was called with no uid from
+# inside the same update and resolved "en". The render scope already knows who
+# is asking, so an unscoped builder must inherit it — and must still fail closed
+# to English when there is no update at all.
+
+
+def _labels(keyboard) -> List[str]:
+    return [b.text for row in getattr(keyboard, "inline_keyboard", []) or [] for b in row]
+
+
+def _label_for(ui: ProBotUI, key: str, lang: str) -> str:
+    from core.infrastructure.telegram.pro_bot_ui import decorate_button_label
+
+    return decorate_button_label(key, ui.i18n.t(key, lang=lang))
+
+
+def test_unscoped_main_menu_inherits_the_panel_language():
+    ui = build_ui()
+    ui.remember_language(UID, "fa")
+    token = _BOT_RENDER_LANGUAGE.set("fa")
+    try:
+        labels = _labels(ui._main_menu())
+    finally:
+        _BOT_RENDER_LANGUAGE.reset(token)
+    assert RTL.search(" ".join(labels)), f"main menu keyboard is not Persian: {labels}"
+    assert _label_for(ui, "ui_main_menu_forward", "fa") in labels
+    assert "Forward" not in labels
+
+
+def test_unscoped_settings_menu_inherits_the_panel_language():
+    ui = build_ui()
+    ui.remember_language(UID, "ru")
+    token = _BOT_RENDER_LANGUAGE.set("ru")
+    try:
+        labels = _labels(ui._client_settings_menu())
+    finally:
+        _BOT_RENDER_LANGUAGE.reset(token)
+    assert CYRILLIC.search(" ".join(labels)), f"settings keyboard is not Russian: {labels}"
+
+
+def test_main_menu_keyboard_matches_the_text_it_sits_under():
+    """Every locale: body and buttons agree, and neither is English."""
+    ui = build_ui()
+    english = None
+    for lang in SUPPORTED_LANGUAGES:
+        ui.remember_language(UID, lang)
+        token = _BOT_RENDER_LANGUAGE.set(lang)
+        try:
+            labels = _labels(ui._main_menu())
+        finally:
+            _BOT_RENDER_LANGUAGE.reset(token)
+        if lang == "en":
+            english = labels
+            continue
+        assert labels != english, f"main menu keyboard is English under {lang}"
+
+
+def test_main_menu_outside_any_update_falls_back_to_english():
+    ui = build_ui()
+    ui.remember_language(UID, "fa")
+    assert _BOT_RENDER_LANGUAGE.get() is None
+    labels = _labels(ui._main_menu())
+    assert _label_for(ui, "ui_main_menu_forward", "en") in labels
+    assert not RTL.search(" ".join(labels))
+
+
+def test_wrapped_handler_renders_a_persian_keyboard_for_a_persian_client():
+    """The screenshot path end to end: no stored row, client language fa."""
+    ui = build_ui()
+    ui._users = None  # nothing persisted for this account yet
+
+    seen: Dict[str, List[str]] = {}
+
+    async def handler(client, event):
+        seen["buttons"] = _labels(ui._main_menu())
+
+    event = MagicMock()
+    event.from_user = MagicMock()
+    event.from_user.id = UID
+    event.from_user.language_code = "fa-IR"
+    asyncio.run(ui._localized_handler(handler)(MagicMock(), event))
+
+    buttons = seen["buttons"]
+    assert RTL.search(" ".join(buttons)), f"wrapped update rendered English buttons: {buttons}"
+    assert _label_for(ui, "ui_main_menu_forward", "fa") in buttons
+    assert _BOT_RENDER_LANGUAGE.get() is None, "render language leaked past the update"
