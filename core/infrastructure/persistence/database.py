@@ -778,10 +778,14 @@ class Row(dict):
         self._values: Tuple[Any, ...] = tuple(values)
 
     def __getitem__(self, key):
-        if isinstance(key, int):
+        # Hot path: this runs once per column per row, and a rules page or an
+        # inbound message hydrates thousands of them (measured: 2M lookups for
+        # one 1000-rule resolve). `type(key) is int` skips the subclass scan of
+        # isinstance, and `dict.__getitem__` skips building a `super` object.
+        if type(key) is int:
             return self._values[key]
         try:
-            return super().__getitem__(key)
+            return dict.__getitem__(self, key)
         except KeyError as exc:  # sqlite3.Row semantics
             raise IndexError(key) from exc
 

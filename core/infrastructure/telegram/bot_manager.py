@@ -443,6 +443,12 @@ class BotManager:
                         await users.set_language(int(uid), text.lower())
                     except Exception:
                         logger.debug("persist language failed", exc_info=True)
+                # The UI memoizes the resolved language per user; without this
+                # the next render would still speak the previous one.
+                bot_ui = getattr(self, "bot_ui", None)
+                remember = getattr(bot_ui, "remember_language", None)
+                if callable(remember):
+                    remember(int(uid), text.lower())
                 await message.reply_text(
                     self.i18n.t("lang_changed", lang=text.lower()))
             return

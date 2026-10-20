@@ -559,13 +559,37 @@ class ProBotUI:
         # transplanted into another user's conversation state is refused.
         return await self._rules.update_owned(rule, self._scope_uid(user_id), expected_version)
 
+    def _lang_memo(self) -> Dict[int, str]:
+        """Per-user resolved-language memo.
+
+        ``_resolve_lang`` runs on nearly every render (the main menu resolves
+        it per callback) and its second step is a SQLite ``SELECT``. The
+        in-memory ``UiState`` covers a user only once something has created
+        that state, so a menu built from a bare uid paid the query every
+        single time. Memoized here, keyed by user id and invalidated the
+        moment the user picks a language.
+
+        Created lazily: several tests and helper paths build this object with
+        ``object.__new__`` and never run ``__init__``.
+        """
+        memo = self.__dict__.get("_lang_cache")
+        if memo is None:
+            memo = {}
+            self.__dict__["_lang_cache"] = memo
+        return memo
+
+    def remember_language(self, uid: int, code: str) -> None:
+        """Record a user's language choice for subsequent renders."""
+        if code in SUPPORTED_LANGUAGES:
+            self._lang_memo()[int(uid)] = code
+
     def _resolve_lang(self, uid: Optional[int] = None, user_obj: Any = None) -> str:
         """Resolve user's chosen language with fail-closed English fallback.
 
-        Resolution order: in-memory UiState → persisted DB row → the user's
-        own Telegram client language_code → 'en' (never the process-wide
-        i18n.current, which is shared across all users and would leak one
-        user's language choice into every other tenant's renders)."""
+        Resolution order: in-memory UiState → memoized resolution → persisted
+        DB row → the user's own Telegram client language_code → 'en' (never the
+        process-wide i18n.current, which is shared across all users and would
+        leak one user's language choice into every other tenant's renders)."""
         if uid:
             states = getattr(self, "_states", None)
             if states and isinstance(states, dict):
@@ -573,12 +597,17 @@ class ProBotUI:
                 if st and getattr(st, "lang", None) and st.lang in SUPPORTED_LANGUAGES:
                     return st.lang
 
+            memo = self._lang_memo().get(int(uid))
+            if memo and memo in SUPPORTED_LANGUAGES:
+                return memo
+
             users = getattr(self, "_users", None)
             if users is not None and getattr(users, "_db", None) is not None:
                 try:
                     row = users._db.query_one("SELECT language FROM users WHERE user_id=?", (int(uid),))
                     if row and row.get("language") and row["language"].lower() in SUPPORTED_LANGUAGES:
                         resolved = row["language"].lower()
+                        self.remember_language(int(uid), resolved)
                         if states and isinstance(states, dict) and int(uid) in states:
                             states[int(uid)].lang = resolved
                         return resolved
@@ -4725,6 +4754,9 @@ class ProBotUI:
                 return
             st = self._state(uid)
             st.lang = code
+            # The memo is what every subsequent render reads first; a stale
+            # entry here would render the *previous* language until restart.
+            self.remember_language(uid, code)
             if self._users is not None:
                 try:
                     await self._users.set_language(uid, code)

@@ -6,7 +6,9 @@ swapped in the DI container — domain and application layers are untouched.
 
 import json
 import logging
+import os
 import sqlite3
+import threading
 import time
 import uuid
 from typing import Any, Dict, List, Optional, Sequence
@@ -74,6 +76,13 @@ def _now() -> int:
 
 
 def _safe_list(raw, default=None):
+    # Empty is by far the most common stored value for these JSON columns, and
+    # ``_row_to_entity`` parses eight of them per rule: a rules page that
+    # hydrates 1000 rows otherwise runs 8000 json.loads calls to discover that
+    # eight lists are empty. The literal is checked first; anything else takes
+    # the real parser.
+    if raw == "[]":
+        return []
     try:
         val = json.loads(raw) if raw else default
         return val if isinstance(val, list) else (default or [])
@@ -105,6 +114,10 @@ def _rule_meta_json(rule) -> str:
 
 
 def _safe_dict(raw, default=None):
+    # See ``_safe_list``: the empty document is the common case and the parser
+    # is not free.
+    if raw == "{}":
+        return {}
     try:
         val = json.loads(raw) if raw else default
         return val if isinstance(val, dict) else (default or {})
@@ -216,8 +229,45 @@ def _reject_inherited_write(rule: Any) -> None:
 
 
 class SqliteForwardRuleRepository(IForwardRuleRepository):
+    #: How long a resolved active-rule set may be reused, in seconds.
+    #:
+    #: ``list_active_by_source`` runs once per inbound message. Its result is a
+    #: *routing table*, not a live reading: it changes when a human creates,
+    #: edits, pauses or deletes a task, which is minutes apart, while a busy
+    #: channel delivers many messages per second. Without reuse, every message
+    #: in a burst repeats the identical query — measured at 0.08ms on a
+    #: distributed store, but 24ms on one where 1000 tasks watch a single
+    #: source, which is the shape a large install actually has.
+    #:
+    #: Correctness is guarded from both sides: every write through this
+    #: repository drops the cache immediately (so a pause is visible on the
+    #: next message, not on the next expiry), and the TTL bounds staleness for
+    #: a writer in *another* process — a second core process, or the worker —
+    #: which cannot reach this dict.
+    ACTIVE_CACHE_TTL = float(os.environ.get("ATF_RULE_CACHE_TTL", "1.0"))
+    #: Bounded so a deployment with thousands of distinct sources cannot grow
+    #: the cache without limit; the whole map is dropped when it fills.
+    ACTIVE_CACHE_MAX = 1024
+
     def __init__(self, db: SqliteDatabase) -> None:
         self._db = db
+        self._active_cache: Dict[str, tuple] = {}
+        self._active_lock = threading.Lock()
+        self._active_hits = 0
+        self._active_misses = 0
+
+    def invalidate_active_cache(self) -> None:
+        """Forget every cached active-rule set. Called by every write here."""
+        with self._active_lock:
+            self._active_cache.clear()
+
+    def active_cache_stats(self) -> Dict[str, int]:
+        with self._active_lock:
+            return {
+                "hits": self._active_hits,
+                "misses": self._active_misses,
+                "entries": len(self._active_cache),
+            }
 
     SMART_RULE_COLUMNS = (
         "message_category", "intermediate_channel_id", "intermediate_channel_name",
@@ -275,6 +325,9 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         return ", ".join(f"{c}=?" for c in SqliteForwardRuleRepository.SMART_RULE_COLUMNS)
 
     async def add(self, rule: ForwardRule) -> ForwardRule:
+        # A new task can start watching a source that already has a cached
+        # routing table; drop every entry before the row exists.
+        self.invalidate_active_cache()
         rule_version = int(getattr(rule, "version", 1) or 1)
         ai_fallback = enum_str(getattr(rule, "ai_fallback_policy", None), AIFallbackPolicy.DROP.value)
         ai_prompt_ver = int(getattr(rule, "ai_prompt_version", 0) or 0)
@@ -337,6 +390,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         return rule
 
     async def update(self, rule: ForwardRule, expected_version: Optional[int] = None) -> ForwardRule:
+        self.invalidate_active_cache()
         _reject_inherited_write(rule)
         rule_version = int(getattr(rule, "version", 1) or 1)
         next_version = rule_version + 1
@@ -429,28 +483,38 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
 
     @staticmethod
     def _row_to_entity(row) -> ForwardRule:
-        cols = set(row.keys())
-        trigger_raw = row["trigger_events"] if "trigger_events" in cols else "NEW_MESSAGE"
+        # ``Row`` is a dict subclass whose ``__getitem__`` is Python-level for
+        # string keys (it also supports positional access, see database.py), and
+        # this method reads ~60 columns per row. ``dict.get`` is *not*
+        # overridden, so it takes the C path: optional columns go through it,
+        # and only the handful of required ones use ``[]``, which keeps
+        # ``IndexError`` for a column an older schema does not have.
+        get = row.get
+
+        # ``.get`` answers None both for a NULL column and for a column that is
+        # absent, which is exactly what the ``in cols`` checks this replaced
+        # meant.
+        def _col(name, default=None):
+            value = get(name)
+            return default if value is None else value
+
+        trigger_raw = _col("trigger_events", TriggerEvent.NEW_MESSAGE.value)
         triggers = _safe_list(trigger_raw, [TriggerEvent.NEW_MESSAGE.value])
         if isinstance(triggers, str):
             triggers = [triggers]
-        content_raw = row["content_mode"] if "content_mode" in cols else ContentMode.AUTO.value
         try:
-            cm = ContentMode(content_raw)
+            cm = ContentMode(_col("content_mode", ContentMode.AUTO.value))
         except ValueError:
             cm = ContentMode.AUTO
-        rule_version = int(row["version"]) if ("version" in cols and row["version"] is not None) else 1
-        fb_raw = row["ai_fallback_policy"] if "ai_fallback_policy" in cols else AIFallbackPolicy.DROP.value
+        rule_version = int(_col("version", 1))
         try:
-            fb_policy = AIFallbackPolicy(fb_raw)
+            fb_policy = AIFallbackPolicy(_col("ai_fallback_policy", AIFallbackPolicy.DROP.value))
         except ValueError:
             fb_policy = AIFallbackPolicy.DROP
-        ai_ver = int(row["ai_prompt_version"]) if ("ai_prompt_version" in cols and row["ai_prompt_version"] is not None) else 0
-        ai_timeout = float(row["ai_timeout_seconds"]) if ("ai_timeout_seconds" in cols and row["ai_timeout_seconds"] is not None) else 15.0
-        ai_sec = str(row["ai_secondary_config_id"]) if ("ai_secondary_config_id" in cols and row["ai_secondary_config_id"] is not None) else None
-
-        def _col(name, default=None):
-            return row[name] if name in cols and row[name] is not None else default
+        ai_ver = int(_col("ai_prompt_version", 0) or 0)
+        ai_timeout = float(_col("ai_timeout_seconds", 15.0))
+        ai_sec_raw = _col("ai_secondary_config_id")
+        ai_sec = None if ai_sec_raw is None else str(ai_sec_raw)
 
         try:
             fallback_mode = ForwardMode(_col("fallback_mode", ForwardMode.COPY_MESSAGE.value))
@@ -458,22 +522,22 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             fallback_mode = ForwardMode.COPY_MESSAGE
 
         detection_criteria = _safe_dict(_col("detection_criteria", "{}"), {})
-        meta = _safe_dict(row["metadata"] if "metadata" in cols else "{}", {})
+        meta = _safe_dict(_col("metadata", "{}"), {})
 
         return ForwardRule(
             id=row["id"], session_id=row["session_id"],
             source_chat_id=row["source_chat_id"], source_chat_name=row["source_chat_name"],
             target_chat_id=row["target_chat_id"], target_chat_name=row["target_chat_name"],
-            target_chat_ids=_safe_list(row["target_chat_ids"] if "target_chat_ids" in cols else "[]", []),
+            target_chat_ids=_safe_list(_col("target_chat_ids", "[]"), []),
             routing_type=RoutingType(row["routing_type"]),
             forward_mode=ForwardMode(row["forward_mode"]),
             is_active=bool(row["is_active"]), filter_rule_id=row["filter_rule_id"],
             ai_config_id=row["ai_config_id"], remove_links=bool(row["remove_links"]),
             custom_caption_template=row["custom_caption_template"],
-            delay_seconds=float(row["delay_seconds"]) if "delay_seconds" in cols else 0.0,
-            skip_history=bool(row["skip_history"]) if "skip_history" in cols else True,
-            since_ts=int(row["since_ts"] or 0) if "since_ts" in cols else 0,
-            ignore_edits=bool(row["ignore_edits"]) if "ignore_edits" in cols else False,
+            delay_seconds=float(_col("delay_seconds", 0.0) or 0.0),
+            skip_history=bool(_col("skip_history", True)),
+            since_ts=int(_col("since_ts", 0) or 0),
+            ignore_edits=bool(_col("ignore_edits", False)),
             trigger_events=triggers,
             content_mode=cm,
             ai_fallback_policy=fb_policy,
@@ -583,7 +647,9 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         rows = self._db.query_all("SELECT * FROM forward_rules ORDER BY created_at")
         return [self._row_to_entity(r) for r in rows]
 
-    async def list_active_by_source(self, source_chat_id: str) -> List[ForwardRule]:
+    async def list_active_by_source(
+        self, source_chat_id: str, fresh: bool = False
+    ) -> List[ForwardRule]:
         """Active rules that watch ``source_chat_id``.
 
         A task may watch several sources: its primary ``source_chat_id`` plus the
@@ -609,8 +675,22 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         rule whose *primary* source is the searched chat is already in the first
         branch, and would otherwise appear twice — once per branch — and forward
         the message twice.
+
+        The result is cached for ``ACTIVE_CACHE_TTL`` seconds and dropped by
+        every write in this repository, because this is the query every inbound
+        message runs and a burst from one channel would otherwise resolve the
+        same routing table once per message. Pass ``fresh=True`` to bypass the
+        cache — the dry-run/preview paths that must reflect a change the user
+        made a moment ago.
+
+        Callers must treat the returned rules as read-only: on a cache hit they
+        are the same objects the previous caller received.
         """
         cid = str(source_chat_id)
+        if not fresh:
+            cached = self._cache_get(cid)
+            if cached is not None:
+                return cached
         rows = self._db.query_all(
             "SELECT * FROM forward_rules WHERE is_active=1 AND source_chat_id = ?"
             " UNION ALL"
@@ -621,7 +701,32 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
             "        WHERE value = ?)",
             (cid, cid, cid),
         )
-        return [self._row_to_entity(r) for r in rows]
+        rules = [self._row_to_entity(r) for r in rows]
+        self._cache_put(cid, rules)
+        return list(rules)
+
+    def _cache_get(self, cid: str):
+        now = time.monotonic()
+        with self._active_lock:
+            entry = self._active_cache.get(cid)
+            if entry is None:
+                self._active_misses += 1
+                return None
+            stored_at, rules = entry
+            if now - stored_at > self.ACTIVE_CACHE_TTL:
+                # Expired, but not invalidated: a writer in another process may
+                # have changed the table, so it must not be served.
+                self._active_cache.pop(cid, None)
+                self._active_misses += 1
+                return None
+            self._active_hits += 1
+            return list(rules)
+
+    def _cache_put(self, cid: str, rules: List[ForwardRule]) -> None:
+        with self._active_lock:
+            if len(self._active_cache) >= self.ACTIVE_CACHE_MAX:
+                self._active_cache.clear()
+            self._active_cache[cid] = (time.monotonic(), tuple(rules))
 
     #: A task's own bookkeeping, all keyed by ``rule_id``. Deleting a task has to
     #: take these with it:
@@ -648,9 +753,10 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         All-or-nothing on purpose: each write goes through ``execute()``, which
         commits per statement, so a crash between "the rule is gone" and "the
         mappings are gone" would leave exactly the inconsistency this exists to
-        prevent — and no watchdog reconciles those tables. A store that predates
+        prevent — and no watchdog reconciles those tables.        A store that predates
         one of them simply has nothing to clean there.
         """
+        self.invalidate_active_cache()
 
         def unit(conn: sqlite3.Connection) -> bool:
             cur = conn.execute("DELETE FROM forward_rules WHERE id=?", (rule_id,))
@@ -680,9 +786,11 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         One conditional UPDATE, so two taps on the same screen cannot both win and
         a screen that is no longer true cannot overwrite a newer change. The
         condition is the exact state the caller was shown (`status_state()`), so
-        e.g. an untimed pause is not confused with a timed one that has already
+        e.g.        an untimed pause is not confused with a timed one that has already
         elapsed.
         """
+        # A pause is exactly the change a stale routing table would hide.
+        self.invalidate_active_cache()
         from ...domain.entities import (
             STATUS_DISABLED,
             STATUS_PAUSED,
