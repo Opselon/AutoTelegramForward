@@ -52,9 +52,11 @@ func TestForwardEveryNIsNormalizedToALegalInterval(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			rule := &pb.ForwardRule{}
 			enrichCustomMetadata([]byte(tc.raw), rule)
-			var meta map[string]any
-			if err := json.Unmarshal([]byte(rule.CustomMetadataJson), &meta); err != nil {
-				t.Fatalf("metadata is not JSON: %v (%q)", err, rule.CustomMetadataJson)
+			meta := map[string]any{}
+			if rule.CustomMetadataJson != "" {
+				if err := json.Unmarshal([]byte(rule.CustomMetadataJson), &meta); err != nil {
+					t.Fatalf("metadata is not JSON: %v (%q)", err, rule.CustomMetadataJson)
+				}
 			}
 			got, present := meta["forward_every_n"]
 			if tc.dropped {
@@ -76,9 +78,11 @@ func TestForwardEveryNIsNormalizedToALegalInterval(t *testing.T) {
 func TestForwardEveryNIsNotInvented(t *testing.T) {
 	rule := &pb.ForwardRule{}
 	enrichCustomMetadata([]byte(`{"source_chat_id":"-1001"}`), rule)
-	var meta map[string]any
-	if err := json.Unmarshal([]byte(rule.CustomMetadataJson), &meta); err != nil {
-		t.Fatalf("metadata is not JSON: %v", err)
+	meta := map[string]any{}
+	if rule.CustomMetadataJson != "" {
+		if err := json.Unmarshal([]byte(rule.CustomMetadataJson), &meta); err != nil {
+			t.Fatalf("metadata is not JSON: %v", err)
+		}
 	}
 	if _, present := meta["forward_every_n"]; present {
 		t.Fatalf("forward_every_n was invented: %#v", meta)
@@ -94,7 +98,18 @@ func TestForwardEveryNSurvivesTheMetadataSizeCap(t *testing.T) {
 		meta["unknown_field_"+string(rune('a'+i%26))+string(rune(i))] = "x"
 	}
 	normalizeAdvancedMetadata(meta)
-	if got, ok := meta["forward_every_n"].(float64); !ok || got != 9 {
+	// The normalizer stores an int; a JSON round trip (what a client sees) makes
+	// it a float64, so accept either without letting a string through.
+	switch got := meta["forward_every_n"].(type) {
+	case int:
+		if got != 9 {
+			t.Fatalf("forward_every_n = %#v, want 9 after the cap", got)
+		}
+	case float64:
+		if got != 9 {
+			t.Fatalf("forward_every_n = %#v, want 9 after the cap", got)
+		}
+	default:
 		t.Fatalf("forward_every_n = %#v, want 9 after the cap", meta["forward_every_n"])
 	}
 }
