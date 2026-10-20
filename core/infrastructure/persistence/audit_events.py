@@ -54,6 +54,9 @@ REASON_CODES = frozenset({
     "DATABASE_OPERATION_FAILED", "QUEUE_ENQUEUE_FAILED",
     "EXTERNAL_RESULT_UNCONFIRMED", "VALIDATION_FAILED", "TIMEOUT",
     "MAX_ATTEMPTS_EXCEEDED", "POISON_EVENT",
+    # Not a failure: the task accepted the message, its cadence just did not
+    # call for this one ("forward every Nth message").
+    "FORWARD_INTERVAL",
 })
 
 # Field-aware redaction — same vocabulary as core/infrastructure/telegram/errors.py

@@ -16,6 +16,10 @@ from .value_objects import (
     RoutingType,
     TriggerEvent,
 )
+from .forward_interval import (
+    DEFAULT_FORWARD_EVERY_N,
+    clamp_forward_every_n,
+)
 # branding.py is dependency-free, so a module-level import is safe here (unlike
 # content_policy, which is imported lazily inside the property below).
 from . import branding as branding_policy
@@ -288,6 +292,39 @@ class ForwardRule:
         self.is_paused = bool(prev.get("was_paused", False))
         self.paused_until = int(prev.get("paused_until") or 0) if self.is_paused else 0
         return True
+
+    # -- forwarding interval ------------------------------------------------
+    #
+    # Stored in metadata rather than a column: it is read once per accepted
+    # message, and adding a column would mean a migration plus a second write
+    # path for the same number. The counter that makes it work is a column
+    # (`rule_counters`), because that one has to survive restarts.
+    @property
+    def forward_every_n(self) -> int:
+        """Forward only every Nth message that passes this task's filters.
+
+        1 means every message — the default, and what a task that never
+        configured the feature keeps doing. The value is clamped on read as well
+        as on write, so a hand-edited row or a float from JSON can never turn
+        into 0 (which would silence the task) or a negative stride.
+        """
+        if not isinstance(self.metadata, dict):
+            return DEFAULT_FORWARD_EVERY_N
+        return clamp_forward_every_n(
+            self.metadata.get("forward_every_n", DEFAULT_FORWARD_EVERY_N)
+        )
+
+    @forward_every_n.setter
+    def forward_every_n(self, value: Any) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        every_n = clamp_forward_every_n(value)
+        if every_n == DEFAULT_FORWARD_EVERY_N:
+            # The default leaves no trace, so "off" and "never configured" stay
+            # indistinguishable and a backup of an old task stays byte-identical.
+            self.metadata.pop("forward_every_n", None)
+        else:
+            self.metadata["forward_every_n"] = every_n
 
     # -- effective task status (one authority for UI + engine) ---------------
     #

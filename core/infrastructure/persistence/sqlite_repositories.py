@@ -33,6 +33,7 @@ from ...application.repositories import (
     ITaskRepository,
     IProcessedMessageRepository,
     IPromptRepository,
+    IRuleCounterRepository,
     IRuleStatsRepository,
     ISessionRepository,
     ISettingsRepository,
@@ -787,6 +788,7 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         "rule_stats",
         "error_log",
         "content_dedup",
+        "rule_counters",
     )
 
     async def delete(self, rule_id: str) -> bool:
@@ -1262,6 +1264,70 @@ class SqliteProcessedMessageRepository(IProcessedMessageRepository):
         cutoff = _now() - self.RETENTION_SECONDS
         cur = self._db.execute("DELETE FROM processed_messages WHERE ts < ?", (cutoff,))
         return cur.rowcount
+
+
+class SqliteRuleCounterRepository(IRuleCounterRepository):
+    """The "forward every Nth message" position, one row per task.
+
+    ``advance`` is a single UPSERT plus a read of the row it just wrote, both
+    inside the database lock and one transaction, which is what makes the
+    sequence unique under concurrency: two pipeline tasks handling two messages
+    of the same rule cannot both see ``accepted = 4`` and both decide they own
+    slot 5. Doing the arithmetic in SQL rather than in Python is the same
+    point — the increment and the reset-on-interval-change are one expression,
+    so they cannot be split by another writer.
+    """
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    _ADVANCE = (
+        "INSERT INTO rule_counters (rule_id, owner_user_id, every_n, accepted, updated_at)"
+        " VALUES (?, ?, ?, 1, ?)"
+        " ON CONFLICT(rule_id) DO UPDATE SET"
+        "  owner_user_id=excluded.owner_user_id,"
+        # The CASE reads the *previous* row (all right-hand sides of an UPSERT
+        # see the old values), so a changed interval restarts the count at 1 and
+        # an unchanged one just steps forward.
+        "  accepted=CASE WHEN rule_counters.every_n=excluded.every_n"
+        "                THEN rule_counters.accepted + 1 ELSE 1 END,"
+        "  every_n=excluded.every_n,"
+        "  updated_at=excluded.updated_at"
+    )
+
+    async def advance(self, rule_id: str, every_n: int, owner_user_id: int = 0) -> int:
+        if not rule_id:
+            raise ValueError("rule_id is required")
+        every_n = max(1, int(every_n or 1))
+
+        def unit(conn: sqlite3.Connection) -> int:
+            conn.execute(self._ADVANCE, (rule_id, int(owner_user_id or 0), every_n, _now()))
+            row = conn.execute(
+                "SELECT accepted FROM rule_counters WHERE rule_id=?", (rule_id,)
+            ).fetchone()
+            return int(row[0]) if row else 0
+
+        return int(self._db.run_in_transaction(unit) or 0)
+
+    async def peek(self, rule_id: str) -> Optional[dict]:
+        row = self._db.query_one(
+            "SELECT rule_id, owner_user_id, every_n, accepted, updated_at"
+            " FROM rule_counters WHERE rule_id=?",
+            (rule_id,),
+        )
+        if row is None:
+            return None
+        return {
+            "rule_id": row[0],
+            "owner_user_id": row[1],
+            "every_n": row[2],
+            "accepted": row[3],
+            "updated_at": row[4],
+        }
+
+    async def reset(self, rule_id: str) -> bool:
+        cur = self._db.execute("DELETE FROM rule_counters WHERE rule_id=?", (rule_id,))
+        return cur.rowcount > 0
 
 
 # --------------------------------------------------------------------------- #

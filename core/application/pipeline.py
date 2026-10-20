@@ -29,6 +29,7 @@ from ..domain.entities import (
     MessagePayload,
 )
 from ..domain.content_policy import ContentPolicy, has_link
+from ..domain.forward_interval import owns_slot
 from ..domain.media_filter import (
     link_block_reason,
     media_block_reason,
@@ -60,6 +61,9 @@ class PipelineStage(str, Enum):
     NORMALIZE = "NORMALIZE"
     DEDUPLICATE = "DEDUPLICATE"
     FILTER = "FILTER"
+    #: The "forward every Nth message" gate: a message that survived every
+    #: filter but is not the current slot in the task's cadence.
+    FORWARD_INTERVAL = "FORWARD_INTERVAL"
     TRANSFORM = "TRANSFORM"
     ENQUEUE = "ENQUEUE"
     DISPATCH = "DISPATCH"
@@ -106,7 +110,17 @@ class PipelineContext:
 
     @property
     def is_failed(self) -> bool:
-        return any(not r.success for r in self.stage_results if r.stage not in (PipelineStage.FILTER, PipelineStage.DEDUPLICATE))
+        return any(
+            not r.success
+            for r in self.stage_results
+            # Both of these mean "the task decided not to send", which is the
+            # pipeline working, not failing.
+            if r.stage not in (
+                PipelineStage.FILTER,
+                PipelineStage.DEDUPLICATE,
+                PipelineStage.FORWARD_INTERVAL,
+            )
+        )
 
 
 @dataclass
@@ -115,6 +129,7 @@ class PipelineMetrics:
     normalized_total: int = 0
     dedup_skipped_total: int = 0
     filtered_total: int = 0
+    forward_interval_skipped_total: int = 0
     transformed_total: int = 0
     enqueued_total: int = 0
     dispatched_total: int = 0
@@ -136,6 +151,7 @@ class PipelineMetrics:
             "normalized_total": self.normalized_total,
             "dedup_skipped_total": self.dedup_skipped_total,
             "filtered_total": self.filtered_total,
+            "forward_interval_skipped_total": self.forward_interval_skipped_total,
             "transformed_total": self.transformed_total,
             "enqueued_total": self.enqueued_total,
             "dispatched_total": self.dispatched_total,
@@ -284,6 +300,7 @@ class DurableMessagePipeline:
         log_policy: Optional["LogPolicy"] = None,
         branding_hop: Optional[Any] = None,
         bot_tokens: Optional[Any] = None,
+        counters: Optional[Any] = None,
     ) -> None:
         self._rules = rule_repo
         self._filters = filter_repo
@@ -309,6 +326,11 @@ class DurableMessagePipeline:
         # carries delivery_transport, bot_token_id and auto_delete_seconds — is
         # derived from the rule object this pipeline hands along.
         self._bot_tokens = bot_tokens
+        # "Forward every Nth message": where each task is in its cadence. A
+        # port (IRuleCounterRepository), optional like every other collaborator
+        # so a bare pipeline still works — without it the setting is inert and
+        # every message is forwarded, which is the pre-feature behaviour.
+        self._counters = counters
         self.metrics = PipelineMetrics()
         # Which lifecycle events may leave this process, and how often. The
         # Logger has no server-side filter yet, so the documented severity
@@ -772,6 +794,67 @@ class DurableMessagePipeline:
             ctx.correlation_id[:8], rule.id[:8], payload.message_id, rule.filter_rule_id or "none",
             eval_res.reason or "allow", (time.monotonic() - t0) * 1000,
         )
+
+        # 4c. FORWARD EVERY N MESSAGES
+        #
+        # Runs after every filter (so a message the task would not forward never
+        # consumes a slot) and before the transform (so a message that will not
+        # be sent does not pay for an AI rewrite).
+        #
+        # The increment is one atomic statement in the store, and the slot is
+        # decided from the number it returns: two workers handling two messages
+        # of the same task get different numbers, so exactly one owns the slot.
+        # Deciding from a count read in Python — or from a cached value — lets
+        # both read 4 and both forward.
+        every_n = int(getattr(rule, "forward_every_n", 1) or 1)
+        # An edit updates a copy that already had its slot: counting it would
+        # both consume a slot and let an edit beat a real message to it.
+        if every_n > 1 and not payload.is_edit and self._counters is not None:
+            sequence = 0
+            try:
+                sequence = int(await self._counters.advance(
+                    rule.id, every_n, int(getattr(rule, "owner_user_id", 0) or 0)
+                ))
+            except Exception as exc:
+                # Fail open, deliberately: a broken bookkeeping row must not
+                # silence a task that was forwarding fine before the feature
+                # existed. The message is forwarded (the pre-feature behaviour)
+                # and the failure is loud in the log.
+                logger.error(
+                    "[PIPELINE:INTERVAL] [%s] Rule %s counter advance failed (%s) — forwarding msg %s anyway",
+                    ctx.correlation_id[:8], rule.id[:8], exc, payload.message_id,
+                )
+            if sequence and not owns_slot(sequence, every_n):
+                # Marked processed even though nothing was sent: a redelivery of
+                # this message (a reconnect replay, a queue retry) would
+                # otherwise consume the *next* slot and forward early.
+                if self._processed is not None:
+                    try:
+                        await self._processed.mark_processed(
+                            rule.id, payload.chat_id, payload.message_id,
+                            payload.media_group_id or "",
+                        )
+                    except Exception:
+                        logger.warning(
+                            "[PIPELINE:INTERVAL] [%s] Rule %s could not mark skipped msg %s processed",
+                            ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+                        )
+                ctx.record_stage(PipelineStage.FORWARD_INTERVAL, False, reason="every_n_skip")
+                self.metrics.forward_interval_skipped_total += 1
+                await self._audit(
+                    ctx, "forward.skipped", "SKIPPED", reason_code="FORWARD_INTERVAL",
+                    rule_id=rule.id, message_id=str(payload.message_id),
+                    result_summary=f"accepted={sequence} every_n={every_n}",
+                )
+                logger.info(
+                    "[PIPELINE:INTERVAL] [%s] Rule %s skipped msg %s: accepted #%s, forwarding every %s",
+                    ctx.correlation_id[:8], rule.id[:8], payload.message_id, sequence, every_n,
+                )
+                return
+            ctx.record_stage(
+                PipelineStage.FORWARD_INTERVAL, True,
+                reason=f"slot:{sequence}" if sequence else "counter_unavailable",
+            )
 
         # 5. TRANSFORM
         t0 = time.monotonic()

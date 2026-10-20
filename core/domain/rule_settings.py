@@ -148,6 +148,14 @@ SETTING_SPECS: Dict[str, SettingSpec] = {
     "auto_delete_seconds": _s(kind="int", default=0, group="sending",
                               minimum=0, maximum=604800,
                               help="Delete the forwarded copy after N seconds (0 = keep)."),
+    # Counts only messages that survived every filter, and treats one album as
+    # one message. The counter lives in `rule_counters`, so this value is a pure
+    # policy: 1 (the default) forwards everything and is what an older task with
+    # no metadata behaves like.
+    "forward_every_n": _s(kind="int", default=1, group="sending",
+                          minimum=1, maximum=1000,
+                          help="Forward only every Nth message that passes this task's filters "
+                               "(1 = every message, 1000 = one in a thousand)."),
     "debug_mode": _s(kind="bool", default=False, group="sending",
                      help="Log every decision for this task."),
     "sync_replies": _s(kind="bool", default=False, group="sending",

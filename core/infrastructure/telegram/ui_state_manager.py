@@ -78,7 +78,8 @@ UI_STEPS = frozenset({
 # handler's ownership check) stays tenant-scoped without crashing the step
 # namespace validation.
 DYNAMIC_STEP_PREFIXES = (
-    "rge_edit_", "rge_search_", "bot_route_token_", "set_delay_", "add_bl_",
+    "rge_edit_", "rge_search_", "bot_route_token_", "set_delay_", "set_every_n_",
+    "add_bl_",
     "add_wl_", "set_wm_", "set_topic_", "rename_rule_", "ai_prompt_name_",
     "ai_prompt_sys_",
 )

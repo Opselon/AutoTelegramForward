@@ -837,6 +837,25 @@ class ProBotUI:
             state=self._t("ui_status_on" if enabled else "ui_status_off", lang=lang),
         )
 
+    def _every_n_label(self, rule: ForwardRule, lang: Optional[str] = None) -> str:
+        """The add-on row's label, carrying the configured interval.
+
+        The catalogue entry says "Forward Every N"; a task at N = 5 should read
+        "Every 5 messages: On" rather than a second trip into the screen to find
+        out which N it is on.
+        """
+        every_n = int(getattr(rule, "forward_every_n", 1) or 1)
+        base = (
+            self._t("ui_addon_every_n_value", lang=lang, n=every_n)
+            if every_n > 1 else self._t("ui_addon_every_n", lang=lang)
+        )
+        return self._t(
+            "ui_toggle_addon",
+            lang=lang,
+            addon=base,
+            state=self._t("ui_status_on" if every_n > 1 else "ui_status_off", lang=lang),
+        )
+
     def _login_fail_text(self, code: str, detail: str = "", lang: Optional[str] = None) -> str:
         """The user-facing line for a LoginFlowManager failure code.
 
@@ -1731,7 +1750,7 @@ class ProBotUI:
             rows.extend([
                 [
                     (self._addon_label("ui_addon_comments", lang, c_comm), f"radon:{rule.id}:comments"),
-                    (self._addon_label("ui_addon_every_n", lang), f"radon:{rule.id}:every_n"),
+                    (self._every_n_label(rule, lang), f"radon:{rule.id}:every_n"),
                 ],
                 [
                     (self._addon_label("ui_addon_kw_confirm", lang), f"radon:{rule.id}:kw_confirm"),
@@ -1744,7 +1763,7 @@ class ProBotUI:
             ])
         else:  # "all" (matches Image 4 exactly)
             c_comm = addons.get("channel_comments", False)
-            ev_n = addons.get("every_n", False)
+            ev_n = int(getattr(rule, "forward_every_n", 1) or 1) > 1
             kw_c = addons.get("kw_confirm", False)
             kw_r = addons.get("kw_reply", False)
             a_del = addons.get("auto_del", False)
@@ -1753,7 +1772,7 @@ class ProBotUI:
             rows.extend([
                 [
                     (self._addon_label("ui_addon_comments", lang, c_comm), f"radon:{rule.id}:comments"),
-                    (self._addon_label("ui_addon_every_n", lang, ev_n), f"radon:{rule.id}:every_n"),
+                    (self._every_n_label(rule, lang), f"radon:{rule.id}:every_n"),
                 ],
                 [
                     (self._addon_label("ui_addon_kw_confirm", lang, kw_c), f"radon:{rule.id}:kw_confirm"),
@@ -3339,6 +3358,50 @@ class ProBotUI:
             ],
             [
                 (self._t("ui_dly_btn_custom", lang=lang), f"rdly_c:{rule.id}"),
+            ],
+            [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
+        ]
+        return text, self._kbd(rows)
+
+    def _render_every_n_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
+        """The "forward every Nth message" panel, one tap from the task card.
+
+        The interval is a number, not a toggle, so this screen replaces the old
+        boolean add-on switch for the same row: presets cover the useful range
+        and a free-text step covers the rest (1..1000). The counter is not shown
+        here — it is the engine's state, and a stale copy of it on a button is
+        worse than none.
+        """
+        lang = self._lang_for(rule)
+        src_label = rule.source_chat_name or rule.source_chat_id
+        dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
+        every_n = int(getattr(rule, "forward_every_n", 1) or 1)
+        curr_str = (
+            self._t("ui_en_every", lang=lang, n=every_n)
+            if every_n > 1 else self._t("ui_en_none", lang=lang)
+        )
+        text = (
+            self._t("ui_en_title", lang=lang)
+            + self._t("ui_hf_rule_line", lang=lang, src=src_label, dst=dst_label)
+            + self._t("ui_en_current", lang=lang, val=curr_str)
+            + "────────────────────\n"
+            + self._t("ui_en_hint", lang=lang)
+        )
+        rows: List[List[Tuple[str, str]]] = [
+            [
+                (self._t("ui_en_btn_off", lang=lang), f"ren:{rule.id}:1"),
+                (self._t("ui_en_btn_n", lang=lang, n=2), f"ren:{rule.id}:2"),
+                (self._t("ui_en_btn_n", lang=lang, n=3), f"ren:{rule.id}:3"),
+            ],
+            [
+                (self._t("ui_en_btn_n", lang=lang, n=5), f"ren:{rule.id}:5"),
+                (self._t("ui_en_btn_n", lang=lang, n=10), f"ren:{rule.id}:10"),
+                (self._t("ui_en_btn_n", lang=lang, n=25), f"ren:{rule.id}:25"),
+            ],
+            [
+                (self._t("ui_en_btn_n", lang=lang, n=50), f"ren:{rule.id}:50"),
+                (self._t("ui_en_btn_n", lang=lang, n=100), f"ren:{rule.id}:100"),
+                (self._t("ui_en_btn_custom", lang=lang), f"renc:{rule.id}"),
             ],
             [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
@@ -6698,6 +6761,13 @@ class ProBotUI:
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            if addon_key == "every_n":
+                # Not a boolean: this row opens the interval screen, which owns
+                # the number. Toggling it would have set a flag the engine no
+                # longer reads, leaving the panel saying "On" at N = 1.
+                text, kbd = self._render_every_n_menu(rule)
+                await self._safe_edit(cq, text, reply_markup=kbd)
+                return await cq.answer()
             addons = rule.paid_addons
             curr = bool(addons.get(addon_key, False))
             addons[addon_key] = not curr
@@ -7241,6 +7311,50 @@ class ProBotUI:
             )
             kbd = self._kbd([[(self._t("ui_cancel_back"), f"rdly:{rule.id}")]])
             await self._safe_edit(cq, prompt, reply_markup=kbd)
+            await cq.answer()
+
+        # -- forward every Nth message -------------------------------------- #
+        @b.on_callback_query(filters.regex(r"^ren:(.+?):(\d+)$"))
+        @self._localized_handler
+        async def _cb_rule_every_n_set(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            parts = raw.split(":")
+            rule_id, n_str = parts[1], parts[2]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            # Client-controlled payload: the interval must be a whole number in
+            # the registry's own range, whatever a crafted callback says.
+            try:
+                every_n = int(n_str)
+            except (TypeError, ValueError):
+                return await cq.answer(self._t("ui_step_every_n_invalid_error"), show_alert=True)
+            if not 1 <= every_n <= 1000:
+                return await cq.answer(self._t("ui_step_every_n_invalid_error"), show_alert=True)
+            rule.forward_every_n = every_n
+            addons = rule.paid_addons
+            addons["every_n"] = every_n > 1
+            rule.paid_addons = addons
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(self._t("ui_step_every_n_saved", n=every_n))
+            text, kbd = self._render_every_n_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^renc:(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_every_n_custom(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            st.step = f"set_every_n_{rule.id}"
+            await self._persist(uid, st)
+            kbd = self._kbd([[(self._t("ui_cancel_back"), f"ren:{rule.id}:{int(getattr(rule, 'forward_every_n', 1) or 1)}")]])
+            await self._safe_edit(cq, self._t("ui_prompt_enter_every_n"), reply_markup=kbd)
             await cq.answer()
 
         # --- Blacklist Handlers ---
@@ -9758,6 +9872,37 @@ class ProBotUI:
         card_text, kbd = self._render_delay_menu(rule)
         await message.reply_text(self._t("ui_step_delay_saved", delay=rule.delay_seconds), reply_markup=kbd)
 
+    async def _step_set_every_n(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
+        """Free-text interval entry: whole numbers only, 1..1000."""
+        uid = message.from_user.id if message.from_user else 0
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
+        raw = (text or "").strip()
+        try:
+            # `int()` and not `float()`: "2.5 messages" is not a thing, and a
+            # silent truncation would be a cadence the user never chose.
+            every_n = int(raw)
+        except (TypeError, ValueError):
+            return await message.reply_text(self._t("ui_step_every_n_invalid_error"))
+        if not 1 <= every_n <= 1000:
+            return await message.reply_text(self._t("ui_step_every_n_invalid_error"))
+        rule.forward_every_n = every_n
+        # The add-on flag stays the catalogue's own switch (a boolean), so the
+        # grid and this screen cannot disagree about whether the feature is on.
+        addons = rule.paid_addons
+        addons["every_n"] = every_n > 1
+        rule.paid_addons = addons
+        await self._save_owned_rule(rule, uid)
+        st.step = ""
+        await self._persist(uid, st)
+        card_text, kbd = self._render_every_n_menu(rule)
+        await message.reply_text(
+            self._t("ui_step_every_n_saved", n=every_n), reply_markup=kbd
+        )
+
     async def _step_add_bl(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
         uid = message.from_user.id if message.from_user else 0
         rule = await self._owned_rule(rule_id, uid)
@@ -10280,6 +10425,9 @@ class ProBotUI:
         if st.step.startswith("set_delay_"):
             rule_id = st.step.split("set_delay_", 1)[1]
             return await self._step_set_delay(message, st, text, rule_id)
+        if st.step.startswith("set_every_n_"):
+            rule_id = st.step.split("set_every_n_", 1)[1]
+            return await self._step_set_every_n(message, st, text, rule_id)
         if st.step.startswith("add_bl_"):
             rule_id = st.step.split("add_bl_", 1)[1]
             return await self._step_add_bl(message, st, text, rule_id)
