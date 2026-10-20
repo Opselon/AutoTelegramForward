@@ -154,8 +154,12 @@ SETTING_SPECS: Dict[str, SettingSpec] = {
     # no metadata behaves like.
     "forward_every_n": _s(kind="int", default=1, group="sending",
                           minimum=1, maximum=1000,
+                          # The catalog's `ui_reg_help_forward_every_n` must stay
+                          # this sentence verbatim: the help-translation test
+                          # pins the two to each other in every locale.
                           help="Forward only every Nth message that passes this task's filters "
-                               "(1 = every message, 1000 = one in a thousand)."),
+                               "(1 = every message, 1000 = one in a thousand). "
+                               "An album counts as one message."),
     "debug_mode": _s(kind="bool", default=False, group="sending",
                      help="Log every decision for this task."),
     "sync_replies": _s(kind="bool", default=False, group="sending",
