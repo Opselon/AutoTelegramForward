@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { KeyRound, Shield, UserCheck, CheckCircle2, AlertCircle, Save } from 'lucide-react'
 import { api } from '../api'
-import { makeT, type UiLang } from '../locales'
+import { makeT, type UiLang } from '../locales/engine'
 
 interface Props {
   lang: UiLang

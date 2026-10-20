@@ -1,5 +1,5 @@
 import { Globe } from 'lucide-react'
-import { SUPPORTED_LANGS, isRtlLang, t, type UiLang } from '../locales'
+import { SUPPORTED_LANGS, isRtlLang, t, type UiLang } from '../locales/engine'
 
 /**
  * The language picker.

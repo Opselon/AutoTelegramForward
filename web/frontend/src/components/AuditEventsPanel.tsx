@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { api } from '../api'
 import type { AuditEventEntry } from '../types'
-import { makeT, type UiLang } from '../locales'
+import { makeT, type UiLang } from '../locales/engine'
 
 interface Props {
   lang: UiLang
@@ -105,7 +105,7 @@ export function AuditEventsPanel({ lang }: Props) {
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
         <div style={{ position: 'relative', flex: '1 1 260px', minWidth: 220 }}>
-          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b' }} />
+          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-muted)' }} />
           <input
             value={corrSearch}
             onChange={(e) => setCorrSearch(e.target.value)}
@@ -151,14 +151,14 @@ export function AuditEventsPanel({ lang }: Props) {
       )}
 
       {/* Summary line */}
-      <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 10 }}>
+      <div style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)', marginBottom: 10 }}>
         {t('ui_total_2_event_s', { total_2: total })}
         {loading ? (t('ui_loading')) : ''}
       </div>
 
       {/* Event list */}
       {events.length === 0 && !loading && !error ? (
-        <div style={{ textAlign: 'center', padding: '48px 20px', color: '#64748b' }}>
+        <div style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--color-text-muted)' }}>
           <Activity size={36} style={{ margin: '0 auto 12px', opacity: 0.5 }} />
           <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{t('ui_no_audit_events_found')}</div>
           <div style={{ fontSize: '0.8rem', marginTop: 6 }}>
@@ -183,23 +183,23 @@ export function AuditEventsPanel({ lang }: Props) {
                 <div style={{ fontSize: '0.825rem', fontWeight: 600, color: '#e2e8f0', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span>{evt.event_type}</span>
                   {evt.reason_code && (
-                    <span style={{ fontSize: '0.7rem', padding: '1px 6px', borderRadius: 4, background: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}>
+                    <span style={{ fontSize: 'var(--type-xs)', padding: '1px 6px', borderRadius: 4, background: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}>
                       {evt.reason_code}
                     </span>
                   )}
-                  {evt.rule_id && <span style={{ fontSize: '0.7rem', color: '#64748b' }}>rule={evt.rule_id.slice(0, 8)}</span>}
+                  {evt.rule_id && <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>rule={evt.rule_id.slice(0, 8)}</span>}
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <span>{evt.service}</span>
                   <span>{fmtTs(evt.ts_utc)}</span>
                   {evt.correlation_id && <span style={{ fontFamily: 'monospace' }}>{evt.correlation_id.slice(0, 12)}</span>}
                   {evt.result_summary && <span style={{ opacity: 0.85 }}>{evt.result_summary.slice(0, 80)}</span>}
                 </div>
               </div>
-              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: severityColor(evt.severity) }}>
+              <span style={{ fontSize: 'var(--type-xs)', fontWeight: 700, color: severityColor(evt.severity) }}>
                 {(evt.severity || 'INFO').toUpperCase()}
               </span>
-              <span style={{ fontSize: '0.7rem', fontWeight: 700, color: outcomeColor(evt.outcome) }}>
+              <span style={{ fontSize: 'var(--type-xs)', fontWeight: 700, color: outcomeColor(evt.outcome) }}>
                 {(evt.outcome || '—').toUpperCase()}
               </span>
             </button>
@@ -223,7 +223,7 @@ export function AuditEventsPanel({ lang }: Props) {
             {detailFields(selected).map(([k, v]) => (
               v ? (
                 <div key={k} style={{ fontSize: '0.75rem' }}>
-                  <div style={{ color: '#64748b', marginBottom: 2 }}>{k}</div>
+                  <div style={{ color: 'var(--color-text-muted)', marginBottom: 2 }}>{k}</div>
                   <div style={{ color: '#cbd5e1', fontFamily: k.includes('id') ? 'monospace' : 'inherit', wordBreak: 'break-all' }}>
                     {v}
                   </div>
@@ -233,8 +233,8 @@ export function AuditEventsPanel({ lang }: Props) {
           </div>
           {selected.metadata_json && selected.metadata_json !== '{}' && (
             <div style={{ marginTop: 12, fontSize: '0.75rem' }}>
-              <div style={{ color: '#64748b', marginBottom: 4 }}>{t('ui_metadata')}</div>
-              <pre style={{ color: '#94a3b8', background: 'rgba(2, 6, 23, 0.6)', padding: 10, borderRadius: 8, overflow: 'auto', margin: 0, fontSize: '0.72rem' }}>
+              <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>{t('ui_metadata')}</div>
+              <pre style={{ color: '#94a3b8', background: 'rgba(2, 6, 23, 0.6)', padding: 10, borderRadius: 8, overflow: 'auto', margin: 0, fontSize: 'var(--type-xs)' }}>
                 {selected.metadata_json}
               </pre>
             </div>

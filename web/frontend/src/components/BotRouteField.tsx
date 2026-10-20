@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { AlertCircle, Check, KeyRound, Loader2, Trash2 } from 'lucide-react'
 import { api } from '../api'
 import type { BotTokenInfo } from '../types'
-import { makeT, type UiLang } from '../locales'
+import { makeT, type UiLang } from '../locales/engine'
 
 interface Props {
   /** The panel's language; the field owns no copy of its own otherwise. */
@@ -192,7 +192,7 @@ export function BotRouteField({
               style={{
                 ...smallButton,
                 backgroundColor: token.trim() && !busy ? '#2563eb' : '#1e293b',
-                color: token.trim() && !busy ? '#fff' : '#64748b',
+                color: token.trim() && !busy ? '#fff' : 'var(--color-text-muted)',
                 cursor: token.trim() && !busy ? 'pointer' : 'not-allowed',
               }}
             >

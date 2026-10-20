@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { api } from '../api'
 import type { SetupReport } from '../types'
-import { makeT, type UiLang } from '../locales'
+import { makeT, type UiLang } from '../locales/engine'
 
 /**
  * System panel — the web twin of the mobile System screen and of `atf setup`'s

@@ -1,12 +1,26 @@
 <!doctype html>
-<html lang="fa" dir="rtl">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#0b0f19" />
     <meta name="color-scheme" content="dark" />
     <title>AutoTelegramForward PRO | Smart Gateway & Control Panel</title>
+    <!-- The shell pins lang/dir from the stored preference before the first
+         paint (src/main.tsx). This element no longer claims Persian: that
+         shipped an RTL document, and a Persian loading line, to every reader. -->
+    <script>
+      /* Pre-paint direction: avoids a left-to-right flash for Persian readers. */
+      try {
+        var stored = localStorage.getItem('atf_lang') || navigator.language || 'en'
+        var code = String(stored).toLowerCase().split(/[-_]/)[0]
+        var supported = ['en', 'fa', 'pt', 'uz', 'ru', 'id', 'es', 'fr', 'it', 'zh']
+        if (supported.indexOf(code) === -1) code = 'en'
+        document.documentElement.lang = code
+        document.documentElement.dir = code === 'fa' ? 'rtl' : 'ltr'
+      } catch (e) {}
+    </script>
     <!-- Non-blocking font load -->
     <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -31,6 +45,12 @@
         gap: 16px;
         padding: 20px;
         text-align: center;
+      }
+      .app-initial-brand {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: #818cf8;
+        letter-spacing: -0.01em;
       }
       .app-initial-spinner {
         width: 44px;

@@ -10,7 +10,7 @@ import type {
 } from '../types'
 import { BotRouteField } from './BotRouteField'
 import { badgeFor, canReset, isInherited, rowValue } from '../settingProvenance'
-import { isRtlLang, makeT, type UiLang } from '../locales'
+import { isRtlLang, makeT, type UiLang } from '../locales/engine'
 import { SETTING_GROUPS, SETTING_HELP, SETTING_LABELS } from '../settingLabels.generated'
 
 interface Props {
@@ -477,7 +477,7 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
               alignItems: 'center',
               gap: '6px',
               backgroundColor: dirtyKeys.length && !saving ? '#2563eb' : '#1e293b',
-              color: dirtyKeys.length && !saving ? '#fff' : '#64748b',
+              color: dirtyKeys.length && !saving ? '#fff' : 'var(--color-text-muted)',
               border: 'none',
               borderRadius: '10px',
               padding: '9px 16px',
@@ -626,7 +626,7 @@ function ChatListEditor({
               background: 'none',
               border: 'none',
               cursor: canRemove ? 'pointer' : 'not-allowed',
-              color: canRemove ? '#f87171' : '#475569',
+              color: canRemove ? '#f87171' : 'var(--color-text-muted)',
               display: 'flex',
             }}
           >
@@ -660,7 +660,7 @@ function ChatListEditor({
             alignItems: 'center',
             gap: '4px',
             backgroundColor: draft.trim() ? '#2563eb' : '#1e293b',
-            color: draft.trim() ? '#fff' : '#64748b',
+            color: draft.trim() ? '#fff' : 'var(--color-text-muted)',
             border: '1px solid #334155',
             borderRadius: '8px',
             padding: '8px 12px',
@@ -783,7 +783,7 @@ function SettingRow({
             title={t('ui_use_the_default_for_this_setting')}
             style={{
               fontSize: '9px',
-              color: resetting ? '#64748b' : '#7dd3fc',
+              color: resetting ? 'var(--color-text-muted)' : '#7dd3fc',
               background: 'none',
               border: '1px solid #334155',
               borderRadius: '4px',
@@ -817,7 +817,7 @@ function SettingRow({
             borderRadius: '999px',
             border: 'none',
             cursor: 'pointer',
-            backgroundColor: value ? '#22c55e' : '#475569',
+            backgroundColor: value ? '#22c55e' : 'var(--color-text-muted)',
             position: 'relative',
             flexShrink: 0,
           }}
@@ -1043,7 +1043,7 @@ function ListEditor({ spec, value, lang, inputStyle, hintStyle, onChange }: List
             alignItems: 'center',
             gap: '4px',
             backgroundColor: draft.trim() ? '#2563eb' : '#1e293b',
-            color: draft.trim() ? '#fff' : '#64748b',
+            color: draft.trim() ? '#fff' : 'var(--color-text-muted)',
             border: '1px solid #334155',
             borderRadius: '8px',
             padding: '8px 12px',

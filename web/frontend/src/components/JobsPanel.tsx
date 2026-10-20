@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw, Plus, X, Ban, RotateCw, Loader2 } from 'lucide-react'
 import { api } from '../api'
 import type { UserTask, TaskKind } from '../types'
-import { makeT, type UiLang } from '../locales'
+import { makeT, type UiLang } from '../locales/engine'
 
 /**
  * The web dashboard's view of the per-user task lifecycle (the same
@@ -168,7 +168,7 @@ export function JobsPanel({
                   {task.error && (
                     <div style={{ fontSize: '0.75rem', color: '#f87171', marginTop: 2 }}>{task.error}</div>
                   )}
-                  <div style={{ fontSize: '0.7rem', color: '#94a3b8', marginTop: 2 }}>
+                  <div style={{ fontSize: 'var(--type-xs)', color: '#94a3b8', marginTop: 2 }}>
                     #{task.id.slice(0, 12)} · {fmt(task.created_at)} → {fmt(task.finished_at)}
                   </div>
                 </div>
@@ -246,7 +246,7 @@ function CreateTaskModal({ lang, onClose, onCreated }: { lang: UiLang; onClose: 
               <input type="radio" checked={kind === o.value} onChange={() => { setKind(o.value); setField0('') }} />
               <div>
                 <div style={{ fontSize: '0.9rem' }}>{t(o.labelKey)}</div>
-                <div style={{ fontSize: '0.72rem', color: '#94a3b8' }}>{t(o.hintKey)}</div>
+                <div style={{ fontSize: 'var(--type-xs)', color: '#94a3b8' }}>{t(o.hintKey)}</div>
               </div>
             </label>
           ))}

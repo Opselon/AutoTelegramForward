@@ -13,7 +13,7 @@ import {
   type SessionState,
 } from './session'
 import { appKey, isSessionStorageEvent } from './sessionIdentity'
-import { makeT, preferredLang } from './locales'
+import { ensureLangLoaded, isRtlLang, makeT, preferredLang } from './locales/engine'
 
 // The shell has no component tree to inherit a language from, so it resolves
 // the same preference the panels do (stored choice → browser → English).
@@ -289,10 +289,25 @@ function Root() {
   return <App key={appKey(session.me)} me={session.me} />
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <ErrorBoundary>
-      <Root />
-    </ErrorBoundary>
-  </StrictMode>,
-)
+/**
+ * Boot the shell in the reader's own language.
+ *
+ * Only the English catalog is in the initial bundle; the other nine arrive as
+ * one small chunk each. That chunk is fetched *before* the first React render,
+ * under the splash screen `index.html` already paints, so a Persian reader
+ * never sees an English dashboard flash — and an English reader downloads no
+ * catalog at all.
+ */
+const bootLang = preferredLang()
+document.documentElement.lang = bootLang
+document.documentElement.dir = isRtlLang(bootLang) ? 'rtl' : 'ltr'
+
+void ensureLangLoaded(bootLang).finally(() => {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <ErrorBoundary>
+        <Root />
+      </ErrorBoundary>
+    </StrictMode>,
+  )
+})

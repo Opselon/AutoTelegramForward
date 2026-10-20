@@ -3,7 +3,7 @@ import { api } from '../api'
 import { LanguagePicker } from '../components/LanguagePicker'
 
 import { applySession } from '../session'
-import { isRtlLang, makeT, preferredLang, rememberLang, type UiLang } from '../locales'
+import { isRtlLang, makeT, preferredLang, rememberLang, type UiLang } from '../locales/engine'
 
 export default function Auth({ onLogin }: { onLogin: () => void }) {
   // The login page is the first screen a user sees, so it must not guess: the
