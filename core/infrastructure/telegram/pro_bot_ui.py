@@ -108,6 +108,9 @@ from .route_lists import (
     ROUTE_EMPTY_TARGETS,
     ROUTE_MISSING_ARROW,
     SHORT_ID_LENGTH,
+    STATUS_FAILED,
+    STATUS_RESOLVED,
+    STATUS_UNCHECKED,
     RouteParseError,
     cb_payload,
     join_ids,
@@ -319,10 +322,11 @@ CB = {
 # being edited. Both fit in the payload budget enforced by cb_payload().
 ROUTE_SCOPE_NEW = "n"
 
-#: Per-entry resolution states.
-ROUTE_RESOLVED = "resolved"
-ROUTE_FAILED = "failed"
-ROUTE_UNCHECKED = "unchecked"
+#: Per-entry resolution states; the contract lives in route_lists.py and the
+#: handler modules read the same constants, so surfaces cannot drift apart.
+ROUTE_RESOLVED = STATUS_RESOLVED
+ROUTE_FAILED = STATUS_FAILED
+ROUTE_UNCHECKED = STATUS_UNCHECKED
 
 #: Per-key caches of catalog-resolved input aliases.
 _ALIAS_CACHE: Dict[str, Optional[frozenset]] = {}
