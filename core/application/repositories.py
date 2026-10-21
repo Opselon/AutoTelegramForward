@@ -744,6 +744,15 @@ class IDeliveryQueueRepository(ABC):
     async def get_stats(self) -> dict:
         ...
 
+    async def counts_for_rule(self, rule_id: str) -> Dict[str, int]:
+        """Delivery counts per status for one rule, e.g. ``{'SENT': 12}``.
+
+        Default is empty: a queue backend that cannot answer a per-rule query
+        still satisfies the port, and the status screen simply omits the queue
+        section instead of showing a fabricated zero.
+        """
+        return {}
+
     @abstractmethod
     async def recover_expired_leases(self) -> int:
         ...

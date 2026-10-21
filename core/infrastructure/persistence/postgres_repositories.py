@@ -1361,6 +1361,20 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
             res[d["status"]] = int(d["cnt"])
         return res
 
+    async def counts_for_rule(self, rule_id: str) -> dict:
+        """Per-status delivery counts for one rule (the status screen)."""
+        if not rule_id:
+            return {}
+        rows = await self._fetch_all(
+            "SELECT status, COUNT(*) as cnt FROM delivery_jobs WHERE rule_id = %s GROUP BY status",
+            (str(rule_id),),
+        )
+        res: dict = {}
+        for r in rows or ():
+            d = dict(r) if hasattr(r, "keys") else r
+            res[str(d["status"])] = int(d["cnt"])
+        return res
+
     async def recover_expired_leases(self) -> int:
         now = time.time()
         query = """

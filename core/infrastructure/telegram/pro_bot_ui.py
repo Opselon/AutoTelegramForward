@@ -1705,6 +1705,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
                 dst = (r.target_chat_name or r.target_chat_id)[:12]
                 rows.append([
                     (f"{status_icon} {src} ➔ {dst}", f"rd:{r.id}"),
+                    ("📊", f"fwd_st:{r.id}"),
                     (self._t("ui_rule_edit_btn", lang=cur_lang), f"re:{r.id}"),
                     ("🗑", f'{CB["rule_del"]}:{r.id}'),
                 ])
@@ -5856,6 +5857,16 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             if role == "source":
                 st.rule_source = chat_id
                 st.buffer["source_name"] = chat_title
+                if isinstance(st.buffer, dict):
+                    # Target-first flow: the catalog already chose the target,
+                    # so this source selection completes the staged build.
+                    pending = st.buffer.get("pending_target") if isinstance(st.buffer, dict) else None
+                    if isinstance(pending, dict) and pending.get("id"):
+                        st.rule_target = str(pending.get("id"))
+                        target_title = str(pending.get("title") or st.rule_target)
+                        st.buffer.pop("pending_target", None)
+                        await cq.answer(self._t("ui_creating_rule", lang=cur_lang), show_alert=False)
+                        return await self._finish_rule_creation(cq, st, chat_title, target_title)
                 st.step = "rule_target"
                 st.buffer["page"] = 0
                 await self._persist(uid, st)
@@ -11227,6 +11238,15 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         if not isinstance(st.buffer, dict):
             st.buffer = {}
         st.buffer["source_name"] = matched_title
+        # Target-first flow: a pending target from the catalog makes this
+        # free-text source answer the completion trigger, not another question.
+        pending = st.buffer.get("pending_target") if isinstance(st.buffer, dict) else None
+        if isinstance(pending, dict) and pending.get("id"):
+            st.rule_target = str(pending.get("id"))
+            target_title = str(pending.get("title") or st.rule_target)
+            st.buffer.pop("pending_target", None)
+            await self._finish_rule_creation(message, st, matched_title, target_title)
+            return
         st.step = "rule_target"
         st.buffer["page"] = 0
         await self._persist(uid, st)
