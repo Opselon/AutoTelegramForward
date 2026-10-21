@@ -191,6 +191,23 @@ class DialogCatalog:
     def as_dicts(self) -> List[Dict[str, Any]]:
         return [entry.as_dict() for entry in self._entries]
 
+    @classmethod
+    def from_dicts(cls, rows: Optional[Sequence[Dict[str, Any]]]) -> "DialogCatalog":
+        """Rebuild a catalog from the dict rows a buffer/FSM persisted."""
+        entries: List[ChatEntry] = []
+        for row in rows or ():
+            if not isinstance(row, dict) or not row.get("id"):
+                continue
+            entries.append(
+                ChatEntry(
+                    id=str(row.get("id")),
+                    title=str(row.get("title") or row.get("id")),
+                    kind=str(row.get("kind") or KIND_USER),
+                    username=str(row.get("username") or ""),
+                )
+            )
+        return cls(entries)
+
 
 class DialogGateway(Protocol):
     """The port infrastructure implements: scan a user's sessions for chats."""

@@ -23,6 +23,7 @@ HANDLER_MODULES = (
         cls=DiscoveryHandlers,
         name="discovery",
         commands=("getchannel", "getgroup", "getuser", "getbot"),
+        register="register_discovery_handlers",
     ),
     HandlerModuleSpec(
         cls=ForwardingHandlers,
