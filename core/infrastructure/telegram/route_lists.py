@@ -36,6 +36,12 @@ LINK_PREFIXES: Tuple[str, ...] = (
 )
 
 MAX_CALLBACK_BYTES = 64
+
+#: Per-entry resolution states shared by the wizard, `/route` and the
+#: forwarding handler: one owner so a status cannot drift between surfaces.
+STATUS_RESOLVED = "resolved"
+STATUS_FAILED = "failed"
+STATUS_UNCHECKED = "unchecked"
 SHORT_ID_LENGTH = 8
 
 # Validation codes, mapped to catalog keys by the surfaces.

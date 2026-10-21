@@ -70,6 +70,27 @@ class FilterAction(str, Enum):
     DROP = "DROP"
 
 
+@dataclass(frozen=True)
+class ChannelReference:
+    """A chat a task sends from or to, as the domain sees it.
+
+    ``chat_id`` is always the resolved Telegram peer id kept as a *string*:
+    channel ids exceed 32-bit range and a numeric round-trip is how precision
+    is lost. ``title`` is display metadata only and never an identity.
+    """
+
+    chat_id: str
+    title: str = ""
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "chat_id", str(self.chat_id or "").strip())
+        object.__setattr__(self, "title", str(self.title or "").strip())
+
+    @property
+    def is_resolved(self) -> bool:
+        return bool(self.chat_id)
+
+
 class DeliveryStatus(str, Enum):
     PENDING = "PENDING"
     CLAIMED = "CLAIMED"
