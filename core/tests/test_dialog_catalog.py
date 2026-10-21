@@ -13,6 +13,9 @@ from core.application.discovery import (
     KIND_GROUP,
     KIND_SAVED,
     KIND_USER,
+    BrowseDialogsUseCase,
+    CatalogCache,
+    CatalogView,
     ChatEntry,
     DialogCatalog,
     ListDialogsUseCase,
@@ -131,3 +134,103 @@ async def test_use_case_tolerates_an_empty_scan():
     catalog = await ListDialogsUseCase(_Gateway([])).execute(1)
     assert len(catalog) == 0 and not catalog
     assert catalog.page(0).total_pages == 1
+
+
+# --------------------------------------------------------------------------- #
+# Browsing: page turns reuse the scan; only refresh rescans
+# --------------------------------------------------------------------------- #
+
+
+class _CountingGateway:
+    """A gateway that counts scans, so a cache decision is observable."""
+
+    def __init__(self, rows):
+        self.rows = rows
+        self.scans = 0
+
+    async def fetch(self, owner_user_id):
+        self.scans += 1
+        return self.rows
+
+
+def _browse_rows():
+    return [
+        {"id": -1001, "title": "Alpha", "type": "CHANNEL"},
+        {"id": -1002, "title": "Beta", "type": "CHANNEL"},
+        {"id": -1003, "title": "Gamma", "type": "CHANNEL"},
+        {"id": -1004, "title": "Delta", "type": "CHANNEL"},
+        {"id": -1005, "title": "Epsilon", "type": "CHANNEL"},
+        {"id": -2001, "title": "Group One", "type": "SUPERGROUP"},
+        {"id": -2002, "title": "Group Two", "type": "SUPERGROUP"},
+        {"id": 900, "title": "Botto", "type": "BOT"},
+        {"id": 700, "title": "Alice", "type": "PRIVATE"},
+    ]
+
+
+async def test_a_page_turn_does_not_rescan_but_refresh_does():
+    """Two consecutive views share one scan; `refresh=True` scans again."""
+    gateway = _CountingGateway(_browse_rows())
+    browse = BrowseDialogsUseCase(ListDialogsUseCase(gateway), page_size=4)
+
+    first = await browse.view(5094837833, KIND_CHANNEL, page=0)
+    second = await browse.view(5094837833, KIND_CHANNEL, page=1)
+
+    assert gateway.scans == 1, "a page turn must reuse the cached scan"
+    assert first.page.total_pages == 2 and second.page.page == 1
+    assert [e.title for e in second.page] == ["Gamma"]
+
+    await browse.view(5094837833, KIND_CHANNEL, page=0, refresh=True)
+    assert gateway.scans == 2, "an explicit refresh must rescan"
+
+
+def test_the_cache_expires_and_serves_only_its_owner():
+    """A stale entry is dropped, and one tenant never sees another's catalog."""
+    clock = {"now": 1000.0}
+    cache = CatalogCache(ttl_seconds=30.0, clock=lambda: clock["now"])
+
+    cache.put(5094837833, DialogCatalog([_entry("-1", "Mine")]))
+    clock["now"] += 20.0
+    cache.put(6278059256, DialogCatalog([_entry("-2", "Theirs")]))
+
+    assert cache.get(5094837833) is not None
+    assert cache.get(6278059256).at(0).title == "Theirs"
+
+    clock["now"] += 25.0
+    assert cache.get(5094837833) is None, "an expired entry must not be served"
+
+    # The other tenant's entry is unaffected by this user's expiry.
+    assert cache.get(6278059256) is not None
+    assert len(cache) == 1
+
+
+def test_the_cache_evicts_oldest_first_and_refuses_the_zero_owner():
+    """A bounded cache cannot grow without limit; uid 0 is never a cache key."""
+    clock = {"now": 0.0}
+    cache = CatalogCache(ttl_seconds=1000.0, clock=lambda: clock["now"], max_entries=2)
+
+    cache.put(1, DialogCatalog([_entry("-1", "One")]))
+    cache.put(2, DialogCatalog([_entry("-2", "Two")]))
+    cache.put(3, DialogCatalog([_entry("-3", "Three")]))
+
+    assert cache.get(1) is None, "the oldest entry is evicted when the bound is hit"
+    assert cache.get(3) is not None
+    assert len(cache) == 2
+
+    cache.put(0, DialogCatalog([_entry("-4", "Anonymous")]))
+    assert cache.get(0) is None, "uid 0 (no authenticated owner) is never cached"
+
+
+async def test_a_view_reports_kind_totals_and_stays_read_only():
+    """The kind switcher needs every kind's count; the catalog itself is not
+    mutated by browsing, so the same view can be taken twice."""
+    gateway = _CountingGateway(_browse_rows())
+    browse = BrowseDialogsUseCase(ListDialogsUseCase(gateway), page_size=10)
+
+    view = await browse.view(5094837833)
+
+    assert view.totals == {
+        KIND_CHANNEL: 5, KIND_GROUP: 2, KIND_BOT: 1, KIND_USER: 1,
+    }
+    assert view.total_all == 9
+    again = await browse.view(5094837833)
+    assert again.totals == view.totals and gateway.scans == 1

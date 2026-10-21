@@ -13,8 +13,9 @@ to do with it. No Telegram type appears in this module.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass, replace
-from typing import Any, Dict, Iterable, List, Optional, Protocol, Sequence, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Sequence, Tuple
 
 #: Chat kinds, most specific first. They double as the `/getchannel`-family
 #: filters and as the stable key a UI button carries.
@@ -261,3 +262,154 @@ class ListDialogsUseCase:
 def with_title(entry: ChatEntry, title: str) -> ChatEntry:
     """A catalog entry renamed for display without changing its identity."""
     return replace(entry, title=title)
+
+
+# --------------------------------------------------------------------------- #
+# Browsing: paging over a scan that is cached, not repeated on every tap
+# --------------------------------------------------------------------------- #
+
+#: How many chats one page shows. A page must stay under Telegram's 4096-char
+#: message limit even when every title is long, so the number is deliberately
+#: small and lives here rather than in each renderer.
+DEFAULT_PAGE_SIZE = 10
+
+#: A dialog scan is expensive (a live MTProto call per session). Navigating a
+#: list must not rescan; only an explicit refresh or an expired entry does.
+DEFAULT_CACHE_TTL_SECONDS = 90.0
+
+#: Bound on remembered catalogs, so a long-running bot cannot grow without
+#: limit on users who pressed `/getchannel` once. Eviction is oldest-first.
+DEFAULT_CACHE_ENTRIES = 256
+
+
+class CatalogCache:
+    """Per-owner catalog memory with a freshness deadline.
+
+    Why this exists: `/getchannel` scans every dialog of every connected
+    session, which is slow and rate-limited. Paging through the result must be
+    instant, and a second user must never be served the first user's catalog —
+    so entries are keyed by owner and carry their own timestamp.
+
+    Time is injected so freshness is testable without sleeping.
+    """
+
+    def __init__(
+        self,
+        ttl_seconds: float = DEFAULT_CACHE_TTL_SECONDS,
+        clock: Optional[Callable[[], float]] = None,
+        max_entries: int = DEFAULT_CACHE_ENTRIES,
+    ) -> None:
+        self._ttl = max(0.0, float(ttl_seconds))
+        self._clock = clock or time.monotonic
+        self._max = max(1, int(max_entries))
+        self._items: Dict[int, Tuple[DialogCatalog, float]] = {}
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+    def get(self, owner_user_id: int) -> Optional[DialogCatalog]:
+        """A fresh catalog for this owner, or ``None`` when expired/unknown."""
+        key = int(owner_user_id or 0)
+        found = self._items.get(key)
+        if found is None:
+            return None
+        catalog, stored_at = found
+        if self._clock() - stored_at >= self._ttl:
+            self._items.pop(key, None)
+            return None
+        return catalog
+
+    def put(self, owner_user_id: int, catalog: DialogCatalog) -> None:
+        key = int(owner_user_id or 0)
+        if not key:
+            return
+        self._items[key] = (catalog, self._clock())
+        while len(self._items) > self._max:
+            oldest = min(self._items, key=lambda k: self._items[k][1])
+            self._items.pop(oldest, None)
+
+    def invalidate(self, owner_user_id: int) -> None:
+        self._items.pop(int(owner_user_id or 0), None)
+
+    def clear(self) -> None:
+        self._items.clear()
+
+
+@dataclass(frozen=True)
+class CatalogView:
+    """One page of one kind, plus what the navigation row needs to be drawn."""
+
+    kind: str
+    page: DialogPage
+    totals: Dict[str, int]
+    cached: bool
+
+    @property
+    def total_all(self) -> int:
+        return sum(self.totals.values())
+
+
+class BrowseDialogsUseCase:
+    """Show a user's chats page by page without rescanning on every page turn.
+
+    The use case owns two policies that used to be implicit in the bot:
+
+    * a page turn reuses the scan while it is fresh (speed, and no dialogs
+      flood on a user holding "next");
+    * ``refresh=True`` always rescans, because the user asked for the truth now.
+
+    It returns a :class:`CatalogView`; wording and buttons are presentation.
+    """
+
+    def __init__(
+        self,
+        lister: ListDialogsUseCase,
+        cache: Optional[CatalogCache] = None,
+        page_size: int = DEFAULT_PAGE_SIZE,
+    ) -> None:
+        self._lister = lister
+        self._cache = cache or CatalogCache()
+        self._page_size = max(1, int(page_size))
+
+    @property
+    def cache(self) -> CatalogCache:
+        return self._cache
+
+    async def catalog(
+        self,
+        owner_user_id: int,
+        refresh: bool = False,
+        saved_label: str = "Saved Messages",
+    ) -> DialogCatalog:
+        """The owner's whole catalog, scanned at most once per freshness window.
+
+        Kept separate from :meth:`view` because the presentation also needs the
+        raw list — to resolve a button's chat id, or to hand the wizard its dict
+        rows — and those must see the same snapshot a page was drawn from.
+        """
+        uid = int(owner_user_id or 0)
+        found = None if refresh else self._cache.get(uid)
+        if found is not None:
+            return found
+        catalog = await self._lister.execute(uid, saved_label=saved_label)
+        self._cache.put(uid, catalog)
+        return catalog
+
+    async def view(
+        self,
+        owner_user_id: int,
+        kind: str = "",
+        page: int = 0,
+        refresh: bool = False,
+        saved_label: str = "Saved Messages",
+    ) -> CatalogView:
+        uid = int(owner_user_id or 0)
+        cached = not refresh and self._cache.get(uid) is not None
+        catalog = await self.catalog(uid, refresh=refresh, saved_label=saved_label)
+        selected = catalog.of_kind(kind)
+        return CatalogView(
+            kind=kind,
+            page=selected.page(page, self._page_size),
+            totals=catalog.kinds(),
+            cached=cached,
+        )

@@ -1,9 +1,17 @@
 """`/getchannel`, `/getgroup`, `/getuser`, `/getbot`: the chat catalog + actions.
 
-Presentation only: classification, ordering and paging come from
-:class:`core.application.discovery.DialogCatalog`; the scan belongs to the
-infrastructure gateway. This module decides what a page says, which buttons it
-carries, and how a chosen chat enters the staged task builder.
+Presentation only: classification, ordering, freshness and paging come from
+:class:`core.application.discovery.DialogCatalog` and
+:class:`core.application.discovery.BrowseDialogsUseCase`; the scan belongs to
+the infrastructure gateway. This module decides what a page says, which buttons
+it carries, and how a chosen chat enters the staged task builder.
+
+The four commands answer with a paged list (``/getchannel 2`` jumps to the
+second page) and the same list can be navigated, switched by kind and refreshed
+from the buttons underneath it. A page turn reuses the scan the application
+cached; only the refresh button rescans. Buttons carry ``gch_pg:<kind>:<page>``
+and are answered through the user who pressed them — never through an id stored
+in the payload — so one tenant cannot page through another tenant's chats.
 
 The catalog is the entry point for task creation: a chat's action sheet can set
 it as the source (then pick a target) or as the target (then pick a source), and
@@ -14,26 +22,33 @@ menu's "new task" button drives. No second creation path, no second state.
 from __future__ import annotations
 
 import logging
-import time
 from typing import Any, Dict, List, Optional, Tuple
 
 from pyrogram import filters
 from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
-from core.application.discovery import DialogCatalog
+from core.application.discovery import (
+    KIND_BOT,
+    KIND_CHANNEL,
+    KIND_GROUP,
+    KIND_USER,
+    BrowseDialogsUseCase,
+    DialogCatalog,
+)
 
 logger = logging.getLogger(__name__)
 
 #: Chats per page in the discovery browser.
 PAGE_SIZE = 6
-#: How long a fetched catalog backs the rendered buttons. A scan hits Telegram
-#: (up to 12s); a tap must not repeat it, and the index in a button resolves
-#: against the same list the user is looking at.
-CATALOG_TTL = 600.0
+
+#: The kinds a page offers a switch to, in the catalog's display order. "saved"
+#: is deliberately absent: Saved Messages is a session artefact, not a task
+#: target anyone browses for.
+BROWSABLE_KINDS: Tuple[str, ...] = (KIND_CHANNEL, KIND_GROUP, KIND_USER, KIND_BOT)
 
 
 class DiscoveryHandlers:
-    """Discovery commands and their callback surface."""
+    """Discovery commands and the navigation buttons of their lists."""
 
     #: Declared to the handler registry; each name needs a ``_cmd_<name>`` here.
     discovery_commands: tuple = ("getchannel", "getgroup", "getuser", "getbot")
@@ -44,57 +59,72 @@ class DiscoveryHandlers:
     # Commands
     # ------------------------------------------------------------------ #
     async def _cmd_getchannel(self, message: Message, args: str) -> None:
-        await self._cmd_discovery(message, "channel")
+        await self._cmd_discovery(message, KIND_CHANNEL, args)
 
     async def _cmd_getgroup(self, message: Message, args: str) -> None:
-        await self._cmd_discovery(message, "group")
+        await self._cmd_discovery(message, KIND_GROUP, args)
 
     async def _cmd_getuser(self, message: Message, args: str) -> None:
-        await self._cmd_discovery(message, "user")
+        await self._cmd_discovery(message, KIND_USER, args)
 
     async def _cmd_getbot(self, message: Message, args: str) -> None:
-        await self._cmd_discovery(message, "bot")
+        await self._cmd_discovery(message, KIND_BOT, args)
 
-    async def _cmd_discovery(self, message: Message, kind: str) -> None:
+    async def _cmd_discovery(self, message: Message, kind: str, args: str = "") -> None:
+        """Render one page of `kind`; a numeric argument is a 1-based page."""
         uid = message.from_user.id if message.from_user else 0
         lang = self._resolve_lang(uid)
+        page = self._page_argument(args)
         catalog = await self._discovery_catalog(uid)
-        picked = catalog.of_kind(kind)
-        if not picked:
+        if not catalog.of_kind(kind):
             return await message.reply_text(
                 self._t("ui_gch_empty", lang=lang, kind=self._kind_label(kind, lang)),
                 reply_markup=self._main_menu(uid),
             )
-        text, kbd = self._render_discovery_page(picked, kind=kind, page=0, lang=lang)
+        text, kbd = self._render_discovery_page(catalog, kind=kind, page=page, lang=lang)
         await message.reply_text(text, reply_markup=kbd)
+
+    @staticmethod
+    def _page_argument(args: str) -> int:
+        """`/getchannel 3` means the third page; anything else means the first."""
+        token = (args or "").strip().split(None, 1)[0] if (args or "").strip() else ""
+        if not token.isdigit():
+            return 0
+        return max(0, int(token) - 1)
 
     # ------------------------------------------------------------------ #
     # Application integration
     # ------------------------------------------------------------------ #
+    def _browse_discovery(self) -> BrowseDialogsUseCase:
+        """The browse use case over the session-backed catalog.
+
+        Built once per panel, so its per-owner cache survives between commands
+        and between page turns — that is the whole point of paging without a
+        rescan.
+        """
+        if getattr(self, "_browse_use_case", None) is None:
+            self._browse_use_case = BrowseDialogsUseCase(
+                self._dialog_catalog(), page_size=PAGE_SIZE
+            )
+        return self._browse_use_case
+
     async def _discovery_catalog(self, uid: int, force: bool = False) -> DialogCatalog:
         """The application catalog for this user, or an empty one.
 
         A dead session is a message, not a crash: the caller renders the empty
-        state and the gateway has already logged why it found nothing. The
-        result is cached per user for :data:`CATALOG_TTL`, because a scan hits
-        Telegram and a button index must resolve against the list the user saw.
+        state and the gateway has already logged why it found nothing. Freshness
+        is the use case's policy (per owner, bounded); ``force`` is the refresh
+        button asking for the truth now.
         """
-        cache = getattr(self, "_discovery_cache", None)
-        if cache is None:
-            cache = self._discovery_cache = {}
-        hit = cache.get(int(uid))
-        if hit and not force and (time.monotonic() - hit[0]) < CATALOG_TTL:
-            return hit[1]
         try:
-            catalog = await self._dialog_catalog().execute(
+            return await self._browse_discovery().catalog(
                 uid,
+                refresh=force,
                 saved_label=self._t("ui_saved_messages", lang=self._resolve_lang(uid)),
             )
         except Exception as exc:
             logger.exception("[PIPELINE:DISCOVERY] catalog failed for uid=%s: %s", uid, exc)
             return DialogCatalog()
-        cache[int(uid)] = (time.monotonic(), catalog)
-        return catalog
 
     async def _fetch_dialogs(self, owner_user_id: Any = None) -> List[Dict[str, Any]]:
         """Dict rows for the wizard buffers (compatibility with the FSM)."""
@@ -121,7 +151,8 @@ class DiscoveryHandlers:
     ) -> Tuple[str, InlineKeyboardMarkup]:
         cur_lang = lang or "en"
         label = self._kind_label(kind, cur_lang)
-        p = catalog.page(page, page_size=PAGE_SIZE)
+        p = catalog.of_kind(kind).page(page, page_size=PAGE_SIZE)
+        totals = catalog.kinds()
 
         lines: List[str] = [
             self._t("ui_gch_title", lang=cur_lang, kind=label, n=p.total),
@@ -155,8 +186,21 @@ class DiscoveryHandlers:
         if p.has_next:
             nav.append((self._t("ui_next", lang=cur_lang) + " ▶️", f"gch_pg:{kind}:{p.page + 1}"))
         rows.append(nav)
+
+        # Switching kind keeps the list, not the page: another kind's pages have
+        # their own numbering, so its first page is the only safe target.
+        switch: List[Tuple[str, str]] = []
+        for other in BROWSABLE_KINDS:
+            if other == kind or not totals.get(other):
+                continue
+            switch.append(
+                (f"{self._kind_label(other, cur_lang)} ({totals[other]})", f"gch_pg:{other}:0")
+            )
+        if switch:
+            rows.append(switch)
+
         rows.append([
-            (self._t("ui_refresh_list", lang=cur_lang), f"gch_rf:{kind}"),
+            (self._t("ui_refresh_list", lang=cur_lang), f"gch_rf:{kind}:{p.page}"),
             (self._btn("ui_back", lang=cur_lang), "m"),
         ])
         return "\n".join(lines), self._kbd(rows)
@@ -203,8 +247,8 @@ class DiscoveryHandlers:
             kind = cq.matches[0].group(1)
             page = int(cq.matches[0].group(2))
             lang = self._resolve_lang(uid)
-            catalog = (await self._discovery_catalog(uid)).of_kind(kind)
-            if not catalog:
+            catalog = await self._discovery_catalog(uid)
+            if not catalog.of_kind(kind):
                 return await cq.answer(
                     self._t("ui_gch_empty", lang=lang, kind=self._kind_label(kind, lang)),
                     show_alert=True,
@@ -213,19 +257,22 @@ class DiscoveryHandlers:
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
-        @b.on_callback_query(filters.regex(r"^gch_rf:([a-z_]+)$"))
+        @b.on_callback_query(filters.regex(r"^gch_rf:([a-z_]+):(\d+)$"))
         @self._localized_handler
         async def _gch_refresh(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             kind = cq.matches[0].group(1)
+            page = int(cq.matches[0].group(2))
             lang = self._resolve_lang(uid)
-            catalog = (await self._discovery_catalog(uid, force=True)).of_kind(kind)
-            if not catalog:
+            catalog = await self._discovery_catalog(uid, force=True)
+            if not catalog.of_kind(kind):
                 return await cq.answer(
                     self._t("ui_gch_empty", lang=lang, kind=self._kind_label(kind, lang)),
                     show_alert=True,
                 )
-            text, kbd = self._render_discovery_page(catalog, kind=kind, page=0, lang=lang)
+            # Refresh rescans but keeps the page: the user asked for the truth,
+            # not to be thrown back to the top of the list.
+            text, kbd = self._render_discovery_page(catalog, kind=kind, page=page, lang=lang)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
