@@ -169,7 +169,7 @@ class ForwardingHandlers:
 
         rows: List[List[Tuple[str, str]]] = []
         if can_modify:
-            switch = "fwd_dis" if status.is_running else "fwd_en"
+            switch = "fwd_off" if status.is_running else "fwd_on"
             label = self._t("ui_fwd_disable", lang=cur_lang) if status.is_running \
                 else self._t("ui_fwd_enable", lang=cur_lang)
             rows.append([(label, f"{switch}:{status.rule_id}")])
@@ -196,14 +196,15 @@ class ForwardingHandlers:
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
-        @b.on_callback_query(filters.regex(r"^fwd_(en|dis):(.+)$"))
+        @b.on_callback_query(filters.regex(r"^fwd_(on|off):(.+)$"))
         @self._localized_handler
         async def _fwd_toggle(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             which = cq.matches[0].group(1)
             rule_id = cq.matches[0].group(2)
             lang = self._resolve_lang(uid)
-            want_active = which == "en"
+            # "on"/"off" are the button's intent, never a language tag.
+            want_active = which == "on"
             scope = None if self._is_admin(uid) else uid
             rule = await self._owned_rule(rule_id, uid)
             if rule is None:

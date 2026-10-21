@@ -203,7 +203,7 @@ async def test_status_screen_shows_state_and_counters(harness):
     assert "Forwarding status" in text
     assert "Forwarded:" in text
     data = payloads(cq.message.sent[-1][2]["reply_markup"])
-    assert f"fwd_dis:{RULE_ID}" in data
+    assert f"fwd_off:{RULE_ID}" in data
 
 
 @pytest.mark.asyncio
@@ -237,7 +237,7 @@ async def test_status_folds_rule_counters_and_queue_into_one_view(harness):
 
     text, kbd = harness.ui._render_forwarding_status(status, lang="en")
     assert "Queue:" in text
-    assert f"fwd_dis:{RULE_ID}" in payloads(kbd)
+    assert f"fwd_off:{RULE_ID}" in payloads(kbd)
 
 
 @pytest.mark.asyncio
@@ -258,7 +258,7 @@ async def test_enable_switch_turns_the_task_on(harness):
     await harness.rules_repo.set_task_status(
         RULE_ID, target_active=False, expected_state="running", owner_user_id=OWNER)
 
-    await harness.press(f"fwd_en:{RULE_ID}", OWNER)
+    await harness.press(f"fwd_on:{RULE_ID}", OWNER)
 
     rule = await harness.rules_repo.get_by_id(RULE_ID)
     assert rule.is_active is True
@@ -266,7 +266,7 @@ async def test_enable_switch_turns_the_task_on(harness):
 
 @pytest.mark.asyncio
 async def test_disable_switch_turns_the_task_off(harness):
-    await harness.press(f"fwd_dis:{RULE_ID}", OWNER)
+    await harness.press(f"fwd_off:{RULE_ID}", OWNER)
 
     rule = await harness.rules_repo.get_by_id(RULE_ID)
     assert rule.is_active is False
@@ -274,7 +274,7 @@ async def test_disable_switch_turns_the_task_off(harness):
 
 @pytest.mark.asyncio
 async def test_a_second_tenants_toggle_is_refused_and_changes_nothing(harness):
-    cq = await harness.press(f"fwd_dis:{RULE_ID}", OTHER)
+    cq = await harness.press(f"fwd_off:{RULE_ID}", OTHER)
 
     rule = await harness.rules_repo.get_by_id(RULE_ID)
     assert rule.is_active is True

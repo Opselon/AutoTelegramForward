@@ -2580,7 +2580,7 @@
         "ui_gch_tasks": "📋 Tareas con este chat",
         "ui_gch_tasks_empty": "Ninguna tarea usa este chat todavía.",
         "ui_gch_tasks_title": "📋 **Tareas que usan {title}**",
-        "ui_gch_title": "📡 **{kind}** — {n} chat(s)",
+        "ui_gch_title": "📡 **{kind}** — {n} chat(s) encontrados",
         "ui_gch_username": "Usuario: @{username}",
         "ui_header_prompt": "📝 **Configurar encabezado del mensaje (prefijo)**\n\nEnvía el texto que se añadirá al comienzo de cada mensaje reenviado.\n\nUsa el botón de abajo para cancelar.",
         "ui_header_removed": "🗑 Encabezado eliminado correctamente.",
