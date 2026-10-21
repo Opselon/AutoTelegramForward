@@ -27,13 +27,26 @@ class UiState:
     buffer: Dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
-        """Serialize the FSM for the durable ui_states table."""
+        """Serialize the FSM for the durable ui_states table.
+
+        Every field a *flow* reads back is here, because a field that is not
+        serialized silently resets on the next process: a screen that reopens
+        after a restart used to lose `filter_id` / `ai_field` and render an
+        unbound editor that wrote to nothing.
+
+        Deliberately absent: `ai_api_key` and `cred_api_hash`. Those are
+        secrets, they live in the credential/AI stores, and the `ui_states`
+        payload is plain JSON in SQLite. A flow that needs one asks for it in
+        the step that uses it, never by resuming it from the row.
+        """
         return {
             "step": self.step,
             "lang": getattr(self, "lang", ""),
             "user_id": getattr(self, "user_id", 0),
             "rule_source": self.rule_source,
             "rule_target": self.rule_target,
+            "filter_id": self.filter_id,
+            "ai_field": self.ai_field,
             "ai_name": self.ai_name,
             "ai_provider": self.ai_provider,
             "ai_model": self.ai_model,
@@ -66,6 +79,7 @@ class UiState:
             rule_source=cur.get("rule_source", ""),
             rule_target=cur.get("rule_target", ""),
             filter_id=cur.get("filter_id"),
+            ai_field=cur.get("ai_field", ""),
             ai_name=cur.get("ai_name", ""),
             ai_provider=cur.get("ai_provider", ""),
             ai_model=cur.get("ai_model", ""),

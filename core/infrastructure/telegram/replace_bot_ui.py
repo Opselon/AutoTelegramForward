@@ -69,7 +69,18 @@ STEP_SEARCH = "replace_search"
 STEP_FIELD = "replace_field_input"
 STEP_TEST = "replace_test_sample"
 
+#: The create wizard's field order. Every answer asks for the next field, and
+#: the last answer opens the task picker (a rule with no task is not usable, so
+#: that is the next thing the wizard needs, not a summary screen the user is
+#: left to decode). `priority` is not in the chain: it has a default.
+DRAFT_ORDER: Tuple[str, ...] = ("name", "source", "to")
+
 STATUS_ORDER = (STATUS_ALL, STATUS_ENABLED, STATUS_DISABLED)
+
+#: Callback verbs that either arm a step themselves or answer without rendering
+#: a screen — they are exempt from the "navigation disarms the prompt" sweep in
+#: `_rpl_dispatch` (a `noop` tap is not a decision to walk away).
+ARMING_VERBS = frozenset({"q", "tr", "df", "ef", "nx", "noop"})
 
 
 def _cb(*parts: Any) -> str:
@@ -388,13 +399,13 @@ class ReplaceBotMixin:
         if not tasks:
             return (
                 _t("ui_rpl_err_no_tasks"),
-                self._kbd([[(self._btn("ui_rpl_btn_back"), _cb("new"))]]),
+                self._kbd([[(self._btn("ui_rpl_btn_back"), _cb("dsum"))]]),
             )
         rows: List[List[tuple]] = []
         for task in tasks[:12]:
             mark = "✅" if task["id"] in chosen else "⬜️"
             rows.append([(f"{mark} {str(task['name'])[:36]}"[:64], _cb("dtg", task["id"]))])
-        rows.append([(_t("ui_rpl_btn_done"), _cb("new"))])
+        rows.append([(_t("ui_rpl_btn_done"), _cb("dsum"))])
         lines = [_t("ui_rpl_pick_tasks_title"), _t("ui_rpl_pick_tasks_hint"), ""]
         return "\n".join(lines), self._kbd(rows)
 
@@ -424,6 +435,41 @@ class ReplaceBotMixin:
             [(_t("ui_rpl_btn_back"), _cb("v", rule_id))],
         ]
         return "\n".join(lines), self._kbd(rows)
+
+    def _rpl_next_draft_field(self, field: str) -> str:
+        try:
+            idx = DRAFT_ORDER.index(field)
+        except ValueError:
+            return ""
+        nxt = idx + 1
+        return DRAFT_ORDER[nxt] if nxt < len(DRAFT_ORDER) else ""
+
+    async def _rpl_arm_draft_field(self, uid: int, field: str, chain: bool = False) -> None:
+        """Arm one create-wizard prompt: the FSM step, the pending arm, the mode.
+
+        ``chain`` is the difference between the guided first pass (every answer
+        asks for the next field) and a surgical edit from the summary screen
+        (answer one field, come back to the summary). It lives in the panel
+        slice, so a restart resumes the same mode.
+        """
+        self._state(uid).step = STEP_FIELD
+        panel = self._rpl_state(uid)
+        panel["editing"] = {"rule_id": "", "field": field}
+        panel["draft_chain"] = bool(chain)
+        await self._rpl_store(uid)
+
+    def _rpl_ask_text(self, uid: int, field: str) -> Tuple[str, InlineKeyboardMarkup]:
+        """The prompt for one wizard field, with its position and its exits."""
+        lang = self._rpl_lang(uid)
+        total = len(DRAFT_ORDER)
+        n = DRAFT_ORDER.index(field) + 1 if field in DRAFT_ORDER else total
+        progress = self._t("ui_rpl_step_progress", lang=lang, n=n, total=total)
+        prompt = self._rpl_prompt_text(field, lang)
+        rows = [
+            [(self._t("ui_rpl_btn_skip", lang=lang), _cb("nx"))],
+            [(self._t("ui_rpl_btn_cancel", lang=lang), _cb("list"))],
+        ]
+        return "\n\n".join([progress, prompt]), self._kbd(rows)
 
     # -- FSM steps -------------------------------------------------------
     async def _step_replace_search(self, message: Message, st: Any, text: str) -> None:
@@ -473,15 +519,32 @@ class ReplaceBotMixin:
             value = str(clamp_priority(value))
 
         if not rule_id:
-            # Create wizard: write into the draft, then re-render it.
+            # Create wizard: write into the draft, then ASK FOR THE NEXT FIELD.
+            # Re-rendering the summary here was the "handlers don't guide the
+            # user" half of the bug: the screen after an answer was a recap with
+            # buttons, so a user answering three prompts had to re-read a screen
+            # and find the next button instead of being asked the next question.
             draft = self._rpl_draft(uid)
             if field in ("name", "source", "to"):
                 draft[field] = value if field != "name" else value[:MAX_NAME_LEN]
             elif field == "priority":
                 draft["priority"] = clamp_priority(value)
             panel["editing"] = {}
+            st.step = ""
+            chained = bool(panel.get("draft_chain"))
+            panel["draft_chain"] = False
+            nxt = self._rpl_next_draft_field(field) if chained else ""
+            if nxt:
+                await self._rpl_arm_draft_field(uid, nxt, chain=True)
+                body, kbd = self._rpl_ask_text(uid, nxt)
+                return await message.reply_text(body, reply_markup=kbd)
+            if not chained:
+                # A single field edit from the summary: go back to the summary.
+                await self._rpl_store(uid)
+                body, kbd = await self._render_rpl_draft(uid)
+                return await message.reply_text(body, reply_markup=kbd)
             await self._rpl_store(uid)
-            body, kbd = await self._render_rpl_draft(uid)
+            body, kbd = await self._render_rpl_draft_tasks(uid)
             return await message.reply_text(body, reply_markup=kbd)
 
         payload: Dict[str, Any] = {}
@@ -567,7 +630,10 @@ class ReplaceBotMixin:
             verb = parts[1] if len(parts) > 1 else "list"
             arg1 = parts[2] if len(parts) > 2 else ""
             arg2 = parts[3] if len(parts) > 3 else ""
-            await self._rpl_dispatch(cq, uid, verb, arg1, arg2, _render)
+            # Same per-user mutex as the free-text router: a tap and a message
+            # for one user must not both consume the same armed step.
+            async with self._user_lock(uid):
+                await self._rpl_dispatch(cq, uid, verb, arg1, arg2, _render)
 
     async def _rpl_dispatch(self, cq: CallbackQuery, uid: int, verb: str, arg1: str,
                             arg2: str, render) -> None:
@@ -581,6 +647,19 @@ class ReplaceBotMixin:
         lang = self._rpl_lang(uid)
         _t = lambda key, **kw: self._t(key, lang=lang, **kw)  # noqa: E731
         panel = self._rpl_state(uid)
+
+        # A callback that renders any screen is a navigation decision, so an
+        # armed prompt (search text, field answer, test sample) must be
+        # disarmed by it: without this the user taps a filter while a prompt is
+        # armed and their NEXT message is stored as that prompt's answer — the
+        # same routing dead-end as a slash command not settling a flow. The
+        # verbs in `ARMING_VERBS` answer without moving the user, so they are
+        # exempt; every other verb renders a different screen.
+        if verb not in ARMING_VERBS:
+            st = self._state(uid)
+            if str(getattr(st, "step", "") or "") in (STEP_SEARCH, STEP_FIELD, STEP_TEST):
+                st.step = ""
+                await self._rpl_store(uid)
 
         if verb in ("noop",):
             return await cq.answer()
@@ -733,18 +812,44 @@ class ReplaceBotMixin:
             panel["editing"] = {}
             await self._rpl_store(uid)
             await cq.answer()
-            return await render(cq, uid, self._render_rpl_draft)
+            # Start the guided pass: the first question, not a form to decode.
+            await self._rpl_arm_draft_field(uid, DRAFT_ORDER[0], chain=True)
+            body, kbd = self._rpl_ask_text(uid, DRAFT_ORDER[0])
+            return await self._safe_edit(cq, body, reply_markup=kbd)
 
         if verb == "df":
-            self._state(uid).step = STEP_FIELD
-            panel["editing"] = {"rule_id": "", "field": arg1}
+            await self._rpl_arm_draft_field(uid, arg1, chain=False)
+            await cq.answer()
+            body, kbd = self._rpl_ask_text(uid, arg1)
+            return await self._safe_edit(cq, body, reply_markup=kbd)
+
+        if verb == "nx":
+            # Skip the field the wizard is asking for. Skipping is a real answer
+            # for `name` (the find text is the label) and for `to` (empty deletes
+            # the match), so it must move the flow on without writing anything.
+            await cq.answer()
+            editing = panel.get("editing") if isinstance(panel.get("editing"), dict) else {}
+            field = str(editing.get("field") or "")
+            nxt = self._rpl_next_draft_field(field) if field else DRAFT_ORDER[0]
+            if nxt:
+                await self._rpl_arm_draft_field(uid, nxt, chain=True)
+                body, kbd = self._rpl_ask_text(uid, nxt)
+                return await self._safe_edit(cq, body, reply_markup=kbd)
+            self._state(uid).step = ""
+            panel["editing"] = {}
+            panel["draft_chain"] = False
+            await self._rpl_store(uid)
+            return await render(cq, uid, self._render_rpl_draft_tasks)
+
+        if verb == "dsum":
+            # Back to the summary: the guided pass is over, edits from here are
+            # single-field (see `df`), and nothing in the draft is discarded.
+            self._state(uid).step = ""
+            panel["editing"] = {}
+            panel["draft_chain"] = False
             await self._rpl_store(uid)
             await cq.answer()
-            prompt = self._rpl_prompt_text(arg1, lang)
-            return await self._safe_edit(
-                cq, prompt,
-                reply_markup=self._kbd([[(self._btn("ui_rpl_btn_back"), _cb("new"))]]),
-            )
+            return await render(cq, uid, self._render_rpl_draft)
 
         if verb == "dm":
             draft = self._rpl_draft(uid)

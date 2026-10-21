@@ -35,9 +35,19 @@ def _i18n() -> I18n:
     return i18n
 
 
+class ContinuePropagation(Exception):
+    """What `message.continue_propagation()` raises in pyrogram.
+
+    The real class subclasses `Exception` (via `StopAsyncIteration`), which is
+    exactly why a `try/except Exception` around the call swallows it — the
+    reason this stand-in raises instead of returning: a stub that returns would
+    let the swallow come back without any test noticing.
+    """
+
+
 def _fake_message(text: str, uid: int = ADMIN) -> SimpleNamespace:
     """A pyrogram Message stand-in: only what the router touches."""
-    return SimpleNamespace(
+    msg = SimpleNamespace(
         text=text,
         chat=SimpleNamespace(id=uid),
         from_user=SimpleNamespace(id=uid),
@@ -45,7 +55,15 @@ def _fake_message(text: str, uid: int = ADMIN) -> SimpleNamespace:
         reply_document=AsyncMock(),
         edit_message_text=AsyncMock(),
         document=None,
+        propagated=False,
     )
+
+    def _continue_propagation():
+        msg.propagated = True
+        raise ContinuePropagation()
+
+    msg.continue_propagation = _continue_propagation
+    return msg
 
 
 def _make_manager(ui_step_checker=None, ui_state_repo=None) -> BotManager:
@@ -120,7 +138,10 @@ async def test_no_unknown_command_when_ui_step_active():
     mgr = _make_manager(ui_step_checker=lambda uid: True)
     msg = _fake_message("+989016807808")
 
-    await mgr._route_text(msg)
+    # Yielding to the dashboard is `continue_propagation()`, which raises: the
+    # router must let the signal out, not absorb it with a `return`.
+    with pytest.raises(ContinuePropagation):
+        await mgr._route_text(msg)
 
     msg.reply_text.assert_not_called()
 
@@ -138,7 +159,8 @@ async def test_no_unknown_command_when_login_pending():
     mgr._login._pending[ADMIN] = state
     msg = _fake_message("12345")
 
-    await mgr._route_text(msg)
+    with pytest.raises(ContinuePropagation):
+        await mgr._route_text(msg)
 
     msg.reply_text.assert_not_called()
 
@@ -209,7 +231,9 @@ async def test_persisted_step_blocks_bot_manager_after_restart(temp_db):
 
     assert mgr._ui_owns(ADMIN) is True
     msg = _fake_message("12345")
-    await mgr._route_text(msg)
+    with pytest.raises(ContinuePropagation):
+        await mgr._route_text(msg)
+    assert msg.propagated, "the router must hand the message to the dashboard"
     msg.reply_text.assert_not_called()
 
 

@@ -109,6 +109,24 @@ ROUTED_TOKENS: Tuple[str, ...] = tuple(
 #: Names that must never reach the free-text FSM routers.
 ALL_COMMAND_TOKENS: Tuple[str, ...] = tuple(_BY_NAME.keys())
 
+#: Commands owned by other modules (BotManager, the panel's own builtin
+#: handlers). They are routed by their own handlers, but they are still
+#: commands a user types while a prompt is pending: each of them goes through
+#: the FSM arbiter (`fsm_arbiter`), so a command always leaves the caller on
+#: the screen the command is about, never answering a prompt they walked away
+#: from. `test_fsm_command_arbitration` scans the package for
+#: `filters.command(...)` literals and asserts every one is covered here.
+OTHER_COMMAND_TOKENS: Tuple[str, ...] = (
+    "admin", "ai", "backup", "cancel", "help", "login", "menu", "panel",
+    "reauth", "restore", "route", "rules", "sessions", "stats",
+)
+
+#: Every token a user can type as a command, in one list — exactly what the
+#: arbiter's message filter registers.
+ARBITRATED_COMMANDS: Tuple[str, ...] = tuple(
+    sorted(set(ALL_COMMAND_TOKENS) | set(OTHER_COMMAND_TOKENS))
+)
+
 
 def resolve(name: str) -> Optional[CommandSpec]:
     """Look a command (or alias) up, case-insensitively."""

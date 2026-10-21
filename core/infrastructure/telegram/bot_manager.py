@@ -12,6 +12,8 @@ from typing import Any, Callable, Optional
 from pyrogram import Client, filters
 from pyrogram.types import Message
 
+from ...application.command_registry import ARBITRATED_COMMANDS
+from . import fsm_arbiter
 from ...application.use_cases import (
     AIConfigUseCases,
     FilterRuleUseCases,
@@ -383,11 +385,32 @@ class BotManager:
             except Exception as exc:
                 await message.reply_text(self.i18n.t("restore_failed", lang=lang, error=str(exc)))
 
-        # Plain text router: FSM (login steps / lang pick / rule add / ai add)
-        @b.on_message(filters.private & ~filters.command([
-            "start", "help", "lang", "login", "cancel", "sessions",
-            "rules", "ai", "stats", "backup", "restore", "menu", "panel", "settings",
-        ]), group=1)
+        # A command settles this manager's own waiting states, at a group that
+        # runs before every command handler. `_awaiting_lang/_awaiting_rule/
+        # _awaiting_ai` are a second, in-memory FSM: they consume the next free
+        # text for one prompt. Left set across a command, they eat a message the
+        # user typed for the screen they are actually on. One handler, every
+        # command token, no drift.
+        @b.on_message(filters.command(list(ARBITRATED_COMMANDS)) & filters.private, group=-4)
+        async def _command_settles_awaiting(client, message: Message):
+            chat_id = message.chat.id if message.chat else None
+            if chat_id is None:
+                return
+            cleared = fsm_arbiter.settle_awaiting(self, chat_id)
+            if cleared:
+                logger.info(
+                    "[PIPELINE:FSM] command %r cleared waiting state for chat %s: %s",
+                    (message.command or [""])[0], chat_id, ", ".join(cleared),
+                )
+
+        # Plain text router: FSM (login steps / lang pick / rule add / ai add).
+        # The exclusion list is the registry's, not a hand-copied one: a command
+        # missing here would be answered by BOTH the command handler and this
+        # fallback ("use the buttons below" after the real answer).
+        @b.on_message(
+            filters.private & ~filters.command(list(ARBITRATED_COMMANDS)),
+            group=1,
+        )
         async def _text(client, message: Message):
             await self._route_text(message)
 
@@ -432,11 +455,9 @@ class BotManager:
 
         if ui_active:
             logger.info("BotManager delegating text from uid=%s to ProBotUI (continue_propagation)", uid)
-            try:
-                message.continue_propagation()
-            except Exception:
-                pass
-            return
+            # Raises ContinuePropagation on purpose: never wrap it in
+            # `except Exception`, which would eat the signal and drop the message.
+            message.continue_propagation()
 
         # Language picker
         if self._awaiting_lang.pop(message.chat.id, None):
