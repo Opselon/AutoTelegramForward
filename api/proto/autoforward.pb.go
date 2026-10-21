@@ -13105,6 +13105,1198 @@ func (x *PreviewAutoReplyResponse) GetTokens() int32 {
 	return 0
 }
 
+type ReplaceRule struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Source        string                 `protobuf:"bytes,3,opt,name=source,proto3" json:"source,omitempty"` // the text (or pattern) to find
+	To            string                 `protobuf:"bytes,4,opt,name=to,proto3" json:"to,omitempty"`         // the replacement
+	Mode          string                 `protobuf:"bytes,5,opt,name=mode,proto3" json:"mode,omitempty"`     // literal | regex
+	Flags         string                 `protobuf:"bytes,6,opt,name=flags,proto3" json:"flags,omitempty"`   // subset of imsx
+	WholeWord     bool                   `protobuf:"varint,7,opt,name=whole_word,json=wholeWord,proto3" json:"whole_word,omitempty"`
+	Enabled       bool                   `protobuf:"varint,8,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Priority      int32                  `protobuf:"varint,9,opt,name=priority,proto3" json:"priority,omitempty"` // 0..1000, higher runs first
+	TaskIds       []string               `protobuf:"bytes,10,rep,name=task_ids,json=taskIds,proto3" json:"task_ids,omitempty"`
+	TaskNames     []string               `protobuf:"bytes,11,rep,name=task_names,json=taskNames,proto3" json:"task_names,omitempty"`
+	Version       int64                  `protobuf:"varint,12,opt,name=version,proto3" json:"version,omitempty"`
+	UpdatedAt     int64                  `protobuf:"varint,13,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Badge         string                 `protobuf:"bytes,14,opt,name=badge,proto3" json:"badge,omitempty"` // lit / lit/i / re / re/im
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReplaceRule) Reset() {
+	*x = ReplaceRule{}
+	mi := &file_autoforward_proto_msgTypes[176]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplaceRule) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplaceRule) ProtoMessage() {}
+
+func (x *ReplaceRule) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[176]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplaceRule.ProtoReflect.Descriptor instead.
+func (*ReplaceRule) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{176}
+}
+
+func (x *ReplaceRule) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ReplaceRule) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ReplaceRule) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *ReplaceRule) GetTo() string {
+	if x != nil {
+		return x.To
+	}
+	return ""
+}
+
+func (x *ReplaceRule) GetMode() string {
+	if x != nil {
+		return x.Mode
+	}
+	return ""
+}
+
+func (x *ReplaceRule) GetFlags() string {
+	if x != nil {
+		return x.Flags
+	}
+	return ""
+}
+
+func (x *ReplaceRule) GetWholeWord() bool {
+	if x != nil {
+		return x.WholeWord
+	}
+	return false
+}
+
+func (x *ReplaceRule) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *ReplaceRule) GetPriority() int32 {
+	if x != nil {
+		return x.Priority
+	}
+	return 0
+}
+
+func (x *ReplaceRule) GetTaskIds() []string {
+	if x != nil {
+		return x.TaskIds
+	}
+	return nil
+}
+
+func (x *ReplaceRule) GetTaskNames() []string {
+	if x != nil {
+		return x.TaskNames
+	}
+	return nil
+}
+
+func (x *ReplaceRule) GetVersion() int64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
+func (x *ReplaceRule) GetUpdatedAt() int64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+func (x *ReplaceRule) GetBadge() string {
+	if x != nil {
+		return x.Badge
+	}
+	return ""
+}
+
+type ReplaceRuleTask struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReplaceRuleTask) Reset() {
+	*x = ReplaceRuleTask{}
+	mi := &file_autoforward_proto_msgTypes[177]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplaceRuleTask) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplaceRuleTask) ProtoMessage() {}
+
+func (x *ReplaceRuleTask) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[177]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplaceRuleTask.ProtoReflect.Descriptor instead.
+func (*ReplaceRuleTask) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{177}
+}
+
+func (x *ReplaceRuleTask) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ReplaceRuleTask) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type ReplaceRuleCounts struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Total         int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
+	Enabled       int32                  `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	Disabled      int32                  `protobuf:"varint,3,opt,name=disabled,proto3" json:"disabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReplaceRuleCounts) Reset() {
+	*x = ReplaceRuleCounts{}
+	mi := &file_autoforward_proto_msgTypes[178]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplaceRuleCounts) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplaceRuleCounts) ProtoMessage() {}
+
+func (x *ReplaceRuleCounts) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[178]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplaceRuleCounts.ProtoReflect.Descriptor instead.
+func (*ReplaceRuleCounts) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{178}
+}
+
+func (x *ReplaceRuleCounts) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *ReplaceRuleCounts) GetEnabled() int32 {
+	if x != nil {
+		return x.Enabled
+	}
+	return 0
+}
+
+func (x *ReplaceRuleCounts) GetDisabled() int32 {
+	if x != nil {
+		return x.Disabled
+	}
+	return 0
+}
+
+// Fields are “optional“ so an update can say "leave this alone" (absent) as
+// distinctly as "set it to false" — proto3 scalars cannot otherwise tell the two
+// apart, and a toggle that cleared the pattern it was switching off would be a
+// data-loss bug, not a UI bug.
+type ReplaceRuleInput struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          *string                `protobuf:"bytes,1,opt,name=name,proto3,oneof" json:"name,omitempty"`
+	Source        *string                `protobuf:"bytes,2,opt,name=source,proto3,oneof" json:"source,omitempty"`
+	To            *string                `protobuf:"bytes,3,opt,name=to,proto3,oneof" json:"to,omitempty"`
+	Mode          *string                `protobuf:"bytes,4,opt,name=mode,proto3,oneof" json:"mode,omitempty"`
+	Flags         *string                `protobuf:"bytes,5,opt,name=flags,proto3,oneof" json:"flags,omitempty"`
+	WholeWord     *bool                  `protobuf:"varint,6,opt,name=whole_word,json=wholeWord,proto3,oneof" json:"whole_word,omitempty"`
+	Enabled       *bool                  `protobuf:"varint,7,opt,name=enabled,proto3,oneof" json:"enabled,omitempty"`
+	Priority      *int32                 `protobuf:"varint,8,opt,name=priority,proto3,oneof" json:"priority,omitempty"`
+	TaskIds       []string               `protobuf:"bytes,9,rep,name=task_ids,json=taskIds,proto3" json:"task_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReplaceRuleInput) Reset() {
+	*x = ReplaceRuleInput{}
+	mi := &file_autoforward_proto_msgTypes[179]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReplaceRuleInput) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReplaceRuleInput) ProtoMessage() {}
+
+func (x *ReplaceRuleInput) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[179]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReplaceRuleInput.ProtoReflect.Descriptor instead.
+func (*ReplaceRuleInput) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{179}
+}
+
+func (x *ReplaceRuleInput) GetName() string {
+	if x != nil && x.Name != nil {
+		return *x.Name
+	}
+	return ""
+}
+
+func (x *ReplaceRuleInput) GetSource() string {
+	if x != nil && x.Source != nil {
+		return *x.Source
+	}
+	return ""
+}
+
+func (x *ReplaceRuleInput) GetTo() string {
+	if x != nil && x.To != nil {
+		return *x.To
+	}
+	return ""
+}
+
+func (x *ReplaceRuleInput) GetMode() string {
+	if x != nil && x.Mode != nil {
+		return *x.Mode
+	}
+	return ""
+}
+
+func (x *ReplaceRuleInput) GetFlags() string {
+	if x != nil && x.Flags != nil {
+		return *x.Flags
+	}
+	return ""
+}
+
+func (x *ReplaceRuleInput) GetWholeWord() bool {
+	if x != nil && x.WholeWord != nil {
+		return *x.WholeWord
+	}
+	return false
+}
+
+func (x *ReplaceRuleInput) GetEnabled() bool {
+	if x != nil && x.Enabled != nil {
+		return *x.Enabled
+	}
+	return false
+}
+
+func (x *ReplaceRuleInput) GetPriority() int32 {
+	if x != nil && x.Priority != nil {
+		return *x.Priority
+	}
+	return 0
+}
+
+func (x *ReplaceRuleInput) GetTaskIds() []string {
+	if x != nil {
+		return x.TaskIds
+	}
+	return nil
+}
+
+type ListReplaceRulesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Query         string                 `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`                     // matches name, source or replacement
+	Status        string                 `protobuf:"bytes,3,opt,name=status,proto3" json:"status,omitempty"`                   // all | enabled | disabled
+	TaskId        string                 `protobuf:"bytes,4,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`     // narrow to the rules one task runs
+	Page          int32                  `protobuf:"varint,5,opt,name=page,proto3" json:"page,omitempty"`                      // 1-based
+	PerPage       int32                  `protobuf:"varint,6,opt,name=per_page,json=perPage,proto3" json:"per_page,omitempty"` // 1..100
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListReplaceRulesRequest) Reset() {
+	*x = ListReplaceRulesRequest{}
+	mi := &file_autoforward_proto_msgTypes[180]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListReplaceRulesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListReplaceRulesRequest) ProtoMessage() {}
+
+func (x *ListReplaceRulesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[180]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListReplaceRulesRequest.ProtoReflect.Descriptor instead.
+func (*ListReplaceRulesRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{180}
+}
+
+func (x *ListReplaceRulesRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *ListReplaceRulesRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *ListReplaceRulesRequest) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ListReplaceRulesRequest) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *ListReplaceRulesRequest) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListReplaceRulesRequest) GetPerPage() int32 {
+	if x != nil {
+		return x.PerPage
+	}
+	return 0
+}
+
+type ListReplaceRulesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Rules         []*ReplaceRule         `protobuf:"bytes,1,rep,name=rules,proto3" json:"rules,omitempty"`
+	Page          int32                  `protobuf:"varint,2,opt,name=page,proto3" json:"page,omitempty"`
+	PerPage       int32                  `protobuf:"varint,3,opt,name=per_page,json=perPage,proto3" json:"per_page,omitempty"`
+	Total         int32                  `protobuf:"varint,4,opt,name=total,proto3" json:"total,omitempty"`
+	Pages         int32                  `protobuf:"varint,5,opt,name=pages,proto3" json:"pages,omitempty"`
+	Counts        *ReplaceRuleCounts     `protobuf:"bytes,6,opt,name=counts,proto3" json:"counts,omitempty"`
+	Query         string                 `protobuf:"bytes,7,opt,name=query,proto3" json:"query,omitempty"`
+	Status        string                 `protobuf:"bytes,8,opt,name=status,proto3" json:"status,omitempty"`
+	TaskId        string                 `protobuf:"bytes,9,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	Tasks         []*ReplaceRuleTask     `protobuf:"bytes,10,rep,name=tasks,proto3" json:"tasks,omitempty"` // the owner's tasks, for the picker
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListReplaceRulesResponse) Reset() {
+	*x = ListReplaceRulesResponse{}
+	mi := &file_autoforward_proto_msgTypes[181]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListReplaceRulesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListReplaceRulesResponse) ProtoMessage() {}
+
+func (x *ListReplaceRulesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[181]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListReplaceRulesResponse.ProtoReflect.Descriptor instead.
+func (*ListReplaceRulesResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{181}
+}
+
+func (x *ListReplaceRulesResponse) GetRules() []*ReplaceRule {
+	if x != nil {
+		return x.Rules
+	}
+	return nil
+}
+
+func (x *ListReplaceRulesResponse) GetPage() int32 {
+	if x != nil {
+		return x.Page
+	}
+	return 0
+}
+
+func (x *ListReplaceRulesResponse) GetPerPage() int32 {
+	if x != nil {
+		return x.PerPage
+	}
+	return 0
+}
+
+func (x *ListReplaceRulesResponse) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *ListReplaceRulesResponse) GetPages() int32 {
+	if x != nil {
+		return x.Pages
+	}
+	return 0
+}
+
+func (x *ListReplaceRulesResponse) GetCounts() *ReplaceRuleCounts {
+	if x != nil {
+		return x.Counts
+	}
+	return nil
+}
+
+func (x *ListReplaceRulesResponse) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+func (x *ListReplaceRulesResponse) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *ListReplaceRulesResponse) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *ListReplaceRulesResponse) GetTasks() []*ReplaceRuleTask {
+	if x != nil {
+		return x.Tasks
+	}
+	return nil
+}
+
+type GetReplaceRuleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,2,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetReplaceRuleRequest) Reset() {
+	*x = GetReplaceRuleRequest{}
+	mi := &file_autoforward_proto_msgTypes[182]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetReplaceRuleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetReplaceRuleRequest) ProtoMessage() {}
+
+func (x *GetReplaceRuleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[182]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetReplaceRuleRequest.ProtoReflect.Descriptor instead.
+func (*GetReplaceRuleRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{182}
+}
+
+func (x *GetReplaceRuleRequest) GetRuleId() string {
+	if x != nil {
+		return x.RuleId
+	}
+	return ""
+}
+
+func (x *GetReplaceRuleRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+type CreateReplaceRuleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Rule          *ReplaceRuleInput      `protobuf:"bytes,2,opt,name=rule,proto3" json:"rule,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateReplaceRuleRequest) Reset() {
+	*x = CreateReplaceRuleRequest{}
+	mi := &file_autoforward_proto_msgTypes[183]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateReplaceRuleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateReplaceRuleRequest) ProtoMessage() {}
+
+func (x *CreateReplaceRuleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[183]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateReplaceRuleRequest.ProtoReflect.Descriptor instead.
+func (*CreateReplaceRuleRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{183}
+}
+
+func (x *CreateReplaceRuleRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *CreateReplaceRuleRequest) GetRule() *ReplaceRuleInput {
+	if x != nil {
+		return x.Rule
+	}
+	return nil
+}
+
+type UpdateReplaceRuleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,2,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Rule          *ReplaceRuleInput      `protobuf:"bytes,3,opt,name=rule,proto3" json:"rule,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateReplaceRuleRequest) Reset() {
+	*x = UpdateReplaceRuleRequest{}
+	mi := &file_autoforward_proto_msgTypes[184]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateReplaceRuleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateReplaceRuleRequest) ProtoMessage() {}
+
+func (x *UpdateReplaceRuleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[184]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateReplaceRuleRequest.ProtoReflect.Descriptor instead.
+func (*UpdateReplaceRuleRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{184}
+}
+
+func (x *UpdateReplaceRuleRequest) GetRuleId() string {
+	if x != nil {
+		return x.RuleId
+	}
+	return ""
+}
+
+func (x *UpdateReplaceRuleRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *UpdateReplaceRuleRequest) GetRule() *ReplaceRuleInput {
+	if x != nil {
+		return x.Rule
+	}
+	return nil
+}
+
+type DeleteReplaceRuleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,2,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteReplaceRuleRequest) Reset() {
+	*x = DeleteReplaceRuleRequest{}
+	mi := &file_autoforward_proto_msgTypes[185]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteReplaceRuleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteReplaceRuleRequest) ProtoMessage() {}
+
+func (x *DeleteReplaceRuleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[185]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteReplaceRuleRequest.ProtoReflect.Descriptor instead.
+func (*DeleteReplaceRuleRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{185}
+}
+
+func (x *DeleteReplaceRuleRequest) GetRuleId() string {
+	if x != nil {
+		return x.RuleId
+	}
+	return ""
+}
+
+func (x *DeleteReplaceRuleRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+type DeleteReplaceRuleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Removed       int32                  `protobuf:"varint,2,opt,name=removed,proto3" json:"removed,omitempty"` // task copies removed
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteReplaceRuleResponse) Reset() {
+	*x = DeleteReplaceRuleResponse{}
+	mi := &file_autoforward_proto_msgTypes[186]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteReplaceRuleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteReplaceRuleResponse) ProtoMessage() {}
+
+func (x *DeleteReplaceRuleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[186]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteReplaceRuleResponse.ProtoReflect.Descriptor instead.
+func (*DeleteReplaceRuleResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{186}
+}
+
+func (x *DeleteReplaceRuleResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *DeleteReplaceRuleResponse) GetRemoved() int32 {
+	if x != nil {
+		return x.Removed
+	}
+	return 0
+}
+
+type SetReplaceRuleEnabledRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,2,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Enabled       bool                   `protobuf:"varint,3,opt,name=enabled,proto3" json:"enabled,omitempty"` // absolute, so a retried call cannot flip it back
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetReplaceRuleEnabledRequest) Reset() {
+	*x = SetReplaceRuleEnabledRequest{}
+	mi := &file_autoforward_proto_msgTypes[187]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetReplaceRuleEnabledRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetReplaceRuleEnabledRequest) ProtoMessage() {}
+
+func (x *SetReplaceRuleEnabledRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[187]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetReplaceRuleEnabledRequest.ProtoReflect.Descriptor instead.
+func (*SetReplaceRuleEnabledRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{187}
+}
+
+func (x *SetReplaceRuleEnabledRequest) GetRuleId() string {
+	if x != nil {
+		return x.RuleId
+	}
+	return ""
+}
+
+func (x *SetReplaceRuleEnabledRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *SetReplaceRuleEnabledRequest) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+type DuplicateReplaceRuleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RuleId        string                 `protobuf:"bytes,1,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`
+	OwnerUserId   int64                  `protobuf:"varint,2,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"` // empty keeps "<original> copy"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DuplicateReplaceRuleRequest) Reset() {
+	*x = DuplicateReplaceRuleRequest{}
+	mi := &file_autoforward_proto_msgTypes[188]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DuplicateReplaceRuleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DuplicateReplaceRuleRequest) ProtoMessage() {}
+
+func (x *DuplicateReplaceRuleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[188]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DuplicateReplaceRuleRequest.ProtoReflect.Descriptor instead.
+func (*DuplicateReplaceRuleRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{188}
+}
+
+func (x *DuplicateReplaceRuleRequest) GetRuleId() string {
+	if x != nil {
+		return x.RuleId
+	}
+	return ""
+}
+
+func (x *DuplicateReplaceRuleRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *DuplicateReplaceRuleRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type TestReplaceRuleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	RuleId        string                 `protobuf:"bytes,2,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"` // when set, the stored rule is the base
+	Rule          *ReplaceRuleInput      `protobuf:"bytes,3,opt,name=rule,proto3" json:"rule,omitempty"`                   // draft values override the stored ones
+	Sample        string                 `protobuf:"bytes,4,opt,name=sample,proto3" json:"sample,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestReplaceRuleRequest) Reset() {
+	*x = TestReplaceRuleRequest{}
+	mi := &file_autoforward_proto_msgTypes[189]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestReplaceRuleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestReplaceRuleRequest) ProtoMessage() {}
+
+func (x *TestReplaceRuleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[189]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestReplaceRuleRequest.ProtoReflect.Descriptor instead.
+func (*TestReplaceRuleRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{189}
+}
+
+func (x *TestReplaceRuleRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *TestReplaceRuleRequest) GetRuleId() string {
+	if x != nil {
+		return x.RuleId
+	}
+	return ""
+}
+
+func (x *TestReplaceRuleRequest) GetRule() *ReplaceRuleInput {
+	if x != nil {
+		return x.Rule
+	}
+	return nil
+}
+
+func (x *TestReplaceRuleRequest) GetSample() string {
+	if x != nil {
+		return x.Sample
+	}
+	return ""
+}
+
+type TestReplaceRuleResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	Input         string                 `protobuf:"bytes,2,opt,name=input,proto3" json:"input,omitempty"`
+	Output        string                 `protobuf:"bytes,3,opt,name=output,proto3" json:"output,omitempty"`
+	Matches       int32                  `protobuf:"varint,4,opt,name=matches,proto3" json:"matches,omitempty"`
+	Changed       bool                   `protobuf:"varint,5,opt,name=changed,proto3" json:"changed,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestReplaceRuleResponse) Reset() {
+	*x = TestReplaceRuleResponse{}
+	mi := &file_autoforward_proto_msgTypes[190]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestReplaceRuleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestReplaceRuleResponse) ProtoMessage() {}
+
+func (x *TestReplaceRuleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[190]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestReplaceRuleResponse.ProtoReflect.Descriptor instead.
+func (*TestReplaceRuleResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{190}
+}
+
+func (x *TestReplaceRuleResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *TestReplaceRuleResponse) GetInput() string {
+	if x != nil {
+		return x.Input
+	}
+	return ""
+}
+
+func (x *TestReplaceRuleResponse) GetOutput() string {
+	if x != nil {
+		return x.Output
+	}
+	return ""
+}
+
+func (x *TestReplaceRuleResponse) GetMatches() int32 {
+	if x != nil {
+		return x.Matches
+	}
+	return 0
+}
+
+func (x *TestReplaceRuleResponse) GetChanged() bool {
+	if x != nil {
+		return x.Changed
+	}
+	return false
+}
+
+type ListReplaceRuleTasksRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OwnerUserId   int64                  `protobuf:"varint,1,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListReplaceRuleTasksRequest) Reset() {
+	*x = ListReplaceRuleTasksRequest{}
+	mi := &file_autoforward_proto_msgTypes[191]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListReplaceRuleTasksRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListReplaceRuleTasksRequest) ProtoMessage() {}
+
+func (x *ListReplaceRuleTasksRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[191]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListReplaceRuleTasksRequest.ProtoReflect.Descriptor instead.
+func (*ListReplaceRuleTasksRequest) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{191}
+}
+
+func (x *ListReplaceRuleTasksRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+type ListReplaceRuleTasksResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Tasks         []*ReplaceRuleTask     `protobuf:"bytes,1,rep,name=tasks,proto3" json:"tasks,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListReplaceRuleTasksResponse) Reset() {
+	*x = ListReplaceRuleTasksResponse{}
+	mi := &file_autoforward_proto_msgTypes[192]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListReplaceRuleTasksResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListReplaceRuleTasksResponse) ProtoMessage() {}
+
+func (x *ListReplaceRuleTasksResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_autoforward_proto_msgTypes[192]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListReplaceRuleTasksResponse.ProtoReflect.Descriptor instead.
+func (*ListReplaceRuleTasksResponse) Descriptor() ([]byte, []int) {
+	return file_autoforward_proto_rawDescGZIP(), []int{192}
+}
+
+func (x *ListReplaceRuleTasksResponse) GetTasks() []*ReplaceRuleTask {
+	if x != nil {
+		return x.Tasks
+	}
+	return nil
+}
+
 var File_autoforward_proto protoreflect.FileDescriptor
 
 const file_autoforward_proto_rawDesc = "" +
@@ -14267,7 +15459,111 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x05model\x18\a \x01(\tR\x05model\x12\x1d\n" +
 	"\n" +
 	"latency_ms\x18\b \x01(\x05R\tlatencyMs\x12\x16\n" +
-	"\x06tokens\x18\t \x01(\x05R\x06tokens*n\n" +
+	"\x06tokens\x18\t \x01(\x05R\x06tokens\"\xe1\x02\n" +
+	"\vReplaceRule\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x16\n" +
+	"\x06source\x18\x03 \x01(\tR\x06source\x12\x0e\n" +
+	"\x02to\x18\x04 \x01(\tR\x02to\x12\x12\n" +
+	"\x04mode\x18\x05 \x01(\tR\x04mode\x12\x14\n" +
+	"\x05flags\x18\x06 \x01(\tR\x05flags\x12\x1d\n" +
+	"\n" +
+	"whole_word\x18\a \x01(\bR\twholeWord\x12\x18\n" +
+	"\aenabled\x18\b \x01(\bR\aenabled\x12\x1a\n" +
+	"\bpriority\x18\t \x01(\x05R\bpriority\x12\x19\n" +
+	"\btask_ids\x18\n" +
+	" \x03(\tR\ataskIds\x12\x1d\n" +
+	"\n" +
+	"task_names\x18\v \x03(\tR\ttaskNames\x12\x18\n" +
+	"\aversion\x18\f \x01(\x03R\aversion\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\r \x01(\x03R\tupdatedAt\x12\x14\n" +
+	"\x05badge\x18\x0e \x01(\tR\x05badge\"5\n" +
+	"\x0fReplaceRuleTask\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"_\n" +
+	"\x11ReplaceRuleCounts\x12\x14\n" +
+	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x18\n" +
+	"\aenabled\x18\x02 \x01(\x05R\aenabled\x12\x1a\n" +
+	"\bdisabled\x18\x03 \x01(\x05R\bdisabled\"\xe6\x02\n" +
+	"\x10ReplaceRuleInput\x12\x17\n" +
+	"\x04name\x18\x01 \x01(\tH\x00R\x04name\x88\x01\x01\x12\x1b\n" +
+	"\x06source\x18\x02 \x01(\tH\x01R\x06source\x88\x01\x01\x12\x13\n" +
+	"\x02to\x18\x03 \x01(\tH\x02R\x02to\x88\x01\x01\x12\x17\n" +
+	"\x04mode\x18\x04 \x01(\tH\x03R\x04mode\x88\x01\x01\x12\x19\n" +
+	"\x05flags\x18\x05 \x01(\tH\x04R\x05flags\x88\x01\x01\x12\"\n" +
+	"\n" +
+	"whole_word\x18\x06 \x01(\bH\x05R\twholeWord\x88\x01\x01\x12\x1d\n" +
+	"\aenabled\x18\a \x01(\bH\x06R\aenabled\x88\x01\x01\x12\x1f\n" +
+	"\bpriority\x18\b \x01(\x05H\aR\bpriority\x88\x01\x01\x12\x19\n" +
+	"\btask_ids\x18\t \x03(\tR\ataskIdsB\a\n" +
+	"\x05_nameB\t\n" +
+	"\a_sourceB\x05\n" +
+	"\x03_toB\a\n" +
+	"\x05_modeB\b\n" +
+	"\x06_flagsB\r\n" +
+	"\v_whole_wordB\n" +
+	"\n" +
+	"\b_enabledB\v\n" +
+	"\t_priority\"\xb3\x01\n" +
+	"\x17ListReplaceRulesRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x14\n" +
+	"\x05query\x18\x02 \x01(\tR\x05query\x12\x16\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\x12\x17\n" +
+	"\atask_id\x18\x04 \x01(\tR\x06taskId\x12\x12\n" +
+	"\x04page\x18\x05 \x01(\x05R\x04page\x12\x19\n" +
+	"\bper_page\x18\x06 \x01(\x05R\aperPage\"\xd8\x02\n" +
+	"\x18ListReplaceRulesResponse\x12.\n" +
+	"\x05rules\x18\x01 \x03(\v2\x18.autoforward.ReplaceRuleR\x05rules\x12\x12\n" +
+	"\x04page\x18\x02 \x01(\x05R\x04page\x12\x19\n" +
+	"\bper_page\x18\x03 \x01(\x05R\aperPage\x12\x14\n" +
+	"\x05total\x18\x04 \x01(\x05R\x05total\x12\x14\n" +
+	"\x05pages\x18\x05 \x01(\x05R\x05pages\x126\n" +
+	"\x06counts\x18\x06 \x01(\v2\x1e.autoforward.ReplaceRuleCountsR\x06counts\x12\x14\n" +
+	"\x05query\x18\a \x01(\tR\x05query\x12\x16\n" +
+	"\x06status\x18\b \x01(\tR\x06status\x12\x17\n" +
+	"\atask_id\x18\t \x01(\tR\x06taskId\x122\n" +
+	"\x05tasks\x18\n" +
+	" \x03(\v2\x1c.autoforward.ReplaceRuleTaskR\x05tasks\"T\n" +
+	"\x15GetReplaceRuleRequest\x12\x17\n" +
+	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\"\n" +
+	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\"q\n" +
+	"\x18CreateReplaceRuleRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x121\n" +
+	"\x04rule\x18\x02 \x01(\v2\x1d.autoforward.ReplaceRuleInputR\x04rule\"\x8a\x01\n" +
+	"\x18UpdateReplaceRuleRequest\x12\x17\n" +
+	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\"\n" +
+	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\x121\n" +
+	"\x04rule\x18\x03 \x01(\v2\x1d.autoforward.ReplaceRuleInputR\x04rule\"W\n" +
+	"\x18DeleteReplaceRuleRequest\x12\x17\n" +
+	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\"\n" +
+	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\"E\n" +
+	"\x19DeleteReplaceRuleResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x18\n" +
+	"\aremoved\x18\x02 \x01(\x05R\aremoved\"u\n" +
+	"\x1cSetReplaceRuleEnabledRequest\x12\x17\n" +
+	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\"\n" +
+	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\x12\x18\n" +
+	"\aenabled\x18\x03 \x01(\bR\aenabled\"n\n" +
+	"\x1bDuplicateReplaceRuleRequest\x12\x17\n" +
+	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\"\n" +
+	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\"\xa0\x01\n" +
+	"\x16TestReplaceRuleRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x17\n" +
+	"\arule_id\x18\x02 \x01(\tR\x06ruleId\x121\n" +
+	"\x04rule\x18\x03 \x01(\v2\x1d.autoforward.ReplaceRuleInputR\x04rule\x12\x16\n" +
+	"\x06sample\x18\x04 \x01(\tR\x06sample\"\x8b\x01\n" +
+	"\x17TestReplaceRuleResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x14\n" +
+	"\x05input\x18\x02 \x01(\tR\x05input\x12\x16\n" +
+	"\x06output\x18\x03 \x01(\tR\x06output\x12\x18\n" +
+	"\amatches\x18\x04 \x01(\x05R\amatches\x12\x18\n" +
+	"\achanged\x18\x05 \x01(\bR\achanged\"A\n" +
+	"\x1bListReplaceRuleTasksRequest\x12\"\n" +
+	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\"R\n" +
+	"\x1cListReplaceRuleTasksResponse\x122\n" +
+	"\x05tasks\x18\x01 \x03(\v2\x1c.autoforward.ReplaceRuleTaskR\x05tasks*n\n" +
 	"\vRoutingType\x12\x13\n" +
 	"\x0fROUTING_UNKNOWN\x10\x00\x12\x16\n" +
 	"\x12CHANNEL_TO_CHANNEL\x10\x01\x12\f\n" +
@@ -14403,7 +15699,17 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x12CancelAutoReplyJob\x12 .autoforward.AutoReplyJobRequest\x1a\x1b.autoforward.StatusResponse\x12R\n" +
 	"\x11RetryAutoReplyJob\x12 .autoforward.AutoReplyJobRequest\x1a\x1b.autoforward.StatusResponse\x12_\n" +
 	"\x11GetAutoReplyStats\x12%.autoforward.GetAutoReplyStatsRequest\x1a#.autoforward.AutoReplyStatsResponse\x12_\n" +
-	"\x10PreviewAutoReply\x12$.autoforward.PreviewAutoReplyRequest\x1a%.autoforward.PreviewAutoReplyResponseB%Z#autoforward/api/proto;autoforwardpbb\x06proto3"
+	"\x10PreviewAutoReply\x12$.autoforward.PreviewAutoReplyRequest\x1a%.autoforward.PreviewAutoReplyResponse2\xe1\x06\n" +
+	"\x19ReplaceRuleControlService\x12_\n" +
+	"\x10ListReplaceRules\x12$.autoforward.ListReplaceRulesRequest\x1a%.autoforward.ListReplaceRulesResponse\x12N\n" +
+	"\x0eGetReplaceRule\x12\".autoforward.GetReplaceRuleRequest\x1a\x18.autoforward.ReplaceRule\x12T\n" +
+	"\x11CreateReplaceRule\x12%.autoforward.CreateReplaceRuleRequest\x1a\x18.autoforward.ReplaceRule\x12T\n" +
+	"\x11UpdateReplaceRule\x12%.autoforward.UpdateReplaceRuleRequest\x1a\x18.autoforward.ReplaceRule\x12b\n" +
+	"\x11DeleteReplaceRule\x12%.autoforward.DeleteReplaceRuleRequest\x1a&.autoforward.DeleteReplaceRuleResponse\x12\\\n" +
+	"\x15SetReplaceRuleEnabled\x12).autoforward.SetReplaceRuleEnabledRequest\x1a\x18.autoforward.ReplaceRule\x12Z\n" +
+	"\x14DuplicateReplaceRule\x12(.autoforward.DuplicateReplaceRuleRequest\x1a\x18.autoforward.ReplaceRule\x12\\\n" +
+	"\x0fTestReplaceRule\x12#.autoforward.TestReplaceRuleRequest\x1a$.autoforward.TestReplaceRuleResponse\x12k\n" +
+	"\x14ListReplaceRuleTasks\x12(.autoforward.ListReplaceRuleTasksRequest\x1a).autoforward.ListReplaceRuleTasksResponseB%Z#autoforward/api/proto;autoforwardpbb\x06proto3"
 
 var (
 	file_autoforward_proto_rawDescOnce sync.Once
@@ -14418,7 +15724,7 @@ func file_autoforward_proto_rawDescGZIP() []byte {
 }
 
 var file_autoforward_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_autoforward_proto_msgTypes = make([]protoimpl.MessageInfo, 182)
+var file_autoforward_proto_msgTypes = make([]protoimpl.MessageInfo, 199)
 var file_autoforward_proto_goTypes = []any{
 	(RoutingType)(0),                        // 0: autoforward.RoutingType
 	(ForwardMode)(0),                        // 1: autoforward.ForwardMode
@@ -14598,12 +15904,29 @@ var file_autoforward_proto_goTypes = []any{
 	(*AutoReplyStatsResponse)(nil),          // 175: autoforward.AutoReplyStatsResponse
 	(*PreviewAutoReplyRequest)(nil),         // 176: autoforward.PreviewAutoReplyRequest
 	(*PreviewAutoReplyResponse)(nil),        // 177: autoforward.PreviewAutoReplyResponse
-	nil,                                     // 178: autoforward.LogStatsResponse.ByLevelEntry
-	nil,                                     // 179: autoforward.LogStatsResponse.ByCategoryEntry
-	nil,                                     // 180: autoforward.LogStatsResponse.ByRuleEntry
-	nil,                                     // 181: autoforward.LogStatsResponse.ByServiceEntry
-	nil,                                     // 182: autoforward.BackupExportResponse.CountsEntry
-	nil,                                     // 183: autoforward.BackupImportResponse.StatsEntry
+	(*ReplaceRule)(nil),                     // 178: autoforward.ReplaceRule
+	(*ReplaceRuleTask)(nil),                 // 179: autoforward.ReplaceRuleTask
+	(*ReplaceRuleCounts)(nil),               // 180: autoforward.ReplaceRuleCounts
+	(*ReplaceRuleInput)(nil),                // 181: autoforward.ReplaceRuleInput
+	(*ListReplaceRulesRequest)(nil),         // 182: autoforward.ListReplaceRulesRequest
+	(*ListReplaceRulesResponse)(nil),        // 183: autoforward.ListReplaceRulesResponse
+	(*GetReplaceRuleRequest)(nil),           // 184: autoforward.GetReplaceRuleRequest
+	(*CreateReplaceRuleRequest)(nil),        // 185: autoforward.CreateReplaceRuleRequest
+	(*UpdateReplaceRuleRequest)(nil),        // 186: autoforward.UpdateReplaceRuleRequest
+	(*DeleteReplaceRuleRequest)(nil),        // 187: autoforward.DeleteReplaceRuleRequest
+	(*DeleteReplaceRuleResponse)(nil),       // 188: autoforward.DeleteReplaceRuleResponse
+	(*SetReplaceRuleEnabledRequest)(nil),    // 189: autoforward.SetReplaceRuleEnabledRequest
+	(*DuplicateReplaceRuleRequest)(nil),     // 190: autoforward.DuplicateReplaceRuleRequest
+	(*TestReplaceRuleRequest)(nil),          // 191: autoforward.TestReplaceRuleRequest
+	(*TestReplaceRuleResponse)(nil),         // 192: autoforward.TestReplaceRuleResponse
+	(*ListReplaceRuleTasksRequest)(nil),     // 193: autoforward.ListReplaceRuleTasksRequest
+	(*ListReplaceRuleTasksResponse)(nil),    // 194: autoforward.ListReplaceRuleTasksResponse
+	nil,                                     // 195: autoforward.LogStatsResponse.ByLevelEntry
+	nil,                                     // 196: autoforward.LogStatsResponse.ByCategoryEntry
+	nil,                                     // 197: autoforward.LogStatsResponse.ByRuleEntry
+	nil,                                     // 198: autoforward.LogStatsResponse.ByServiceEntry
+	nil,                                     // 199: autoforward.BackupExportResponse.CountsEntry
+	nil,                                     // 200: autoforward.BackupImportResponse.StatsEntry
 }
 var file_autoforward_proto_depIdxs = []int32{
 	3,   // 0: autoforward.ListSessionsResponse.sessions:type_name -> autoforward.SessionInfo
@@ -14625,16 +15948,16 @@ var file_autoforward_proto_depIdxs = []int32{
 	56,  // 16: autoforward.ListAIProvidersResponse.providers:type_name -> autoforward.AIProviderInfo
 	64,  // 17: autoforward.LogRequest.entry:type_name -> autoforward.LogEntry
 	64,  // 18: autoforward.QueryLogsResponse.logs:type_name -> autoforward.LogEntry
-	178, // 19: autoforward.LogStatsResponse.by_level:type_name -> autoforward.LogStatsResponse.ByLevelEntry
-	179, // 20: autoforward.LogStatsResponse.by_category:type_name -> autoforward.LogStatsResponse.ByCategoryEntry
-	180, // 21: autoforward.LogStatsResponse.by_rule:type_name -> autoforward.LogStatsResponse.ByRuleEntry
-	181, // 22: autoforward.LogStatsResponse.by_service:type_name -> autoforward.LogStatsResponse.ByServiceEntry
+	195, // 19: autoforward.LogStatsResponse.by_level:type_name -> autoforward.LogStatsResponse.ByLevelEntry
+	196, // 20: autoforward.LogStatsResponse.by_category:type_name -> autoforward.LogStatsResponse.ByCategoryEntry
+	197, // 21: autoforward.LogStatsResponse.by_rule:type_name -> autoforward.LogStatsResponse.ByRuleEntry
+	198, // 22: autoforward.LogStatsResponse.by_service:type_name -> autoforward.LogStatsResponse.ByServiceEntry
 	75,  // 23: autoforward.ListDeadLetterResponse.entries:type_name -> autoforward.DeadLetterEntry
 	81,  // 24: autoforward.DeliveryStatsResponse.rules:type_name -> autoforward.RuleLiveStat
 	82,  // 25: autoforward.DeliveryStatsResponse.errors:type_name -> autoforward.RecentError
 	86,  // 26: autoforward.QueryAuditEventsResponse.events:type_name -> autoforward.AuditEventEntry
-	182, // 27: autoforward.BackupExportResponse.counts:type_name -> autoforward.BackupExportResponse.CountsEntry
-	183, // 28: autoforward.BackupImportResponse.stats:type_name -> autoforward.BackupImportResponse.StatsEntry
+	199, // 27: autoforward.BackupExportResponse.counts:type_name -> autoforward.BackupExportResponse.CountsEntry
+	200, // 28: autoforward.BackupImportResponse.stats:type_name -> autoforward.BackupImportResponse.StatsEntry
 	93,  // 29: autoforward.RegisterAccountResponse.account:type_name -> autoforward.WebAccount
 	93,  // 30: autoforward.LoginAccountResponse.account:type_name -> autoforward.WebAccount
 	108, // 31: autoforward.AdminListUsersResponse.users:type_name -> autoforward.AdminUser
@@ -14655,212 +15978,237 @@ var file_autoforward_proto_depIdxs = []int32{
 	164, // 46: autoforward.ListAutoReplyRulesResponse.rules:type_name -> autoforward.AutoReplyRule
 	164, // 47: autoforward.SaveAutoReplyRuleRequest.rule:type_name -> autoforward.AutoReplyRule
 	170, // 48: autoforward.ListAutoReplyJobsResponse.jobs:type_name -> autoforward.AutoReplyJob
-	92,  // 49: autoforward.BackupImportResponse.StatsEntry.value:type_name -> autoforward.EntityImportStats
-	4,   // 50: autoforward.SessionControlService.ListSessions:input_type -> autoforward.ListSessionsRequest
-	6,   // 51: autoforward.SessionControlService.StartLogin:input_type -> autoforward.StartLoginRequest
-	8,   // 52: autoforward.SessionControlService.SubmitCode:input_type -> autoforward.SubmitCodeRequest
-	10,  // 53: autoforward.SessionControlService.SubmitPassword:input_type -> autoforward.SubmitPasswordRequest
-	12,  // 54: autoforward.SessionControlService.BackupSession:input_type -> autoforward.BackupSessionRequest
-	14,  // 55: autoforward.SessionControlService.RestoreSession:input_type -> autoforward.RestoreSessionRequest
-	16,  // 56: autoforward.SessionControlService.TerminateSession:input_type -> autoforward.TerminateSessionRequest
-	19,  // 57: autoforward.SessionControlService.ResolveChat:input_type -> autoforward.ResolveChatRequest
-	21,  // 58: autoforward.SessionControlService.ListChats:input_type -> autoforward.ListChatsRequest
-	30,  // 59: autoforward.ForwardRuleControlService.ListRules:input_type -> autoforward.ListRulesRequest
-	31,  // 60: autoforward.ForwardRuleControlService.GetRule:input_type -> autoforward.GetRuleRequest
-	18,  // 61: autoforward.ForwardRuleControlService.CreateRule:input_type -> autoforward.CreateRuleRequest
-	24,  // 62: autoforward.ForwardRuleControlService.UpdateRule:input_type -> autoforward.UpdateRuleRequest
-	29,  // 63: autoforward.ForwardRuleControlService.DeleteRule:input_type -> autoforward.DeleteRuleRequest
-	72,  // 64: autoforward.ForwardRuleControlService.TestRule:input_type -> autoforward.TestRuleRequest
-	83,  // 65: autoforward.ForwardRuleControlService.PauseRule:input_type -> autoforward.PauseRuleRequest
-	83,  // 66: autoforward.ForwardRuleControlService.ResumeRule:input_type -> autoforward.PauseRuleRequest
-	25,  // 67: autoforward.ForwardRuleControlService.GetRuleSettings:input_type -> autoforward.RuleSettingsRequest
-	27,  // 68: autoforward.ForwardRuleControlService.UpdateRuleSettings:input_type -> autoforward.UpdateRuleSettingsRequest
-	28,  // 69: autoforward.ForwardRuleControlService.GetRuleSettingsSchema:input_type -> autoforward.RuleSettingsSchemaRequest
-	79,  // 70: autoforward.DeliveryControlService.GetDeliveryStats:input_type -> autoforward.DeliveryStatsRequest
-	74,  // 71: autoforward.DeliveryControlService.ListDeadLetter:input_type -> autoforward.ListDeadLetterRequest
-	77,  // 72: autoforward.DeliveryControlService.ReplayDeadLetter:input_type -> autoforward.ReplayDeadLetterRequest
-	78,  // 73: autoforward.DeliveryControlService.PurgeDeadLetter:input_type -> autoforward.PurgeDeadLetterRequest
-	37,  // 74: autoforward.FilterControlService.ListFilters:input_type -> autoforward.ListFiltersRequest
-	34,  // 75: autoforward.FilterControlService.CreateFilter:input_type -> autoforward.CreateFilterRequest
-	35,  // 76: autoforward.FilterControlService.UpdateFilter:input_type -> autoforward.UpdateFilterRequest
-	36,  // 77: autoforward.FilterControlService.DeleteFilter:input_type -> autoforward.DeleteFilterRequest
-	43,  // 78: autoforward.AIControlService.ListAIConfigs:input_type -> autoforward.ListAIConfigsRequest
-	40,  // 79: autoforward.AIControlService.CreateAIConfig:input_type -> autoforward.CreateAIConfigRequest
-	41,  // 80: autoforward.AIControlService.UpdateAIConfig:input_type -> autoforward.UpdateAIConfigRequest
-	42,  // 81: autoforward.AIControlService.DeleteAIConfig:input_type -> autoforward.DeleteAIConfigRequest
-	45,  // 82: autoforward.AIControlService.TestAIRewrite:input_type -> autoforward.TestAIRewriteRequest
-	54,  // 83: autoforward.AIControlService.CheckProviderKey:input_type -> autoforward.CheckProviderKeyRequest
-	57,  // 84: autoforward.AIControlService.ListAIProviders:input_type -> autoforward.ListAIProvidersRequest
-	48,  // 85: autoforward.AIControlService.ListPromptTemplates:input_type -> autoforward.ListPromptTemplatesRequest
-	50,  // 86: autoforward.AIControlService.SavePromptTemplate:input_type -> autoforward.SavePromptTemplateRequest
-	51,  // 87: autoforward.AIControlService.DeletePromptTemplate:input_type -> autoforward.DeletePromptTemplateRequest
-	52,  // 88: autoforward.AIControlService.TestPrompt:input_type -> autoforward.TestPromptRequest
-	59,  // 89: autoforward.SystemStatusControlService.GetSystemStats:input_type -> autoforward.SystemStatsRequest
-	61,  // 90: autoforward.SystemStatusControlService.GetLogPolicy:input_type -> autoforward.LogPolicyRequest
-	62,  // 91: autoforward.SystemStatusControlService.SetLogPolicy:input_type -> autoforward.SetLogPolicyRequest
-	85,  // 92: autoforward.AuditControlService.QueryAuditEvents:input_type -> autoforward.QueryAuditEventsRequest
-	65,  // 93: autoforward.LogControlService.Log:input_type -> autoforward.LogRequest
-	66,  // 94: autoforward.LogControlService.QueryLogs:input_type -> autoforward.QueryLogsRequest
-	70,  // 95: autoforward.LogControlService.LogStats:input_type -> autoforward.LogStatsRequest
-	67,  // 96: autoforward.LogControlService.PurgeLogs:input_type -> autoforward.PurgeLogsRequest
-	88,  // 97: autoforward.BackupControlService.BackupExport:input_type -> autoforward.BackupExportRequest
-	90,  // 98: autoforward.BackupControlService.BackupImport:input_type -> autoforward.BackupImportRequest
-	94,  // 99: autoforward.AccountControlService.RegisterAccount:input_type -> autoforward.RegisterAccountRequest
-	96,  // 100: autoforward.AccountControlService.LoginAccount:input_type -> autoforward.LoginAccountRequest
-	98,  // 101: autoforward.AccountControlService.ValidateToken:input_type -> autoforward.ValidateTokenRequest
-	100, // 102: autoforward.AccountControlService.IssueWebToken:input_type -> autoforward.IssueWebTokenRequest
-	103, // 103: autoforward.AccountControlService.ExchangeWebLoginCode:input_type -> autoforward.ExchangeWebLoginCodeRequest
-	101, // 104: autoforward.AccountControlService.IssueLoginCode:input_type -> autoforward.IssueLoginCodeRequest
-	104, // 105: autoforward.AccountControlService.ChangePassword:input_type -> autoforward.ChangePasswordRequest
-	105, // 106: autoforward.AccountControlService.GetAccount:input_type -> autoforward.GetAccountRequest
-	106, // 107: autoforward.AdminControlService.GetOverview:input_type -> autoforward.AdminOverviewRequest
-	109, // 108: autoforward.AdminControlService.ListUsers:input_type -> autoforward.AdminListUsersRequest
-	111, // 109: autoforward.AdminControlService.SetUserStatus:input_type -> autoforward.AdminSetUserStatusRequest
-	112, // 110: autoforward.AdminControlService.Broadcast:input_type -> autoforward.AdminBroadcastRequest
-	114, // 111: autoforward.AdminControlService.GetSettings:input_type -> autoforward.AdminGetSettingsRequest
-	116, // 112: autoforward.AdminControlService.SaveSettings:input_type -> autoforward.AdminSaveSettingsRequest
-	118, // 113: autoforward.AdminControlService.ListAdmins:input_type -> autoforward.AdminListAdminsRequest
-	120, // 114: autoforward.AdminControlService.AddAdmin:input_type -> autoforward.AdminAddAdminRequest
-	121, // 115: autoforward.AdminControlService.RemoveAdmin:input_type -> autoforward.AdminRemoveAdminRequest
-	122, // 116: autoforward.AdminControlService.GetClientSettings:input_type -> autoforward.ClientSettingsRequest
-	124, // 117: autoforward.AdminControlService.SaveClientCredentials:input_type -> autoforward.ClientSaveCredentialsRequest
-	126, // 118: autoforward.BotTokenControlService.ListBotTokens:input_type -> autoforward.ListBotTokensRequest
-	128, // 119: autoforward.BotTokenControlService.CreateBotToken:input_type -> autoforward.CreateBotTokenRequest
-	130, // 120: autoforward.BotTokenControlService.DeleteBotToken:input_type -> autoforward.DeleteBotTokenRequest
-	131, // 121: autoforward.BotTokenControlService.GetBotDefaults:input_type -> autoforward.GetBotDefaultsRequest
-	132, // 122: autoforward.BotTokenControlService.SetBotDefaults:input_type -> autoforward.SetBotDefaultsRequest
-	135, // 123: autoforward.TaskControlService.CreateTask:input_type -> autoforward.CreateTaskRequest
-	137, // 124: autoforward.TaskControlService.GetTask:input_type -> autoforward.GetTaskRequest
-	139, // 125: autoforward.TaskControlService.ListTasks:input_type -> autoforward.ListTasksRequest
-	141, // 126: autoforward.TaskControlService.CancelTask:input_type -> autoforward.CancelTaskRequest
-	142, // 127: autoforward.TaskControlService.RetryTask:input_type -> autoforward.RetryTaskRequest
-	144, // 128: autoforward.AutoReplyControlService.GetAutoReplySettings:input_type -> autoforward.GetAutoReplySettingsRequest
-	145, // 129: autoforward.AutoReplyControlService.UpdateAutoReplySettings:input_type -> autoforward.UpdateAutoReplySettingsRequest
-	147, // 130: autoforward.AutoReplyControlService.ListAutoReplyPrompts:input_type -> autoforward.ListAutoReplyPromptsRequest
-	149, // 131: autoforward.AutoReplyControlService.SaveAutoReplyPrompt:input_type -> autoforward.SaveAutoReplyPromptRequest
-	150, // 132: autoforward.AutoReplyControlService.DeleteAutoReplyPrompt:input_type -> autoforward.DeleteAutoReplyPromptRequest
-	151, // 133: autoforward.AutoReplyControlService.DuplicateAutoReplyPrompt:input_type -> autoforward.DuplicateAutoReplyPromptRequest
-	152, // 134: autoforward.AutoReplyControlService.ExportAutoReplyPrompts:input_type -> autoforward.ExportAutoReplyPromptsRequest
-	154, // 135: autoforward.AutoReplyControlService.ImportAutoReplyPrompts:input_type -> autoforward.ImportAutoReplyPromptsRequest
-	157, // 136: autoforward.AutoReplyControlService.ListAutoReplyTargets:input_type -> autoforward.ListAutoReplyTargetsRequest
-	159, // 137: autoforward.AutoReplyControlService.AddAutoReplyTargets:input_type -> autoforward.AddAutoReplyTargetsRequest
-	160, // 138: autoforward.AutoReplyControlService.UpdateAutoReplyTarget:input_type -> autoforward.UpdateAutoReplyTargetRequest
-	161, // 139: autoforward.AutoReplyControlService.RemoveAutoReplyTargets:input_type -> autoforward.RemoveAutoReplyTargetsRequest
-	162, // 140: autoforward.AutoReplyControlService.ResolveAutoReplyChat:input_type -> autoforward.ResolveAutoReplyChatRequest
-	165, // 141: autoforward.AutoReplyControlService.ListAutoReplyRules:input_type -> autoforward.ListAutoReplyRulesRequest
-	167, // 142: autoforward.AutoReplyControlService.SaveAutoReplyRule:input_type -> autoforward.SaveAutoReplyRuleRequest
-	168, // 143: autoforward.AutoReplyControlService.DeleteAutoReplyRule:input_type -> autoforward.DeleteAutoReplyRuleRequest
-	169, // 144: autoforward.AutoReplyControlService.ReorderAutoReplyRules:input_type -> autoforward.ReorderAutoReplyRulesRequest
-	171, // 145: autoforward.AutoReplyControlService.ListAutoReplyJobs:input_type -> autoforward.ListAutoReplyJobsRequest
-	173, // 146: autoforward.AutoReplyControlService.CancelAutoReplyJob:input_type -> autoforward.AutoReplyJobRequest
-	173, // 147: autoforward.AutoReplyControlService.RetryAutoReplyJob:input_type -> autoforward.AutoReplyJobRequest
-	174, // 148: autoforward.AutoReplyControlService.GetAutoReplyStats:input_type -> autoforward.GetAutoReplyStatsRequest
-	176, // 149: autoforward.AutoReplyControlService.PreviewAutoReply:input_type -> autoforward.PreviewAutoReplyRequest
-	5,   // 150: autoforward.SessionControlService.ListSessions:output_type -> autoforward.ListSessionsResponse
-	7,   // 151: autoforward.SessionControlService.StartLogin:output_type -> autoforward.StartLoginResponse
-	9,   // 152: autoforward.SessionControlService.SubmitCode:output_type -> autoforward.SubmitCodeResponse
-	11,  // 153: autoforward.SessionControlService.SubmitPassword:output_type -> autoforward.SubmitPasswordResponse
-	13,  // 154: autoforward.SessionControlService.BackupSession:output_type -> autoforward.BackupSessionResponse
-	15,  // 155: autoforward.SessionControlService.RestoreSession:output_type -> autoforward.RestoreSessionResponse
-	2,   // 156: autoforward.SessionControlService.TerminateSession:output_type -> autoforward.StatusResponse
-	20,  // 157: autoforward.SessionControlService.ResolveChat:output_type -> autoforward.ResolveChatResponse
-	23,  // 158: autoforward.SessionControlService.ListChats:output_type -> autoforward.ListChatsResponse
-	32,  // 159: autoforward.ForwardRuleControlService.ListRules:output_type -> autoforward.ListRulesResponse
-	17,  // 160: autoforward.ForwardRuleControlService.GetRule:output_type -> autoforward.ForwardRule
-	17,  // 161: autoforward.ForwardRuleControlService.CreateRule:output_type -> autoforward.ForwardRule
-	17,  // 162: autoforward.ForwardRuleControlService.UpdateRule:output_type -> autoforward.ForwardRule
-	2,   // 163: autoforward.ForwardRuleControlService.DeleteRule:output_type -> autoforward.StatusResponse
-	73,  // 164: autoforward.ForwardRuleControlService.TestRule:output_type -> autoforward.TestRuleResponse
-	84,  // 165: autoforward.ForwardRuleControlService.PauseRule:output_type -> autoforward.RuleActionResponse
-	84,  // 166: autoforward.ForwardRuleControlService.ResumeRule:output_type -> autoforward.RuleActionResponse
-	26,  // 167: autoforward.ForwardRuleControlService.GetRuleSettings:output_type -> autoforward.RuleSettingsResponse
-	26,  // 168: autoforward.ForwardRuleControlService.UpdateRuleSettings:output_type -> autoforward.RuleSettingsResponse
-	26,  // 169: autoforward.ForwardRuleControlService.GetRuleSettingsSchema:output_type -> autoforward.RuleSettingsResponse
-	80,  // 170: autoforward.DeliveryControlService.GetDeliveryStats:output_type -> autoforward.DeliveryStatsResponse
-	76,  // 171: autoforward.DeliveryControlService.ListDeadLetter:output_type -> autoforward.ListDeadLetterResponse
-	84,  // 172: autoforward.DeliveryControlService.ReplayDeadLetter:output_type -> autoforward.RuleActionResponse
-	84,  // 173: autoforward.DeliveryControlService.PurgeDeadLetter:output_type -> autoforward.RuleActionResponse
-	38,  // 174: autoforward.FilterControlService.ListFilters:output_type -> autoforward.ListFiltersResponse
-	33,  // 175: autoforward.FilterControlService.CreateFilter:output_type -> autoforward.FilterRule
-	33,  // 176: autoforward.FilterControlService.UpdateFilter:output_type -> autoforward.FilterRule
-	2,   // 177: autoforward.FilterControlService.DeleteFilter:output_type -> autoforward.StatusResponse
-	44,  // 178: autoforward.AIControlService.ListAIConfigs:output_type -> autoforward.ListAIConfigsResponse
-	39,  // 179: autoforward.AIControlService.CreateAIConfig:output_type -> autoforward.AIConfig
-	39,  // 180: autoforward.AIControlService.UpdateAIConfig:output_type -> autoforward.AIConfig
-	2,   // 181: autoforward.AIControlService.DeleteAIConfig:output_type -> autoforward.StatusResponse
-	46,  // 182: autoforward.AIControlService.TestAIRewrite:output_type -> autoforward.TestAIRewriteResponse
-	55,  // 183: autoforward.AIControlService.CheckProviderKey:output_type -> autoforward.CheckProviderKeyResponse
-	58,  // 184: autoforward.AIControlService.ListAIProviders:output_type -> autoforward.ListAIProvidersResponse
-	49,  // 185: autoforward.AIControlService.ListPromptTemplates:output_type -> autoforward.ListPromptTemplatesResponse
-	47,  // 186: autoforward.AIControlService.SavePromptTemplate:output_type -> autoforward.PromptTemplate
-	2,   // 187: autoforward.AIControlService.DeletePromptTemplate:output_type -> autoforward.StatusResponse
-	53,  // 188: autoforward.AIControlService.TestPrompt:output_type -> autoforward.TestPromptResponse
-	60,  // 189: autoforward.SystemStatusControlService.GetSystemStats:output_type -> autoforward.SystemStatsResponse
-	63,  // 190: autoforward.SystemStatusControlService.GetLogPolicy:output_type -> autoforward.LogPolicyResponse
-	63,  // 191: autoforward.SystemStatusControlService.SetLogPolicy:output_type -> autoforward.LogPolicyResponse
-	87,  // 192: autoforward.AuditControlService.QueryAuditEvents:output_type -> autoforward.QueryAuditEventsResponse
-	2,   // 193: autoforward.LogControlService.Log:output_type -> autoforward.StatusResponse
-	69,  // 194: autoforward.LogControlService.QueryLogs:output_type -> autoforward.QueryLogsResponse
-	71,  // 195: autoforward.LogControlService.LogStats:output_type -> autoforward.LogStatsResponse
-	68,  // 196: autoforward.LogControlService.PurgeLogs:output_type -> autoforward.PurgeLogsResponse
-	89,  // 197: autoforward.BackupControlService.BackupExport:output_type -> autoforward.BackupExportResponse
-	91,  // 198: autoforward.BackupControlService.BackupImport:output_type -> autoforward.BackupImportResponse
-	95,  // 199: autoforward.AccountControlService.RegisterAccount:output_type -> autoforward.RegisterAccountResponse
-	97,  // 200: autoforward.AccountControlService.LoginAccount:output_type -> autoforward.LoginAccountResponse
-	99,  // 201: autoforward.AccountControlService.ValidateToken:output_type -> autoforward.ValidateTokenResponse
-	97,  // 202: autoforward.AccountControlService.IssueWebToken:output_type -> autoforward.LoginAccountResponse
-	97,  // 203: autoforward.AccountControlService.ExchangeWebLoginCode:output_type -> autoforward.LoginAccountResponse
-	102, // 204: autoforward.AccountControlService.IssueLoginCode:output_type -> autoforward.IssueLoginCodeResponse
-	2,   // 205: autoforward.AccountControlService.ChangePassword:output_type -> autoforward.StatusResponse
-	93,  // 206: autoforward.AccountControlService.GetAccount:output_type -> autoforward.WebAccount
-	107, // 207: autoforward.AdminControlService.GetOverview:output_type -> autoforward.AdminOverviewResponse
-	110, // 208: autoforward.AdminControlService.ListUsers:output_type -> autoforward.AdminListUsersResponse
-	2,   // 209: autoforward.AdminControlService.SetUserStatus:output_type -> autoforward.StatusResponse
-	113, // 210: autoforward.AdminControlService.Broadcast:output_type -> autoforward.AdminBroadcastResponse
-	115, // 211: autoforward.AdminControlService.GetSettings:output_type -> autoforward.AdminSettingsResponse
-	2,   // 212: autoforward.AdminControlService.SaveSettings:output_type -> autoforward.StatusResponse
-	119, // 213: autoforward.AdminControlService.ListAdmins:output_type -> autoforward.AdminListAdminsResponse
-	2,   // 214: autoforward.AdminControlService.AddAdmin:output_type -> autoforward.StatusResponse
-	2,   // 215: autoforward.AdminControlService.RemoveAdmin:output_type -> autoforward.StatusResponse
-	123, // 216: autoforward.AdminControlService.GetClientSettings:output_type -> autoforward.ClientSettingsResponse
-	2,   // 217: autoforward.AdminControlService.SaveClientCredentials:output_type -> autoforward.StatusResponse
-	127, // 218: autoforward.BotTokenControlService.ListBotTokens:output_type -> autoforward.ListBotTokensResponse
-	129, // 219: autoforward.BotTokenControlService.CreateBotToken:output_type -> autoforward.CreateBotTokenResponse
-	2,   // 220: autoforward.BotTokenControlService.DeleteBotToken:output_type -> autoforward.StatusResponse
-	133, // 221: autoforward.BotTokenControlService.GetBotDefaults:output_type -> autoforward.BotDefaultsResponse
-	133, // 222: autoforward.BotTokenControlService.SetBotDefaults:output_type -> autoforward.BotDefaultsResponse
-	136, // 223: autoforward.TaskControlService.CreateTask:output_type -> autoforward.CreateTaskResponse
-	138, // 224: autoforward.TaskControlService.GetTask:output_type -> autoforward.TaskResponse
-	140, // 225: autoforward.TaskControlService.ListTasks:output_type -> autoforward.ListTasksResponse
-	138, // 226: autoforward.TaskControlService.CancelTask:output_type -> autoforward.TaskResponse
-	138, // 227: autoforward.TaskControlService.RetryTask:output_type -> autoforward.TaskResponse
-	143, // 228: autoforward.AutoReplyControlService.GetAutoReplySettings:output_type -> autoforward.AutoReplySettings
-	143, // 229: autoforward.AutoReplyControlService.UpdateAutoReplySettings:output_type -> autoforward.AutoReplySettings
-	148, // 230: autoforward.AutoReplyControlService.ListAutoReplyPrompts:output_type -> autoforward.ListAutoReplyPromptsResponse
-	146, // 231: autoforward.AutoReplyControlService.SaveAutoReplyPrompt:output_type -> autoforward.AutoReplyPrompt
-	2,   // 232: autoforward.AutoReplyControlService.DeleteAutoReplyPrompt:output_type -> autoforward.StatusResponse
-	146, // 233: autoforward.AutoReplyControlService.DuplicateAutoReplyPrompt:output_type -> autoforward.AutoReplyPrompt
-	153, // 234: autoforward.AutoReplyControlService.ExportAutoReplyPrompts:output_type -> autoforward.ExportAutoReplyPromptsResponse
-	155, // 235: autoforward.AutoReplyControlService.ImportAutoReplyPrompts:output_type -> autoforward.ImportAutoReplyPromptsResponse
-	158, // 236: autoforward.AutoReplyControlService.ListAutoReplyTargets:output_type -> autoforward.ListAutoReplyTargetsResponse
-	158, // 237: autoforward.AutoReplyControlService.AddAutoReplyTargets:output_type -> autoforward.ListAutoReplyTargetsResponse
-	156, // 238: autoforward.AutoReplyControlService.UpdateAutoReplyTarget:output_type -> autoforward.AutoReplyTarget
-	2,   // 239: autoforward.AutoReplyControlService.RemoveAutoReplyTargets:output_type -> autoforward.StatusResponse
-	163, // 240: autoforward.AutoReplyControlService.ResolveAutoReplyChat:output_type -> autoforward.ResolveAutoReplyChatResponse
-	166, // 241: autoforward.AutoReplyControlService.ListAutoReplyRules:output_type -> autoforward.ListAutoReplyRulesResponse
-	164, // 242: autoforward.AutoReplyControlService.SaveAutoReplyRule:output_type -> autoforward.AutoReplyRule
-	2,   // 243: autoforward.AutoReplyControlService.DeleteAutoReplyRule:output_type -> autoforward.StatusResponse
-	166, // 244: autoforward.AutoReplyControlService.ReorderAutoReplyRules:output_type -> autoforward.ListAutoReplyRulesResponse
-	172, // 245: autoforward.AutoReplyControlService.ListAutoReplyJobs:output_type -> autoforward.ListAutoReplyJobsResponse
-	2,   // 246: autoforward.AutoReplyControlService.CancelAutoReplyJob:output_type -> autoforward.StatusResponse
-	2,   // 247: autoforward.AutoReplyControlService.RetryAutoReplyJob:output_type -> autoforward.StatusResponse
-	175, // 248: autoforward.AutoReplyControlService.GetAutoReplyStats:output_type -> autoforward.AutoReplyStatsResponse
-	177, // 249: autoforward.AutoReplyControlService.PreviewAutoReply:output_type -> autoforward.PreviewAutoReplyResponse
-	150, // [150:250] is the sub-list for method output_type
-	50,  // [50:150] is the sub-list for method input_type
-	50,  // [50:50] is the sub-list for extension type_name
-	50,  // [50:50] is the sub-list for extension extendee
-	0,   // [0:50] is the sub-list for field type_name
+	178, // 49: autoforward.ListReplaceRulesResponse.rules:type_name -> autoforward.ReplaceRule
+	180, // 50: autoforward.ListReplaceRulesResponse.counts:type_name -> autoforward.ReplaceRuleCounts
+	179, // 51: autoforward.ListReplaceRulesResponse.tasks:type_name -> autoforward.ReplaceRuleTask
+	181, // 52: autoforward.CreateReplaceRuleRequest.rule:type_name -> autoforward.ReplaceRuleInput
+	181, // 53: autoforward.UpdateReplaceRuleRequest.rule:type_name -> autoforward.ReplaceRuleInput
+	181, // 54: autoforward.TestReplaceRuleRequest.rule:type_name -> autoforward.ReplaceRuleInput
+	179, // 55: autoforward.ListReplaceRuleTasksResponse.tasks:type_name -> autoforward.ReplaceRuleTask
+	92,  // 56: autoforward.BackupImportResponse.StatsEntry.value:type_name -> autoforward.EntityImportStats
+	4,   // 57: autoforward.SessionControlService.ListSessions:input_type -> autoforward.ListSessionsRequest
+	6,   // 58: autoforward.SessionControlService.StartLogin:input_type -> autoforward.StartLoginRequest
+	8,   // 59: autoforward.SessionControlService.SubmitCode:input_type -> autoforward.SubmitCodeRequest
+	10,  // 60: autoforward.SessionControlService.SubmitPassword:input_type -> autoforward.SubmitPasswordRequest
+	12,  // 61: autoforward.SessionControlService.BackupSession:input_type -> autoforward.BackupSessionRequest
+	14,  // 62: autoforward.SessionControlService.RestoreSession:input_type -> autoforward.RestoreSessionRequest
+	16,  // 63: autoforward.SessionControlService.TerminateSession:input_type -> autoforward.TerminateSessionRequest
+	19,  // 64: autoforward.SessionControlService.ResolveChat:input_type -> autoforward.ResolveChatRequest
+	21,  // 65: autoforward.SessionControlService.ListChats:input_type -> autoforward.ListChatsRequest
+	30,  // 66: autoforward.ForwardRuleControlService.ListRules:input_type -> autoforward.ListRulesRequest
+	31,  // 67: autoforward.ForwardRuleControlService.GetRule:input_type -> autoforward.GetRuleRequest
+	18,  // 68: autoforward.ForwardRuleControlService.CreateRule:input_type -> autoforward.CreateRuleRequest
+	24,  // 69: autoforward.ForwardRuleControlService.UpdateRule:input_type -> autoforward.UpdateRuleRequest
+	29,  // 70: autoforward.ForwardRuleControlService.DeleteRule:input_type -> autoforward.DeleteRuleRequest
+	72,  // 71: autoforward.ForwardRuleControlService.TestRule:input_type -> autoforward.TestRuleRequest
+	83,  // 72: autoforward.ForwardRuleControlService.PauseRule:input_type -> autoforward.PauseRuleRequest
+	83,  // 73: autoforward.ForwardRuleControlService.ResumeRule:input_type -> autoforward.PauseRuleRequest
+	25,  // 74: autoforward.ForwardRuleControlService.GetRuleSettings:input_type -> autoforward.RuleSettingsRequest
+	27,  // 75: autoforward.ForwardRuleControlService.UpdateRuleSettings:input_type -> autoforward.UpdateRuleSettingsRequest
+	28,  // 76: autoforward.ForwardRuleControlService.GetRuleSettingsSchema:input_type -> autoforward.RuleSettingsSchemaRequest
+	79,  // 77: autoforward.DeliveryControlService.GetDeliveryStats:input_type -> autoforward.DeliveryStatsRequest
+	74,  // 78: autoforward.DeliveryControlService.ListDeadLetter:input_type -> autoforward.ListDeadLetterRequest
+	77,  // 79: autoforward.DeliveryControlService.ReplayDeadLetter:input_type -> autoforward.ReplayDeadLetterRequest
+	78,  // 80: autoforward.DeliveryControlService.PurgeDeadLetter:input_type -> autoforward.PurgeDeadLetterRequest
+	37,  // 81: autoforward.FilterControlService.ListFilters:input_type -> autoforward.ListFiltersRequest
+	34,  // 82: autoforward.FilterControlService.CreateFilter:input_type -> autoforward.CreateFilterRequest
+	35,  // 83: autoforward.FilterControlService.UpdateFilter:input_type -> autoforward.UpdateFilterRequest
+	36,  // 84: autoforward.FilterControlService.DeleteFilter:input_type -> autoforward.DeleteFilterRequest
+	43,  // 85: autoforward.AIControlService.ListAIConfigs:input_type -> autoforward.ListAIConfigsRequest
+	40,  // 86: autoforward.AIControlService.CreateAIConfig:input_type -> autoforward.CreateAIConfigRequest
+	41,  // 87: autoforward.AIControlService.UpdateAIConfig:input_type -> autoforward.UpdateAIConfigRequest
+	42,  // 88: autoforward.AIControlService.DeleteAIConfig:input_type -> autoforward.DeleteAIConfigRequest
+	45,  // 89: autoforward.AIControlService.TestAIRewrite:input_type -> autoforward.TestAIRewriteRequest
+	54,  // 90: autoforward.AIControlService.CheckProviderKey:input_type -> autoforward.CheckProviderKeyRequest
+	57,  // 91: autoforward.AIControlService.ListAIProviders:input_type -> autoforward.ListAIProvidersRequest
+	48,  // 92: autoforward.AIControlService.ListPromptTemplates:input_type -> autoforward.ListPromptTemplatesRequest
+	50,  // 93: autoforward.AIControlService.SavePromptTemplate:input_type -> autoforward.SavePromptTemplateRequest
+	51,  // 94: autoforward.AIControlService.DeletePromptTemplate:input_type -> autoforward.DeletePromptTemplateRequest
+	52,  // 95: autoforward.AIControlService.TestPrompt:input_type -> autoforward.TestPromptRequest
+	59,  // 96: autoforward.SystemStatusControlService.GetSystemStats:input_type -> autoforward.SystemStatsRequest
+	61,  // 97: autoforward.SystemStatusControlService.GetLogPolicy:input_type -> autoforward.LogPolicyRequest
+	62,  // 98: autoforward.SystemStatusControlService.SetLogPolicy:input_type -> autoforward.SetLogPolicyRequest
+	85,  // 99: autoforward.AuditControlService.QueryAuditEvents:input_type -> autoforward.QueryAuditEventsRequest
+	65,  // 100: autoforward.LogControlService.Log:input_type -> autoforward.LogRequest
+	66,  // 101: autoforward.LogControlService.QueryLogs:input_type -> autoforward.QueryLogsRequest
+	70,  // 102: autoforward.LogControlService.LogStats:input_type -> autoforward.LogStatsRequest
+	67,  // 103: autoforward.LogControlService.PurgeLogs:input_type -> autoforward.PurgeLogsRequest
+	88,  // 104: autoforward.BackupControlService.BackupExport:input_type -> autoforward.BackupExportRequest
+	90,  // 105: autoforward.BackupControlService.BackupImport:input_type -> autoforward.BackupImportRequest
+	94,  // 106: autoforward.AccountControlService.RegisterAccount:input_type -> autoforward.RegisterAccountRequest
+	96,  // 107: autoforward.AccountControlService.LoginAccount:input_type -> autoforward.LoginAccountRequest
+	98,  // 108: autoforward.AccountControlService.ValidateToken:input_type -> autoforward.ValidateTokenRequest
+	100, // 109: autoforward.AccountControlService.IssueWebToken:input_type -> autoforward.IssueWebTokenRequest
+	103, // 110: autoforward.AccountControlService.ExchangeWebLoginCode:input_type -> autoforward.ExchangeWebLoginCodeRequest
+	101, // 111: autoforward.AccountControlService.IssueLoginCode:input_type -> autoforward.IssueLoginCodeRequest
+	104, // 112: autoforward.AccountControlService.ChangePassword:input_type -> autoforward.ChangePasswordRequest
+	105, // 113: autoforward.AccountControlService.GetAccount:input_type -> autoforward.GetAccountRequest
+	106, // 114: autoforward.AdminControlService.GetOverview:input_type -> autoforward.AdminOverviewRequest
+	109, // 115: autoforward.AdminControlService.ListUsers:input_type -> autoforward.AdminListUsersRequest
+	111, // 116: autoforward.AdminControlService.SetUserStatus:input_type -> autoforward.AdminSetUserStatusRequest
+	112, // 117: autoforward.AdminControlService.Broadcast:input_type -> autoforward.AdminBroadcastRequest
+	114, // 118: autoforward.AdminControlService.GetSettings:input_type -> autoforward.AdminGetSettingsRequest
+	116, // 119: autoforward.AdminControlService.SaveSettings:input_type -> autoforward.AdminSaveSettingsRequest
+	118, // 120: autoforward.AdminControlService.ListAdmins:input_type -> autoforward.AdminListAdminsRequest
+	120, // 121: autoforward.AdminControlService.AddAdmin:input_type -> autoforward.AdminAddAdminRequest
+	121, // 122: autoforward.AdminControlService.RemoveAdmin:input_type -> autoforward.AdminRemoveAdminRequest
+	122, // 123: autoforward.AdminControlService.GetClientSettings:input_type -> autoforward.ClientSettingsRequest
+	124, // 124: autoforward.AdminControlService.SaveClientCredentials:input_type -> autoforward.ClientSaveCredentialsRequest
+	126, // 125: autoforward.BotTokenControlService.ListBotTokens:input_type -> autoforward.ListBotTokensRequest
+	128, // 126: autoforward.BotTokenControlService.CreateBotToken:input_type -> autoforward.CreateBotTokenRequest
+	130, // 127: autoforward.BotTokenControlService.DeleteBotToken:input_type -> autoforward.DeleteBotTokenRequest
+	131, // 128: autoforward.BotTokenControlService.GetBotDefaults:input_type -> autoforward.GetBotDefaultsRequest
+	132, // 129: autoforward.BotTokenControlService.SetBotDefaults:input_type -> autoforward.SetBotDefaultsRequest
+	135, // 130: autoforward.TaskControlService.CreateTask:input_type -> autoforward.CreateTaskRequest
+	137, // 131: autoforward.TaskControlService.GetTask:input_type -> autoforward.GetTaskRequest
+	139, // 132: autoforward.TaskControlService.ListTasks:input_type -> autoforward.ListTasksRequest
+	141, // 133: autoforward.TaskControlService.CancelTask:input_type -> autoforward.CancelTaskRequest
+	142, // 134: autoforward.TaskControlService.RetryTask:input_type -> autoforward.RetryTaskRequest
+	144, // 135: autoforward.AutoReplyControlService.GetAutoReplySettings:input_type -> autoforward.GetAutoReplySettingsRequest
+	145, // 136: autoforward.AutoReplyControlService.UpdateAutoReplySettings:input_type -> autoforward.UpdateAutoReplySettingsRequest
+	147, // 137: autoforward.AutoReplyControlService.ListAutoReplyPrompts:input_type -> autoforward.ListAutoReplyPromptsRequest
+	149, // 138: autoforward.AutoReplyControlService.SaveAutoReplyPrompt:input_type -> autoforward.SaveAutoReplyPromptRequest
+	150, // 139: autoforward.AutoReplyControlService.DeleteAutoReplyPrompt:input_type -> autoforward.DeleteAutoReplyPromptRequest
+	151, // 140: autoforward.AutoReplyControlService.DuplicateAutoReplyPrompt:input_type -> autoforward.DuplicateAutoReplyPromptRequest
+	152, // 141: autoforward.AutoReplyControlService.ExportAutoReplyPrompts:input_type -> autoforward.ExportAutoReplyPromptsRequest
+	154, // 142: autoforward.AutoReplyControlService.ImportAutoReplyPrompts:input_type -> autoforward.ImportAutoReplyPromptsRequest
+	157, // 143: autoforward.AutoReplyControlService.ListAutoReplyTargets:input_type -> autoforward.ListAutoReplyTargetsRequest
+	159, // 144: autoforward.AutoReplyControlService.AddAutoReplyTargets:input_type -> autoforward.AddAutoReplyTargetsRequest
+	160, // 145: autoforward.AutoReplyControlService.UpdateAutoReplyTarget:input_type -> autoforward.UpdateAutoReplyTargetRequest
+	161, // 146: autoforward.AutoReplyControlService.RemoveAutoReplyTargets:input_type -> autoforward.RemoveAutoReplyTargetsRequest
+	162, // 147: autoforward.AutoReplyControlService.ResolveAutoReplyChat:input_type -> autoforward.ResolveAutoReplyChatRequest
+	165, // 148: autoforward.AutoReplyControlService.ListAutoReplyRules:input_type -> autoforward.ListAutoReplyRulesRequest
+	167, // 149: autoforward.AutoReplyControlService.SaveAutoReplyRule:input_type -> autoforward.SaveAutoReplyRuleRequest
+	168, // 150: autoforward.AutoReplyControlService.DeleteAutoReplyRule:input_type -> autoforward.DeleteAutoReplyRuleRequest
+	169, // 151: autoforward.AutoReplyControlService.ReorderAutoReplyRules:input_type -> autoforward.ReorderAutoReplyRulesRequest
+	171, // 152: autoforward.AutoReplyControlService.ListAutoReplyJobs:input_type -> autoforward.ListAutoReplyJobsRequest
+	173, // 153: autoforward.AutoReplyControlService.CancelAutoReplyJob:input_type -> autoforward.AutoReplyJobRequest
+	173, // 154: autoforward.AutoReplyControlService.RetryAutoReplyJob:input_type -> autoforward.AutoReplyJobRequest
+	174, // 155: autoforward.AutoReplyControlService.GetAutoReplyStats:input_type -> autoforward.GetAutoReplyStatsRequest
+	176, // 156: autoforward.AutoReplyControlService.PreviewAutoReply:input_type -> autoforward.PreviewAutoReplyRequest
+	182, // 157: autoforward.ReplaceRuleControlService.ListReplaceRules:input_type -> autoforward.ListReplaceRulesRequest
+	184, // 158: autoforward.ReplaceRuleControlService.GetReplaceRule:input_type -> autoforward.GetReplaceRuleRequest
+	185, // 159: autoforward.ReplaceRuleControlService.CreateReplaceRule:input_type -> autoforward.CreateReplaceRuleRequest
+	186, // 160: autoforward.ReplaceRuleControlService.UpdateReplaceRule:input_type -> autoforward.UpdateReplaceRuleRequest
+	187, // 161: autoforward.ReplaceRuleControlService.DeleteReplaceRule:input_type -> autoforward.DeleteReplaceRuleRequest
+	189, // 162: autoforward.ReplaceRuleControlService.SetReplaceRuleEnabled:input_type -> autoforward.SetReplaceRuleEnabledRequest
+	190, // 163: autoforward.ReplaceRuleControlService.DuplicateReplaceRule:input_type -> autoforward.DuplicateReplaceRuleRequest
+	191, // 164: autoforward.ReplaceRuleControlService.TestReplaceRule:input_type -> autoforward.TestReplaceRuleRequest
+	193, // 165: autoforward.ReplaceRuleControlService.ListReplaceRuleTasks:input_type -> autoforward.ListReplaceRuleTasksRequest
+	5,   // 166: autoforward.SessionControlService.ListSessions:output_type -> autoforward.ListSessionsResponse
+	7,   // 167: autoforward.SessionControlService.StartLogin:output_type -> autoforward.StartLoginResponse
+	9,   // 168: autoforward.SessionControlService.SubmitCode:output_type -> autoforward.SubmitCodeResponse
+	11,  // 169: autoforward.SessionControlService.SubmitPassword:output_type -> autoforward.SubmitPasswordResponse
+	13,  // 170: autoforward.SessionControlService.BackupSession:output_type -> autoforward.BackupSessionResponse
+	15,  // 171: autoforward.SessionControlService.RestoreSession:output_type -> autoforward.RestoreSessionResponse
+	2,   // 172: autoforward.SessionControlService.TerminateSession:output_type -> autoforward.StatusResponse
+	20,  // 173: autoforward.SessionControlService.ResolveChat:output_type -> autoforward.ResolveChatResponse
+	23,  // 174: autoforward.SessionControlService.ListChats:output_type -> autoforward.ListChatsResponse
+	32,  // 175: autoforward.ForwardRuleControlService.ListRules:output_type -> autoforward.ListRulesResponse
+	17,  // 176: autoforward.ForwardRuleControlService.GetRule:output_type -> autoforward.ForwardRule
+	17,  // 177: autoforward.ForwardRuleControlService.CreateRule:output_type -> autoforward.ForwardRule
+	17,  // 178: autoforward.ForwardRuleControlService.UpdateRule:output_type -> autoforward.ForwardRule
+	2,   // 179: autoforward.ForwardRuleControlService.DeleteRule:output_type -> autoforward.StatusResponse
+	73,  // 180: autoforward.ForwardRuleControlService.TestRule:output_type -> autoforward.TestRuleResponse
+	84,  // 181: autoforward.ForwardRuleControlService.PauseRule:output_type -> autoforward.RuleActionResponse
+	84,  // 182: autoforward.ForwardRuleControlService.ResumeRule:output_type -> autoforward.RuleActionResponse
+	26,  // 183: autoforward.ForwardRuleControlService.GetRuleSettings:output_type -> autoforward.RuleSettingsResponse
+	26,  // 184: autoforward.ForwardRuleControlService.UpdateRuleSettings:output_type -> autoforward.RuleSettingsResponse
+	26,  // 185: autoforward.ForwardRuleControlService.GetRuleSettingsSchema:output_type -> autoforward.RuleSettingsResponse
+	80,  // 186: autoforward.DeliveryControlService.GetDeliveryStats:output_type -> autoforward.DeliveryStatsResponse
+	76,  // 187: autoforward.DeliveryControlService.ListDeadLetter:output_type -> autoforward.ListDeadLetterResponse
+	84,  // 188: autoforward.DeliveryControlService.ReplayDeadLetter:output_type -> autoforward.RuleActionResponse
+	84,  // 189: autoforward.DeliveryControlService.PurgeDeadLetter:output_type -> autoforward.RuleActionResponse
+	38,  // 190: autoforward.FilterControlService.ListFilters:output_type -> autoforward.ListFiltersResponse
+	33,  // 191: autoforward.FilterControlService.CreateFilter:output_type -> autoforward.FilterRule
+	33,  // 192: autoforward.FilterControlService.UpdateFilter:output_type -> autoforward.FilterRule
+	2,   // 193: autoforward.FilterControlService.DeleteFilter:output_type -> autoforward.StatusResponse
+	44,  // 194: autoforward.AIControlService.ListAIConfigs:output_type -> autoforward.ListAIConfigsResponse
+	39,  // 195: autoforward.AIControlService.CreateAIConfig:output_type -> autoforward.AIConfig
+	39,  // 196: autoforward.AIControlService.UpdateAIConfig:output_type -> autoforward.AIConfig
+	2,   // 197: autoforward.AIControlService.DeleteAIConfig:output_type -> autoforward.StatusResponse
+	46,  // 198: autoforward.AIControlService.TestAIRewrite:output_type -> autoforward.TestAIRewriteResponse
+	55,  // 199: autoforward.AIControlService.CheckProviderKey:output_type -> autoforward.CheckProviderKeyResponse
+	58,  // 200: autoforward.AIControlService.ListAIProviders:output_type -> autoforward.ListAIProvidersResponse
+	49,  // 201: autoforward.AIControlService.ListPromptTemplates:output_type -> autoforward.ListPromptTemplatesResponse
+	47,  // 202: autoforward.AIControlService.SavePromptTemplate:output_type -> autoforward.PromptTemplate
+	2,   // 203: autoforward.AIControlService.DeletePromptTemplate:output_type -> autoforward.StatusResponse
+	53,  // 204: autoforward.AIControlService.TestPrompt:output_type -> autoforward.TestPromptResponse
+	60,  // 205: autoforward.SystemStatusControlService.GetSystemStats:output_type -> autoforward.SystemStatsResponse
+	63,  // 206: autoforward.SystemStatusControlService.GetLogPolicy:output_type -> autoforward.LogPolicyResponse
+	63,  // 207: autoforward.SystemStatusControlService.SetLogPolicy:output_type -> autoforward.LogPolicyResponse
+	87,  // 208: autoforward.AuditControlService.QueryAuditEvents:output_type -> autoforward.QueryAuditEventsResponse
+	2,   // 209: autoforward.LogControlService.Log:output_type -> autoforward.StatusResponse
+	69,  // 210: autoforward.LogControlService.QueryLogs:output_type -> autoforward.QueryLogsResponse
+	71,  // 211: autoforward.LogControlService.LogStats:output_type -> autoforward.LogStatsResponse
+	68,  // 212: autoforward.LogControlService.PurgeLogs:output_type -> autoforward.PurgeLogsResponse
+	89,  // 213: autoforward.BackupControlService.BackupExport:output_type -> autoforward.BackupExportResponse
+	91,  // 214: autoforward.BackupControlService.BackupImport:output_type -> autoforward.BackupImportResponse
+	95,  // 215: autoforward.AccountControlService.RegisterAccount:output_type -> autoforward.RegisterAccountResponse
+	97,  // 216: autoforward.AccountControlService.LoginAccount:output_type -> autoforward.LoginAccountResponse
+	99,  // 217: autoforward.AccountControlService.ValidateToken:output_type -> autoforward.ValidateTokenResponse
+	97,  // 218: autoforward.AccountControlService.IssueWebToken:output_type -> autoforward.LoginAccountResponse
+	97,  // 219: autoforward.AccountControlService.ExchangeWebLoginCode:output_type -> autoforward.LoginAccountResponse
+	102, // 220: autoforward.AccountControlService.IssueLoginCode:output_type -> autoforward.IssueLoginCodeResponse
+	2,   // 221: autoforward.AccountControlService.ChangePassword:output_type -> autoforward.StatusResponse
+	93,  // 222: autoforward.AccountControlService.GetAccount:output_type -> autoforward.WebAccount
+	107, // 223: autoforward.AdminControlService.GetOverview:output_type -> autoforward.AdminOverviewResponse
+	110, // 224: autoforward.AdminControlService.ListUsers:output_type -> autoforward.AdminListUsersResponse
+	2,   // 225: autoforward.AdminControlService.SetUserStatus:output_type -> autoforward.StatusResponse
+	113, // 226: autoforward.AdminControlService.Broadcast:output_type -> autoforward.AdminBroadcastResponse
+	115, // 227: autoforward.AdminControlService.GetSettings:output_type -> autoforward.AdminSettingsResponse
+	2,   // 228: autoforward.AdminControlService.SaveSettings:output_type -> autoforward.StatusResponse
+	119, // 229: autoforward.AdminControlService.ListAdmins:output_type -> autoforward.AdminListAdminsResponse
+	2,   // 230: autoforward.AdminControlService.AddAdmin:output_type -> autoforward.StatusResponse
+	2,   // 231: autoforward.AdminControlService.RemoveAdmin:output_type -> autoforward.StatusResponse
+	123, // 232: autoforward.AdminControlService.GetClientSettings:output_type -> autoforward.ClientSettingsResponse
+	2,   // 233: autoforward.AdminControlService.SaveClientCredentials:output_type -> autoforward.StatusResponse
+	127, // 234: autoforward.BotTokenControlService.ListBotTokens:output_type -> autoforward.ListBotTokensResponse
+	129, // 235: autoforward.BotTokenControlService.CreateBotToken:output_type -> autoforward.CreateBotTokenResponse
+	2,   // 236: autoforward.BotTokenControlService.DeleteBotToken:output_type -> autoforward.StatusResponse
+	133, // 237: autoforward.BotTokenControlService.GetBotDefaults:output_type -> autoforward.BotDefaultsResponse
+	133, // 238: autoforward.BotTokenControlService.SetBotDefaults:output_type -> autoforward.BotDefaultsResponse
+	136, // 239: autoforward.TaskControlService.CreateTask:output_type -> autoforward.CreateTaskResponse
+	138, // 240: autoforward.TaskControlService.GetTask:output_type -> autoforward.TaskResponse
+	140, // 241: autoforward.TaskControlService.ListTasks:output_type -> autoforward.ListTasksResponse
+	138, // 242: autoforward.TaskControlService.CancelTask:output_type -> autoforward.TaskResponse
+	138, // 243: autoforward.TaskControlService.RetryTask:output_type -> autoforward.TaskResponse
+	143, // 244: autoforward.AutoReplyControlService.GetAutoReplySettings:output_type -> autoforward.AutoReplySettings
+	143, // 245: autoforward.AutoReplyControlService.UpdateAutoReplySettings:output_type -> autoforward.AutoReplySettings
+	148, // 246: autoforward.AutoReplyControlService.ListAutoReplyPrompts:output_type -> autoforward.ListAutoReplyPromptsResponse
+	146, // 247: autoforward.AutoReplyControlService.SaveAutoReplyPrompt:output_type -> autoforward.AutoReplyPrompt
+	2,   // 248: autoforward.AutoReplyControlService.DeleteAutoReplyPrompt:output_type -> autoforward.StatusResponse
+	146, // 249: autoforward.AutoReplyControlService.DuplicateAutoReplyPrompt:output_type -> autoforward.AutoReplyPrompt
+	153, // 250: autoforward.AutoReplyControlService.ExportAutoReplyPrompts:output_type -> autoforward.ExportAutoReplyPromptsResponse
+	155, // 251: autoforward.AutoReplyControlService.ImportAutoReplyPrompts:output_type -> autoforward.ImportAutoReplyPromptsResponse
+	158, // 252: autoforward.AutoReplyControlService.ListAutoReplyTargets:output_type -> autoforward.ListAutoReplyTargetsResponse
+	158, // 253: autoforward.AutoReplyControlService.AddAutoReplyTargets:output_type -> autoforward.ListAutoReplyTargetsResponse
+	156, // 254: autoforward.AutoReplyControlService.UpdateAutoReplyTarget:output_type -> autoforward.AutoReplyTarget
+	2,   // 255: autoforward.AutoReplyControlService.RemoveAutoReplyTargets:output_type -> autoforward.StatusResponse
+	163, // 256: autoforward.AutoReplyControlService.ResolveAutoReplyChat:output_type -> autoforward.ResolveAutoReplyChatResponse
+	166, // 257: autoforward.AutoReplyControlService.ListAutoReplyRules:output_type -> autoforward.ListAutoReplyRulesResponse
+	164, // 258: autoforward.AutoReplyControlService.SaveAutoReplyRule:output_type -> autoforward.AutoReplyRule
+	2,   // 259: autoforward.AutoReplyControlService.DeleteAutoReplyRule:output_type -> autoforward.StatusResponse
+	166, // 260: autoforward.AutoReplyControlService.ReorderAutoReplyRules:output_type -> autoforward.ListAutoReplyRulesResponse
+	172, // 261: autoforward.AutoReplyControlService.ListAutoReplyJobs:output_type -> autoforward.ListAutoReplyJobsResponse
+	2,   // 262: autoforward.AutoReplyControlService.CancelAutoReplyJob:output_type -> autoforward.StatusResponse
+	2,   // 263: autoforward.AutoReplyControlService.RetryAutoReplyJob:output_type -> autoforward.StatusResponse
+	175, // 264: autoforward.AutoReplyControlService.GetAutoReplyStats:output_type -> autoforward.AutoReplyStatsResponse
+	177, // 265: autoforward.AutoReplyControlService.PreviewAutoReply:output_type -> autoforward.PreviewAutoReplyResponse
+	183, // 266: autoforward.ReplaceRuleControlService.ListReplaceRules:output_type -> autoforward.ListReplaceRulesResponse
+	178, // 267: autoforward.ReplaceRuleControlService.GetReplaceRule:output_type -> autoforward.ReplaceRule
+	178, // 268: autoforward.ReplaceRuleControlService.CreateReplaceRule:output_type -> autoforward.ReplaceRule
+	178, // 269: autoforward.ReplaceRuleControlService.UpdateReplaceRule:output_type -> autoforward.ReplaceRule
+	188, // 270: autoforward.ReplaceRuleControlService.DeleteReplaceRule:output_type -> autoforward.DeleteReplaceRuleResponse
+	178, // 271: autoforward.ReplaceRuleControlService.SetReplaceRuleEnabled:output_type -> autoforward.ReplaceRule
+	178, // 272: autoforward.ReplaceRuleControlService.DuplicateReplaceRule:output_type -> autoforward.ReplaceRule
+	192, // 273: autoforward.ReplaceRuleControlService.TestReplaceRule:output_type -> autoforward.TestReplaceRuleResponse
+	194, // 274: autoforward.ReplaceRuleControlService.ListReplaceRuleTasks:output_type -> autoforward.ListReplaceRuleTasksResponse
+	166, // [166:275] is the sub-list for method output_type
+	57,  // [57:166] is the sub-list for method input_type
+	57,  // [57:57] is the sub-list for extension type_name
+	57,  // [57:57] is the sub-list for extension extendee
+	0,   // [0:57] is the sub-list for field type_name
 }
 
 func init() { file_autoforward_proto_init() }
@@ -14869,15 +16217,16 @@ func file_autoforward_proto_init() {
 		return
 	}
 	file_autoforward_proto_msgTypes[60].OneofWrappers = []any{}
+	file_autoforward_proto_msgTypes[179].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_autoforward_proto_rawDesc), len(file_autoforward_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   182,
+			NumMessages:   199,
 			NumExtensions: 0,
-			NumServices:   14,
+			NumServices:   15,
 		},
 		GoTypes:           file_autoforward_proto_goTypes,
 		DependencyIndexes: file_autoforward_proto_depIdxs,

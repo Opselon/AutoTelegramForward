@@ -85,10 +85,11 @@ Future<AppState> _state() async {
 
 Finder _key(String key) => find.byKey(ValueKey<String>(key));
 
-/// The nine destinations, in order, by the l10n key of their label.
+/// The ten destinations, in order, by the l10n key of their label.
 const _labels = [
   'nav_dashboard',
   'nav_rules',
+  'nav_replace',
   'nav_chats',
   'nav_sessions',
   'nav_filters',
@@ -184,7 +185,7 @@ void main() {
   });
 
   testWidgets('the bar is not used where it cannot fit: a medium window gets '
-      'the labelled rail with all nine destinations', (tester) async {
+      'the labelled rail with all ten destinations', (tester) async {
     tester.view.physicalSize = const Size(700, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -198,7 +199,7 @@ void main() {
     expect(rail.destinations, hasLength(_labels.length));
     expect(rail.labelType, NavigationRailLabelType.all);
 
-    // All nine labels are present in the rail, none truncated into a sheet.
+    // All ten labels are present in the rail, none truncated into a sheet.
     final t = AppMessages(const Locale('en'));
     for (final label in _labels) {
       expect(find.text(t.get(label)), findsWidgets, reason: label);
@@ -254,7 +255,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final rail = tester.widget<NavigationRail>(find.byType(NavigationRail));
-    expect(rail.selectedIndex, 2);
+    expect(rail.selectedIndex, 3);
     expect(find.byType(ChatsScreen), findsOneWidget);
   });
 }

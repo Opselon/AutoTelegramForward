@@ -1245,3 +1245,85 @@ export interface AutoReplyResolvedChat {
   chat_type: string
   resolved: boolean
 }
+
+/* -------------------------------------------------------------------------- */
+/* Text-replacement rules (`/api/replace-rules*`)                             */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * One replace rule as every surface sees it.
+ *
+ * A rule is stored once per task it runs on, but it is *one* rule: the server
+ * groups the copies by id and reports the tasks it covers, so the dashboard
+ * edits a single object and the change lands on all of them. `to` may be empty
+ * — that is a deletion, not a missing value.
+ */
+export interface ReplaceRule {
+  id: string
+  name: string
+  source: string
+  to: string
+  /** `literal` (exact text) or `regex`. */
+  mode: string
+  /** Regex flags, e.g. `i` for case-insensitive. Empty in literal mode. */
+  flags: string
+  whole_word: boolean
+  enabled: boolean
+  /** 0-1000; a higher number runs first. */
+  priority: number
+  task_ids: string[]
+  task_names: string[]
+  version: number
+  updated_at: number
+  /** `promo` / `/promo/i` — the pattern as a person would write it. */
+  badge: string
+}
+
+/** A forwarding task a rule can be assigned to. */
+export interface ReplaceTaskOption {
+  id: string
+  name: string
+}
+
+/** Total/enabled/disabled over the *filtered* set, so a chip never lies. */
+export interface ReplaceRuleCounts {
+  total: number
+  enabled: number
+  disabled: number
+}
+
+/** One page of rules, plus the counts and the task options for the picker. */
+export interface ReplaceRulePage {
+  rules: ReplaceRule[]
+  total: number
+  page: number
+  pages: number
+  per_page: number
+  counts: ReplaceRuleCounts
+  query: string
+  status: string
+  task_id: string
+  tasks: ReplaceTaskOption[]
+}
+
+/** Create/update body. Omitted keys are left as they are (a PATCH). */
+export interface ReplaceRuleInput {
+  name?: string
+  source?: string
+  to?: string
+  mode?: string
+  flags?: string
+  whole_word?: boolean
+  enabled?: boolean
+  priority?: number
+  task_ids?: string[]
+}
+
+/** The test preview: what a rule would do to a sample, without storing it. */
+export interface ReplaceRuleTestResult {
+  ok: boolean
+  input: string
+  output: string
+  matches: number
+  changed: boolean
+}

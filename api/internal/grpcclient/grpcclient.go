@@ -124,6 +124,8 @@ type Clients struct {
 	Tasks pb.TaskControlServiceClient
 	// AI private-message auto-reply (schema v28).
 	AutoReply pb.AutoReplyControlServiceClient
+	// Replace rules: the unified find/replace manager behind /replace.
+	Replace pb.ReplaceRuleControlServiceClient
 }
 
 // NewClients bundles the core service stubs.
@@ -142,6 +144,7 @@ func NewClients(conn *grpc.ClientConn) *Clients {
 		BotTokens: pb.NewBotTokenControlServiceClient(conn),
 		Tasks:     pb.NewTaskControlServiceClient(conn),
 		AutoReply: pb.NewAutoReplyControlServiceClient(conn),
+		Replace:   pb.NewReplaceRuleControlServiceClient(conn),
 	}
 }
 

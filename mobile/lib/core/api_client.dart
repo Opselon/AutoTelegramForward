@@ -23,6 +23,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'auto_reply_models.dart';
+import 'replace_models.dart';
 import 'env.dart';
 import 'models.dart';
 import 'storage.dart';
@@ -380,6 +381,14 @@ class ApiClient {
   // ------------------------------------------------------------------ //
   // Core plumbing
   // ------------------------------------------------------------------ //
+
+  /// Unwraps a response whose payload is `{"rule": {...}}`.
+  /// Shared by create, update, duplicate and enable so a shape change on the
+  /// Go handler cannot desync on one call but not the others.
+  ReplaceRule _replaceRuleFrom(Map<String, dynamic> json) =>
+      ReplaceRule.fromJson(
+        (json['rule'] as Map?)?.cast<String, dynamic>() ?? json,
+      );
 
   Uri _uri(String path, [Map<String, dynamic>? query]) {
     final clean = path.startsWith('/') ? path.substring(1) : path;
@@ -768,6 +777,92 @@ class ApiClient {
     path: '/api/diagnostics',
     fromJson: DiagnosticsReport.fromJson,
     retryable: true,
+  );
+
+  // ---------------------------------------------------- Text replacement
+  // The manager that backs the bot's `/replace` panel and the web dashboard.
+  // A rule is one object across every task it runs on: the core stores one
+  // copy per task, groups them by rule id and reports `task_ids`/`task_names`,
+  // so nothing here ever lists a task's raw entry map. Owner identity is the
+  // bearer token, never a parameter.
+  Future<ReplaceRulePage> listReplaceRules({
+    String query = '',
+    String status = 'all',
+    String taskId = '',
+    int page = 1,
+    int perPage = 20,
+  }) => _request(
+    method: 'GET',
+    path: '/api/replace-rules',
+    query: {
+      if (query.isNotEmpty) 'q': query,
+      if (status != 'all') 'status': status,
+      if (taskId.isNotEmpty) 'task_id': taskId,
+      if (page > 1) 'page': page,
+      if (perPage != 20) 'per_page': perPage,
+    },
+    fromJson: ReplaceRulePage.fromJson,
+    retryable: true,
+  );
+
+  Future<ReplaceRule> createReplaceRule(ReplaceRule rule) => _request(
+    method: 'POST',
+    path: '/api/replace-rules',
+    body: rule.toJson(),
+    fromJson: _replaceRuleFrom,
+    retryable: false,
+  );
+
+  Future<ReplaceRule> updateReplaceRule(String id, ReplaceRule rule) =>
+      _request(
+        method: 'PATCH',
+        path: '/api/replace-rules/${Uri.encodeComponent(id)}',
+        body: rule.toJson(),
+        fromJson: _replaceRuleFrom,
+        retryable: false,
+      );
+
+  Future<void> deleteReplaceRule(String id) => _request(
+    method: 'DELETE',
+    path: '/api/replace-rules/${Uri.encodeComponent(id)}',
+    fromJson: (json) => json,
+    retryable: false,
+  );
+
+  Future<ReplaceRule> setReplaceRuleEnabled(String id, bool enabled) =>
+      _request(
+        method: 'POST',
+        path: '/api/replace-rules/${Uri.encodeComponent(id)}/enable',
+        body: {'enabled': enabled},
+        fromJson: _replaceRuleFrom,
+        retryable: false,
+      );
+
+  Future<ReplaceRule> duplicateReplaceRule(String id) => _request(
+    method: 'POST',
+    path: '/api/replace-rules/${Uri.encodeComponent(id)}/duplicate',
+    fromJson: _replaceRuleFrom,
+    retryable: false,
+  );
+
+  /// Runs the real engine over [sample] (`POST /api/replace-rules/test`). A
+  /// preview must never write, so this is its own endpoint, not a save.
+  Future<ReplaceRuleTestResult> testReplaceRule({
+    required String ruleId,
+    required String sample,
+  }) => _request(
+    method: 'POST',
+    path: '/api/replace-rules/test',
+    body: {'rule_id': ruleId, 'sample': sample},
+    fromJson: ReplaceRuleTestResult.fromJson,
+    retryable: false,
+  );
+
+  Future<List<ReplaceTaskOption>> listReplaceRuleTasks() => _requestList(
+    method: 'GET',
+    path: '/api/replace-rules/tasks',
+    fromJson: ReplaceTaskOption.fromJson,
+    listKey: 'tasks',
   );
 
   Future<List<ForwardRule>> listRules() => _requestList(

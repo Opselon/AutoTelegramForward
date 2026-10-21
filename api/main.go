@@ -194,6 +194,24 @@ func main() {
 	dashMux.HandleFunc("GET /auto-reply/stats", h.GetAutoReplyStats)
 	dashMux.HandleFunc("POST /auto-reply/preview", h.PreviewAutoReply)
 
+	// Replace rules — the unified find/replace manager behind /replace. One rule
+	// may serve several tasks; the core stores it inside each one, so these
+	// routes speak in rules (create/list/toggle/test/duplicate/delete) rather
+	// than in per-task entry maps. Tenant scope is the verified identity, as
+	// with every other dashMux route.
+	dashMux.HandleFunc("GET /replace-rules", h.ListReplaceRules)
+	dashMux.HandleFunc("POST /replace-rules", h.CreateReplaceRule)
+	// Literal segments outrank the {id} wildcard in Go's mux, so /tasks is
+	// reachable even though /replace-rules/{id} exists.
+	dashMux.HandleFunc("GET /replace-rules/tasks", h.ListReplaceRuleTasks)
+	dashMux.HandleFunc("GET /replace-rules/{id}", h.GetReplaceRule)
+	dashMux.HandleFunc("PUT /replace-rules/{id}", h.UpdateReplaceRule)
+	dashMux.HandleFunc("PATCH /replace-rules/{id}", h.UpdateReplaceRule)
+	dashMux.HandleFunc("DELETE /replace-rules/{id}", h.DeleteReplaceRule)
+	dashMux.HandleFunc("POST /replace-rules/{id}/enable", h.SetReplaceRuleEnabled)
+	dashMux.HandleFunc("POST /replace-rules/{id}/duplicate", h.DuplicateReplaceRule)
+	dashMux.HandleFunc("POST /replace-rules/test", h.TestReplaceRule)
+
 	dashMux.HandleFunc("GET /queue", h.DeliveryStats)
 	dashMux.HandleFunc("GET /dlq", h.ListDeadLetter)
 	dashMux.HandleFunc("POST /dlq/{id}/retry", h.ReplayDeadLetter)

@@ -32,6 +32,7 @@ import '../dashboard/dashboard_screen.dart';
 import '../delivery/delivery_screen.dart';
 import '../filters/filters_screen.dart';
 import '../logs/logs_screen.dart';
+import '../replace/replace_rules_screen.dart';
 import '../rules/rules_screen.dart';
 import '../settings/settings_screen.dart';
 import '../telegram_sessions/sessions_screen.dart';
@@ -75,6 +76,14 @@ class _HomeScreenState extends State<HomeScreen> {
       icon: Icons.alt_route_outlined,
       selectedIcon: Icons.alt_route,
       labelKey: 'nav_rules',
+    ),
+    // Replace sits next to Rules: it answers the same traffic from the other
+    // side — not "where does a message go" but "what does it say once it
+    // arrives", so the two belong in the same reach.
+    _Destination(
+      icon: Icons.find_replace_outlined,
+      selectedIcon: Icons.find_replace,
+      labelKey: 'nav_replace',
     ),
     // Chats sits next to Rules on purpose: it answers the question Rules raises
     // ("which chat is this id?"), so the two belong in the same reach.
@@ -121,6 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
   static const List<Widget> _screens = [
     DashboardScreen(),
     RulesScreen(),
+    ReplaceRulesScreen(),
     ChatsScreen(),
     SessionsScreen(),
     FiltersScreen(),
@@ -133,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// The four destinations a phone shows directly. Order is the bar's order,
   /// not the destination list's: dashboard, rules, logs, settings are the ones
   /// an operator opens every day.
-  static const List<int> _compactSlots = [0, 1, 6, 8];
+  static const List<int> _compactSlots = [0, 1, 7, 9];
 
   void _select(int idx) {
     if (idx == _currentIndex) return;
@@ -148,10 +158,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final t = AppMessages.of(context);
     final window = AppWindow.of(context);
 
-    // A rail needs vertical room for nine entries: 9 × 56 dp plus the brand
+    // A rail needs vertical room for ten entries: 10 × 56 dp plus the brand
     // mark. Below that a landscape phone would lose the tail of the list, so it
     // keeps the horizontal bar instead.
-    final railFits = window.size.height >= 580;
+    final railFits = window.size.height >= 636;
     final useRail = window.size.width >= AppBreakpoints.medium && railFits;
 
     final body = IndexedStack(
@@ -165,7 +175,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // Rules and logs own their width: they lay out a two-pane
           // master-detail on an expanded window and must not be capped to a
           // single readable column.
-          else if (i == 1 || i == 6)
+          else if (i == 1 || i == 7)
             _screens[i]
           else
             _ContentWidth(child: _screens[i]),
