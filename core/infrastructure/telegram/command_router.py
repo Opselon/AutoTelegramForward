@@ -139,6 +139,29 @@ class TextCommandMixin:
                 return rule
         return None
 
+    def _kind_label(self, kind: str, lang: str) -> str:
+        """The localized word for a list kind.
+
+        Spelled out instead of `f"cmd_kind_{kind}"`: an assembled key hides the
+        catalog dependency from the i18n audit, which then cannot tell a real
+        label from a typo that would render as a raw key.
+        """
+        if kind == "whitelist":
+            key = "cmd_kind_whitelist"
+        elif kind == "blacklist":
+            key = "cmd_kind_blacklist"
+        elif kind == "channel":
+            key = "cmd_kind_channel"
+        elif kind == "group":
+            key = "cmd_kind_group"
+        elif kind == "user":
+            key = "cmd_kind_user"
+        elif kind == "bot":
+            key = "cmd_kind_bot"
+        else:
+            key = "cmd_kind_channel"
+        return self._t(key, lang=lang)
+
     async def _cmd_rule_or_pick(self, message: Message, uid: int, token: str = "") -> Optional[Any]:
         """The task for this command, or a picker message and ``None``."""
         lang = self._resolve_lang(uid)
@@ -356,7 +379,7 @@ class TextCommandMixin:
         sub, _, rest = raw.partition(" ")
         sub = sub.lower()
         rest = rest.strip()
-        label = self._t(f"cmd_kind_{kind}", lang=lang)
+        label = self._kind_label(kind, lang)
         attr = "whitelist_words" if kind == "whitelist" else "blacklist_words"
         renderer = self._render_whitelist_menu if kind == "whitelist" else self._render_blacklist_menu
         verbs = ("list", "show", "add", "set", "del", "delete", "remove", "rm", "clear", "reset")
@@ -443,7 +466,7 @@ class TextCommandMixin:
     async def _cmd_discovery(self, message: Message, kind: str) -> None:
         uid = message.from_user.id if message.from_user else 0
         lang = self._resolve_lang(uid)
-        label = self._t(f"cmd_kind_{kind}", lang=lang)
+        label = self._kind_label(kind, lang)
         chats = await self._fetch_dialogs(uid)
         picked = [c for c in chats if str(c.get("kind")) == kind]
         if not picked:
