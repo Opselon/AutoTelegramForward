@@ -23,7 +23,7 @@ locally, because a count that is guessed will eventually be wrong.
 Callback data
 -------------
 ``rpl:<verb>[:<rule id>[:<arg>]]``. Rule ids are 16 hex characters, so the
-longest payload (``rpl:en:<id>:0``) is 27 bytes — far inside Telegram's 64-byte
+longest payload (``rpl:sw:<id>:0``) is 27 bytes — far inside Telegram's 64-byte
 limit, and short enough that no index-into-a-list indirection is needed.
 
 Panel state (the search query, the status filter, the page, and a rule being
@@ -164,7 +164,7 @@ class ReplaceBotMixin:
                 off=counts.get("disabled", 0),
             ),
         ]
-        filter_line = _t(f"ui_rpl_filter_{status}")
+        filter_line = self._rpl_filter_text(status, lang)
         if query:
             filter_line = _t("ui_rpl_filter_query", q=query, f=filter_line)
         lines.append(filter_line)
@@ -238,7 +238,7 @@ class ReplaceBotMixin:
 
         toggle_label = _t("ui_rpl_btn_disable") if rule.enabled else _t("ui_rpl_btn_enable")
         rows: List[List[tuple]] = [
-            [(toggle_label, _cb("en", rule.id, "1" if not rule.enabled else "0"))],
+            [(toggle_label, _cb("sw", rule.id, "1" if not rule.enabled else "0"))],
             [(_t("ui_rpl_btn_edit"), _cb("ed", rule.id)), (_t("ui_rpl_btn_tasks"), _cb("ts", rule.id))],
             [(_t("ui_rpl_btn_test"), _cb("tr", rule.id)), (_t("ui_rpl_btn_dup"), _cb("dup", rule.id))],
             [(_t("ui_rpl_btn_delete"), _cb("del", rule.id))],
@@ -517,6 +517,36 @@ class ReplaceBotMixin:
         body, kbd = await self._render_rpl_detail(uid, rule_id)
         await message.reply_text(body, reply_markup=kbd)
 
+    def _rpl_label(self, suffix: str, lang: str, **kw) -> str:
+        """`ui_rpl_<group>_<suffix>` only when the catalog defines it.
+
+        The suffix comes from a callback payload or the stored filter, both of
+        which outlive the build that wrote them, so an unknown value must fall
+        back to the generic label rather than reaching the user as the raw key.
+        """
+        for group in ("prompt", "filter"):
+            key = f"ui_rpl_{group}_{suffix}"
+            if self.i18n.contains(key):
+                return self._t(key, lang=lang, **kw)
+        logger.warning("[PIPELINE:REPLACE] no catalog entry for replace label %r", suffix)
+        return self._t("ui_rpl_prompt_source", lang=lang, **kw)
+
+    #: The four fields the edit flow can ask for, in the order it asks them.
+    PROMPT_FIELDS = ("name", "source", "to", "priority")
+
+    def _rpl_prompt_text(self, field: str, lang: str) -> str:
+        """The prompt for one editable field; unknown fields ask for the source."""
+        if field not in self.PROMPT_FIELDS:
+            logger.warning("[PIPELINE:REPLACE] unknown edit field %r", field)
+            field = "source"
+        return self._rpl_label(field, lang)
+
+    def _rpl_filter_text(self, status: str, lang: str) -> str:
+        """The "filtered by …" line; an unknown status falls back to all."""
+        if status not in STATUS_ORDER:
+            status = STATUS_ALL
+        return self._rpl_label(status, lang)
+
     # -- registration ----------------------------------------------------
     def register_replace_handlers(self) -> None:
         """Mount the panel's callbacks. Called once from ``_register``."""
@@ -593,7 +623,7 @@ class ReplaceBotMixin:
             await cq.answer()
             return await render(cq, uid, self._render_rpl_detail, arg1)
 
-        if verb == "en":
+        if verb == "sw":
             want = arg2 in ("1", "true", "on")
             try:
                 rule = await service.update(uid, arg1, {"enabled": want})
@@ -679,9 +709,9 @@ class ReplaceBotMixin:
             panel["editing"] = {"rule_id": arg1, "field": arg2}
             await self._rpl_store(uid)
             await cq.answer()
+            prompt = self._rpl_prompt_text(arg2, lang)
             return await self._safe_edit(
-                cq, _t(f"ui_rpl_prompt_{arg2}" if arg2 in ("name", "source", "to", "priority")
-                       else "ui_rpl_prompt_source"),
+                cq, prompt,
                 reply_markup=self._kbd([[(self._btn("ui_rpl_btn_back"), _cb("ed", arg1))]]),
             )
 
@@ -710,9 +740,9 @@ class ReplaceBotMixin:
             panel["editing"] = {"rule_id": "", "field": arg1}
             await self._rpl_store(uid)
             await cq.answer()
+            prompt = self._rpl_prompt_text(arg1, lang)
             return await self._safe_edit(
-                cq, _t(f"ui_rpl_prompt_{arg1}" if arg1 in ("name", "source", "to", "priority")
-                       else "ui_rpl_prompt_source"),
+                cq, prompt,
                 reply_markup=self._kbd([[(self._btn("ui_rpl_btn_back"), _cb("new"))]]),
             )
 

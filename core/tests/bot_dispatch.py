@@ -249,6 +249,15 @@ class _LogClient:
         return [text for level, text in self.records if level == "error"]
 
 
+#: The modules that mount callback handlers with their own `filters` import.
+#: A new mixin belongs here, or its regexes are invisible to the harness.
+REGISTERING_MODULES = (
+    "core.infrastructure.telegram.pro_bot_ui",
+    "core.infrastructure.telegram.autoreply_bot_ui",
+    "core.infrastructure.telegram.replace_bot_ui",
+)
+
+
 class BotHarness:
     """A registered ProBotUI wired to a real SQLite store."""
 
@@ -283,17 +292,18 @@ class BotHarness:
 
         self.bot = FakeBot()
         self.log_client = _LogClient()
-        # Two modules register callbacks: the UI itself and the auto-reply
-        # mixin it inherits. Both must see the fake filter object, or the
-        # mixin's pyrogram `RegexFilter` (which exposes only `.p`) is treated as
-        # "matches everything" and every press runs every panel handler.
-        ar_module = importlib.import_module(
-            "core.infrastructure.telegram.autoreply_bot_ui"
-        )
-        original_filters = ui_module.filters
-        original_ar_filters = ar_module.filters
-        ui_module.filters = self.bot.filters
-        ar_module.filters = self.bot.filters
+        # Every module that registers callbacks owns its own `filters` import:
+        # the UI itself, and each mixin it inherits. All of them must see the
+        # fake filter object, or a module's real pyrogram `RegexFilter` (which
+        # exposes `.p`, not `.matches`) is treated as "matches everything" and
+        # its handlers swallow every press before the intended one runs.
+        registering_modules = [
+            importlib.import_module(name)
+            for name in REGISTERING_MODULES
+        ]
+        original_filters = [m.filters for m in registering_modules]
+        for module in registering_modules:
+            module.filters = self.bot.filters
         try:
             self.ui = ui_module.ProBotUI(
                 bot=self.bot,
@@ -322,8 +332,8 @@ class BotHarness:
             # is complete here. Calling it again would double-register every
             # handler and make a test press the same button twice.
         finally:
-            ui_module.filters = original_filters
-            ar_module.filters = original_ar_filters
+            for module, original in zip(registering_modules, original_filters):
+                module.filters = original
 
     # ------------------------------------------------------------------ #
     # The store

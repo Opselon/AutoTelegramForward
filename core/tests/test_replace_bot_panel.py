@@ -324,7 +324,7 @@ def test_detail_offers_every_action_and_toggles_status(tmp_path):
         assert "Promo" in text and "promo" in text and "offer" in text
         assert "250" in text
         assert "Task One" in text and "Task Two" in text
-        assert f"rpl:en:{rule.id}:0" in datas(kbd), "an enabled rule must offer Disable"
+        assert f"rpl:sw:{rule.id}:0" in datas(kbd), "an enabled rule must offer Disable"
         assert f"rpl:ed:{rule.id}" in datas(kbd)
         assert f"rpl:ts:{rule.id}" in datas(kbd)
         assert f"rpl:tr:{rule.id}" in datas(kbd)
@@ -333,12 +333,12 @@ def test_detail_offers_every_action_and_toggles_status(tmp_path):
         assert "rpl:list" in datas(kbd)
 
         # Disabling flips the stored flag and re-renders with the opposite action.
-        cq = await press(panel, OWNER, f"rpl:en:{rule.id}:0")
+        cq = await press(panel, OWNER, f"rpl:sw:{rule.id}:0")
         stored = await service.get(OWNER, rule.id)
         assert stored.enabled is False
-        assert f"rpl:en:{rule.id}:1" in datas(cq.edits[-1][1])
+        assert f"rpl:sw:{rule.id}:1" in datas(cq.edits[-1][1])
 
-        await press(panel, OWNER, f"rpl:en:{rule.id}:1")
+        await press(panel, OWNER, f"rpl:sw:{rule.id}:1")
         assert (await service.get(OWNER, rule.id)).enabled is True
 
     asyncio.run(body())
