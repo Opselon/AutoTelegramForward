@@ -407,6 +407,9 @@ SEV_ICON = diagnostics.SEVERITY_ICON
 
 
 from core.infrastructure.telegram.autoreply_bot_ui import AutoReplyBotMixin
+from core.infrastructure.telegram.handlers import build_handler_registry
+from core.infrastructure.telegram.handlers.discovery import DiscoveryHandlers
+from core.infrastructure.telegram.handlers.forwarding import ForwardingHandlers
 from core.infrastructure.telegram.replace_bot_ui import ReplaceBotMixin
 from core.infrastructure.telegram.command_router import TextCommandMixin
 from core.application.command_registry import ARBITRATED_COMMANDS
@@ -426,8 +429,14 @@ from core.domain.text_replace import (
 )
 
 
-class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin):
-    """Renders and routes the entire button-based control panel."""
+class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHandlers,
+               ForwardingHandlers):
+    """Renders and routes the entire button-based control panel.
+
+    Every handler surface is a mixin that owns one file; ``_handler_registry``
+    is the validated inventory of those modules (see
+    :mod:`core.infrastructure.telegram.handlers`).
+    """
 
     def __init__(
         self,
@@ -527,6 +536,10 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin):
         self._ui_manager = UiStateManager(
             repo=ui_state_repo, logger=log_client,
         )
+        #: Single inventory of handler modules, validated (not just listed) at
+        #: mount time — see core/infrastructure/telegram/handlers/registry.py.
+        self._handler_registry = build_handler_registry()
+        self._dialog_use_case = None
         self._register()
 
     # ------------------------------------------------------------------ #
@@ -4054,107 +4067,21 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin):
         fallback_rows.append([(self._t("ui_cancel_back", lang=cur_lang), cancel_cb)])
         return text, self._kbd(fallback_rows)
 
-    async def _fetch_dialogs(self, owner_user_id: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Fetch available channels/groups from connected session clients with structured pipeline logging."""
-        _dlg_uid = int(owner_user_id or 0)
-        logger.info("[PIPELINE:DIALOG_FETCH:START] Initiating dialog fetch for owner_user_id=%s", _dlg_uid)
+    def _dialog_catalog(self):
+        """The application use case over the session-backed gateway.
 
-        sessions: List[Any] = []
-        if _dlg_uid:
-            try:
-                sessions = await self._sessions.list_by_owner(_dlg_uid)
-                logger.info("[PIPELINE:DIALOG_FETCH:BY_OWNER] Found %d session(s) for owner_user_id=%s", len(sessions), _dlg_uid)
-            except Exception as exc:
-                logger.warning("[PIPELINE:DIALOG_FETCH:WARN] list_by_owner(%s) failed: %s", _dlg_uid, exc)
+        Built once per panel instance. The gateway is infrastructure: it owns
+        reconnection and the scan; classification, ordering and paging are
+        application policy in :mod:`core.application.discovery`.
+        """
+        if getattr(self, "_dialog_use_case", None) is None:
+            from core.application.discovery import ListDialogsUseCase
+            from core.infrastructure.telegram.dialog_gateway import SessionDialogGateway
 
-        if not sessions and (_dlg_uid == 0 or self._is_admin(_dlg_uid)):
-            try:
-                sessions = await self._sessions.list_all()
-                logger.info("[PIPELINE:DIALOG_FETCH:ADMIN_FALLBACK] Loaded %d session(s) from global list", len(sessions))
-            except Exception as exc:
-                logger.warning("[PIPELINE:DIALOG_FETCH:WARN] list_all() failed: %s", exc)
-
-        active_sessions = [s for s in sessions if getattr(s, "is_active", True) and getattr(s, "is_authorized", False)]
-        if not active_sessions and sessions:
-            active_sessions = [s for s in sessions if getattr(s, "is_active", True)] or sessions
-
-        logger.info("[PIPELINE:DIALOG_FETCH:SESSIONS] Candidate active sessions count=%d (total=%d)", len(active_sessions), len(sessions))
-        if not active_sessions:
-            logger.warning("[PIPELINE:DIALOG_FETCH:EMPTY] No active sessions found for owner_user_id=%s", _dlg_uid)
-            return []
-
-        chats: List[Dict[str, Any]] = []
-        seen_ids = set()
-        cur_lang = self._resolve_lang(_dlg_uid)
-
-        for session in active_sessions:
-            client = self._pool.get(session.id)
-            if not client or not getattr(client, "is_connected", False):
-                sess_str = getattr(session, "session_string", "") or getattr(session, "session_string_encrypted", "")
-                if sess_str:
-                    try:
-                        logger.info("[PIPELINE:DIALOG_FETCH:RECONNECT] Reconnecting session %s...", session.id[:8])
-                        await self._pool.start_with_session_string(
-                            session.id, sess_str, credential_id=getattr(session, "credential_id", "default")
-                        )
-                        client = self._pool.get(session.id)
-                    except Exception as exc:
-                        logger.warning("[PIPELINE:DIALOG_FETCH:RECONNECT_FAIL] Session %s reconnect failed: %s", session.id[:8], exc)
-                        continue
-
-            if not client or not getattr(client, "is_connected", False):
-                logger.warning("[PIPELINE:DIALOG_FETCH:SESSION_DISCONNECTED] Session %s is not connected", session.id[:8])
-                continue
-
-            try:
-                logger.info("[PIPELINE:DIALOG_FETCH:SCAN] Scanning dialogs on session %s...", session.id[:8])
-                session_chats_count = 0
-                async with asyncio.timeout(12.0):
-                    async for dialog in client.get_dialogs(limit=100):
-                        chat = getattr(dialog, "chat", None)
-                        if not chat or chat.id in seen_ids:
-                            continue
-                        seen_ids.add(chat.id)
-
-                        ctype = getattr(chat.type, "value", str(chat.type)).lower()
-                        my_id = getattr(client.me, "id", None) if hasattr(client, "me") and client.me else None
-
-                        if "channel" in ctype:
-                            emoji = "📢"
-                            kind = "channel"
-                        elif "supergroup" in ctype or "group" in ctype:
-                            emoji = "👥"
-                            kind = "group"
-                        elif "bot" in ctype:
-                            emoji = "🤖"
-                            kind = "bot"
-                        elif my_id and chat.id == my_id:
-                            emoji = "💾"
-                            kind = "saved"
-                        else:
-                            emoji = "👤"
-                            kind = "user"
-
-                        title = getattr(chat, "title", None) or getattr(chat, "first_name", None) or str(chat.id)
-                        if kind == "saved":
-                            title = self._t("ui_saved_messages", lang=cur_lang)
-
-                        chats.append({
-                            "id": str(chat.id),
-                            "title": str(title),
-                            "emoji": emoji,
-                            "kind": kind,
-                            "username": getattr(chat, "username", "") or "",
-                        })
-                        session_chats_count += 1
-                logger.info("[PIPELINE:DIALOG_FETCH:SUCCESS] Session %s fetched %d chats", session.id[:8], session_chats_count)
-            except Exception as exc:
-                logger.warning("[PIPELINE:DIALOG_FETCH:ERROR] Exception fetching dialogs for session %s: %s", session.id[:8], exc)
-
-        priority = {"channel": 0, "group": 1, "saved": 2, "bot": 3, "user": 4}
-        chats.sort(key=lambda c: priority.get(c["kind"], 99))
-        logger.info("[PIPELINE:DIALOG_FETCH:COMPLETE] Returned %d total dialogs for owner_user_id=%s", len(chats), _dlg_uid)
-        return chats
+            self._dialog_use_case = ListDialogsUseCase(
+                SessionDialogGateway(self._sessions, self._pool, is_admin=self._is_admin)
+            )
+        return self._dialog_use_case
 
     async def _finish_rule_creation(self, event: Any, st: UiState, source_title: str, target_title: str) -> None:
         lang = self._lang_for(st)
@@ -4527,6 +4454,11 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin):
         except Exception as exc:  # a broken command table must not kill the UI
             logger.exception("text command mount failed: %s", exc)
 
+        # Handler modules: each surface (discovery, forwarding, ...) is a mixin
+        # whose handlers mount through one validated registry, so a command can
+        # never be owned twice and a declared handler cannot be missing.
+        self._handler_registry.mount(b, self)
+
         # Trace all callback queries across the UI
         @b.on_callback_query(group=-1)
         @self._localized_handler
@@ -4725,49 +4657,6 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin):
                 await message.reply_text(body, reply_markup=kbd)
             except Exception as exc:
                 logger.exception("/profile failed for uid=%s: %s", uid, exc)
-
-        @b.on_message(filters.command("forward") & filters.private)
-        @self._localized_handler
-        async def _forward_cmd(_, message: Message):
-            uid = message.from_user.id if message.from_user else 0
-            logger.info("Handling /forward from uid=%s", uid)
-            try:
-                parts = (message.text or "").strip().split()
-                if len(parts) > 1 and parts[1].isdigit():
-                    secs = int(parts[1])
-                    rules = await self._rules.list_by_owner(uid) if uid else []
-                    for r in rules:
-                        r.max_time_edit = secs
-                        await self._save_owned_rule(r, uid)
-                    await message.reply_text(
-                        self._t("ui_mte_global_set", secs=secs)
-                    )
-                    return
-
-                rules = await self._rules.list_by_owner(uid) if uid else []
-                if not rules:
-                    await message.reply_text(self._t("ui_forward_cmd_no_rules"))
-                    return
-
-                text = (
-                    self._t("ui_forward_cmd_prompt")
-                )
-                _, kbd = self._render_rules_list(rules, page=0)
-                await message.reply_text(text, reply_markup=kbd)
-            except Exception as exc:
-                logger.exception("/forward failed for uid=%s: %s", uid, exc)
-
-        @b.on_message(filters.command("rules") & filters.private)
-        @self._localized_handler
-        async def _rules_cmd(_, message: Message):
-            uid = message.from_user.id if message.from_user else 0
-            logger.info("Handling /rules from uid=%s", uid)
-            try:
-                rules = await self._rules.list_by_owner(uid) if uid else []
-                text, kbd = self._render_rules_list(rules, page=0)
-                await message.reply_text(text, reply_markup=kbd)
-            except Exception as exc:
-                logger.exception("/rules failed for uid=%s: %s", uid, exc)
 
         @b.on_callback_query(filters.regex("^" + CB["main"] + "$"))
         @self._localized_handler
