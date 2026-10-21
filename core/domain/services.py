@@ -17,6 +17,7 @@ from ..domain.value_objects import DeliveryStatus, FilterAction, LinkPolicy, Med
 from . import branding
 from .content_policy import compile_user_regex
 from .media_filter import media_block_reason
+from .text_replace import apply_replacements
 
 logger = logging.getLogger(__name__)
 
@@ -193,22 +194,12 @@ class FilterEngine:
         return EMOJI_REGEX.sub("", text).strip()
 
     def replace_text(self, text: str, replacements: dict) -> str:
-        if not text or not replacements:
-            return text
-        res = text
-        for old, new in replacements.items():
-            if not old:
-                continue
-            old_str = str(old)
-            new_str = str(new)
-            # Exact match first
-            if old_str in res:
-                res = res.replace(old_str, new_str)
-            else:
-                # Case-insensitive match for handles or words
-                pattern = re.compile(re.escape(old_str), re.IGNORECASE)
-                res = pattern.sub(new_str, res)
-        return res
+        """Apply the task's replacement entries (literal or regex, with options).
+
+        Delegates to :mod:`core.domain.text_replace` so the engine, the bot
+        panel and the dashboard share one interpretation of a stored entry.
+        """
+        return apply_replacements(text, replacements)
 
     def apply_header_footer(self, text: str, header: str = "", footer: str = "") -> str:
         parts = []

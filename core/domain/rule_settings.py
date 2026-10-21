@@ -100,7 +100,13 @@ SETTING_SPECS: Dict[str, SettingSpec] = {
     "footer": _s(kind="str", default="", group="cleanup",
                  help="Text appended to every forwarded message."),
     "replacements": _s(kind="dict", default={}, group="cleanup",
-                       help="Literal find/replace pairs applied to the text."),
+                       help=(
+                           "Find/replace pairs applied to the text. "
+                           '`{"find": "replace"}` is a literal pair; '
+                           '`{"find": {"to": "replace", "mode": "regex", "flags": "i", '
+                           '"name": "label"}}` adds options '
+                           "(`i` ignore case, `c` case-sensitive, `w` whole word)."
+                       )),
     "link_replacement": _s(kind="str", default="", group="cleanup"),
     "clean_usernames": _s(kind="bool", default=False, group="cleanup"),
     "clean_hashtags": _s(kind="bool", default=False, group="cleanup"),
