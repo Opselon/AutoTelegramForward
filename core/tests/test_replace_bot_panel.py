@@ -37,6 +37,7 @@ from core.infrastructure.persistence.sqlite_repositories import (
 )
 from core.infrastructure.security.crypto import CryptoService
 from core.infrastructure.telegram.i18n import I18n
+from core.infrastructure.telegram.pro_bot_ui import ProBotUI
 from core.infrastructure.telegram.replace_bot_ui import ReplaceBotMixin
 
 OWNER = 5094837833
@@ -95,6 +96,10 @@ class FakeCallback:
 
 class Harness(ReplaceBotMixin):
     """The panel with the minimum bot plumbing it depends on."""
+
+    # `_user_lock` ships on ProBotUI but the panel handler takes it, so the
+    # heading binds the real implementation instead of a stub.
+    _user_lock = ProBotUI._user_lock
 
     def __init__(self, service: Any) -> None:
         self._replace_rules = service
@@ -453,3 +458,187 @@ def test_every_panel_string_exists_in_all_ten_locales():
         assert not missing, f"{lang} is missing {missing}"
     # English is the fallback for all ten, so it must be complete too.
     assert all(k in catalog["en"] for k in used)
+
+
+# --------------------------------------------------------------------------- #
+# the guided create wizard
+# --------------------------------------------------------------------------- #
+
+def test_new_starts_the_guided_pass_with_a_positioned_question(tmp_path):
+    async def body():
+        db, repo, service = build(tmp_path)
+        await seed(db, repo)
+        panel = Harness(service)
+        cq = await press(panel, OWNER, "rpl:new")
+
+        text, kbd = cq.edits[-1]
+        assert "Step 1 of 3" in text and "new **name**" in text
+        assert panel._state(OWNER).step == "replace_field_input"
+        state = panel._rpl_state(OWNER)
+        assert state["editing"] == {"rule_id": "", "field": "name"}
+        assert state["draft_chain"] is True
+        # The two exits of every prompt: skip ahead, or leave the wizard.
+        assert "rpl:nx" in datas(kbd)
+        assert "rpl:list" in datas(kbd)
+
+    asyncio.run(body())
+
+
+def test_the_wizard_asks_the_next_field_after_every_answer(tmp_path):
+    async def body():
+        db, repo, service = build(tmp_path)
+        await seed(db, repo)
+        panel = Harness(service)
+        await press(panel, OWNER, "rpl:new")
+
+        msg = FakeMessage(OWNER, "Promo")
+        await panel._step_replace_field_input(msg, panel._state(OWNER), msg.text)
+        text, _ = msg.sent[-1]
+        assert "Step 2 of 3" in text and "text to find" in text
+
+        msg = FakeMessage(OWNER, "buy now")
+        await panel._step_replace_field_input(msg, panel._state(OWNER), msg.text)
+        text, _ = msg.sent[-1]
+        assert "Step 3 of 3" in text and "replacement text" in text
+
+        msg = FakeMessage(OWNER, "SALE")
+        await panel._step_replace_field_input(msg, panel._state(OWNER), msg.text)
+        # The next thing a usable rule needs is its tasks, not a recap screen.
+        text, kbd = msg.sent[-1]
+        assert "Tasks for this rule" in text
+        assert "rpl:dtg:t1" in datas(kbd)
+
+        panel_state = panel._rpl_state(OWNER)
+        assert panel_state["draft"] == {"name": "Promo", "source": "buy now",
+                                        "to": "SALE", "mode": "literal",
+                                        "flags": "", "priority": 100, "task_ids": []}
+
+    asyncio.run(body())
+
+
+def test_skip_moves_the_chain_without_writing(tmp_path):
+    async def body():
+        db, repo, service = build(tmp_path)
+        await seed(db, repo)
+        panel = Harness(service)
+        await press(panel, OWNER, "rpl:new")
+
+        cq = await press(panel, OWNER, "rpl:nx")     # skip the name
+        assert "Step 2 of 3" in cq.edits[-1][0]
+        msg = FakeMessage(OWNER, "spam ideas")
+        await panel._step_replace_field_input(msg, panel._state(OWNER), msg.text)
+
+        cq = await press(panel, OWNER, "rpl:nx")     # skip the replacement: delete
+        text, _ = cq.edits[-1]
+        assert "Tasks for this rule" in text
+
+        draft = panel._rpl_draft(OWNER)
+        assert draft["source"] == "spam ideas" and draft["to"] == ""
+
+        # Missing task, so the create button must not be there yet.
+        await press(panel, OWNER, "rpl:dsum")
+        _, form = await panel._render_rpl_draft(OWNER)
+        assert not any(d == "rpl:dcreate" for d in datas(form))
+
+    asyncio.run(body())
+
+
+def test_cancel_disarms_the_pending_prompt(tmp_path):
+    async def body():
+        db, repo, service = build(tmp_path)
+        await seed(db, repo)
+        panel = Harness(service)
+        await press(panel, OWNER, "rpl:new")
+        assert panel._state(OWNER).step == "replace_field_input"
+
+        cq = await press(panel, OWNER, "rpl:list")
+        assert panel._state(OWNER).step == ""
+        assert "Total: 0" in cq.edits[-1][0]
+
+        # An armed search prompt is retired by leaving for the list too.
+        await press(panel, OWNER, "rpl:q")
+        assert panel._state(OWNER).step == "replace_search"
+        await press(panel, OWNER, "rpl:st:all")
+        assert panel._state(OWNER).step == ""
+
+    asyncio.run(body())
+
+
+def test_a_single_field_edit_comes_back_to_the_summary(tmp_path):
+    async def body():
+        db, repo, service = build(tmp_path)
+        await seed(db, repo)
+        panel = Harness(service)
+        await press(panel, OWNER, "rpl:new")
+        for value in ("Promo", "buy now", "SALE"):
+            msg = FakeMessage(OWNER, value)
+            await panel._step_replace_field_input(msg, panel._state(OWNER), msg.text)
+        await press(panel, OWNER, "rpl:dtg:t1")
+        await press(panel, OWNER, "rpl:dsum")
+
+        # A surgical edit from the summary screen edits ONE field.
+        await press(panel, OWNER, "rpl:df:to")
+        msg = FakeMessage(OWNER, "MEGA SALE")
+        await panel._step_replace_field_input(msg, panel._state(OWNER), msg.text)
+        text, kbd = msg.sent[-1]
+        assert "New replace rule" in text and "MEGA SALE" in text
+        assert panel._state(OWNER).step == ""
+        assert not panel._rpl_state(OWNER).get("draft_chain")
+        assert "rpl:dcreate" in datas(kbd)
+
+    asyncio.run(body())
+
+
+def test_the_guided_pass_creates_a_working_rule(tmp_path):
+    async def body():
+        db, repo, service = build(tmp_path)
+        await seed(db, repo)
+        panel = Harness(service)
+        await press(panel, OWNER, "rpl:new")
+        for value in ("Promo", "buy now", "SALE"):
+            msg = FakeMessage(OWNER, value)
+            await panel._step_replace_field_input(msg, panel._state(OWNER), msg.text)
+        await press(panel, OWNER, "rpl:dtg:t1")
+        await press(panel, OWNER, "rpl:dsum")
+        cq = await press(panel, OWNER, "rpl:dcreate")
+
+        stored = await service.get(OWNER, await _created_id(service, OWNER))
+        assert (stored.name, stored.source, stored.to) == ("Promo", "buy now", "SALE")
+        assert tuple(stored.task_ids) == ("t1",)
+        assert panel._rpl_state(OWNER)["editing"] == {}
+        assert "Promo" in cq.edits[-1][0]
+
+    asyncio.run(body())
+
+
+async def _created_id(service, uid: int) -> str:
+    rules = await service.list(uid)
+    return (rules["items"][0] or {}).get("id", "")
+
+
+def test_tapping_a_filter_while_search_is_armed_disarms_it(tmp_path):
+    async def body():
+        db, repo, service = build(tmp_path)
+        await seed(db, repo)
+        panel = Harness(service)
+        await press(panel, OWNER, "rpl:q")
+        assert panel._state(OWNER).step == "replace_search"
+
+        # The user changes their mind and filters instead: the search prompt is
+        # not still waiting for a text the next message would feed it.
+        await press(panel, OWNER, "rpl:st:all")
+        assert panel._state(OWNER).step == ""
+
+    asyncio.run(body())
+
+
+def test_the_armed_search_prompt_survives_its_own_button(tmp_path):
+    async def body():
+        db, repo, service = build(tmp_path)
+        await seed(db, repo)
+        panel = Harness(service)
+        await press(panel, OWNER, "rpl:q")
+        # q re-arms the step; the prompt is what the screen asks for.
+        assert panel._state(OWNER).step == "replace_search"
+
+    asyncio.run(body())

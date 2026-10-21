@@ -189,6 +189,13 @@ def language_label(code: str, *, with_code: bool = False) -> str:
     return f"{text} ({key.upper()})" if with_code else text
 
 # Callback data must stay <= 64 bytes for Telegram. Keep keys short.
+#: How long an armed FSM step stays armed while the user is idle. A prompt is
+#: a question about *now*; after this window the next free-text message is
+#: routed normally (menu hint / BotManager) instead of being stored as the
+#: answer to a question from a previous session. Login steps are exempt
+#: (`fsm_arbiter.PROTECTED_STEP_PREFIXES`) because they are themselves
+#: command-driven and settling one orphans a half-finished login.
+UI_STEP_TTL_SECONDS = 6 * 60 * 60
 CB = {
     "main": "m",
     "sessions": "s",
@@ -402,7 +409,8 @@ SEV_ICON = diagnostics.SEVERITY_ICON
 from core.infrastructure.telegram.autoreply_bot_ui import AutoReplyBotMixin
 from core.infrastructure.telegram.replace_bot_ui import ReplaceBotMixin
 from core.infrastructure.telegram.command_router import TextCommandMixin
-from core.application.command_registry import ALL_COMMAND_TOKENS
+from core.application.command_registry import ARBITRATED_COMMANDS
+from core.infrastructure.telegram import fsm_arbiter
 from core.domain.text_replace import (
     MAX_ENTRIES,
     MODE_LITERAL,
@@ -507,6 +515,11 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin):
         self._backup = backup_service
         self._settings = settings  # ISettingsRepository, optional
         self._states: Dict[int, UiState] = {}
+        # Last time a user's armed step was actually used (answered, re-armed or
+        # read): the idle clock for `_expire_stale_step`. Seeded from the
+        # durable row's updated_at on resume, so a prompt armed before a
+        # restart ages exactly like one armed in this process.
+        self._step_touch: Dict[int, float] = {}
         # Pro state manager (durable, validated, single-writer): the plain
         # dict above stays as the sync render cache the ~250 handlers read,
         # while every DURABLE write now flows through the manager so the
@@ -519,6 +532,15 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin):
     # ------------------------------------------------------------------ #
     # helpers
     # ------------------------------------------------------------------ #
+    #: pyrogram's propagation signals are StopAsyncIteration subclasses; they
+    #: must not be caught by the `except Exception` blocks that guard user
+    #: replies, or a handler's "give this to the next group" decision is
+    #: swallowed and the user is answered twice.
+    @staticmethod
+    def _is_propagation_signal(exc: BaseException) -> bool:
+        return type(exc).__name__ in {"ContinuePropagation", "StopPropagation"} or isinstance(
+            exc, (StopAsyncIteration, StopIteration))
+
     def _localized_handler(self, handler):
         """Bind the resolved user language for the lifetime of one async update."""
         @wraps(handler)
@@ -701,33 +723,200 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin):
         st = self._states.get(uid)
         if st is None:
             st = UiState()
-            resumed = self._load_state_sync(uid)
+            resumed, updated_at = self._load_state_sync(uid)
             if resumed:
                 st = UiState.from_dict(resumed)
+                if updated_at:
+                    self._touch_map()[uid] = updated_at
                 logger.debug("resumed ui state for %s → %s", uid, st.step)
             self._states[uid] = st
         st.user_id = int(uid)
         if not getattr(st, "lang", ""):
             st.lang = self._resolve_lang(uid, user)
+        self._expire_stale_step(uid, st)
         return st
 
-    def _load_state_sync(self, uid: int) -> Optional[dict]:
-        """Best-effort synchronous read of persisted state (sqlite is sync)."""
+    def _user_lock(self, uid: int) -> "fsm_arbiter.UserGate":
+        """The per-user mutex for state-mutating entry points.
+
+        pyrogram dispatches updates to a worker pool, so two messages from one
+        user can be in flight at once: a command settling the flow while the
+        message it referred to is still being routed, or a double-tap on two
+        wizard fields. Both would read the same `UiState`, and the later write
+        wins with a step the other update already acted on. One lock per user
+        serialises the decision points (the arbiter, the free-text router, the
+        panel dispatcher) without touching the ~250 handlers that only read.
+
+        The gate is re-entrant (`fsm_arbiter.UserGate`): a handler that already
+        holds it — the free-text router, then a step handler that settles the
+        same flow — continues instead of deadlocking on itself. Gates are keyed
+        by event loop too, because `asyncio.Lock` binds the loop it first waits
+        in and a process that runs more than one loop (a test, a script) would
+        otherwise fail with "bound to a different event loop".
+        """
+        try:
+            loop: Any = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        locks = getattr(self, "_user_locks", None)
+        if locks is None:
+            locks = self._user_locks = {}
+        entry = locks.get(uid)
+        if entry is None or entry[0] is not loop:
+            entry = locks[uid] = (loop, fsm_arbiter.UserGate())
+        return entry[1]
+
+    def _touch_map(self) -> Dict[int, float]:
+        """The per-user step clock, created on demand.
+
+        `ProBotUI` is built without `__init__` in the test harnesses (and by
+        `__new__` in the CLI paths), so a lazily created map keeps the idle
+        clock from turning a missing attribute into a persist failure.
+        """
+        touches = getattr(self, "_step_touch", None)
+        if touches is None:
+            touches = self._step_touch = {}
+        return touches
+
+    def _expire_stale_step(self, uid: int, st: UiState) -> None:
+        """Drop a prompt nobody answered for too long.
+
+        A step is an armed question. Left armed across a restart it outlives its
+        own context: the user comes back the next day, types anything, and the
+        text is consumed by a prompt from a flow they have forgotten. An idle
+        window is therefore part of the state contract, and expiry is logged so
+        "the bot answered the wrong thing" is diagnosable after the fact.
+        """
+        step = str(getattr(st, "step", "") or "")
+        if not step or fsm_arbiter.is_protected(step):
+            return
+        now = time.time()
+        touches = self._touch_map()
+        touch = touches.get(uid)
+        if not touch:
+            touches[uid] = now
+            return
+        idle = now - touch
+        if idle <= UI_STEP_TTL_SECONDS:
+            return
+        touches[uid] = now
+        result = fsm_arbiter.settle(st, reason=f"stale:{int(idle)}s")
+        logger.info(
+            "[PIPELINE:FSM] expired stale step=%r uid=%s idle=%ds cleared_arms=%s",
+            step, uid, int(idle), ",".join(result.arms_cleared) or "-",
+        )
+        try:
+            asyncio.get_running_loop().create_task(self._persist(uid, st))
+        except RuntimeError:
+            # No loop (a sync caller, a unit test): the row keeps the old step
+            # until the next write, which is harmless — every reader now sees
+            # the settled in-memory state.
+            pass
+
+    def _load_state_sync(self, uid: int) -> Tuple[Optional[dict], float]:
+        """Best-effort synchronous read of persisted state (sqlite is sync).
+
+        Returns the resume payload and the row's last-write time, so a resumed
+        flow can be aged exactly like a live one.
+        """
         repo = self._ui_state_repo
         if repo is None:
-            return None
+            return None, 0.0
         db = getattr(repo, "_db", None)
         if db is None:
-            return None
+            return None, 0.0
         try:
             row = db.query_one(
-                "SELECT step, buffer FROM ui_states WHERE user_id=?", (int(uid),)
+                "SELECT step, buffer, updated_at FROM ui_states WHERE user_id=?",
+                (int(uid),),
             )
         except Exception:
-            return None
+            return None, 0.0
         if not row:
-            return None
-        return {"step": row["step"] or "", "buffer": db.loads(row["buffer"], {})}
+            return None, 0.0
+        try:
+            updated_at = float(row["updated_at"] or 0)
+        except (TypeError, ValueError, KeyError, IndexError):
+            updated_at = 0.0
+        return {"step": row["step"] or "", "buffer": db.loads(row["buffer"], {})}, updated_at
+
+    async def _settle_flow(self, uid: int, reason: str = "") -> bool:
+        """Settle a pending prompt because a command took over (see fsm_arbiter)."""
+        st = self._state(uid)
+        result = fsm_arbiter.settle(st, reason=reason)
+        if result.preserved:
+            logger.info(
+                "[PIPELINE:FSM] preserved step=%r for uid=%s (%s)",
+                result.preserved, uid, reason,
+            )
+        if not result.touched:
+            return False
+        await self._persist(uid, st)
+        logger.info(
+            "[PIPELINE:FSM] settled pending flow for uid=%s (%s): step=%r arms=%s",
+            uid, reason or "-", result.step_cleared or "-",
+            ",".join(result.arms_cleared) or "-",
+        )
+        return True
+
+    async def _handle_free_text(self, message: Message) -> None:
+        """Route one free-text message through the pending flow (the body of the
+        group -1 handler, kept on the class so it can be driven by tests and
+        called under `_user_lock`).
+        """
+        # Every step of every flow is traced: if the bot ever goes quiet
+        # again, the log shows exactly which step died and why.
+        uid = message.from_user.id if message.from_user else 0
+        text = (message.text or "").strip()
+        preview = (text[:40] + "...") if len(text) > 40 else text
+        step = ""
+        try:
+            step = self._state(uid).step or ""
+        except Exception as exc:
+            logger.warning("Could not read state for %s: %s", uid, exc)
+
+        logger.info("ProBotUI._text: uid=%s step=%r text=%r", uid, step, preview)
+
+        if not step:
+            # Not in an active UI flow: hand the message to BotManager in
+            # group 1. `continue_propagation()` works by raising, so it is
+            # never wrapped in a try/except — `except Exception` catches
+            # the signal and the message goes nowhere.
+            message.continue_propagation()
+
+        try:
+            self._log.info(
+                "bot", "fsm",
+                f"text in from {uid} step={step}: {preview!r}")
+        except Exception:
+            pass
+        try:
+            await self._route_text(message)
+        except Exception as exc:
+            if self._is_propagation_signal(exc):
+                # A step handler decided the message is not its own: the
+                # signal must reach the dispatcher, so never absorb it.
+                raise
+            logger.exception("ProBotUI._route_text failed for %s step=%s: %s", uid, step, exc)
+            try:
+                self._log.error(
+                    "bot", "fsm",
+                    f"route_text failed for {uid} step={step}: {type(exc).__name__}: {exc}",
+                )
+            except Exception:
+                pass
+            try:
+                await message.reply_text(
+                    self._t("ui_internal_error"),
+                    reply_markup=self._cancel_kbd())
+            except Exception:
+                pass
+        # The flow owns this message, so stop here. This call used to sit
+        # inside `except Exception: pass`, which swallowed the
+        # StopPropagation exception itself: BotManager (group 1) then
+        # answered the same message as well, and the user got the flow's
+        # answer followed by "use the buttons below" for the same text.
+        message.stop_propagation()
 
     async def _persist(self, uid: int, st: UiState) -> None:
         """Durable save through the pro state manager.
@@ -751,6 +940,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin):
                 st if isinstance(st, dict) else {})
             stn.step = _safe_step(stn.step or "")
             st.user_id = int(uid)
+            self._touch_map()[uid] = time.time()
         except Exception:
             logger.debug("ui state mirror failed", exc_info=True)
             return
@@ -9812,65 +10002,36 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin):
             scope = raw.split(":", 1)[1]
             await self._route_back(uid, self._state(uid), lang, cq=cq, scope=scope)
 
+        # ---------------- command / FSM arbitration ----------------
+        # Mounted at group -3, ahead of the command router (-2), the free-text
+        # router (-1) and BotManager (1) — for EVERY command token the bot
+        # answers, including the ones other modules own. A command is a statement
+        # of intent, so it settles whatever prompt was pending before it renders:
+        # without this a step armed on a previous screen stayed armed and the
+        # caller's next message was stored as the answer to a question they had
+        # already walked away from. The logic, the command list and the reasons
+        # live in `fsm_arbiter` (tested there against real pyrogram exceptions).
+        fsm_arbiter.register(b, self)
+
         # ---------------- free-text FSM router ----------------
-        # Every command token is excluded here as well: the command router runs
-        # at group -2 and stops propagation, but a command must never be able
-        # to fall into an FSM step (where it would be stored as input) if that
-        # registration ever changes.
-        @b.on_message(filters.private & filters.text & ~filters.command(
-            ["start", "menu", "cancel", "connect", "rules", "panel", "settings",
-             "profile", "forward", "route", *ALL_COMMAND_TOKENS]
-        ), group=-1)
+        # Every command token is excluded here as well, and the list is the same
+        # registry-derived one the arbiter registers: the command router runs at
+        # group -2 and stops propagation, but a command must never be able to
+        # fall into an FSM step (where it would be stored as input) if that
+        # registration ever changes. A hand-copied list drifts; this one cannot.
+        @b.on_message(
+            filters.private & filters.text & ~filters.command(list(ARBITRATED_COMMANDS)),
+            group=-1,
+        )
         @self._localized_handler
         async def _text(_, message: Message):
-            # Every step of every flow is traced: if the bot ever goes quiet
-            # again, the log shows exactly which step died and why.
-            uid = message.from_user.id if message.from_user else 0
-            text = (message.text or "").strip()
-            preview = (text[:40] + "...") if len(text) > 40 else text
-            step = ""
-            try:
-                step = self._state(uid).step or ""
-            except Exception as exc:
-                logger.warning("Could not read state for %s: %s", uid, exc)
-
-            logger.info("ProBotUI._text: uid=%s step=%r text=%r", uid, step, preview)
-
-            if not step:
-                # Not in an active UI flow — pass to BotManager in group 0
-                try:
-                    message.continue_propagation()
-                except Exception:
-                    pass
-                return
-
-            try:
-                self._log.info(
-                    "bot", "fsm",
-                    f"text in from {uid} step={step}: {preview!r}")
-            except Exception:
-                pass
-            try:
-                await self._route_text(message)
-                try:
-                    message.stop_propagation()
-                except Exception:
-                    pass
-            except Exception as exc:
-                logger.exception("ProBotUI._route_text failed for %s step=%s: %s", uid, step, exc)
-                try:
-                    self._log.error(
-                        "bot", "fsm",
-                        f"route_text failed for {uid} step={step}: {type(exc).__name__}: {exc}",
-                    )
-                except Exception:
-                    pass
-                try:
-                    await message.reply_text(
-                        self._t("ui_internal_error"),
-                        reply_markup=self._cancel_kbd())
-                except Exception:
-                    pass
+            # One message at a time per user (see `_user_lock`): the step read,
+            # the routing decision and the persist that follows it must not
+            # interleave with another update for the same user, or two updates
+            # act on the same step and the later write wins with stale data.
+            uid = int(message.from_user.id) if message.from_user else 0
+            async with self._user_lock(uid):
+                await self._handle_free_text(message)
 
         @b.on_message(filters.private & filters.document, group=-2)
         @self._localized_handler
@@ -9883,11 +10044,8 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin):
             except Exception:
                 pass
             if step != "migrate_await_file":
-                try:
-                    message.continue_propagation()
-                except Exception:
-                    pass
-                return
+                # Not ours: raise the propagation signal unwrapped (see _text).
+                message.continue_propagation()
             await self._route_document(message)
 
     # ------------------------------------------------------------------ #

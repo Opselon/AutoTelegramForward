@@ -124,6 +124,40 @@ Inside parenthesized multiline strings `(...)` in Python:
 
 ---
 
+## 🧭 2.5 Command ↔ FSM Arbitration (binding for every command handler)
+
+A command is a **statement of intent**, not just a token to match. Typing one cancels
+whatever the bot was waiting for. The mechanism is `fsm_arbiter` (handler group `-3`,
+ahead of every command router), and these rules keep it airtight:
+
+- **Every command token must be arbitrated.** The arbiter's filter is built from
+  `command_registry.ARBITRATED_COMMANDS`, never from a hand-written list, and
+  `test_fsm_command_arbitration` scans the package for `filters.command(...)` literals
+  and fails if a token is missing. A hard-copied exclusion list in another module is a
+  defect: it drifts, and the drift shows up as a command answered twice.
+- **The arbiter settles, it never answers.** It clears the pending flow and calls
+  `stop_propagation()` so the command's own handler renders its own screen. An arbiter
+  that replies produces two competing messages.
+- **Settling means**: `state.step` and the replace panel arm are cleared; the last saved
+  draft and the last task selection survive (they are the user's data, not a prompt).
+  Login steps (`login_*`) are protected — that flow is itself command-driven.
+- **Never wrap propagation signals in `try/except Exception`.** `StopPropagation` and
+  `ContinuePropagation` subclass `StopAsyncIteration`, hence `Exception`: a wrapper
+  swallows them, the message is consumed twice and logged as a handler error. Call them
+  bare, or re-raise explicitly.
+- **Every waiting state is command-scoped.** `UiState.step` is the durable one; the
+  BotManager's `_awaiting_lang/_awaiting_rule/_awaiting_ai` flags are the in-memory one
+  and are cleared for the chat by the same command (`fsm_arbiter.settle_awaiting`).
+  Adding a new waiting flag means adding it there.
+- **An armed step expires.** `UI_STEP_TTL_SECONDS` (6h) bounds an armed prompt, measured
+  from the row's `updated_at` so a restart does not resurrect a prompt from yesterday.
+- **A wizard asks one field at a time, in order, and says where it is.** Multi-field
+  creation (`replace` draft) arms one field, shows `Step n of total`, and chains from
+  the answer; a summary-screen edit arms a single field (`chain=False`) and returns to
+  the summary. `DRAFT_ORDER` is the only field list.
+
+---
+
 ## 🧪 3. Mandatory Pre-Commit Quality & Audit Gates
 
 Before pushing changes or submitting PRs, agents must run and pass the following suites locally:
