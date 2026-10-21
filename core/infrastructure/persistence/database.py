@@ -4,6 +4,7 @@ import json
 import logging
 import sqlite3
 import threading
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
@@ -887,6 +888,20 @@ MIGRATIONS = {
     );
     CREATE INDEX IF NOT EXISTS idx_rule_counters_owner ON rule_counters(owner_user_id);
     """,
+    29: """
+    -- v29: referral attribution for /make_money.
+    -- One row per invited account, keyed by the invitee so a second /start with
+    -- somebody else's link cannot re-attribute an existing user (INSERT OR
+    -- IGNORE). The inviter is a Telegram user id, not a task: no foreign key to
+    -- forward_rules, because an invitee never has to own a task to count.
+    CREATE TABLE IF NOT EXISTS referrals (
+        invitee_user_id INTEGER PRIMARY KEY,
+        inviter_user_id INTEGER NOT NULL,
+        created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_referrals_inviter
+        ON referrals(inviter_user_id, created_at DESC);
+    """,
 }
 
 
@@ -1395,6 +1410,40 @@ class SqliteDatabase:
     def query_all(self, sql: str, params: tuple = ()):
         with self._lock:
             return self._conn.execute(sql, params).fetchall()
+
+    # ------------------------------------------------------------------ #
+    # Referrals (/make_money)
+    # ------------------------------------------------------------------ #
+    def record_referral(self, invitee_user_id: int, inviter_user_id: int,
+                        now: Optional[int] = None) -> bool:
+        """Attribute one invitee to one inviter, first writer wins.
+
+        Returns True only when a row was actually inserted, so a repeated
+        ``/start ref_<id>`` (Telegram replays it) does not inflate a count and
+        a second link cannot steal an existing invitee.
+        """
+        invitee = int(invitee_user_id or 0)
+        inviter = int(inviter_user_id or 0)
+        if invitee <= 0 or inviter <= 0 or invitee == inviter:
+            return False
+        ts = int(now if now is not None else time.time())
+        try:
+            cur = self.execute(
+                "INSERT OR IGNORE INTO referrals (invitee_user_id, inviter_user_id, created_at)"
+                " VALUES (?,?,?)",
+                (invitee, inviter, ts),
+            )
+            return bool(cur.rowcount)
+        except sqlite3.Error as exc:  # pragma: no cover - defensive
+            logger.warning("referral insert failed: %s", exc)
+            return False
+
+    def count_referrals(self, inviter_user_id: int) -> int:
+        row = self.query_one(
+            "SELECT COUNT(*) AS n FROM referrals WHERE inviter_user_id=?",
+            (int(inviter_user_id or 0),),
+        )
+        return int(row["n"]) if row else 0
 
     @staticmethod
     def dumps(value) -> str:

@@ -58,17 +58,42 @@ UI_STEPS = frozenset({
     "login_phone", "login_code", "login_password", "login_2fa",
     # rule draft flow
     "rule_source", "rule_target", "rule_name", "rule_confirm",
+    # rule editor: free-text inputs that a screen is waiting for. A step that
+    # is not listed here is coerced to "" on persist, so the user's next
+    # message falls through to the main-menu hint and the flow looks broken
+    # even though its handler exists — that is exactly how "add replacement
+    # rule" used to swallow its own input.
+    "rule_replace_input", "rule_clean_words_input", "rule_header_input",
+    "rule_footer_input", "rule_max_edit_input", "rule_edit_source",
+    "rule_edit_target", "rule_editing_draft",
+    # per-task routing editor (source/target lists are typed, not picked)
+    "route_sources", "route_targets", "route_edit_s", "route_edit_t",
+    # filter rule editor
+    "filter_name", "filter_blacklist",
+    # smart filters
+    "smart_set_header", "smart_set_intermediate", "smart_set_keywords",
+    "smart_set_regex", "smart_set_brand_words", "smart_set_brand_origins",
+    "smart_test_rule",
+    # private-view auto-responder
+    "pv_persona_input", "pv_test_input",
     # registry editor
     "registry_edit", "registry_search", "registry_confirm",
     # bot route editor
     "bot_route_token", "bot_route_confirm",
     # credentials
     "cred_add", "cred_label", "cred_api_id", "cred_api_hash",
+    "client_api_id", "client_api_hash",
     # ai configs
     "ai_name", "ai_provider", "ai_model", "ai_api_key", "ai_url", "ai_field",
+    "ai_base_url", "ai_edit_host", "ai_edit_key", "ai_edit_model",
     # web dashboard url, admin broadcast, scheduled resume, media group delay
-    "weburl", "admin_bcast", "admin_forcesub", "ai_prompt_edit",
-    "media_group_delay", "user_set_about", "user_set_first_name",
+    "weburl", "weburl_input", "admin_bcast", "admin_forcesub",
+    "admin_add_id", "admin_broadcast_text", "admin_forcesub_channel",
+    "ai_prompt_edit", "media_group_delay", "user_set_about",
+    "user_set_first_name",
+    # backup / migration passphrases and the file it waits for
+    "session_backup_passphrase", "migrate_passphrase",
+    "migrate_import_passphrase", "migrate_await_file",
     "route_client_edit", "route_client_search",
 })
 

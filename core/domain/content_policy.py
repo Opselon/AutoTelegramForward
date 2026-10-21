@@ -274,6 +274,25 @@ def contains_word(
 
 
 @lru_cache(maxsize=2048)
+def compile_user_pattern(pattern: str, flags: int = 0) -> Optional[re.Pattern]:
+    """Compile a user-supplied pattern with explicit flags, or None.
+
+    Same guard as :func:`compile_user_regex` (length cap, nested-quantifier
+    refusal) but the caller chooses the flags, which a find/replace entry needs:
+    a replacement may be case-sensitive, dot-all, multiline or verbose while a
+    content filter is always case-insensitive.
+    """
+    if not pattern or len(pattern) > _MAX_PATTERN_LEN:
+        return None
+    if _REDOS.search(pattern):
+        return None
+    try:
+        return re.compile(pattern, flags)
+    except re.error:
+        return None
+
+
+@lru_cache(maxsize=2048)
 def compile_user_regex(pattern: str) -> Optional[re.Pattern]:
     """Compile a user-supplied pattern, or None when it is unusable.
 
@@ -283,14 +302,8 @@ def compile_user_regex(pattern: str) -> Optional[re.Pattern]:
     stage that evaluates a pattern a user typed (the content policy and
     `FilterEngine`), so the guard cannot be forgotten in one place.
     """
-    if not pattern or len(pattern) > _MAX_PATTERN_LEN:
-        return None
-    if _REDOS.search(pattern):
-        return None
-    try:
-        return re.compile(pattern, re.IGNORECASE | re.MULTILINE)
-    except re.error:
-        return None
+    return compile_user_pattern(pattern, re.IGNORECASE | re.MULTILINE)
+
 
 
 #: Kept so existing callers inside this module (and any third-party importer)

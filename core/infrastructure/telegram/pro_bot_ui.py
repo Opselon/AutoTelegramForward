@@ -400,9 +400,24 @@ SEV_ICON = diagnostics.SEVERITY_ICON
 
 
 from core.infrastructure.telegram.autoreply_bot_ui import AutoReplyBotMixin
+from core.infrastructure.telegram.command_router import TextCommandMixin
+from core.application.command_registry import ALL_COMMAND_TOKENS
+from core.domain.text_replace import (
+    MAX_ENTRIES,
+    MODE_LITERAL,
+    MODE_REGEX,
+    ReplaceError,
+    clean_flags,
+    describe_entry,
+    entry_from_value,
+    entry_with,
+    error_key,
+    merge_entry,
+    parse_freeform,
+)
 
 
-class ProBotUI(AutoReplyBotMixin):
+class ProBotUI(TextCommandMixin, AutoReplyBotMixin):
     """Renders and routes the entire button-based control panel."""
 
     def __init__(
@@ -3117,10 +3132,16 @@ class ProBotUI(AutoReplyBotMixin):
 
     def _render_replace_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
         lang = self._lang_for(rule)
-        """Render text replacement configuration menu."""
+        """Render text replacement configuration menu.
+
+        Each entry shows its mode marker (``lit``/``re``) and the flags that
+        change how it matches, so "why did this rule not fire?" is answerable
+        from the screen instead of from the engine's logs.
+        """
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
         reps = rule.replacements
+        version = int(getattr(rule, "version", 1) or 1)
 
         lines = [
             self._t("ui_rep_title", lang=lang) + "\n",
@@ -3131,34 +3152,84 @@ class ProBotUI(AutoReplyBotMixin):
         if not reps:
             lines.append(self._t("ui_rep_none", lang=lang) + "\n")
         else:
-            for idx, (old, new) in enumerate(reps.items(), start=1):
-                rep_display = f"`{new}`" if new else self._t("ui_rep_word_deleted", lang=lang)
-                lines.append(f"{idx}. `{old}` ➔ {rep_display}")
+            for idx, (old, value) in enumerate(reps.items(), start=1):
+                entry = entry_from_value(old, value)
+                rep_display = f"`{entry.to}`" if entry.to else self._t("ui_rep_word_deleted", lang=lang)
+                name = f" · {entry.name}" if entry.name else ""
+                lines.append(f"{idx}. `{old}` ➔ {rep_display}  `{entry.badge()}`{name}")
             lines.append("")
 
         lines.extend([
             self._t("ui_rep_help_title", lang=lang),
             self._t("ui_rep_help_add", lang=lang),
             self._t("ui_rep_help_fmt", lang=lang),
+            self._t("ui_rep_help_regex", lang=lang),
+            self._t("ui_rep_help_edit", lang=lang),
             self._t("ui_rep_help_del", lang=lang),
+            self._t("ui_rep_help_cmd", lang=lang),
         ])
 
         rows: List[List[Tuple[str, str]]] = [
             [(self._t("ui_rep_btn_add", lang=lang), f"rtxa:{rule.id}")],
         ]
         if reps:
-            del_row: List[Tuple[str, str]] = []
             for idx, old in enumerate(list(reps.keys())[:6]):
                 display_k = old[:10]
-                del_row.append((f"❌ {display_k}", f"rtxd:{rule.id}:{idx}:{int(getattr(rule, 'version', 1) or 1)}"))
-                if len(del_row) == 2:
-                    rows.append(del_row)
-                    del_row = []
-            if del_row:
-                rows.append(del_row)
+                rows.append([
+                    (self._t("ui_rep_btn_entry", lang=lang, source=display_k),
+                     f"rtxe:{rule.id}:{idx}:{version}"),
+                    (f"❌ {display_k}", f"rtxd:{rule.id}:{idx}:{version}"),
+                ])
             rows.append([(self._t("ui_rep_btn_clear", lang=lang), f"rtxc:{rule.id}")])
 
         rows.append([(self._btn('ui_rule_back_rule'), f"rd:{rule.id}")])
+        return "\n".join(lines), self._kbd(rows)
+
+    def _replace_option_entry(self, replacements: Dict[str, Any], key: str, option: str):
+        """The entry with one option flipped (mode / case / whole word)."""
+        entry = entry_from_value(key, replacements.get(key))
+        if option == "mode":
+            mode = MODE_LITERAL if entry.is_regex else MODE_REGEX
+            return entry_with(replacements, key, mode=mode)
+        if option == "i":
+            if entry.ignore_case:
+                flags = entry.flags.replace("i", "")
+            else:
+                flags = clean_flags(entry.flags.replace("c", "") + "i", entry.mode)
+            return entry_with(replacements, key, flags=flags)
+        flags = entry.flags.replace("w", "") if entry.whole_word else entry.flags + "w"
+        return entry_with(replacements, key, flags=flags)
+
+    def _render_replace_entry(self, rule: ForwardRule, key: str) -> Tuple[str, InlineKeyboardMarkup]:
+        """One entry's option screen: mode, case, whole word, delete."""
+        lang = self._lang_for(rule)
+        entry = entry_from_value(key, rule.replacements.get(key))
+        target = f"`{entry.to}`" if entry.to else self._t("ui_rep_word_deleted", lang=lang)
+        mode_name = self._t(
+            "ui_rep_mode_regex" if entry.is_regex else "ui_rep_mode_literal", lang=lang
+        )
+        keys = list(rule.replacements.keys())
+        idx = keys.index(key) if key in keys else 0
+        version = int(getattr(rule, "version", 1) or 1)
+        lines = [
+            self._t("ui_rep_entry_title", lang=lang, source=key),
+            self._t(
+                "ui_rep_entry_body", lang=lang, mode=mode_name,
+                flags=entry.flags or "—", target=target, name=entry.name or "—",
+            ),
+            self._t("ui_rep_entry_hint", lang=lang),
+        ]
+        rows: List[List[Tuple[str, str]]] = [
+            [(self._t("ui_rep_btn_mode", lang=lang, mode=mode_name), f"rtxem:{rule.id}:{idx}:{version}")],
+            [(self._t("ui_rep_btn_case", lang=lang,
+                      state=self._t("ui_yes" if entry.ignore_case else "ui_no", lang=lang)),
+              f"rtxef:{rule.id}:{idx}:{version}:i")],
+            [(self._t("ui_rep_btn_word", lang=lang,
+                      state=self._t("ui_yes" if entry.whole_word else "ui_no", lang=lang)),
+              f"rtxef:{rule.id}:{idx}:{version}:w")],
+            [(self._t("ui_delete", lang=lang), f"rtxd:{rule.id}:{idx}:{version}")],
+            [(self._btn("ui_rule_back_rule", lang=lang), f"rtx:{rule.id}")],
+        ]
         return "\n".join(lines), self._kbd(rows)
 
     def _render_header_footer_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
@@ -4247,6 +4318,14 @@ class ProBotUI(AutoReplyBotMixin):
         # v28 auto-reply panel: a mixin so its ~20 callbacks stay in one file.
         self.register_autoreply_handlers()
 
+        # v29 text-command surface: the commands the registry says no earlier
+        # handler owns. Mounted at group -2 so a command always reaches the
+        # router before the free-text FSM router can see it.
+        try:
+            self._mount_text_commands(b)
+        except Exception as exc:  # a broken command table must not kill the UI
+            logger.exception("text command mount failed: %s", exc)
+
         # Trace all callback queries across the UI
         @b.on_callback_query(group=-1)
         @self._localized_handler
@@ -4272,6 +4351,10 @@ class ProBotUI(AutoReplyBotMixin):
         async def _start(_, message: Message):
             uid = message.from_user.id if message.from_user else 0
             logger.info("Handling /start from uid=%s", uid)
+            # An invite link (`/start ref_<id>`) is attributed before anything
+            # else can fail: the referral is the visitor's first impression and
+            # must not depend on the menu render below.
+            await self._record_referral(uid, message.text or "")
             try:
                 # Reset any in-progress FSM state on fresh /start
                 st = self._state(uid)
@@ -5946,6 +6029,71 @@ class ProBotUI(AutoReplyBotMixin):
             text, kbd = self._render_replace_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rtxe:(.+):(\d+):(\d+)$"))
+        @self._localized_handler
+        async def _cb_rule_replace_entry(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            parts = raw.split(":")
+            rule_id, idx_str, ver_str = parts[1], parts[2], parts[3]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule or not rule.replacements:
+                return await cq.answer(self._t("ui_rep_none_found_alert"), show_alert=True)
+            key = self._resolve_replace_click(rule, int(idx_str), ver_str)
+            if key is None:
+                await cq.answer(
+                    self._t("ui_rep_list_changed_alert", lang=self._lang_for(rule)),
+                    show_alert=True,
+                )
+                text, kbd = self._render_replace_menu(rule)
+                return await self._safe_edit(cq, text, reply_markup=kbd)
+            text, kbd = self._render_replace_entry(rule, key)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        async def _replace_toggle(cq: CallbackQuery, option: str) -> None:
+            uid = cq.from_user.id if cq.from_user else 0
+            lang = self._resolve_lang(uid)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            parts = raw.split(":")
+            rule_id, idx_str, ver_str = parts[1], parts[2], parts[3]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule or not rule.replacements:
+                return await cq.answer(self._t("ui_rep_none_found_alert", lang=lang), show_alert=True)
+            key = self._resolve_replace_click(rule, int(idx_str), ver_str)
+            if key is None:
+                await cq.answer(self._t("ui_rep_list_changed_alert", lang=lang), show_alert=True)
+                text, kbd = self._render_replace_menu(rule)
+                return await self._safe_edit(cq, text, reply_markup=kbd)
+            replacements = dict(rule.replacements)
+            try:
+                updated = self._replace_option_entry(replacements, key, option)
+            except ReplaceError:
+                # Switching a literal to regex can turn a valid source into an
+                # invalid pattern ("(" is a word literally, not a regex): the
+                # refusal is explained instead of storing something that would
+                # be skipped at delivery time.
+                return await cq.answer(self._t("ui_rep_err_invalid_regex", lang=lang), show_alert=True)
+            replacements[key] = updated.to_value()
+            if not isinstance(rule.metadata, dict):
+                rule.metadata = {}
+            rule.metadata["replacements"] = replacements
+            await self._save_owned_rule(rule, uid)
+            text, kbd = self._render_replace_entry(rule, key)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rtxem:(.+):(\d+):(\d+)$"))
+        @self._localized_handler
+        async def _cb_rule_replace_mode(_, cq: CallbackQuery):
+            await _replace_toggle(cq, "mode")
+
+        @b.on_callback_query(filters.regex(r"^rtxef:(.+):(\d+):(\d+):([icw])$"))
+        @self._localized_handler
+        async def _cb_rule_replace_flag(_, cq: CallbackQuery):
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            await _replace_toggle(cq, raw.rsplit(":", 1)[-1])
 
         @b.on_callback_query(filters.regex(r"^rhf:(.+)$"))
         @self._localized_handler
@@ -9654,7 +9802,14 @@ class ProBotUI(AutoReplyBotMixin):
             await self._route_back(uid, self._state(uid), lang, cq=cq, scope=scope)
 
         # ---------------- free-text FSM router ----------------
-        @b.on_message(filters.private & filters.text & ~filters.command(["start", "menu", "cancel", "connect", "rules", "panel", "settings", "profile", "forward", "route"]), group=-1)
+        # Every command token is excluded here as well: the command router runs
+        # at group -2 and stops propagation, but a command must never be able
+        # to fall into an FSM step (where it would be stored as input) if that
+        # registration ever changes.
+        @b.on_message(filters.private & filters.text & ~filters.command(
+            ["start", "menu", "cancel", "connect", "rules", "panel", "settings",
+             "profile", "forward", "route", *ALL_COMMAND_TOKENS]
+        ), group=-1)
         @self._localized_handler
         async def _text(_, message: Message):
             # Every step of every flow is traced: if the bot ever goes quiet
@@ -11245,29 +11400,11 @@ class ProBotUI(AutoReplyBotMixin):
             return
 
         lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
-        new_replacements = {}
-        delimiters = ["->", "=>", "➔", "—>", ":"]
-
-        for line in lines:
-            delim_found = None
-            for d in delimiters:
-                if d in line:
-                    delim_found = d
-                    break
-            if delim_found:
-                parts = line.split(delim_found, 1)
-                src = parts[0].strip()
-                dst = parts[1].strip()
-                if src:
-                    new_replacements[src] = dst
-            else:
-                parts = line.split(None, 1)
-                if len(parts) == 2:
-                    new_replacements[parts[0].strip()] = parts[1].strip()
-                elif len(parts) == 1:
-                    new_replacements[parts[0].strip()] = ""
+        new_replacements, problems = parse_freeform(text)
 
         if not new_replacements:
+            # A completely unusable input keeps the old behaviour: explain the
+            # format. A partially unusable one below names the rejected lines.
             await message.reply_text(
                 self._t("ui_replace_format_invalid", lang=lang),
                 reply_markup=self._kbd([[(self._t("ui_cancel"), f"rtx:{rule_id}")]]),
@@ -11277,7 +11414,15 @@ class ProBotUI(AutoReplyBotMixin):
         if not isinstance(rule.metadata, dict):
             rule.metadata = {}
         current_reps = dict(rule.replacements)
-        current_reps.update(new_replacements)
+        try:
+            for src, value in new_replacements.items():
+                current_reps = merge_entry(current_reps, entry_from_value(src, value))
+        except ReplaceError as exc:
+            await message.reply_text(
+                self._t(error_key(exc.code), lang=lang, max=MAX_ENTRIES),
+                reply_markup=self._kbd([[(self._t("ui_cancel"), f"rtx:{rule_id}")]]),
+            )
+            return
         rule.metadata["replacements"] = current_reps
         await self._save_owned_rule(rule, uid)
 
@@ -11286,8 +11431,19 @@ class ProBotUI(AutoReplyBotMixin):
         await self._persist(message.from_user.id, st)
 
         deleted_label = self._t("ui_rep_word_deleted", lang=lang)
-        added_list = "\n".join([f"• `{k}` ➔ `{v or deleted_label}`" for k, v in new_replacements.items()])
+        added_list = "\n".join([
+            "• " + describe_entry(entry_from_value(k, v), deleted_label)
+            for k, v in new_replacements.items()
+        ])
         await message.reply_text(self._t("ui_replace_added", lang=lang, added_list=added_list))
+        if problems:
+            rejected = "\n".join(
+                f"• `{src}` — {self._t(error_key(code), lang=lang)}"
+                for src, code in problems
+            )
+            await message.reply_text(
+                self._t("ui_rep_rejected", lang=lang) + "\n" + rejected
+            )
         menu_text, menu_kbd = self._render_replace_menu(rule)
         await message.reply_text(menu_text, reply_markup=menu_kbd)
 
