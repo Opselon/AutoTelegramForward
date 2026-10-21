@@ -7,9 +7,9 @@
   "version": "2.2.4",
   "releaseTag": "v2.2.4",
   "releaseDate": "2026-10-16",
-  "gitCommit": "8365c2a",
-  "gitDate": "2026-10-20T19:19:37Z",
-  "syncTimestamp": "2026-10-20T19:36:25.399Z",
+  "gitCommit": "b211b6e",
+  "gitDate": "2026-10-21T05:09:30+03:30",
+  "syncTimestamp": "2026-10-21T02:25:35.814Z",
   "author": "Opselon",
   "maintainer": {
     "name": "𝐂ap$iz𝗲Ʀ",
@@ -28,20 +28,20 @@
     "uz",
     "zh"
   ],
-  "i18nKeyCount": 1634,
+  "i18nKeyCount": 1714,
   "stats": {
-    "pythonTests": 161,
+    "pythonTests": 165,
     "goTests": 47,
-    "grpcRpcCount": 100,
+    "grpcRpcCount": 109,
     "cliGroups": 29,
     "featureCatalogEntries": 19,
     "services": 4,
     "locales": 10,
-    "i18nKeys": 1634,
+    "i18nKeys": 1714,
     "implementedFeatures": 15,
     "partialFeatures": 2,
     "plannedFeatures": 2,
-    "apiRoutes": 126
+    "apiRoutes": 136
   },
   "featureCatalog": [
     "Create forwarding rule",
@@ -2293,6 +2293,76 @@
       "method": "GET",
       "path": "/api/queue",
       "handler": "h.DeliveryStats",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/replace-rules",
+      "handler": "h.ListReplaceRules",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/replace-rules",
+      "handler": "h.CreateReplaceRule",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/replace-rules/{id}",
+      "handler": "h.GetReplaceRule",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "PUT",
+      "path": "/api/replace-rules/{id}",
+      "handler": "h.UpdateReplaceRule",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "PATCH",
+      "path": "/api/replace-rules/{id}",
+      "handler": "h.UpdateReplaceRule",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "DELETE",
+      "path": "/api/replace-rules/{id}",
+      "handler": "h.DeleteReplaceRule",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/replace-rules/{id}/duplicate",
+      "handler": "h.DuplicateReplaceRule",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/replace-rules/{id}/enable",
+      "handler": "h.SetReplaceRuleEnabled",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/replace-rules/tasks",
+      "handler": "h.ListReplaceRuleTasks",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/replace-rules/test",
+      "handler": "h.TestReplaceRule",
       "auth": "bearer"
     },
     {

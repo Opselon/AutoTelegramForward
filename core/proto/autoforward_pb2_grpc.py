@@ -4774,3 +4774,419 @@ class AutoReplyControlService:
             timeout,
             metadata,
             _registered_method=True)
+
+
+class ReplaceRuleControlServiceStub:
+    """Missing associated documentation comment in .proto file."""
+
+    def __init__(self, channel):
+        """Constructor.
+
+        Args:
+            channel: A grpc.Channel.
+        """
+        self.ListReplaceRules = channel.unary_unary(
+                '/autoforward.ReplaceRuleControlService/ListReplaceRules',
+                request_serializer=autoforward__pb2.ListReplaceRulesRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ListReplaceRulesResponse.FromString,
+                _registered_method=True)
+        self.GetReplaceRule = channel.unary_unary(
+                '/autoforward.ReplaceRuleControlService/GetReplaceRule',
+                request_serializer=autoforward__pb2.GetReplaceRuleRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ReplaceRule.FromString,
+                _registered_method=True)
+        self.CreateReplaceRule = channel.unary_unary(
+                '/autoforward.ReplaceRuleControlService/CreateReplaceRule',
+                request_serializer=autoforward__pb2.CreateReplaceRuleRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ReplaceRule.FromString,
+                _registered_method=True)
+        self.UpdateReplaceRule = channel.unary_unary(
+                '/autoforward.ReplaceRuleControlService/UpdateReplaceRule',
+                request_serializer=autoforward__pb2.UpdateReplaceRuleRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ReplaceRule.FromString,
+                _registered_method=True)
+        self.DeleteReplaceRule = channel.unary_unary(
+                '/autoforward.ReplaceRuleControlService/DeleteReplaceRule',
+                request_serializer=autoforward__pb2.DeleteReplaceRuleRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.DeleteReplaceRuleResponse.FromString,
+                _registered_method=True)
+        self.SetReplaceRuleEnabled = channel.unary_unary(
+                '/autoforward.ReplaceRuleControlService/SetReplaceRuleEnabled',
+                request_serializer=autoforward__pb2.SetReplaceRuleEnabledRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ReplaceRule.FromString,
+                _registered_method=True)
+        self.DuplicateReplaceRule = channel.unary_unary(
+                '/autoforward.ReplaceRuleControlService/DuplicateReplaceRule',
+                request_serializer=autoforward__pb2.DuplicateReplaceRuleRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ReplaceRule.FromString,
+                _registered_method=True)
+        self.TestReplaceRule = channel.unary_unary(
+                '/autoforward.ReplaceRuleControlService/TestReplaceRule',
+                request_serializer=autoforward__pb2.TestReplaceRuleRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.TestReplaceRuleResponse.FromString,
+                _registered_method=True)
+        self.ListReplaceRuleTasks = channel.unary_unary(
+                '/autoforward.ReplaceRuleControlService/ListReplaceRuleTasks',
+                request_serializer=autoforward__pb2.ListReplaceRuleTasksRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.ListReplaceRuleTasksResponse.FromString,
+                _registered_method=True)
+
+
+class ReplaceRuleControlServiceServicer:
+    """Missing associated documentation comment in .proto file."""
+
+    def ListReplaceRules(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetReplaceRule(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CreateReplaceRule(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateReplaceRule(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteReplaceRule(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def SetReplaceRuleEnabled(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DuplicateReplaceRule(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def TestReplaceRule(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def ListReplaceRuleTasks(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+
+def add_ReplaceRuleControlServiceServicer_to_server(servicer, server):
+    rpc_method_handlers = {
+            'ListReplaceRules': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListReplaceRules,
+                    request_deserializer=autoforward__pb2.ListReplaceRulesRequest.FromString,
+                    response_serializer=autoforward__pb2.ListReplaceRulesResponse.SerializeToString,
+            ),
+            'GetReplaceRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetReplaceRule,
+                    request_deserializer=autoforward__pb2.GetReplaceRuleRequest.FromString,
+                    response_serializer=autoforward__pb2.ReplaceRule.SerializeToString,
+            ),
+            'CreateReplaceRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.CreateReplaceRule,
+                    request_deserializer=autoforward__pb2.CreateReplaceRuleRequest.FromString,
+                    response_serializer=autoforward__pb2.ReplaceRule.SerializeToString,
+            ),
+            'UpdateReplaceRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateReplaceRule,
+                    request_deserializer=autoforward__pb2.UpdateReplaceRuleRequest.FromString,
+                    response_serializer=autoforward__pb2.ReplaceRule.SerializeToString,
+            ),
+            'DeleteReplaceRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteReplaceRule,
+                    request_deserializer=autoforward__pb2.DeleteReplaceRuleRequest.FromString,
+                    response_serializer=autoforward__pb2.DeleteReplaceRuleResponse.SerializeToString,
+            ),
+            'SetReplaceRuleEnabled': grpc.unary_unary_rpc_method_handler(
+                    servicer.SetReplaceRuleEnabled,
+                    request_deserializer=autoforward__pb2.SetReplaceRuleEnabledRequest.FromString,
+                    response_serializer=autoforward__pb2.ReplaceRule.SerializeToString,
+            ),
+            'DuplicateReplaceRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.DuplicateReplaceRule,
+                    request_deserializer=autoforward__pb2.DuplicateReplaceRuleRequest.FromString,
+                    response_serializer=autoforward__pb2.ReplaceRule.SerializeToString,
+            ),
+            'TestReplaceRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.TestReplaceRule,
+                    request_deserializer=autoforward__pb2.TestReplaceRuleRequest.FromString,
+                    response_serializer=autoforward__pb2.TestReplaceRuleResponse.SerializeToString,
+            ),
+            'ListReplaceRuleTasks': grpc.unary_unary_rpc_method_handler(
+                    servicer.ListReplaceRuleTasks,
+                    request_deserializer=autoforward__pb2.ListReplaceRuleTasksRequest.FromString,
+                    response_serializer=autoforward__pb2.ListReplaceRuleTasksResponse.SerializeToString,
+            ),
+    }
+    generic_handler = grpc.method_handlers_generic_handler(
+            'autoforward.ReplaceRuleControlService', rpc_method_handlers)
+    server.add_generic_rpc_handlers((generic_handler,))
+    server.add_registered_method_handlers('autoforward.ReplaceRuleControlService', rpc_method_handlers)
+
+
+ # This class is part of an EXPERIMENTAL API.
+class ReplaceRuleControlService:
+    """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def ListReplaceRules(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ReplaceRuleControlService/ListReplaceRules',
+            autoforward__pb2.ListReplaceRulesRequest.SerializeToString,
+            autoforward__pb2.ListReplaceRulesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetReplaceRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ReplaceRuleControlService/GetReplaceRule',
+            autoforward__pb2.GetReplaceRuleRequest.SerializeToString,
+            autoforward__pb2.ReplaceRule.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CreateReplaceRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ReplaceRuleControlService/CreateReplaceRule',
+            autoforward__pb2.CreateReplaceRuleRequest.SerializeToString,
+            autoforward__pb2.ReplaceRule.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateReplaceRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ReplaceRuleControlService/UpdateReplaceRule',
+            autoforward__pb2.UpdateReplaceRuleRequest.SerializeToString,
+            autoforward__pb2.ReplaceRule.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteReplaceRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ReplaceRuleControlService/DeleteReplaceRule',
+            autoforward__pb2.DeleteReplaceRuleRequest.SerializeToString,
+            autoforward__pb2.DeleteReplaceRuleResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def SetReplaceRuleEnabled(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ReplaceRuleControlService/SetReplaceRuleEnabled',
+            autoforward__pb2.SetReplaceRuleEnabledRequest.SerializeToString,
+            autoforward__pb2.ReplaceRule.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DuplicateReplaceRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ReplaceRuleControlService/DuplicateReplaceRule',
+            autoforward__pb2.DuplicateReplaceRuleRequest.SerializeToString,
+            autoforward__pb2.ReplaceRule.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def TestReplaceRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ReplaceRuleControlService/TestReplaceRule',
+            autoforward__pb2.TestReplaceRuleRequest.SerializeToString,
+            autoforward__pb2.TestReplaceRuleResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def ListReplaceRuleTasks(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.ReplaceRuleControlService/ListReplaceRuleTasks',
+            autoforward__pb2.ListReplaceRuleTasksRequest.SerializeToString,
+            autoforward__pb2.ListReplaceRuleTasksResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)

@@ -803,6 +803,112 @@ export const endpointDetail: Record<string, EndpointDetail> = {
     summary: 'Enables or disables one extension.',
     statuses: ['200', '401', '403', '404'],
   },
+  // ------------------------------------------------------------ replace rules
+  'GET /api/replace-rules': {
+    summary:
+      'One page of the caller’s replace rules, with search, a status filter, a task filter and the counts the header shows.',
+    note: 'A rule assigned to three tasks is one row here: the copies inside the tasks are grouped by rule id. The counts describe the filtered set, so “3 enabled” next to a task filter never counts a rule that task does not run.',
+    statuses: auth,
+    fields: [
+      { name: 'q', type: 'string', required: false, notes: 'Matches a rule’s name, source text or replacement.' },
+      { name: 'status', type: 'string', required: false, notes: 'all (default), enabled or disabled.' },
+      { name: 'task_id', type: 'string', required: false, notes: 'Narrow to the rules one forwarding task runs.' },
+      { name: 'page', type: 'integer', required: false, notes: '1-based; a page past the end is clamped, not an error.' },
+      { name: 'per_page', type: 'integer', required: false, notes: '1–100, default 20.' },
+    ],
+    response: `{
+  "rules": [
+    {
+      "id": "5f1c9a7d2e4b8c01", "name": "Promo prices", "source": "promo", "to": "OFFER",
+      "mode": "literal", "flags": "", "whole_word": false, "enabled": true, "priority": 100,
+      "task_ids": ["t1", "t2"], "task_names": ["Desk feed", "VIP"],
+      "version": 3, "updated_at": 1792548120, "badge": "lit"
+    }
+  ],
+  "total": 1, "page": 1, "pages": 1, "per_page": 20,
+  "counts": { "total": 1, "enabled": 1, "disabled": 0 },
+  "query": "", "status": "all", "task_id": "",
+  "tasks": [{ "id": "t1", "name": "Desk feed" }]
+}`,
+  },
+  'POST /api/replace-rules': {
+    summary:
+      'Creates a replace rule and assigns it to one or more forwarding tasks; one copy is stored in each named task.',
+    note: 'task_ids is required — a rule nobody runs would never fire. The replacement is validated at write time, so an invalid regex is refused here rather than silently skipped at forward time.',
+    statuses: ['201', '400', '401', '413', '503'],
+    fields: [
+      { name: 'name', type: 'string', required: false, notes: 'Human label; falls back to the source text in lists.' },
+      { name: 'source', type: 'string', required: true, notes: 'The text (or pattern) to find.' },
+      { name: 'to', type: 'string', required: false, notes: 'The replacement; empty deletes the match.' },
+      { name: 'mode', type: 'string', required: false, notes: 'literal (default) or regex.' },
+      { name: 'flags', type: 'string', required: false, notes: 'Subset of imsx; i is ignore case, w is whole word.' },
+      { name: 'whole_word', type: 'boolean', required: false, notes: 'Shorthand for adding w to flags.' },
+      { name: 'enabled', type: 'boolean', required: false, notes: 'Default true.' },
+      { name: 'priority', type: 'integer', required: false, notes: '0–1000, default 100; higher runs first.' },
+      { name: 'task_ids', type: 'string[]', required: true, notes: 'The tasks that should run the rule.' },
+    ],
+    request: `{
+  "name": "Promo prices",
+  "source": "promo\\s*(\\d+)",
+  "to": "OFFER \\1",
+  "mode": "regex",
+  "flags": "i",
+  "priority": 200,
+  "task_ids": ["t1", "t2"]
+}`,
+  },
+  'GET /api/replace-rules/tasks': {
+    summary: 'The caller’s forwarding tasks, for the rule editor’s picker.',
+    statuses: auth,
+    response: `{ "tasks": [{ "id": "t1", "name": "Desk feed" }] }`,
+  },
+  'GET /api/replace-rules/{id}': {
+    summary: 'One replace rule, with the tasks it is assigned to.',
+    note: 'A rule that belongs to another tenant answers 404, exactly like one that does not exist — an id is never proof of ownership.',
+    statuses: ['200', '401', '404'],
+  },
+  'PUT /api/replace-rules/{id}': {
+    summary: 'Updates a rule’s fields and its task assignments.',
+    note: 'task_ids replaces the assignment set: a task left out stops running the rule, and the copy inside it is removed rather than left orphaned.',
+    statuses: ['200', '400', '401', '404', '413'],
+  },
+  'PATCH /api/replace-rules/{id}': {
+    summary: 'Partial update: only the keys present in the body are written.',
+    note: 'The distinction is load-bearing — a body of {"enabled": false} disables the rule, while the same body on a non-partial write would blank the pattern it is switching off.',
+    statuses: ['200', '400', '401', '404', '413'],
+  },
+  'DELETE /api/replace-rules/{id}': {
+    summary: 'Deletes a rule from every task it is assigned to, and reports how many copies were removed.',
+    statuses: ['200', '401', '404'],
+    response: `{ "ok": true, "removed": 2 }`,
+  },
+  'POST /api/replace-rules/{id}/enable': {
+    summary: 'Sets an absolute enabled state on every copy of the rule.',
+    note: 'Absolute rather than a toggle: a retried request (a double tap, a retry after a timeout) lands on the state the user asked for instead of flipping it back.',
+    statuses: ['200', '400', '401', '404', '413'],
+    fields: [{ name: 'enabled', type: 'boolean', required: true, notes: 'The state to store.' }],
+    request: `{ "enabled": false }`,
+  },
+  'POST /api/replace-rules/{id}/duplicate': {
+    summary: 'Copies a rule to a new id, keeping it assigned to the same tasks.',
+    statuses: ['201', '401', '404'],
+    fields: [{ name: 'name', type: 'string', required: false, notes: 'The copy’s label; empty keeps the original’s name.' }],
+  },
+  'POST /api/replace-rules/test': {
+    summary:
+      'Previews a rule against sample text using the same engine a forwarded message goes through, so the preview cannot promise an output the pipeline would not produce.',
+    note: 'Pass rule_id to preview a stored rule, and any of source/to/mode/flags/whole_word to try an edit before saving it.',
+    statuses: ['200', '400', '401', '413'],
+    fields: [
+      { name: 'rule_id', type: 'string', required: false, notes: 'The stored rule to use as the base.' },
+      { name: 'sample', type: 'string', required: true, notes: 'The text to transform.' },
+      { name: 'source', type: 'string', required: false, notes: 'Overrides the stored pattern.' },
+      { name: 'to', type: 'string', required: false, notes: 'Overrides the stored replacement.' },
+      { name: 'mode', type: 'string', required: false, notes: 'literal or regex.' },
+      { name: 'flags', type: 'string', required: false, notes: 'Subset of imsx.' },
+    ],
+    response: `{ "ok": true, "input": "promo 50", "output": "OFFER 50", "matches": 1, "changed": true }`,
+  },
   'GET /api/admin/ratelimit': {
     summary:
       'The limiter’s own control surface: effective class policies, whether the store is reachable, and whether requests are currently served by the in-process fallback.',

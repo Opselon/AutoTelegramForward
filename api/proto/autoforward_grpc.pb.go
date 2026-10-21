@@ -4748,3 +4748,410 @@ var AutoReplyControlService_ServiceDesc = grpc.ServiceDesc{
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "autoforward.proto",
 }
+
+const (
+	ReplaceRuleControlService_ListReplaceRules_FullMethodName      = "/autoforward.ReplaceRuleControlService/ListReplaceRules"
+	ReplaceRuleControlService_GetReplaceRule_FullMethodName        = "/autoforward.ReplaceRuleControlService/GetReplaceRule"
+	ReplaceRuleControlService_CreateReplaceRule_FullMethodName     = "/autoforward.ReplaceRuleControlService/CreateReplaceRule"
+	ReplaceRuleControlService_UpdateReplaceRule_FullMethodName     = "/autoforward.ReplaceRuleControlService/UpdateReplaceRule"
+	ReplaceRuleControlService_DeleteReplaceRule_FullMethodName     = "/autoforward.ReplaceRuleControlService/DeleteReplaceRule"
+	ReplaceRuleControlService_SetReplaceRuleEnabled_FullMethodName = "/autoforward.ReplaceRuleControlService/SetReplaceRuleEnabled"
+	ReplaceRuleControlService_DuplicateReplaceRule_FullMethodName  = "/autoforward.ReplaceRuleControlService/DuplicateReplaceRule"
+	ReplaceRuleControlService_TestReplaceRule_FullMethodName       = "/autoforward.ReplaceRuleControlService/TestReplaceRule"
+	ReplaceRuleControlService_ListReplaceRuleTasks_FullMethodName  = "/autoforward.ReplaceRuleControlService/ListReplaceRuleTasks"
+)
+
+// ReplaceRuleControlServiceClient is the client API for ReplaceRuleControlService service.
+//
+// For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+type ReplaceRuleControlServiceClient interface {
+	ListReplaceRules(ctx context.Context, in *ListReplaceRulesRequest, opts ...grpc.CallOption) (*ListReplaceRulesResponse, error)
+	GetReplaceRule(ctx context.Context, in *GetReplaceRuleRequest, opts ...grpc.CallOption) (*ReplaceRule, error)
+	CreateReplaceRule(ctx context.Context, in *CreateReplaceRuleRequest, opts ...grpc.CallOption) (*ReplaceRule, error)
+	UpdateReplaceRule(ctx context.Context, in *UpdateReplaceRuleRequest, opts ...grpc.CallOption) (*ReplaceRule, error)
+	DeleteReplaceRule(ctx context.Context, in *DeleteReplaceRuleRequest, opts ...grpc.CallOption) (*DeleteReplaceRuleResponse, error)
+	SetReplaceRuleEnabled(ctx context.Context, in *SetReplaceRuleEnabledRequest, opts ...grpc.CallOption) (*ReplaceRule, error)
+	DuplicateReplaceRule(ctx context.Context, in *DuplicateReplaceRuleRequest, opts ...grpc.CallOption) (*ReplaceRule, error)
+	TestReplaceRule(ctx context.Context, in *TestReplaceRuleRequest, opts ...grpc.CallOption) (*TestReplaceRuleResponse, error)
+	ListReplaceRuleTasks(ctx context.Context, in *ListReplaceRuleTasksRequest, opts ...grpc.CallOption) (*ListReplaceRuleTasksResponse, error)
+}
+
+type replaceRuleControlServiceClient struct {
+	cc grpc.ClientConnInterface
+}
+
+func NewReplaceRuleControlServiceClient(cc grpc.ClientConnInterface) ReplaceRuleControlServiceClient {
+	return &replaceRuleControlServiceClient{cc}
+}
+
+func (c *replaceRuleControlServiceClient) ListReplaceRules(ctx context.Context, in *ListReplaceRulesRequest, opts ...grpc.CallOption) (*ListReplaceRulesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListReplaceRulesResponse)
+	err := c.cc.Invoke(ctx, ReplaceRuleControlService_ListReplaceRules_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *replaceRuleControlServiceClient) GetReplaceRule(ctx context.Context, in *GetReplaceRuleRequest, opts ...grpc.CallOption) (*ReplaceRule, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReplaceRule)
+	err := c.cc.Invoke(ctx, ReplaceRuleControlService_GetReplaceRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *replaceRuleControlServiceClient) CreateReplaceRule(ctx context.Context, in *CreateReplaceRuleRequest, opts ...grpc.CallOption) (*ReplaceRule, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReplaceRule)
+	err := c.cc.Invoke(ctx, ReplaceRuleControlService_CreateReplaceRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *replaceRuleControlServiceClient) UpdateReplaceRule(ctx context.Context, in *UpdateReplaceRuleRequest, opts ...grpc.CallOption) (*ReplaceRule, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReplaceRule)
+	err := c.cc.Invoke(ctx, ReplaceRuleControlService_UpdateReplaceRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *replaceRuleControlServiceClient) DeleteReplaceRule(ctx context.Context, in *DeleteReplaceRuleRequest, opts ...grpc.CallOption) (*DeleteReplaceRuleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteReplaceRuleResponse)
+	err := c.cc.Invoke(ctx, ReplaceRuleControlService_DeleteReplaceRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *replaceRuleControlServiceClient) SetReplaceRuleEnabled(ctx context.Context, in *SetReplaceRuleEnabledRequest, opts ...grpc.CallOption) (*ReplaceRule, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReplaceRule)
+	err := c.cc.Invoke(ctx, ReplaceRuleControlService_SetReplaceRuleEnabled_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *replaceRuleControlServiceClient) DuplicateReplaceRule(ctx context.Context, in *DuplicateReplaceRuleRequest, opts ...grpc.CallOption) (*ReplaceRule, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReplaceRule)
+	err := c.cc.Invoke(ctx, ReplaceRuleControlService_DuplicateReplaceRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *replaceRuleControlServiceClient) TestReplaceRule(ctx context.Context, in *TestReplaceRuleRequest, opts ...grpc.CallOption) (*TestReplaceRuleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestReplaceRuleResponse)
+	err := c.cc.Invoke(ctx, ReplaceRuleControlService_TestReplaceRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *replaceRuleControlServiceClient) ListReplaceRuleTasks(ctx context.Context, in *ListReplaceRuleTasksRequest, opts ...grpc.CallOption) (*ListReplaceRuleTasksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListReplaceRuleTasksResponse)
+	err := c.cc.Invoke(ctx, ReplaceRuleControlService_ListReplaceRuleTasks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ReplaceRuleControlServiceServer is the server API for ReplaceRuleControlService service.
+// All implementations must embed UnimplementedReplaceRuleControlServiceServer
+// for forward compatibility.
+type ReplaceRuleControlServiceServer interface {
+	ListReplaceRules(context.Context, *ListReplaceRulesRequest) (*ListReplaceRulesResponse, error)
+	GetReplaceRule(context.Context, *GetReplaceRuleRequest) (*ReplaceRule, error)
+	CreateReplaceRule(context.Context, *CreateReplaceRuleRequest) (*ReplaceRule, error)
+	UpdateReplaceRule(context.Context, *UpdateReplaceRuleRequest) (*ReplaceRule, error)
+	DeleteReplaceRule(context.Context, *DeleteReplaceRuleRequest) (*DeleteReplaceRuleResponse, error)
+	SetReplaceRuleEnabled(context.Context, *SetReplaceRuleEnabledRequest) (*ReplaceRule, error)
+	DuplicateReplaceRule(context.Context, *DuplicateReplaceRuleRequest) (*ReplaceRule, error)
+	TestReplaceRule(context.Context, *TestReplaceRuleRequest) (*TestReplaceRuleResponse, error)
+	ListReplaceRuleTasks(context.Context, *ListReplaceRuleTasksRequest) (*ListReplaceRuleTasksResponse, error)
+	mustEmbedUnimplementedReplaceRuleControlServiceServer()
+}
+
+// UnimplementedReplaceRuleControlServiceServer must be embedded to have
+// forward compatible implementations.
+//
+// NOTE: this should be embedded by value instead of pointer to avoid a nil
+// pointer dereference when methods are called.
+type UnimplementedReplaceRuleControlServiceServer struct{}
+
+func (UnimplementedReplaceRuleControlServiceServer) ListReplaceRules(context.Context, *ListReplaceRulesRequest) (*ListReplaceRulesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListReplaceRules not implemented")
+}
+func (UnimplementedReplaceRuleControlServiceServer) GetReplaceRule(context.Context, *GetReplaceRuleRequest) (*ReplaceRule, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetReplaceRule not implemented")
+}
+func (UnimplementedReplaceRuleControlServiceServer) CreateReplaceRule(context.Context, *CreateReplaceRuleRequest) (*ReplaceRule, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateReplaceRule not implemented")
+}
+func (UnimplementedReplaceRuleControlServiceServer) UpdateReplaceRule(context.Context, *UpdateReplaceRuleRequest) (*ReplaceRule, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateReplaceRule not implemented")
+}
+func (UnimplementedReplaceRuleControlServiceServer) DeleteReplaceRule(context.Context, *DeleteReplaceRuleRequest) (*DeleteReplaceRuleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteReplaceRule not implemented")
+}
+func (UnimplementedReplaceRuleControlServiceServer) SetReplaceRuleEnabled(context.Context, *SetReplaceRuleEnabledRequest) (*ReplaceRule, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetReplaceRuleEnabled not implemented")
+}
+func (UnimplementedReplaceRuleControlServiceServer) DuplicateReplaceRule(context.Context, *DuplicateReplaceRuleRequest) (*ReplaceRule, error) {
+	return nil, status.Error(codes.Unimplemented, "method DuplicateReplaceRule not implemented")
+}
+func (UnimplementedReplaceRuleControlServiceServer) TestReplaceRule(context.Context, *TestReplaceRuleRequest) (*TestReplaceRuleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TestReplaceRule not implemented")
+}
+func (UnimplementedReplaceRuleControlServiceServer) ListReplaceRuleTasks(context.Context, *ListReplaceRuleTasksRequest) (*ListReplaceRuleTasksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListReplaceRuleTasks not implemented")
+}
+func (UnimplementedReplaceRuleControlServiceServer) mustEmbedUnimplementedReplaceRuleControlServiceServer() {
+}
+func (UnimplementedReplaceRuleControlServiceServer) testEmbeddedByValue() {}
+
+// UnsafeReplaceRuleControlServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ReplaceRuleControlServiceServer will
+// result in compilation errors.
+type UnsafeReplaceRuleControlServiceServer interface {
+	mustEmbedUnimplementedReplaceRuleControlServiceServer()
+}
+
+func RegisterReplaceRuleControlServiceServer(s grpc.ServiceRegistrar, srv ReplaceRuleControlServiceServer) {
+	// If the following call panics, it indicates UnimplementedReplaceRuleControlServiceServer was
+	// embedded by pointer and is nil.  This will cause panics if an
+	// unimplemented method is ever invoked, so we test this at initialization
+	// time to prevent it from happening at runtime later due to I/O.
+	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
+		t.testEmbeddedByValue()
+	}
+	s.RegisterService(&ReplaceRuleControlService_ServiceDesc, srv)
+}
+
+func _ReplaceRuleControlService_ListReplaceRules_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListReplaceRulesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReplaceRuleControlServiceServer).ListReplaceRules(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReplaceRuleControlService_ListReplaceRules_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReplaceRuleControlServiceServer).ListReplaceRules(ctx, req.(*ListReplaceRulesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ReplaceRuleControlService_GetReplaceRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetReplaceRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReplaceRuleControlServiceServer).GetReplaceRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReplaceRuleControlService_GetReplaceRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReplaceRuleControlServiceServer).GetReplaceRule(ctx, req.(*GetReplaceRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ReplaceRuleControlService_CreateReplaceRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateReplaceRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReplaceRuleControlServiceServer).CreateReplaceRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReplaceRuleControlService_CreateReplaceRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReplaceRuleControlServiceServer).CreateReplaceRule(ctx, req.(*CreateReplaceRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ReplaceRuleControlService_UpdateReplaceRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateReplaceRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReplaceRuleControlServiceServer).UpdateReplaceRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReplaceRuleControlService_UpdateReplaceRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReplaceRuleControlServiceServer).UpdateReplaceRule(ctx, req.(*UpdateReplaceRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ReplaceRuleControlService_DeleteReplaceRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteReplaceRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReplaceRuleControlServiceServer).DeleteReplaceRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReplaceRuleControlService_DeleteReplaceRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReplaceRuleControlServiceServer).DeleteReplaceRule(ctx, req.(*DeleteReplaceRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ReplaceRuleControlService_SetReplaceRuleEnabled_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetReplaceRuleEnabledRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReplaceRuleControlServiceServer).SetReplaceRuleEnabled(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReplaceRuleControlService_SetReplaceRuleEnabled_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReplaceRuleControlServiceServer).SetReplaceRuleEnabled(ctx, req.(*SetReplaceRuleEnabledRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ReplaceRuleControlService_DuplicateReplaceRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DuplicateReplaceRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReplaceRuleControlServiceServer).DuplicateReplaceRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReplaceRuleControlService_DuplicateReplaceRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReplaceRuleControlServiceServer).DuplicateReplaceRule(ctx, req.(*DuplicateReplaceRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ReplaceRuleControlService_TestReplaceRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestReplaceRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReplaceRuleControlServiceServer).TestReplaceRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReplaceRuleControlService_TestReplaceRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReplaceRuleControlServiceServer).TestReplaceRule(ctx, req.(*TestReplaceRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ReplaceRuleControlService_ListReplaceRuleTasks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListReplaceRuleTasksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ReplaceRuleControlServiceServer).ListReplaceRuleTasks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ReplaceRuleControlService_ListReplaceRuleTasks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ReplaceRuleControlServiceServer).ListReplaceRuleTasks(ctx, req.(*ListReplaceRuleTasksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ReplaceRuleControlService_ServiceDesc is the grpc.ServiceDesc for ReplaceRuleControlService service.
+// It's only intended for direct use with grpc.RegisterService,
+// and not to be introspected or modified (even as a copy)
+var ReplaceRuleControlService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "autoforward.ReplaceRuleControlService",
+	HandlerType: (*ReplaceRuleControlServiceServer)(nil),
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "ListReplaceRules",
+			Handler:    _ReplaceRuleControlService_ListReplaceRules_Handler,
+		},
+		{
+			MethodName: "GetReplaceRule",
+			Handler:    _ReplaceRuleControlService_GetReplaceRule_Handler,
+		},
+		{
+			MethodName: "CreateReplaceRule",
+			Handler:    _ReplaceRuleControlService_CreateReplaceRule_Handler,
+		},
+		{
+			MethodName: "UpdateReplaceRule",
+			Handler:    _ReplaceRuleControlService_UpdateReplaceRule_Handler,
+		},
+		{
+			MethodName: "DeleteReplaceRule",
+			Handler:    _ReplaceRuleControlService_DeleteReplaceRule_Handler,
+		},
+		{
+			MethodName: "SetReplaceRuleEnabled",
+			Handler:    _ReplaceRuleControlService_SetReplaceRuleEnabled_Handler,
+		},
+		{
+			MethodName: "DuplicateReplaceRule",
+			Handler:    _ReplaceRuleControlService_DuplicateReplaceRule_Handler,
+		},
+		{
+			MethodName: "TestReplaceRule",
+			Handler:    _ReplaceRuleControlService_TestReplaceRule_Handler,
+		},
+		{
+			MethodName: "ListReplaceRuleTasks",
+			Handler:    _ReplaceRuleControlService_ListReplaceRuleTasks_Handler,
+		},
+	},
+	Streams:  []grpc.StreamDesc{},
+	Metadata: "autoforward.proto",
+}

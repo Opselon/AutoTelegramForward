@@ -263,16 +263,22 @@ class TextCommandMixin:
     # Replace rules (the reason this command surface exists)
     # ------------------------------------------------------------------ #
     async def _cmd_replace(self, message: Message, args: str) -> None:
-        """``/replace`` — manage a task's replacement entries.
+        """``/replace`` — the replace-rule manager, one list across all tasks.
 
-        Grammar::
+        Bare ``/replace`` opens the unified manager panel: every rule the caller
+        owns, however many tasks run it, with the search, the status filter, the
+        paging and the whole detail screen the dashboard and the mobile client
+        offer. It goes through :class:`~core.application.replace_rules.
+        ReplaceRuleService`, the surface every other client uses.
 
-            /replace                          open the replace menu
-            /replace list [task]              same, explicit
+        The per-task CLI verbs are kept for people who type::
+
             /replace add [task] NAME -"OLD" -"NEW" [--regex] [-i] [-w] [-c]
-            /replace del [task] NAME|OLD      delete one entry
-            /replace clear [task]             delete every entry
-            /replace <task>                   open that task's replace menu
+            /replace del [task] NAME|OLD
+            /replace <task>        open that task's replace menu
+
+        and they still write through the same engine, so a rule added here is the
+        one `/replace` lists and one the pipeline applies.
         """
         uid = message.from_user.id if message.from_user else 0
         lang = self._resolve_lang(uid)
@@ -282,11 +288,7 @@ class TextCommandMixin:
         rest = rest.strip()
 
         if sub in ("", "list", "show"):
-            rule = await self._cmd_rule_or_pick(message, uid, rest)
-            if rule is None:
-                return
-            text, kbd = self._render_replace_menu(rule)
-            return await message.reply_text(text, reply_markup=kbd)
+            return await self._cmd_replace_panel(message, uid, lang)
 
         if sub in ("add", "set", "new"):
             return await self._cmd_replace_add(message, uid, lang, rest)
@@ -312,6 +314,21 @@ class TextCommandMixin:
             return
         text, kbd = self._render_replace_menu(rule)
         await message.reply_text(text, reply_markup=kbd)
+
+    async def _cmd_replace_panel(self, message: Message, uid: int, lang: str) -> None:
+        """Open the unified manager list, scoping to the caller's own rules."""
+        service = getattr(self, "_replace_rules", None)
+        if service is None:
+            # The manager is unavailable (an older core, a wiring hole): fall
+            # back to the per-task menu rather than showing an empty panel that
+            # would look like "you own nothing".
+            rule = await self._cmd_rule_or_pick(message, uid, "")
+            if rule is None:
+                return
+            text, kbd = self._render_replace_menu(rule)
+            return await message.reply_text(text, reply_markup=kbd)
+        body, kbd = await self._render_rpl_list(uid)
+        await message.reply_text(body, reply_markup=kbd)
 
     async def _cmd_replace_add(self, message: Message, uid: int, lang: str, rest: str) -> None:
         rule, payload = await self._cmd_split_task(uid, rest)

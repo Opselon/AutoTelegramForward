@@ -91,6 +91,8 @@ UI_STEPS = frozenset({
     "admin_add_id", "admin_broadcast_text", "admin_forcesub_channel",
     "ai_prompt_edit", "media_group_delay", "user_set_about",
     "user_set_first_name",
+    # replace-rule manager (/replace): search, field prompts and the test sample
+    "replace_search", "replace_field_input", "replace_test_sample",
     # backup / migration passphrases and the file it waits for
     "session_backup_passphrase", "migrate_passphrase",
     "migrate_import_passphrase", "migrate_await_file",

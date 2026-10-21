@@ -407,8 +407,16 @@ def build_container(cfg: Config) -> dict:
         i18n=i18n,
     )
 
+    # The replace-rule manager: one instance for the whole process, over the
+    # same rule use-cases every other surface writes through. Built here rather
+    # than inside serve_grpc so the bot panel and the gRPC servicer cannot end
+    # up with two managers over one store.
+    from core.application.replace_rules import ReplaceRuleService
+    replace_rules = ReplaceRuleService(rules)
+
     return {
         "config": cfg, "db": db, "crypto": crypto,
+        "replace_rules": replace_rules,
         "admin_service": admin_service, "account_servicer": account_servicer,
         "admin_servicer": admin_servicer,
         "sessions": sessions, "rules": rules, "filters": filter_rules,
@@ -592,6 +600,20 @@ async def serve_grpc(container: dict, cfg: Config):
         pb_grpc.add_AdminControlServiceServicer_to_server(
             container["admin_servicer"], server,
         )
+    # Replace rules: the manager behind /replace on every surface. The instance
+    # was built with the container, so the bot panel and this servicer share it
+    # and a rule created from the dashboard is the one the next forwarded
+    # message is checked against.
+    from core.application.replace_rules import ReplaceRuleService  # noqa: E402
+    from core.infrastructure.grpc_server.replace_servicer import (  # noqa: E402
+        ReplaceRuleControlServicer,
+    )
+
+    replace_rules = container.get("replace_rules") or ReplaceRuleService(container["rules"])
+    container["replace_rules"] = replace_rules
+    pb_grpc.add_ReplaceRuleControlServiceServicer_to_server(
+        ReplaceRuleControlServicer(replace_rules), server,
+    )
     # Per-user task lifecycle (API-first phase 2) — creation/control surface.
     from core.infrastructure.grpc_server.task_servicer import TaskControlServicer  # noqa: E402
     pb_grpc.add_TaskControlServiceServicer_to_server(
@@ -885,6 +907,7 @@ async def main() -> None:
             account_servicer=container.get("account_servicer"),
             backup_service=container.get("backup"),
             settings=container.get("settings"),
+            replace_rules=container.get("replace_rules"),
         )
         # An operator's saved dashboard URL wins over the config/env default —
         # they set it from the bot and expect it to survive a restart.

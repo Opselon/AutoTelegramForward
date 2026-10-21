@@ -65,3 +65,18 @@ Map<String, int> jsonIntMap(Object? value) {
     for (final entry in value.entries) '${entry.key}': jsonInt(entry.value),
   };
 }
+
+/// A list of strings that may arrive as strings, numbers, or anything else.
+///
+/// Task ids and names travel as a JSON array whose entries are practically
+/// always strings, but a server-side change that emits a number (or a null
+/// placeholder) must not take the whole list down with a cast. Non-string
+/// entries are dropped rather than stringified: a `1` in a task-name list is
+/// not a name, and inventing one would mislabel a row.
+List<String> jsonStringList(Object? value) {
+  if (value is! List) return const [];
+  return value
+      .whereType<String>()
+      .where((e) => e.isNotEmpty)
+      .toList(growable: false);
+}

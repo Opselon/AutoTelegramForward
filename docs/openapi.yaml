@@ -1474,6 +1474,209 @@ paths:
         "400": { $ref: '#/components/responses/BadRequest' }
         "404": { $ref: '#/components/responses/NotFound' }
         "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/replace-rules:
+    get:
+      tags: [replace]
+      summary: 'One page of the caller''s replace rules, with search, status filter, task filter and counts'
+      operationId: getApiReplaceRules
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters:
+        - { name: q, in: query, schema: { type: string }, description: 'Matches a rule''s name, source or replacement' }
+        - { name: status, in: query, schema: { type: string, enum: [all, enabled, disabled] } }
+        - { name: task_id, in: query, schema: { type: string }, description: 'Narrow to the rules one task runs' }
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: per_page, in: query, schema: { type: integer, minimum: 1, maximum: 100 } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+    post:
+      tags: [replace]
+      summary: 'Create a replace rule and assign it to one or more forwarding tasks'
+      operationId: postApiReplaceRules
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                source: { type: string, description: 'The text or pattern to find' }
+                to: { type: string, description: 'The replacement' }
+                mode: { type: string, enum: [literal, regex] }
+                flags: { type: string, description: 'Subset of imsx' }
+                whole_word: { type: boolean }
+                enabled: { type: boolean }
+                priority: { type: integer, minimum: 0, maximum: 1000, description: 'Higher runs first' }
+                task_ids: { type: array, items: { type: string } }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/replace-rules/tasks:
+    get:
+      tags: [replace]
+      summary: 'The caller''s forwarding tasks, for the rule editor''s task picker'
+      operationId: getApiReplaceRulesTasks
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/replace-rules/{id}:
+    get:
+      tags: [replace]
+      summary: 'One of the caller''s replace rules, with the tasks it runs on'
+      operationId: getApiReplaceRulesId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/ruleId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+    put:
+      tags: [replace]
+      summary: 'Replace every field of one rule (absent nullable fields keep their value)'
+      operationId: putApiReplaceRulesId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/ruleId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+    patch:
+      tags: [replace]
+      summary: 'Partial update: only the keys present are written, so a disable cannot blank the pattern'
+      operationId: patchApiReplaceRulesId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/ruleId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+    delete:
+      tags: [replace]
+      summary: 'Delete a rule from every task it is assigned to; reports how many copies were removed'
+      operationId: deleteApiReplaceRulesId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/ruleId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/replace-rules/{id}/enable:
+    post:
+      tags: [replace]
+      summary: 'Set an absolute enabled state (not a toggle), so a retried call cannot flip a rule back'
+      operationId: postApiReplaceRulesIdEnable
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/ruleId' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled: { type: boolean }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+  /api/replace-rules/{id}/duplicate:
+    post:
+      tags: [replace]
+      summary: 'Copy a rule to a new id, keeping its tasks; an empty name keeps a copy of the original'
+      operationId: postApiReplaceRulesIdDuplicate
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/ruleId' }]
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/replace-rules/test:
+    post:
+      tags: [replace]
+      summary: 'Preview a rule (stored and/or edited) against sample text with the same engine that forwards use'
+      operationId: postApiReplaceRulesTest
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rule_id: { type: string, description: 'When set, the stored rule is the base and the other fields override it' }
+                sample: { type: string }
+                source: { type: string }
+                to: { type: string }
+                mode: { type: string, enum: [literal, regex] }
+                flags: { type: string }
+                whole_word: { type: boolean }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
   /api/auto-reply/rules:
     get:
       tags: [autoreply]

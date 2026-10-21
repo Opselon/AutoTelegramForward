@@ -30,6 +30,7 @@ export type TabId =
   | 'ai'
   | 'pv'
   | 'autoreply'
+  | 'replace'
   | 'filters'
   | 'sessions'
   | 'jobs'

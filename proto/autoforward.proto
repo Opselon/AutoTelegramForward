@@ -1743,3 +1743,152 @@ service AutoReplyControlService {
   rpc GetAutoReplyStats(GetAutoReplyStatsRequest) returns (AutoReplyStatsResponse);
   rpc PreviewAutoReply(PreviewAutoReplyRequest) returns (PreviewAutoReplyResponse);
 }
+
+// -----------------------------------------------------------------------------
+// Replace rules (text replacements) — Phase: unified replace-rule manager.
+//
+// A replace rule is one find/replace pair that can be assigned to several
+// forwarding tasks. It is stored inside each task's metadata (the field the
+// forwarder already reads), so this surface manages rules *through* their
+// tasks: one row per rule, however many tasks run it. Every call is scoped by
+// ``owner_user_id``, resolved from the authenticated principal by the Go API.
+// -----------------------------------------------------------------------------
+
+message ReplaceRule {
+  string id = 1;
+  string name = 2;
+  string source = 3;          // the text (or pattern) to find
+  string to = 4;              // the replacement
+  string mode = 5;            // literal | regex
+  string flags = 6;           // subset of imsx
+  bool whole_word = 7;
+  bool enabled = 8;
+  int32 priority = 9;         // 0..1000, higher runs first
+  repeated string task_ids = 10;
+  repeated string task_names = 11;
+  int64 version = 12;
+  int64 updated_at = 13;
+  string badge = 14;          // lit / lit/i / re / re/im
+}
+
+message ReplaceRuleTask {
+  string id = 1;
+  string name = 2;
+}
+
+message ReplaceRuleCounts {
+  int32 total = 1;
+  int32 enabled = 2;
+  int32 disabled = 3;
+}
+
+// Fields are ``optional`` so an update can say "leave this alone" (absent) as
+// distinctly as "set it to false" — proto3 scalars cannot otherwise tell the two
+// apart, and a toggle that cleared the pattern it was switching off would be a
+// data-loss bug, not a UI bug.
+message ReplaceRuleInput {
+  optional string name = 1;
+  optional string source = 2;
+  optional string to = 3;
+  optional string mode = 4;
+  optional string flags = 5;
+  optional bool whole_word = 6;
+  optional bool enabled = 7;
+  optional int32 priority = 8;
+  repeated string task_ids = 9;
+}
+
+message ListReplaceRulesRequest {
+  int64 owner_user_id = 1;
+  string query = 2;           // matches name, source or replacement
+  string status = 3;          // all | enabled | disabled
+  string task_id = 4;         // narrow to the rules one task runs
+  int32 page = 5;             // 1-based
+  int32 per_page = 6;         // 1..100
+}
+
+message ListReplaceRulesResponse {
+  repeated ReplaceRule rules = 1;
+  int32 page = 2;
+  int32 per_page = 3;
+  int32 total = 4;
+  int32 pages = 5;
+  ReplaceRuleCounts counts = 6;
+  string query = 7;
+  string status = 8;
+  string task_id = 9;
+  repeated ReplaceRuleTask tasks = 10;   // the owner's tasks, for the picker
+}
+
+message GetReplaceRuleRequest {
+  string rule_id = 1;
+  int64 owner_user_id = 2;
+}
+
+message CreateReplaceRuleRequest {
+  int64 owner_user_id = 1;
+  ReplaceRuleInput rule = 2;
+}
+
+message UpdateReplaceRuleRequest {
+  string rule_id = 1;
+  int64 owner_user_id = 2;
+  ReplaceRuleInput rule = 3;
+}
+
+message DeleteReplaceRuleRequest {
+  string rule_id = 1;
+  int64 owner_user_id = 2;
+}
+
+message DeleteReplaceRuleResponse {
+  bool ok = 1;
+  int32 removed = 2;          // task copies removed
+}
+
+message SetReplaceRuleEnabledRequest {
+  string rule_id = 1;
+  int64 owner_user_id = 2;
+  bool enabled = 3;           // absolute, so a retried call cannot flip it back
+}
+
+message DuplicateReplaceRuleRequest {
+  string rule_id = 1;
+  int64 owner_user_id = 2;
+  string name = 3;            // empty keeps "<original> copy"
+}
+
+message TestReplaceRuleRequest {
+  int64 owner_user_id = 1;
+  string rule_id = 2;         // when set, the stored rule is the base
+  ReplaceRuleInput rule = 3;  // draft values override the stored ones
+  string sample = 4;
+}
+
+message TestReplaceRuleResponse {
+  bool ok = 1;
+  string input = 2;
+  string output = 3;
+  int32 matches = 4;
+  bool changed = 5;
+}
+
+message ListReplaceRuleTasksRequest {
+  int64 owner_user_id = 1;
+}
+
+message ListReplaceRuleTasksResponse {
+  repeated ReplaceRuleTask tasks = 1;
+}
+
+service ReplaceRuleControlService {
+  rpc ListReplaceRules(ListReplaceRulesRequest) returns (ListReplaceRulesResponse);
+  rpc GetReplaceRule(GetReplaceRuleRequest) returns (ReplaceRule);
+  rpc CreateReplaceRule(CreateReplaceRuleRequest) returns (ReplaceRule);
+  rpc UpdateReplaceRule(UpdateReplaceRuleRequest) returns (ReplaceRule);
+  rpc DeleteReplaceRule(DeleteReplaceRuleRequest) returns (DeleteReplaceRuleResponse);
+  rpc SetReplaceRuleEnabled(SetReplaceRuleEnabledRequest) returns (ReplaceRule);
+  rpc DuplicateReplaceRule(DuplicateReplaceRuleRequest) returns (ReplaceRule);
+  rpc TestReplaceRule(TestReplaceRuleRequest) returns (TestReplaceRuleResponse);
+  rpc ListReplaceRuleTasks(ListReplaceRuleTasksRequest) returns (ListReplaceRuleTasksResponse);
+}

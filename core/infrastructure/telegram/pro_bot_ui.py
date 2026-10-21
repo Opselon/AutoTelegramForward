@@ -400,6 +400,7 @@ SEV_ICON = diagnostics.SEVERITY_ICON
 
 
 from core.infrastructure.telegram.autoreply_bot_ui import AutoReplyBotMixin
+from core.infrastructure.telegram.replace_bot_ui import ReplaceBotMixin
 from core.infrastructure.telegram.command_router import TextCommandMixin
 from core.application.command_registry import ALL_COMMAND_TOKENS
 from core.domain.text_replace import (
@@ -417,7 +418,7 @@ from core.domain.text_replace import (
 )
 
 
-class ProBotUI(TextCommandMixin, AutoReplyBotMixin):
+class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin):
     """Renders and routes the entire button-based control panel."""
 
     def __init__(
@@ -448,6 +449,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin):
         ai_transformer=None,
         pv_responder=None,
         autoreply=None,
+        replace_rules=None,
         web_url: str = "",
         account_servicer=None,
         backup_service=None,
@@ -497,6 +499,9 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin):
         #: AutoReplyService (v28): the same instance the gRPC surface uses, so
         #: a switch flipped here is what the worker applies to the next message.
         self._autoreply = autoreply
+        #: ReplaceRuleService: the same instance the gRPC surface serves, so a
+        #: rule created from the dashboard is the one /replace lists here.
+        self._replace_rules = replace_rules
         self._web_url = (web_url or "").rstrip("/")
         self._accounts = account_servicer
         self._backup = backup_service
@@ -3152,11 +3157,14 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin):
         if not reps:
             lines.append(self._t("ui_rep_none", lang=lang) + "\n")
         else:
-            for idx, (old, value) in enumerate(reps.items(), start=1):
-                entry = entry_from_value(old, value)
+            for idx, (stored_key, value) in enumerate(reps.items(), start=1):
+                entry = entry_from_value(stored_key, value)
                 rep_display = f"`{entry.to}`" if entry.to else self._t("ui_rep_word_deleted", lang=lang)
                 name = f" · {entry.name}" if entry.name else ""
-                lines.append(f"{idx}. `{old}` ➔ {rep_display}  `{entry.badge()}`{name}")
+                # The stored key is usually the source text, but a managed rule
+                # is keyed by id; the source is what the user typed either way.
+                label = entry.name or entry.source
+                lines.append(f"{idx}. `{label[:40]}` ➔ {rep_display}  `{entry.badge()}`{name}")
             lines.append("")
 
         lines.extend([
@@ -3174,7 +3182,8 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin):
         ]
         if reps:
             for idx, old in enumerate(list(reps.keys())[:6]):
-                display_k = old[:10]
+                entry = entry_from_value(old, reps.get(old))
+                display_k = (entry.name or entry.source)[:10]
                 rows.append([
                     (self._t("ui_rep_btn_entry", lang=lang, source=display_k),
                      f"rtxe:{rule.id}:{idx}:{version}"),
@@ -4317,6 +4326,8 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin):
 
         # v28 auto-reply panel: a mixin so its ~20 callbacks stay in one file.
         self.register_autoreply_handlers()
+        # The unified /replace manager: list, detail, create/edit, tasks, test.
+        self.register_replace_handlers()
 
         # v29 text-command surface: the commands the registry says no earlier
         # handler owns. Mounted at group -2 so a command always reaches the

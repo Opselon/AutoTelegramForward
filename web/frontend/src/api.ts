@@ -54,6 +54,11 @@ import type {
   AutoReplyPreviewResponse,
   SaveAutoReplyPromptRequest,
   SaveAutoReplyRuleRequest,
+  ReplaceRule,
+  ReplaceRuleInput,
+  ReplaceRulePage,
+  ReplaceRuleTestResult,
+  ReplaceTaskOption,
   ServicesHealthResponse,
   Session,
   SetupReport,
@@ -826,6 +831,60 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ inbound_text: inboundText, prompt_id: promptId, ai_config_id: aiConfigId }),
     }),
+  // ---------------------------------------------------- Text replacement
+  // A replace rule is stored once per task it runs on, but every method here
+  // speaks about it as one rule: the core groups the copies by id and reports
+  // the tasks it covers. Owner identity is the bearer token, never a parameter.
+  listReplaceRules: (opts: {
+    q?: string
+    status?: string
+    taskId?: string
+    page?: number
+    perPage?: number
+  } = {}) => {
+    const params = new URLSearchParams()
+    if (opts.q) params.set('q', opts.q)
+    if (opts.status && opts.status !== 'all') params.set('status', opts.status)
+    if (opts.taskId) params.set('task_id', opts.taskId)
+    if (opts.page && opts.page > 1) params.set('page', String(opts.page))
+    if (opts.perPage) params.set('per_page', String(opts.perPage))
+    const qs = params.toString()
+    return fetchJson<ReplaceRulePage>(`${API_BASE}/replace-rules${qs ? `?${qs}` : ''}`)
+  },
+  getReplaceRule: (id: string) =>
+    fetchJson<{ rule: ReplaceRule }>(`${API_BASE}/replace-rules/${encodeURIComponent(id)}`),
+  createReplaceRule: (req: ReplaceRuleInput) =>
+    fetchJson<{ rule: ReplaceRule }>(`${API_BASE}/replace-rules`, {
+      method: 'POST',
+      body: JSON.stringify(req),
+    }),
+  updateReplaceRule: (id: string, req: ReplaceRuleInput) =>
+    fetchJson<{ rule: ReplaceRule }>(`${API_BASE}/replace-rules/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(req),
+    }),
+  deleteReplaceRule: (id: string) =>
+    fetchJson<{ removed: number }>(`${API_BASE}/replace-rules/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
+  setReplaceRuleEnabled: (id: string, enabled: boolean) =>
+    fetchJson<{ rule: ReplaceRule }>(
+      `${API_BASE}/replace-rules/${encodeURIComponent(id)}/enable`,
+      { method: 'POST', body: JSON.stringify({ enabled }) },
+    ),
+  duplicateReplaceRule: (id: string, name = '') =>
+    fetchJson<{ rule: ReplaceRule }>(
+      `${API_BASE}/replace-rules/${encodeURIComponent(id)}/duplicate`,
+      { method: 'POST', body: JSON.stringify({ name }) },
+    ),
+  testReplaceRule: (ruleId: string, sample: string, draft: ReplaceRuleInput = {}) =>
+    fetchJson<ReplaceRuleTestResult>(`${API_BASE}/replace-rules/test`, {
+      method: 'POST',
+      body: JSON.stringify({ rule_id: ruleId, sample, ...draft }),
+    }),
+  listReplaceRuleTasks: () =>
+    fetchJson<{ tasks: ReplaceTaskOption[] }>(`${API_BASE}/replace-rules/tasks`),
+
   // ------------------------------------------------------------ Diagnostics
   diagnostics: () => fetchJson<DiagnosticsResponse>(`${API_BASE}/diagnostics`),
 

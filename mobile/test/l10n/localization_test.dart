@@ -451,5 +451,121 @@ void main() {
         });
       }
     });
+
+    // ---- the replace-rule manager surface --------------------------------
+    // Every key the Replace screen renders must exist in all ten catalogs, and
+    // the placeholders must survive the translation: a row that renders
+    // "Page {page} of {pages}" literally is worse than an English label,
+    // because it looks like a bug in the data.
+    test('the replace manager resolves in every locale', () {
+      const keys = <String>[
+        'nav_replace',
+        'rp_title',
+        'rp_counts',
+        'rp_search_hint',
+        'rp_filter_all',
+        'rp_filter_enabled',
+        'rp_filter_disabled',
+        'rp_task_filter',
+        'rp_new',
+        'rp_empty_title',
+        'rp_empty_filtered',
+        'rp_prev',
+        'rp_next',
+        'rp_page_of',
+        'rp_status_on',
+        'rp_status_off',
+        'rp_enable',
+        'rp_disable',
+        'rp_duplicate',
+        'rp_test',
+        'rp_create_title',
+        'rp_edit_title',
+        'rp_delete_title',
+        'rp_delete_confirm',
+        'rp_mode_label',
+        'rp_mode_literal',
+        'rp_mode_regex',
+        'rp_find_label',
+        'rp_replace_label',
+        'rp_priority_label',
+        'rp_tasks_label',
+        'rp_test_sample_label',
+        'rp_test_input',
+        'rp_test_output',
+        'rp_test_unchanged',
+        'rp_no_tasks',
+      ];
+      for (final locale in AppMessages.supportedLocales) {
+        final msgs = AppMessages(locale);
+        for (final key in keys) {
+          expect(
+            msgs.get(key),
+            isNot(key),
+            reason: '${locale.languageCode} is missing $key',
+          );
+        }
+      }
+    });
+
+    test(
+      'replace placeholders interpolate and the arrow follows the script',
+      () {
+        const cases = <String, Map<String, String>>{
+          'rp_counts': {'total': '9', 'on': '6', 'off': '3'},
+          'rp_page_of': {'page': '2', 'pages': '5'},
+          'rp_priority_short': {'priority': '300'},
+          'rp_runs_on': {'n': '2', 'names': 'News, Deals'},
+        };
+        for (final locale in AppMessages.supportedLocales) {
+          final msgs = AppMessages(locale);
+          cases.forEach((key, params) {
+            final value = msgs.get(key, params: params);
+            params.forEach((name, expected) {
+              expect(
+                value,
+                contains(expected),
+                reason: '${locale.languageCode} lost {$name} in $key',
+              );
+              expect(
+                value,
+                isNot(contains('{$name}')),
+                reason: '${locale.languageCode} left {$name} literal in $key',
+              );
+            });
+          });
+        }
+
+        // RTL points left, so the source -> replacement line must not hardcode
+        // "->" and leave a Persian reader following it backwards.
+        final fa = AppMessages(const Locale('fa'));
+        final en = AppMessages(const Locale('en'));
+        final faArrow = fa.get('rp_arrow_to', params: {'text': 'سلام'});
+        final enArrow = en.get('rp_arrow_to', params: {'text': 'hi'});
+        expect(faArrow, contains('\u2190'));
+        expect(enArrow, contains('\u2192'));
+        expect(faArrow, isNot(contains('{text}')));
+        expect(enArrow, isNot(contains('{text}')));
+      },
+    );
+
+    test('the arrows differ by direction, not by accident', () {
+      // A locale that translated the string but kept the LTR arrow would read
+      // correctly to nobody; only Persian is RTL today, and it is the one that
+      // must flip.
+      for (final locale in AppMessages.supportedLocales) {
+        final arrow = AppMessages(locale)
+            .get('rp_arrow_to', params: {'text': 'x'});
+        if (locale.languageCode == 'fa') {
+          expect(arrow, contains('\u2190'), reason: 'fa must point left');
+        } else {
+          expect(
+            arrow,
+            contains('\u2192'),
+            reason: '${locale.languageCode} points right',
+          );
+        }
+      }
+    });
   });
 }

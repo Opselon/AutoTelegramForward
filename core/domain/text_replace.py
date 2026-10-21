@@ -32,6 +32,7 @@ edit.
 from __future__ import annotations
 
 import logging
+import hashlib
 import re
 from dataclasses import dataclass, replace as dataclass_replace
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
@@ -55,6 +56,14 @@ MAX_ENTRIES = 100
 MAX_PATTERN_LEN = 300
 MAX_REPLACEMENT_LEN = 2000
 MAX_NAME_LEN = 40
+
+#: Execution order. Every entry carries one; a higher number runs first, the
+#: same direction as `ForwardRule.priority`, so a user who understands one
+#: number understands both. The default is the value every entry written before
+#: this field existed behaves as: same priority, therefore insertion order.
+DEFAULT_PRIORITY = 100
+MIN_PRIORITY = 0
+MAX_PRIORITY = 1000
 
 #: Delimiters accepted in the free-text form (the panel's "old -> new" input).
 DELIMITERS: Tuple[str, ...] = ("->", "=>", "➔", "—>", "→")
@@ -92,6 +101,7 @@ _ERROR_KEYS = {
     "missing_flags": "ui_rep_err_unknown_option",
     "name_too_long": "ui_rep_err_name_too_long",
     "unknown_mode": "ui_rep_err_invalid_regex",
+    "priority_out_of_range": "ui_rep_err_priority",
 }
 
 
@@ -105,6 +115,16 @@ class ReplaceEntry:
     flags: str = ""
     whole_word: bool = False
     name: str = ""
+    #: Whether the entry runs at all. A disabled rule stays stored (so it can be
+    #: switched back on) but the engine skips it.
+    enabled: bool = True
+    #: Higher runs first; equal priorities keep insertion order.
+    priority: int = DEFAULT_PRIORITY
+    #: Stable identifier of the *rule* this entry is a copy of. A rule assigned
+    #: to three tasks is three entries sharing one id, which is what lets the
+    #: manager show and edit it as one row. Empty on entries written before the
+    #: manager existed; those are addressed by their source text.
+    rid: str = ""
 
     # -- derived -------------------------------------------------------- #
     @property
@@ -127,6 +147,8 @@ class ReplaceEntry:
             and not self.flags
             and not self.whole_word
             and not self.name
+            and self.enabled
+            and self.priority == DEFAULT_PRIORITY
         )
 
     # -- storage -------------------------------------------------------- #
@@ -143,6 +165,36 @@ class ReplaceEntry:
             out["whole_word"] = True
         if self.name:
             out["name"] = self.name
+        if not self.enabled:
+            out["enabled"] = False
+        if self.priority != DEFAULT_PRIORITY:
+            out["priority"] = self.priority
+        return out
+
+    def to_rule_value(self, rid: Optional[str] = None) -> Dict[str, Any]:
+        """The value stored when the entry is keyed by its rule id.
+
+        The source travels in the value because the map key is no longer the
+        text to find: two rules may legitimately search for the same string with
+        different replacements, and one of them being renamed must not move.
+        """
+        out: Dict[str, Any] = {
+            "id": str(rid or self.rid or ""),
+            "source": self.source,
+            "to": self.to,
+        }
+        if self.mode != MODE_LITERAL:
+            out["mode"] = self.mode
+        if self.flags:
+            out["flags"] = self.flags
+        if self.whole_word:
+            out["whole_word"] = True
+        if self.name:
+            out["name"] = self.name
+        if not self.enabled:
+            out["enabled"] = False
+        if self.priority != DEFAULT_PRIORITY:
+            out["priority"] = self.priority
         return out
 
     # -- display -------------------------------------------------------- #
@@ -161,6 +213,20 @@ def _as_bool(value: Any) -> bool:
     if isinstance(value, (int, float)):
         return bool(value)
     return str(value or "").strip().lower() in {"1", "true", "yes", "on", "y"}
+
+
+def clamp_priority(value: Any) -> int:
+    """A priority as stored: an int inside ``MIN_PRIORITY..MAX_PRIORITY``.
+
+    Clamped on read as well as on write, so a hand-edited row, a float from
+    JSON or a string from a form can never make the engine sort on a value the
+    UI cannot represent (or raise while sorting a message).
+    """
+    try:
+        number = int(float(value))
+    except (TypeError, ValueError):
+        return DEFAULT_PRIORITY
+    return max(MIN_PRIORITY, min(MAX_PRIORITY, number))
 
 
 def clean_flags(raw: Any, mode: str = MODE_LITERAL) -> str:
@@ -185,6 +251,9 @@ def entry_from_value(source: Any, value: Any) -> ReplaceEntry:
     written by older dashboards (``{"from": ..., "to": ...}``,
     ``{"replacement": ...}``). Never raises: an unreadable value becomes an
     empty replacement, which is what "delete this word" means anyway.
+
+    A dict may carry its own ``source``: entries written by the replace-rule
+    manager are keyed by rule id, so the key is not the text to find.
     """
     src = "" if source is None else str(source)
     if isinstance(value, Mapping):
@@ -199,9 +268,15 @@ def entry_from_value(source: Any, value: Any) -> ReplaceEntry:
             flags = clean_flags("i", mode)
         whole = _as_bool(value.get("whole_word", value.get("word", False))) or ("w" in flags)
         name = str(value.get("name") or "").strip()
+        stored_source = value.get("source")
+        if stored_source is not None:
+            src = str(stored_source)
         return ReplaceEntry(
             source=src, to="" if to is None else str(to), mode=mode,
             flags=flags, whole_word=whole, name=name[:MAX_NAME_LEN],
+            enabled=_as_bool(value.get("enabled", True)),
+            priority=clamp_priority(value.get("priority", DEFAULT_PRIORITY)),
+            rid=str(value.get("id") or value.get("rid") or "").strip()[:64],
         )
     return ReplaceEntry(source=src, to="" if value is None else str(value))
 
@@ -218,6 +293,8 @@ def validate_entry(entry: ReplaceEntry) -> None:
         raise ReplaceError("name_too_long", f"name exceeds {MAX_NAME_LEN} chars")
     if entry.mode not in MODES:
         raise ReplaceError("unknown_mode", f"mode '{entry.mode}' is not supported")
+    if not MIN_PRIORITY <= int(entry.priority) <= MAX_PRIORITY:
+        raise ReplaceError("priority_out_of_range", "priority is out of range")
     if entry.is_regex:
         # Compile once here so a bad pattern is refused at the point the user
         # typed it, not silently at delivery time.
@@ -336,16 +413,53 @@ def _literal_replacement(entry: ReplaceEntry) -> str:
 
 
 def apply_replacements(text: str, replacements: Any) -> str:
-    """Apply every entry in order, first to last."""
+    """Apply every enabled entry, highest priority first.
+
+    Order matters: ``# -> ##`` followed by ``## -> x`` produces a different
+    message than the reverse, so the user gets an explicit priority number
+    instead of depending on dict insertion order they cannot see. Entries that
+    share a priority keep the order they were written in (a stable sort), which
+    is exactly what every rule written before priorities existed relied on.
+    """
     if not text or not isinstance(replacements, Mapping) or not replacements:
         return text
-    out = text
+    entries: List[ReplaceEntry] = []
     for source, value in replacements.items():
         entry = entry_from_value(source, value)
-        if not entry.source.strip():
+        if not entry.source.strip() or not entry.enabled:
             continue
+        entries.append(entry)
+    # Stable: equal priorities keep insertion order.
+    entries.sort(key=lambda item: -item.priority)
+    out = text
+    for entry in entries:
         out = apply_entry(out, entry)
     return out
+
+
+def stored_entries(replacements: Any, task_id: str = "") -> List[Tuple[str, ReplaceEntry]]:
+    """``(rule_id, entry)`` for every stored pair, in map order.
+
+    A rule id is the stable handle the manager edits by. Entries written before
+    the manager existed carry none, so one is derived from the task and the
+    source text: deterministic (the same row always maps to the same id) and
+    local to that task (two tasks that happen to replace the same word stay two
+    independent rules until someone edits them through the manager).
+    """
+    if not isinstance(replacements, Mapping):
+        return []
+    out: List[Tuple[str, ReplaceEntry]] = []
+    for key, value in replacements.items():
+        entry = entry_from_value(key, value)
+        rid = entry.rid or legacy_rule_id(task_id, str(key))
+        out.append((rid, entry))
+    return out
+
+
+def legacy_rule_id(task_id: str, key: str) -> str:
+    """A stable, URL-safe id for an entry that predates rule ids."""
+    digest = hashlib.sha1(f"{task_id}\x00{key}".encode("utf-8")).hexdigest()
+    return "l" + digest[:15]
 
 
 # --------------------------------------------------------------------------- #
@@ -530,7 +644,7 @@ def tokenize(raw: str) -> List[str]:
 
 
 def parse_add_arguments(raw: str) -> Tuple[ReplaceEntry, bool]:
-    """Parse ``NAME -"OLD" -"NEW" [--regex] [-i] [-w] [-c] [--flags=imsx]``.
+    """Parse ``NAME -"OLD" -"NEW" [--regex] [-i] [-w] [-c] [--priority=N]``.
 
     Returns ``(entry, named)``. The name is optional: with two positionals they
     are OLD and NEW, with one positional it is OLD and the replacement is empty
@@ -542,6 +656,7 @@ def parse_add_arguments(raw: str) -> Tuple[ReplaceEntry, bool]:
     flags = ""
     name_opt = ""
     delete_opt = False
+    priority_opt: Optional[int] = None
     i = 0
     while i < len(tokens):
         token = tokens[i]
@@ -567,6 +682,16 @@ def parse_add_arguments(raw: str) -> Tuple[ReplaceEntry, bool]:
             continue
         if low == "--flags":
             raise ReplaceError("missing_flags", "use --flags=imsx")
+        if low.startswith("--priority="):
+            priority_opt = clamp_priority(token.split("=", 1)[1])
+            i += 1
+            continue
+        if low in ("-p", "--priority"):
+            if i + 1 >= len(tokens):
+                raise ReplaceError("priority_out_of_range", "no number after --priority")
+            priority_opt = clamp_priority(tokens[i + 1])
+            i += 2
+            continue
         action = _OPTION_ALIASES.get(low)
         if action in MODES:
             mode = action
@@ -598,9 +723,33 @@ def parse_add_arguments(raw: str) -> Tuple[ReplaceEntry, bool]:
     entry = ReplaceEntry(
         source=source, to=target, mode=mode,
         flags=flags, whole_word=("w" in flags), name=name.strip()[:MAX_NAME_LEN],
+        priority=DEFAULT_PRIORITY if priority_opt is None else priority_opt,
     )
     validate_entry(entry)
     return entry, bool(name.strip())
+
+
+def count_matches(text: str, entry: ReplaceEntry) -> int:
+    """How many places ``entry`` would change in ``text`` (for a test preview).
+
+    Counted with the same rules ``apply_entry`` uses, including the legacy
+    literal's smart case (an exact-case occurrence wins, otherwise a
+    case-insensitive pass), so the number a preview shows is the number of
+    replacements that will actually happen.
+    """
+    if not text or not entry.source.strip():
+        return 0
+    try:
+        if _legacy_literal(entry):
+            if entry.source in text:
+                return text.count(entry.source)
+            return len(re.findall(re.escape(entry.source), text, flags=re.IGNORECASE))
+        pattern = compile_entry(entry)
+        if pattern is None:
+            return 0
+        return sum(1 for _ in pattern.finditer(text))
+    except re.error:
+        return 0
 
 
 def entry_with(mapping: Mapping[str, Any], key: str, **changes: Any) -> ReplaceEntry:
