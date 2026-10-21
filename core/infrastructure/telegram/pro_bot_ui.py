@@ -5965,12 +5965,18 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         @b.on_callback_query(filters.regex(r"^rdel:(.+)$"))
         @self._localized_handler
         async def _cb_rule_del(_, cq: CallbackQuery):
-            if not self._is_admin(cq.from_user.id):
-                return await cq.answer(self._t("ui_rule_not_found_or_not_owner", lang=self._resolve_lang(cq.from_user.id)), show_alert=True)
+            uid = cq.from_user.id if cq.from_user else 0
+            lang = self._resolve_lang(uid)
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
             rid = raw.split(":", 1)[1]
-            rule = await self._rules.get(rid)
-            name = (rule.source_chat_name or rule.source_chat_id) if rule else rid[:8]
+            # An owner deletes their own task; an admin acts on the whole
+            # install. Anything else is a forged id and must be refused here,
+            # before the confirmation screen renders another tenant's name.
+            rule = await self._owned_rule(rid, uid)
+            if rule is None:
+                return await cq.answer(
+                    self._t("ui_rule_not_found_or_not_owner", lang=lang), show_alert=True)
+            name = rule.source_chat_name or rule.source_chat_id
             confirm_text = (
                 self._t("ui_confirm_delete_rule") + "\n\n" + self._t("ui_confirm_delete_rule_body", name=name)
             )

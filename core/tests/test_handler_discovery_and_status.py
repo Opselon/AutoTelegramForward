@@ -305,3 +305,44 @@ def test_every_registered_payload_is_within_the_callback_limit(harness):
     ):
         for data in payloads(provider):
             assert len(data.encode()) <= 64, data
+
+
+        # --------------------------------------------------------------------------- #
+# --------------------------------------------------------------------------- #
+# Delete: a task's owner can delete it; nobody else can even see the confirm
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_delete_confirmation_is_offered_to_the_owner(harness):
+    cq = await harness.press(f"rdel:{RULE_ID}", OWNER)
+
+    assert cq.message.sent, "the owner sees the confirmation screen"
+    assert any(d.startswith("rdelyes:") for d in payloads(cq.message.sent[-1][2]["reply_markup"]))
+
+
+@pytest.mark.asyncio
+async def test_delete_is_refused_for_a_task_the_user_does_not_own(harness):
+    """The confirmation screen must not name another tenant's task."""
+    cq = await harness.press(f"rdel:{RULE_ID}", OTHER)
+
+    assert any("not found" in t.lower() or "owner" in t.lower() for t in cq.answers.texts)
+    assert not cq.message.sent
+    assert (await harness.rules_repo.get_by_id(RULE_ID)) is not None
+
+
+@pytest.mark.asyncio
+async def test_confirming_the_delete_removes_the_task(harness):
+    await harness.press(f"rdel:{RULE_ID}", OWNER)
+    cq = await harness.press(f"rdelyes:{RULE_ID}", OWNER)
+
+    assert (await harness.rules_repo.get_by_id(RULE_ID)) is None
+    assert harness.rule_count(OWNER) == 0
+    assert cq.answers.texts
+
+
+@pytest.mark.asyncio
+async def test_a_second_tenant_cannot_confirm_someone_elses_delete(harness):
+    await harness.press(f"rdel:{RULE_ID}", OWNER)
+    cq = await harness.press(f"rdelyes:{RULE_ID}", OTHER)
+
+    assert (await harness.rules_repo.get_by_id(RULE_ID)) is not None
+    assert any("not found" in t.lower() or "owner" in t.lower() for t in cq.answers.texts)
