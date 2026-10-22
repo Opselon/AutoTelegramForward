@@ -8,6 +8,10 @@ cryptography==50.0.2
 PyYAML==6.0.3
 pytest==9.1.1
 pytest-asyncio==1.4.0
+# CI runs the suite distributed (`pytest -n auto --dist loadfile`): the
+# parallel-free wall clock is dominated by a handful of whole-tree locale
+# scans that each take 80+ seconds; per-file workers make those concurrent.
+pytest-xdist==3.8.0
 asyncpg>=0.29.0
 # Redis: shared rate-limit store and the Core's worker-coordination leases. The
 # asyncio client is optional at runtime (see core/infrastructure/redis): an

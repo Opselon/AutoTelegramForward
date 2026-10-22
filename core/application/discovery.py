@@ -13,6 +13,7 @@ to do with it. No Telegram type appears in this module.
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, replace
 from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Sequence, Tuple
@@ -60,6 +61,19 @@ def classify(raw_type: Any, is_self: bool = False) -> str:
     if is_self:
         return KIND_SAVED
     return KIND_USER
+
+
+#: A channel's Bot-API id (``-1001234567890``) names the same chat as its raw
+#: unique id (``1234567890``): the prefix is Bot-API spelling, not identity.
+#: Any id a *user* may paste runs through this normalizer before comparison.
+UNIQUE_ID_PATTERN = re.compile(r"^-100(?P<raw>\d{1,20})$")
+
+
+def unique_chat_id(chat_id: Any) -> str:
+    """The ``-100``-stripped form of a numeric chat id; other forms untouched."""
+    text = str(chat_id or "").strip()
+    match = UNIQUE_ID_PATTERN.match(text)
+    return match.group("raw") if match else text
 
 
 @dataclass(frozen=True)
@@ -175,12 +189,17 @@ class DialogCatalog:
             return None
 
     def find(self, token: str) -> Optional[ChatEntry]:
-        """Resolve a typed id, @username or title — the text-input fallback."""
+        """Resolve a typed id, unique id, @username or title — the text fallback.
+
+        A numeric token matches the ``-100…`` Bot-API spelling and the raw
+        unique id alike, so an id copied from *any* list (`/getchannel -id`,
+        another bot, the dashboard) resolves to the same chat.
+        """
         wanted = (token or "").strip().lstrip("@").lower()
         if not wanted:
             return None
         for entry in self._entries:
-            if wanted in {entry.id.lower(), entry.username.lower()}:
+            if wanted in {entry.id.lower(), unique_chat_id(entry.id), entry.username.lower()}:
                 return entry
             if wanted == entry.title.lower():
                 return entry
@@ -413,3 +432,74 @@ class BrowseDialogsUseCase:
             totals=catalog.kinds(),
             cached=cached,
         )
+
+
+# --------------------------------------------------------------------------- #
+# The `/getchannel`-family argument line: one parser, regex-pinned grammar
+# --------------------------------------------------------------------------- #
+
+@dataclass(frozen=True)
+class ChatListQuery:
+    """A parsed `/getchannel`-family argument line.
+
+    ``with_ids`` asks for the copy-ready one-line list (``-id``); ``all_kinds``
+    widens a kind-filtered command to every kind (``-all``); ``page`` is the
+    0-based page of the plain list. Parsing is pure: errors carry a ``code``
+    the surface localizes, and no Telegram type is involved.
+    """
+
+    with_ids: bool = False
+    all_kinds: bool = False
+    page: int = 0
+
+
+class ChatQueryError(ValueError):
+    """The argument line cannot be read; ``code`` names the reason."""
+
+    def __init__(self, code: str, detail: str = "") -> None:
+        super().__init__(code)
+        self.code = code
+        self.detail = detail
+
+
+#: Flags, regex-pinned: ``-id`` and ``-all``, single or double dash, lowercase
+#: only — anything else that starts with ``-`` is a refusal, never a guess.
+_ID_FLAG = re.compile(r"^--?id$")
+_ALL_FLAG = re.compile(r"^--?all$")
+
+#: The page is a 1-based integer of at most three digits (`/getchannel -id 7`).
+_PAGE_TOKEN = re.compile(r"^[1-9]\d{0,2}$")
+
+
+def parse_chat_list_query(raw: str) -> ChatListQuery:
+    """Parse one ``/getchannel``-family argument line.
+
+    Grammar (flags and page in any order, flags not repeated)::
+
+        [(-id | --id)] [(-all | --all)] [PAGE]
+
+    Anything else — a bare word, a second page, an unknown ``-flag`` — is
+    refused with :class:`ChatQueryError`, which the surface turns into a
+    usage line rather than guessing what was meant.
+    """
+    with_ids = False
+    all_kinds = False
+    page = 0
+    for token in (str(raw or "").strip()).split():
+        if _ID_FLAG.match(token):
+            if with_ids:
+                raise ChatQueryError("bad_flag", token)
+            with_ids = True
+            continue
+        if _ALL_FLAG.match(token):
+            if all_kinds:
+                raise ChatQueryError("bad_flag", token)
+            all_kinds = True
+            continue
+        if _PAGE_TOKEN.match(token):
+            if page:
+                raise ChatQueryError("bad_flag", token)
+            page = int(token) - 1
+            continue
+        raise ChatQueryError("bad_flag", token)
+    return ChatListQuery(with_ids=with_ids, all_kinds=all_kinds, page=page)
