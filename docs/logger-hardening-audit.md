@@ -182,7 +182,7 @@ Verified during this audit:
   The deployment currently mitigates this only by keeping the listener inside
   the compose network.
 
-**Fix (PR-2)**: real authentication, risk-bounded and additive:
+**Fix (PR-2) — DONE in `feat/logger-auth`**: real authentication, additive:
 
 - `ATF_LOGGER_INGEST_TOKEN`, `ATF_LOGGER_READ_TOKEN`, `ATF_LOGGER_ADMIN_TOKEN`
   (one secret per capability class, never one master key); unset token = scope
@@ -194,8 +194,22 @@ Verified during this audit:
   leaked producer token cannot read the archive.
 - Producers updated: the Python client and the Go API read their own
   logger-token variable and attach it in the outgoing metadata.
-- `metrics.rs`: `auth_failures_total{scope,reason}` so "someone reached the
-  port unauthenticated" is a first-class operational signal.
+- `metrics.rs`: `atf_logger_auth_failures_total{outcome}` so "someone reached
+  the port unauthenticated" is a first-class operational signal — `(scope ×
+  missing|malformed|mismatch|forbidden)` folded into one bounded label, 12
+  possible series, never a raw token.
+- Enforced *inside* the four RPC methods (Log = ingest, QueryLogs/LogStats =
+  read, PurgeLogs = admin) as `RpcGuard`-counted entry: the failure is
+  UNAUTHENTICATED (16) for absent/unknown credentials and PERMISSION_DENIED (7)
+  for a credential belonging to another capability class, and it is recorded in
+  `rpc_total`/`rpc_status_total` exactly like every other rejection.
+- Deleted `LogBatch`/`DeleteUserLogs` naming confusion: the proto serves
+  exactly `Log`, `QueryLogs`, `LogStats`, `PurgeLogs` (Section 1), so the PR-2
+  plan's `LogBatch`/`DeleteUserLogs` classes collapse into `Log` and don't
+  exist as separate RPCs.
+- Method classification defaults everything unknown to **admin** (deny for all
+  existing tokens): an RPC added to the proto later can never inherit an open
+  scope by accident.
 
 ### GAP-4 — No engine-side admission limiter; rate limiting only protects *enabled* verbose events (severity: medium)
 

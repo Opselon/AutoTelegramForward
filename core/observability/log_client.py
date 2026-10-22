@@ -65,8 +65,13 @@ class LogClient:
         address: str = "localhost:50052",
         max_queue_size: int = 4096,
         policy: Optional[Any] = None,
+        token: str = "",
     ) -> None:
         self._address = address
+        # Ingest credential for the Logger's bearer-token gate (unset by the
+        # deployment = the gate is open, so this stays compatible with previous
+        # behaviour). Sent per-call, never logged into an entry's payload.
+        self._token = token
         self._channel: Optional[grpc.aio.Channel] = None
         self._stub: Optional[Any] = None
         self._enabled = True
@@ -108,6 +113,14 @@ class LogClient:
         self._channel = grpc.aio.insecure_channel(self._address)
         self._stub = _pb_grpc().LogControlServiceStub(self._channel)
 
+    def _bearer(self) -> tuple:
+        # grpc metadata must be ASCII; a token is config, so len() is fine.
+        return (
+            (("authorization", f"Bearer {self._token}"),)
+            if self._token
+            else ()
+        )
+
     def _backoff(self, consecutive_errors: int) -> float:
         """Bounded exponential backoff with jitter (see the constants above)."""
         window = min(_BACKOFF_BASE * (2 ** min(consecutive_errors - 1, 5)), _BACKOFF_CAP)
@@ -135,7 +148,9 @@ class LogClient:
                 self._pending_entry = await self._queue.get()
                 self._in_flight += 1
             try:
-                await self._stub.Log(_pb().LogRequest(entry=self._pending_entry))
+                await self._stub.Log(
+                    _pb().LogRequest(entry=self._pending_entry), metadata=self._bearer()
+                )
                 self._sent_total += 1
                 self._pending_entry = None
                 self._in_flight -= 1
@@ -157,7 +172,9 @@ class LogClient:
                         break
                     self._in_flight += 1
                     try:
-                        await self._stub.Log(_pb().LogRequest(entry=burst_entry))
+                        await self._stub.Log(
+                            _pb().LogRequest(entry=burst_entry), metadata=self._bearer()
+                        )
                         self._sent_total += 1
                         self._in_flight -= 1
                     except Exception:
@@ -305,13 +322,14 @@ class LogClient:
             ascending=ascending, levels=list(levels or []),
             user_id=int(user_id or 0), correlation_id=correlation_id,
         )
-        return await self._stub.QueryLogs(req)
+        return await self._stub.QueryLogs(req, metadata=self._bearer())
 
     async def stats(self, rule_id="", user_id=0):
         self.connect()
         pb = _pb()
         return await self._stub.LogStats(
-            pb.LogStatsRequest(rule_id=rule_id, user_id=int(user_id or 0))
+            pb.LogStatsRequest(rule_id=rule_id, user_id=int(user_id or 0)),
+            metadata=self._bearer(),
         )
 
     # ------------------------------------------------------------------ #

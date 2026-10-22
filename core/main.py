@@ -775,7 +775,11 @@ async def main() -> None:
     # attached there once instead of at each call site. Reuse the instance built
     # with the container: the control plane reports that same object, and two
     # instances would let it describe a policy this process is not applying.
-    log_client = LogClient(cfg.logger_addr, policy=container["log_policy"])
+    log_client = LogClient(
+        cfg.logger_addr,
+        policy=container["log_policy"],
+        token=os.environ.get("ATF_LOGGER_INGEST_TOKEN", ""),
+    )
     try:
         await log_client.start()
     except Exception as exc:

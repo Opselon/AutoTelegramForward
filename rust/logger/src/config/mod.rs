@@ -133,6 +133,13 @@ pub struct Config {
     pub max_detail_bytes: usize,
     pub max_tag_bytes: usize,
 
+    /// Capability-scoped bearer tokens for the gRPC surface. Empty string =
+    /// scope open (previous behaviour; documented trade-off in the audit):
+    /// producers keep logging through an unattended rotation window.
+    pub auth_ingest_token: String,
+    pub auth_read_token: String,
+    pub auth_admin_token: String,
+
     pub redact_identifiers: bool,
     pub dedupe_window_secs: u64,
 
@@ -168,6 +175,9 @@ impl Default for Config {
             max_message_bytes: 1 << 20,
             max_detail_bytes: 1 << 20,
             max_tag_bytes: 4096,
+            auth_ingest_token: String::new(),
+            auth_read_token: String::new(),
+            auth_admin_token: String::new(),
             redact_identifiers: true,
             dedupe_window_secs: 0,
             retention_enabled: true,
@@ -317,6 +327,10 @@ impl Config {
             }
         }
         set_str("ATF_LOGGER_METRICS_LISTEN", &mut self.metrics_listen);
+
+        set_str("ATF_LOGGER_INGEST_TOKEN", &mut self.auth_ingest_token);
+        set_str("ATF_LOGGER_READ_TOKEN", &mut self.auth_read_token);
+        set_str("ATF_LOGGER_ADMIN_TOKEN", &mut self.auth_admin_token);
 
         macro_rules! from_env {
             ($key:expr, $slot:expr, $parse:expr) => {
@@ -528,6 +542,10 @@ impl Config {
         for c in &self.protected_categories {
             feed(c);
         }
+        // Auth tokens change the config fingerprint too, but only their
+        // presence ever enters the hash: the hash is rendered by /metrics and
+        // must never echo a secret.
+        feed(derive_auth_state(self).as_str());
         format!("{h:016x}")
     }
 
@@ -597,6 +615,20 @@ USAGE: atf-logger [OPTIONS]
   --retention-ts-unit <s|ms>   unit of the stored ts column
   --version, --help
 ";
+
+/// Bounded auth-state fingerprint for `version_hash` (presence only).
+fn derive_auth_state(c: &Config) -> String {
+    let on = [
+        !c.auth_ingest_token.is_empty(),
+        !c.auth_read_token.is_empty(),
+        !c.auth_admin_token.is_empty(),
+    ];
+    let mut bits = String::new();
+    for b in on {
+        bits.push(if b { '1' } else { '0' });
+    }
+    bits
+}
 
 #[cfg(test)]
 mod tests {
@@ -758,6 +790,48 @@ mod tests {
         assert_eq!(a.version_hash(), b.version_hash());
         b.batch_size += 1;
         assert_ne!(a.version_hash(), b.version_hash());
+    }
+
+    #[test]
+    fn auth_tokens_default_open_and_parse_from_env() {
+        let cfg = Config::default();
+        assert!(cfg.auth_ingest_token.is_empty());
+        let env = |key: &str| -> Option<String> {
+            match key {
+                "ATF_LOGGER_INGEST_TOKEN" => Some("s3cr3t-ingest".to_string()),
+                "ATF_LOGGER_READ_TOKEN" => Some("s3cr3t-read".to_string()),
+                "ATF_LOGGER_ADMIN_TOKEN" => Some("s3cr3t-admin".to_string()),
+                _ => None,
+            }
+        };
+        let cfg = Config::from_parts(&[], &env).expect("valid config");
+        assert_eq!(cfg.auth_ingest_token, "s3cr3t-ingest");
+        assert_eq!(cfg.auth_read_token, "s3cr3t-read");
+        assert_eq!(cfg.auth_admin_token, "s3cr3t-admin");
+        // An explicitly empty secret leaves the scope open, it must not become
+        // an unlockable empty credential.
+        let env = |key: &str| -> Option<String> {
+            if key == "ATF_LOGGER_INGEST_TOKEN" {
+                Some(String::new())
+            } else {
+                None
+            }
+        };
+        let cfg = Config::from_parts(&[], &env).expect("valid config");
+        assert!(cfg.auth_ingest_token.is_empty());
+    }
+
+    #[test]
+    fn version_hash_never_receives_the_secret_itself() {
+        let cfg = Config {
+            auth_ingest_token: "topsecret-abc123".to_string(),
+            ..Config::default()
+        };
+        let hash = cfg.version_hash();
+        assert!(!hash.contains("topsecret"), "hash must not echo the secret");
+        // …but arming a gate does change the fingerprint.
+        let open = Config::default(); // auth_ingest_token is empty
+        assert_ne!(hash, open.version_hash());
     }
 
     #[test]
