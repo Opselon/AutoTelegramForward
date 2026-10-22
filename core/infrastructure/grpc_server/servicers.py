@@ -1062,6 +1062,9 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
         except ValueError as exc:
             await context.abort(grpc.StatusCode.INVALID_ARGUMENT, str(exc))
             return pb.ForwardRule()
+        except PermissionError as exc:
+            await context.abort(grpc.StatusCode.PERMISSION_DENIED, str(exc))
+            return pb.ForwardRule()
         except Exception as exc:  # a storage constraint is a refusal, not a 500
             await self._refuse_reference_failure(context, exc)
             return pb.ForwardRule()
@@ -2068,8 +2071,19 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
         from ...domain.entities import AIConfig as Entity
         from ...domain.value_objects import AIProviderType as PT
         c = request.config
+        try:
+            provider = PT(c.provider.lower()) if c.provider else PT.OPENAI
+        except ValueError:
+            # An unknown provider name is a client mistake, not a crash: the
+            # constructor used to raise outside the try/except and gRPC logged
+            # it as "Unexpected [ValueError]" with a 500 behind it.
+            await context.abort(
+                grpc.StatusCode.INVALID_ARGUMENT,
+                f"unsupported_provider: {c.provider}",
+            )
+            return pb.AIConfig()
         entity = Entity(
-            name=c.name, provider=PT(c.provider.lower()) if c.provider else PT.OPENAI,
+            name=c.name, provider=provider,
             model=c.model or "gpt-4o-mini", api_key=c.api_key, base_url=c.base_url,
             system_prompt=c.system_prompt, user_prompt_template=c.user_prompt_template or "{text}",
             temperature=c.temperature or 0.7, is_enabled=c.is_enabled or True,
@@ -2082,10 +2096,9 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
             # "endpoint refused: endpoint_blocked" -> INVALID_ARGUMENT so the
             # API answers 400 with a code the clients can translate, instead of
             # a 500 named "Unexpected ValueError".
-            code = str(exc).rsplit(":", 1)[-1].strip() or "endpoint_blocked"
-            if "endpoint refused" in str(exc):
-                await context.abort(grpc.StatusCode.INVALID_ARGUMENT, code)
-            raise
+            code = str(exc).rsplit(":", 1)[-1].strip() or "invalid_ai_config"
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, code)
+            return pb.AIConfig()
         return _ai_pb(created)
 
     async def UpdateAIConfig(self, request, context):
@@ -2116,10 +2129,9 @@ class AIControlServicer(pb_grpc.AIControlServiceServicer):
         try:
             updated = await self._ai.update(existing)
         except ValueError as exc:
-            code = str(exc).rsplit(":", 1)[-1].strip() or "endpoint_blocked"
-            if "endpoint refused" in str(exc):
-                await context.abort(grpc.StatusCode.INVALID_ARGUMENT, code)
-            raise
+            code = str(exc).rsplit(":", 1)[-1].strip() or "invalid_ai_config"
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, code)
+            return pb.AIConfig()
         return _ai_pb(updated)
 
     async def DeleteAIConfig(self, request, context):

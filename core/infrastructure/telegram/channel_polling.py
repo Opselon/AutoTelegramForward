@@ -45,6 +45,19 @@ MAX_POSTS_PER_SWEEP = 100
 # pipeline's dedup layer drops the ones already accepted.
 REPLAY_DRAIN_TIMEOUT_SECONDS = 120.0
 
+# A channel the session cannot resolve (`PEER_ID_INVALID`) or that is not a
+# channel at all (`CHANNEL_INVALID`) fails on every sweep. Retrying it every
+# 15s produced thousands of identical WARN lines and kept hammering Telegram
+# with a request that cannot succeed, so the sweeper backs off per channel:
+# first retry after a minute, doubling up to this ceiling. Any successful poll
+# clears the backoff immediately.
+FAILURE_BACKOFF_BASE_SECONDS = 60.0
+FAILURE_BACKOFF_MAX_SECONDS = 900.0
+
+
+class PollFailure(Exception):
+    """A channel poll failed in a way that should be retried later, not now."""
+
 
 class _OrderedReplayLane:
     """A per-channel FIFO that hands replayed posts to the pipeline in order.
@@ -146,6 +159,11 @@ class ChannelPollingService:
         # Ordered replay lanes, keyed by (session_id, chat_id). One live lane per
         # polled channel is what guarantees a burst leaves in source order.
         self._lanes: Dict[Tuple[str, str], _OrderedReplayLane] = {}
+        # Per-channel failure backoff: failures[key] counts consecutive failed
+        # sweeps, retry_at[key] is the next epoch second worth trying. A bad
+        # source (invalid peer, non-channel id) is one WARN, not one per sweep.
+        self._failures: Dict[Tuple[str, str], int] = {}
+        self._retry_at: Dict[Tuple[str, str], float] = {}
 
     # ------------------------------------------------------------------ #
     # Lifecycle
@@ -227,18 +245,60 @@ class ChannelPollingService:
                 continue
 
             for chat_id, chat_name in channels:
+                key = (session_id, chat_id)
+                if self._retry_at.get(key, 0.0) > time.time():
+                    # Backing off from a channel Telegram already refused; the
+                    # previous failure was logged once (see _note_failure).
+                    continue
                 checked += 1
                 try:
                     n = await self._poll_channel(client, session_id, chat_id, chat_name)
                 except Exception as exc:
-                    logger.warning("poll: channel check failed for %s (%s): %s", chat_name or chat_id, chat_id, exc)
+                    self._note_failure(key, chat_id, chat_name, exc)
                     continue
                 replayed += n
+                self._note_success(key)
                 if n:
                     logger.info(
                         "poll: replayed %d new post(s) from %s (%s)", n, chat_name or chat_id, chat_id
                     )
         return (replayed, checked)
+
+    def _note_failure(self, key: Tuple[str, str], chat_id: str, chat_name: str,
+                      exc: Exception) -> None:
+        """Record a failed sweep for one channel, with escalating backoff.
+
+        The first failure is a WARNING because it is new information; repeats
+        of the same permanent condition (an invalid peer never becomes valid on
+        its own) are DEBUG with a periodic WARNING so the log stays truthful
+        without drowning in it.
+        """
+        count = self._failures.get(key, 0) + 1
+        self._failures[key] = count
+        delay = min(
+            FAILURE_BACKOFF_MAX_SECONDS,
+            FAILURE_BACKOFF_BASE_SECONDS * (2 ** min(count - 1, 8)),
+        )
+        self._retry_at[key] = time.time() + delay
+        label = f"{chat_name or chat_id} ({chat_id})"
+        if count == 1:
+            logger.warning(
+                "poll: %s failed (%s); backing off %.0fs before retrying",
+                label, exc, delay,
+            )
+        elif count % 10 == 0:
+            logger.warning(
+                "poll: %s still failing after %d attempts (%s); next retry in %.0fs",
+                label, count, exc, delay,
+            )
+        else:
+            logger.debug("poll: %s failed again (%s); next retry in %.0fs", label, exc, delay)
+
+    def _note_success(self, key: Tuple[str, str]) -> None:
+        """Clear a channel's backoff after any successful poll."""
+        if self._failures.pop(key, None) is not None:
+            logger.info("poll: %s recovered; polling resumed", key[1])
+        self._retry_at.pop(key, None)
 
     async def _source_channels(self, session_id: str) -> List[Tuple[str, str]]:
         """Active source channels for this session's rules."""
@@ -276,8 +336,7 @@ class ChannelPollingService:
             try:
                 peer = await client.resolve_peer(chat_id)
             except Exception as exc:
-                logger.warning("poll: cannot resolve peer for %s (%s): %s", chat_name or chat_id, chat_id, exc)
-                return 0
+                raise PollFailure(f"cannot resolve peer: {exc}") from exc
 
         # The channel pts is required by getChannelDifference.
         try:
@@ -285,16 +344,14 @@ class ChannelPollingService:
 
             full = await client.invoke(GetFullChannel(channel=peer))
         except Exception as exc:
-            logger.warning("poll: GetFullChannel for %s (%s) failed: %s", chat_name or chat_id, chat_id, exc)
-            return 0
+            raise PollFailure(f"GetFullChannel failed: {exc}") from exc
         pts = getattr(getattr(full, "full_chat", None), "pts", 0) or 0
 
         cursor = self._state.get(chat_id, 0)
         try:
             top = await self._channel_top_message(client, chat_id)
         except Exception as exc:
-            logger.warning("poll: cannot read top of %s (%s): %s", chat_name or chat_id, chat_id, exc)
-            return 0
+            raise PollFailure(f"cannot read top message: {exc}") from exc
 
         logger.info(
             "[POLL TRACE] channel=%s (%s) cursor=%s top_msg_id=%s pts=%s",
@@ -319,8 +376,7 @@ class ChannelPollingService:
                 )
             )
         except Exception as exc:
-            logger.warning("poll: GetChannelDifference for %s (%s) failed: %s", chat_name or chat_id, chat_id, exc)
-            return 0
+            raise PollFailure(f"GetChannelDifference failed: {exc}") from exc
 
         raw_messages = getattr(diff, "new_messages", None) or []
         messages = sorted(raw_messages, key=lambda m: getattr(m, "id", 0) or 0)

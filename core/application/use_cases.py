@@ -180,10 +180,19 @@ class ForwardRuleUseCases:
         )
         if not ok:
             raise ValueError(f"Invalid rule endpoints: {err}")
-        if self._session_repo and rule.session_id and getattr(rule, "owner_user_id", 0):
+        # A rule must name a session that exists: the storage layer enforces it
+        # with a foreign key, and letting sqlite raise that as an IntegrityError
+        # answered the caller with "invalid_reference" *after* a 500 in the API.
+        # Checking here names the problem before the write, and keeps the
+        # cross-tenant guard in the same place.
+        if self._session_repo and rule.session_id:
             sess = await self._session_repo.get_by_id(rule.session_id)
-            if sess and getattr(sess, "owner_user_id", 0) and int(sess.owner_user_id) != int(rule.owner_user_id):
-                raise PermissionError(f"Session {rule.session_id} not owned by {rule.owner_user_id}")
+            if sess is None:
+                raise ValueError(f"Unknown session: {rule.session_id}")
+            owner = int(getattr(rule, "owner_user_id", 0) or 0)
+            sess_owner = int(getattr(sess, "owner_user_id", 0) or 0)
+            if owner and sess_owner and sess_owner != owner:
+                raise PermissionError(f"Session {rule.session_id} not owned by {owner}")
         return await self._repo.add(rule)
 
     async def update(self, rule: ForwardRule, expected_version: Optional[int] = None) -> ForwardRule:
