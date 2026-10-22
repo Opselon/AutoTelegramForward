@@ -1,4 +1,4 @@
-# AutoTelegramForward (v2.0)
+# AutoTelegramForward (v2.3)
 
 <p align="center">
   <img src="docs/assets/social-preview.png" alt="AutoTelegramForward — Production Telegram Auto-Forwarding & Routing Suite" width="100%">
@@ -23,6 +23,44 @@
 </p>
 
 > 🌐 **Official Website, Documentation & Live Transformation Playground:** [https://opselon.github.io/AutoTelegramForward/](https://opselon.github.io/AutoTelegramForward/)
+
+---
+
+## 🤖 Try the live bot — test the project in 60 seconds
+
+Before cloning anything you can drive the production bot the same way every
+self-deployed instance behaves. It runs the latest merged build of `master`:
+
+> **[@AutoForwarderFreeBot](https://t.me/AutoForwarderFreeBot)** — open the link
+> (or search the username) and press **Start**.
+
+A minimal test walk:
+
+| Step | Do this | What it proves |
+| --- | --- | --- |
+| 1 | `/start`, then `Connect` and log in a Telegram account (phone → OTP → 2FA) | the interactive login, encrypted session storage |
+| 2 | `/getchannel -id` | live dialog scan (pinned chats first) and a copy-ready `id` list |
+| 3 | `/forward add demo [SOURCE_ID] -> [DESTINATION_ID]` | the one-line CLI: create a forwarding task |
+| 4 | post something in the source chat | the real forwarding pipeline, end to end |
+| 5 | `/settings` → `Cleaner`/`Filters`/`Delay` | per-task options without touching the code |
+| 6 | `/language` → pick any of the 10 locales | 1:1 multilingual parity, switchable live |
+
+Notes for testers:
+
+- The live instance is the project's own deployment: login/session commands
+  (`/login`, `/sessions`) are restricted to its configured admin, while
+  discovery and rule commands act on **your** account and stay tenant-scoped —
+  no account can see another's chats, rules or logs.
+- To exercise the full login flow (phone → OTP → 2FA) safely, self-host the
+  stack (below) and connect a spare account session rather than your daily
+  driver.
+- A source chat is readable only if that account can read it (member or admin).
+- Forwarded *messages* from private users are never mirrored; forwarding is
+  channel/group-targeted by design.
+- The live instance resets nothing you create — clean up with `/forward` →
+  delete when you are done.
+- The same commands run on every self-hosted instance; the sections below
+  describe building your own.
 
 ---
 
@@ -99,7 +137,7 @@ the overlay is fully functional, it just cannot resolve `9router`).
 
 ## 🏛️ Architecture & Microservice Topology
 
-AutoTelegramForward v2.0 is engineered with strict, fail-closed microservice boundaries and Domain-Driven Design (DDD):
+AutoTelegramForward v2.3 is engineered with strict, fail-closed microservice boundaries and Domain-Driven Design (DDD):
 
 ```
 ┌────────────────────────┐      ┌─────────────────────────┐
@@ -158,7 +196,7 @@ AutoTelegramForward v2.0 is engineered with strict, fail-closed microservice bou
 
 ---
 
-## 🚀 What is New in v2.0
+## 🚀 What is New in v2.x
 
 - 🧹 **Advanced Content Cleaner & Sanitizer**:
   Strip links, `@mentions`, `#hashtags`, emojis, and custom regex patterns per rule, with preview and dynamic toggle.
@@ -169,7 +207,7 @@ AutoTelegramForward v2.0 is engineered with strict, fail-closed microservice bou
 - 🏷️ **Show Forward Header Toggle**:
   Seamlessly choose between native Telegram quote forwarding (preserving author channel header) and clean direct copy.
 - 🌐 **10-Language 1:1 Parity**:
-  Comprehensive, 100% catalog parity (378 keys) across English (`en`), Persian (`fa`), Russian (`ru`), Chinese (`zh`), Portuguese (`pt`), Uzbek (`uz`), Indonesian (`id`), Spanish (`es`), French (`fr`), and Italian (`it`) with fail-closed English fallback.
+  Comprehensive, 100% catalog parity (1,844 keys) across English (`en`), Persian (`fa`), Russian (`ru`), Chinese (`zh`), Portuguese (`pt`), Uzbek (`uz`), Indonesian (`id`), Spanish (`es`), French (`fr`), and Italian (`it`) with fail-closed English fallback.
 - 🎛️ **Interactive Telegram Bot Submenus**:
   Full visual configuration for Cleaner, Filters, Delay, Blacklist, Whitelist, and Replacements with dynamic status badges.
 - 📊 **Modular Task Overview Modal**:
@@ -267,6 +305,27 @@ Start the bot with `/start` to access the interactive panel without typing compl
 | 🌐 **Language** | Switch on-the-fly between all 10 supported languages |
 | 💾 **Backup** | Export and restore AES-256-GCM encrypted `.atf` configurations |
 
+### One-line command line
+
+Everything the panels do is also a single typed line — no wizard required:
+
+```text
+/getchannel -id                     # channels as "Name → id" (copy-ready), pinned first
+/getchannel -id 2                   # page 2 of the same plain list
+/getchannel -all -id                # every kind: channels, groups, bots, private chats
+/getgroup  -id                      # only groups        /getuser -id → private chats
+/forward                            # the task list panel
+/forward add demo -1001206461239 -> -1009988776655
+/forward add demo 1206461239 -> 9988776655          # raw unique ids work too
+/forward status                     # tasks, their state and ids
+/commands                           # the generated command guide
+```
+
+Flags are pinned by a regex parser: `-id`/`--id`, `-all`/`--all`, a page number
+`1–999`. An unknown or repeated flag is refused with the offending token named —
+never guessed at. Ids resolve in both spellings, so `-1001206461239` and
+`1206461239` are the same chat everywhere (catalog, wizard, self-loop checks).
+
 ---
 
 ## 🔌 REST API Endpoints (Go Control Plane, `:8080`)
@@ -342,8 +401,8 @@ POST   /api/logs/purge            # a tenant must name one of their own tasks; i
 AutoTelegramForward maintains strict test gates across every tier:
 
 ```bash
-# Python MTProto Core (507+ tests: DDD, crypto, cleaner, pipeline, gRPC, FSM)
-pytest core/tests -q
+# Python MTProto Core (3,700+ tests: DDD, crypto, cleaner, pipeline, gRPC, FSM, i18n)
+pytest -q core/tests scripts/tests
 
 # Go REST API Control Plane (100% passing: auth, tenant isolation, metadata validation)
 cd api && go test -v ./...
