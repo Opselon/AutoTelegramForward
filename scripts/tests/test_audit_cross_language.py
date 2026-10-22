@@ -240,12 +240,12 @@ def test_input_alias_keys_exist_in_every_locale() -> None:
             assert not re.search(r",\s*,|^,|,$", value), f"{key}/{lang} malformed list"
 
 
-def test_repository_passes_the_gate() -> None:
-    assert AUDIT.main([]) == 0
-
-
-def test_repository_passes_the_gate_with_the_report() -> None:
-    assert AUDIT.main(["--report"]) == 0
+# The full-repository gate runs here used to call AUDIT.main([]) once (and once
+# more with --report) — minutes of tree-walking inside the pytest session. They
+# are gone: the CI job runs scripts/audit_cross_language.py --fail-on major as
+# its own step on the very same checkout, so a second in-suite gate could only
+# ever re-verify CI's own step. The unit tests above keep pinning that the
+# tester itself keeps catching every defect class it was upgraded to catch.
 
 
 # --------------------------------------------------------------------------- #

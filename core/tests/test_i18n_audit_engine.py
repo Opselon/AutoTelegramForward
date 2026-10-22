@@ -103,11 +103,12 @@ def test_a_clean_fixture_has_no_critical_or_major_findings(tmp_path):
     assert result.stats["wrapped_handlers"] == 1
 
 
-def test_the_real_tree_has_no_critical_findings():
-    """The repository itself must pass what CI enforces."""
-    result = audit_mod.audit(REPO)
-    critical = [f for f in result.findings if f.severity == "critical"]
-    assert critical == [], [(f.path, f.line, f.detail) for f in critical]
+# The real-tree gate used to run audit_mod.audit(REPO) here (the whole tree,
+# in-process, ~26 s). It is gone: the CI job runs scripts/i18n_audit.py
+# --fail-on major against the same checkout as its own step, and
+# `test_baseline_pins_known_debt_and_still_fails_on_new_debt` pins the engine's
+# gate behaviour on the pin file. The fixture tests above keep auditing what the
+# engine must catch; the repository itself is CI's audit step's job.
 
 
 # --------------------------------------------------------------------------- #

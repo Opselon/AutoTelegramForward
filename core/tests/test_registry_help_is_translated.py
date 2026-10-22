@@ -56,13 +56,24 @@ class Saver:
         return None
 
 
+_CATALOG_CACHE: dict = {}
+_I18N_CACHE: dict[str, I18n] = {}
+
+
 def catalog() -> dict:
-    return json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+    """The parsed catalog, read once — this module calls it on every test's
+    inner loop and json.load of the 1.5 MB table costs ~10 ms per call."""
+    if not _CATALOG_CACHE:
+        _CATALOG_CACHE.update(json.loads(CATALOG_PATH.read_text(encoding="utf-8")))
+    return _CATALOG_CACHE
 
 
 def translate(lang: str):
     def _t(key, **params):
-        text = I18n().t(key, lang=lang, **params)
+        inst = _I18N_CACHE.get(lang)
+        if inst is None:
+            inst = _I18N_CACHE[lang] = I18n()
+        text = inst.t(key, lang=lang, **params)
         assert text and text != key, f"{key} is missing from the {lang} catalog"
         return text
 

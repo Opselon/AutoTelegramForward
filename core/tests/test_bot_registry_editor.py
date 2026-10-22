@@ -47,11 +47,19 @@ class Saver:
             raise RuntimeError("concurrency conflict")
 
 
+_I18N_EN = None
+
+
 def t(key, **params):
     """The real catalog, so a missing key fails here rather than on a phone."""
     from core.infrastructure.telegram.i18n import I18n
 
-    text = I18n().t(key, lang="en", **params)
+    # One instance per module: I18n() re-parses the 1.5 MB catalog table, and
+    # the render walk below calls t() thousands of times.
+    global _I18N_EN
+    if _I18N_EN is None:
+        _I18N_EN = I18n()
+    text = _I18N_EN.t(key, lang="en", **params)
     assert text and text != key, f"catalog key missing: {key}"
     return text
 
