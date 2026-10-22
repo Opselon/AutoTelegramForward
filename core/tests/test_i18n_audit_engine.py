@@ -103,12 +103,10 @@ def test_a_clean_fixture_has_no_critical_or_major_findings(tmp_path):
     assert result.stats["wrapped_handlers"] == 1
 
 
-# The real-tree gate used to run audit_mod.audit(REPO) here (the whole tree,
-# in-process, ~26 s). It is gone: the CI job runs scripts/i18n_audit.py
-# --fail-on major against the same checkout as its own step, and
-# `test_baseline_pins_known_debt_and_still_fails_on_new_debt` pins the engine's
-# gate behaviour on the pin file. The fixture tests above keep auditing what the
-# engine must catch; the repository itself is CI's audit step's job.
+# `test_the_real_tree_has_no_critical_findings` was deleted: `scripts/
+# i18n_audit.py --fail-on major` runs the same `audit()` over this same tree
+# a few steps later in the CI job, fail-closed on critical findings too, so
+# the scan inside pytest duplicated the slowest audit without adding one.
 
 
 # --------------------------------------------------------------------------- #

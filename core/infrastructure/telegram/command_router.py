@@ -38,8 +38,6 @@ from core.domain.text_replace import (
 
 logger = logging.getLogger(__name__)
 
-#: How many dialogs one discovery command prints.
-_DISCOVERY_LIMIT = 40
 #: Clone bounds: a user-triggered history copy is a bounded operation, not a
 #: migration tool. Both ends are enforced before the first message is sent.
 _CLONE_DEFAULT = 20
@@ -464,44 +462,6 @@ class TextCommandMixin:
             return
         text, kbd = self._render_filters_menu(rule)
         await message.reply_text(text, reply_markup=kbd)
-
-    # ------------------------------------------------------------------ #
-    # Chat discovery
-    # ------------------------------------------------------------------ #
-    async def _cmd_getchannel(self, message: Message, args: str) -> None:
-        await self._cmd_discovery(message, "channel")
-
-    async def _cmd_getgroup(self, message: Message, args: str) -> None:
-        await self._cmd_discovery(message, "group")
-
-    async def _cmd_getuser(self, message: Message, args: str) -> None:
-        await self._cmd_discovery(message, "user")
-
-    async def _cmd_getbot(self, message: Message, args: str) -> None:
-        await self._cmd_discovery(message, "bot")
-
-    async def _cmd_discovery(self, message: Message, kind: str) -> None:
-        uid = message.from_user.id if message.from_user else 0
-        lang = self._resolve_lang(uid)
-        label = self._kind_label(kind, lang)
-        chats = await self._fetch_dialogs(uid)
-        picked = [c for c in chats if str(c.get("kind")) == kind]
-        if not picked:
-            return await message.reply_text(
-                self._t("cmd_list_empty", lang=lang, kind=label),
-                reply_markup=self._main_menu(uid),
-            )
-        lines = [self._t("cmd_list_title", lang=lang, kind=label, n=len(picked)), ""]
-        for chat in picked[:_DISCOVERY_LIMIT]:
-            title = str(chat.get("title") or chat.get("id"))
-            handle = f" (@{chat['username']})" if chat.get("username") else ""
-            lines.append(f"{chat.get('emoji') or '•'} {title}{handle} — `{chat.get('id')}`")
-        if len(picked) > _DISCOVERY_LIMIT:
-            lines.append(self._t("ui_bl_more", lang=lang, more=len(picked) - _DISCOVERY_LIMIT))
-        await message.reply_text(
-            "\n".join(lines),
-            reply_markup=self._kbd([[(self._btn("ui_main_menu_forward", lang=lang), "r")]]),
-        )
 
     # ------------------------------------------------------------------ #
     # Account

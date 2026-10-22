@@ -74,6 +74,16 @@ func main() {
 	mux.HandleFunc("GET /readyz", h.Ready)
 	mux.HandleFunc("GET /ready", h.Ready)
 	mux.HandleFunc("GET /api/version", h.Version)
+	// Clients that prefix every path with /api (dashboard tooling, external
+	// monitors) get a plain 401 today for the health endpoints they probe, so
+	// register the same public liveness/readiness surface under that prefix.
+	mux.HandleFunc("GET /api/healthz", h.Health)
+	mux.HandleFunc("GET /api/health", h.Health)
+	mux.HandleFunc("GET /api/v1/health", h.Health)
+	mux.HandleFunc("GET /api/readyz", h.Ready)
+	mux.HandleFunc("GET /api/ready", h.Ready)
+	mux.HandleFunc("GET /api/v1/ready", h.Ready)
+	mux.HandleFunc("GET /api/system/ready", h.Ready)
 	// The API's own machine-readable contract (ships in the image).
 	mux.HandleFunc("GET /api/openapi.yaml", h.OpenAPIDoc)
 	mux.HandleFunc("GET /api/v1/health/services", h.ServicesHealth)
@@ -106,6 +116,10 @@ func main() {
 	// account via Identity.UserID (0 = unlinked web account => sees nothing).
 	dashMux := http.NewServeMux()
 	dashMux.HandleFunc("GET /stats", h.GetStats)
+	// The DevOps panel polls this every ten seconds; it was documented by the
+	// frontend but never routed, so every poll was a 404 in the access log.
+	dashMux.HandleFunc("GET /gateway", h.GatewayInfo)
+	dashMux.HandleFunc("GET /v1/gateway", h.GatewayInfo)
 	dashMux.HandleFunc("GET /rules", h.ListRules)
 	dashMux.HandleFunc("POST /rules", h.CreateRule)
 	dashMux.HandleFunc("GET /rules/{id}", h.GetRule)

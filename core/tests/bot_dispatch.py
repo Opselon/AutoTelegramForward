@@ -255,6 +255,8 @@ REGISTERING_MODULES = (
     "core.infrastructure.telegram.pro_bot_ui",
     "core.infrastructure.telegram.autoreply_bot_ui",
     "core.infrastructure.telegram.replace_bot_ui",
+    "core.infrastructure.telegram.handlers.discovery",
+    "core.infrastructure.telegram.handlers.forwarding",
 )
 
 

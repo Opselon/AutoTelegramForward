@@ -240,12 +240,12 @@ def test_input_alias_keys_exist_in_every_locale() -> None:
             assert not re.search(r",\s*,|^,|,$", value), f"{key}/{lang} malformed list"
 
 
-# The full-repository gate runs here used to call AUDIT.main([]) once (and once
-# more with --report) — minutes of tree-walking inside the pytest session. They
-# are gone: the CI job runs scripts/audit_cross_language.py --fail-on major as
-# its own step on the very same checkout, so a second in-suite gate could only
-# ever re-verify CI's own step. The unit tests above keep pinning that the
-# tester itself keeps catching every defect class it was upgraded to catch.
+# The twin `test_repository_passes_the_gate` scans used to re-run the whole
+# tree gate here (150+ seconds of pytest) while the same CI job needs only
+# four steps later (`python scripts/audit_cross_language.py`, the same gate,
+# fail-closed). The rule/mutation tests above prove the scanner *works*; the
+# dedicated CI step proves the tree *passes* — pytest does not need to do
+# both.
 
 
 # --------------------------------------------------------------------------- #

@@ -18,6 +18,7 @@ enforced in one place instead of being re-derived at every call site.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Iterable, List, Optional, Sequence, Tuple
 
@@ -35,7 +36,18 @@ LINK_PREFIXES: Tuple[str, ...] = (
     "telegram.me/",
 )
 
+#: A fully numeric entry is one id spelled either way: ``-1001234567890``
+#: (Bot-API) and ``1234567890`` (the raw unique id) name the same channel,
+#: so duplicate and self-loop detection must treat them as one token.
+UNIQUE_ID_MATCH = re.compile(r"^(?:-100)?(?P<raw>\d{1,20})$")
+
 MAX_CALLBACK_BYTES = 64
+
+#: Per-entry resolution states shared by the wizard, `/route` and the
+#: forwarding handler: one owner so a status cannot drift between surfaces.
+STATUS_RESOLVED = "resolved"
+STATUS_FAILED = "failed"
+STATUS_UNCHECKED = "unchecked"
 SHORT_ID_LENGTH = 8
 
 # Validation codes, mapped to catalog keys by the surfaces.
@@ -82,15 +94,30 @@ def strip_link_prefix(token: str) -> str:
     return text
 
 
+def unique_peer_key(token: str) -> str:
+    """Key that collides both spellings of one numeric id.
+
+    ``-1001234567890`` and ``1234567890`` are one chat; a username or a
+    ``t.me`` link is spelling-sensitive like before.
+    """
+    text = strip_link_prefix(token)
+    stripped = text.lstrip("@").strip().lower()
+    match = UNIQUE_ID_MATCH.match(stripped)
+    return match.group("raw") if match else stripped
+
+
 def peer_key(token: str) -> str:
     """Normalized comparison key for one entry.
 
-    Two spellings of the same chat (`@News`, `news`, `https://t.me/news`)
-    must collide, so duplicate and self-loop detection is spelled-insensitively
-    identical to how Telegram resolves the entry.
+    Two spellings of the same chat (`@News`, `news`, `https://t.me/news`,
+    `-100123…` and its raw unique id) must collide, so duplicate and
+    self-loop detection is spelled-insensitively identical to how Telegram
+    resolves the entry.
     """
     text = strip_link_prefix(token)
-    return text.lstrip("@").strip().lower()
+    stripped = text.lstrip("@").strip().lower()
+    match = UNIQUE_ID_MATCH.match(stripped)
+    return match.group("raw") if match else stripped
 
 
 def looks_like_peer(token: str) -> bool:

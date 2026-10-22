@@ -17,6 +17,7 @@ from .coercion import enum_str
 
 logger = logging.getLogger(__name__)
 
+
 from ...application.repositories import (
     ApiCredential,
     BotToken,
@@ -66,6 +67,29 @@ from ...domain.value_objects import (
 )
 from ..security.crypto import CryptoService
 from .database import SqliteDatabase
+
+
+def _safe_decrypt(crypto, enc: str, *, kind: str, row_id: str) -> str:
+    """Decrypt one stored secret, or return "" for a row that cannot be read.
+
+    One undecryptable row (written under a previous ``ATF_MASTER_KEY``, or
+    truncated) used to fail the whole *list*: ListBotTokens answered
+    "Unexpected [Error]" with a base64 traceback and the dashboard rendered a
+    blank page. A per-row failure now degrades to an empty secret with a named
+    warning, so the rest of the page still works and the operator knows exactly
+    which row to re-enter.
+    """
+    if not enc:
+        return ""
+    try:
+        return crypto.decrypt(enc)
+    except Exception as exc:  # noqa: BLE001 - one bad row must not fail a list
+        logger.warning(
+            "%s %s cannot be decrypted (%s); returning an empty secret — "
+            "re-enter it or restore the master key",
+            kind, str(row_id)[:8], exc,
+        )
+        return ""
 
 
 def _new_id() -> str:
@@ -170,7 +194,7 @@ class SqliteSessionRepository(ISessionRepository):
         return TelegramSession(
             id=row["id"],
             phone_number=row["phone_number"],
-            session_string_encrypted=self._crypto.decrypt(enc) if enc else "",
+            session_string_encrypted=_safe_decrypt(self._crypto, enc, kind="session", row_id=row["id"]),
             user_id=row["user_id"],
             username=row["username"],
             first_name=row["first_name"],
@@ -991,7 +1015,7 @@ class SqliteAIConfigRepository(IAIConfigRepository):
         return AIConfig(
             id=row["id"], name=row["name"], provider=AIProviderType(row["provider"]),
             model=row["model"],
-            api_key=self._crypto.decrypt(enc) if enc else "",
+            api_key=_safe_decrypt(self._crypto, enc, kind="ai config", row_id=row["id"]),
             base_url=row["base_url"], system_prompt=row["system_prompt"],
             user_prompt_template=row["user_prompt_template"],
             temperature=row["temperature"], is_enabled=bool(row["is_enabled"]),
@@ -1071,7 +1095,7 @@ class SqliteApiCredentialRepository(IApiCredentialRepository):
         enc = row["api_hash_encrypted"]
         return ApiCredential(
             id=row["id"], label=row["label"], api_id=row["api_id"],
-            api_hash=self._crypto.decrypt(enc) if enc else "",
+            api_hash=_safe_decrypt(self._crypto, enc, kind="api credential", row_id=row["id"]),
             proxy=row["proxy"], is_default=bool(row["is_default"]),
             created_at=row["created_at"], updated_at=row["updated_at"],
             owner_user_id=int(row["owner_user_id"]) if "owner_user_id" in row.keys() else 0,
@@ -1165,7 +1189,7 @@ class SqliteBotTokenRepository(IBotTokenRepository):
             raw_defaults = "{}"  # a row from a database that predates v20
         return BotToken(
             id=row["id"], label=row["label"],
-            token=self._crypto.decrypt(enc) if enc else "",
+            token=_safe_decrypt(self._crypto, enc, kind="bot token", row_id=row["id"]),
             is_active=bool(row["is_active"]),
             created_at=row["created_at"], updated_at=row["updated_at"],
             owner_user_id=owner,
@@ -2498,6 +2522,16 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
         for r in rows:
             res[r["status"]] = int(r["cnt"])
         return res
+
+    async def counts_for_rule(self, rule_id: str) -> dict:
+        """Per-status delivery counts for one rule (the status screen)."""
+        if not rule_id:
+            return {}
+        rows = self._db.query_all(
+            "SELECT status, COUNT(*) as cnt FROM delivery_jobs WHERE rule_id=? GROUP BY status",
+            (str(rule_id),),
+        )
+        return {str(r["status"]): int(r["cnt"]) for r in rows or ()}
 
     async def recover_expired_leases(self) -> int:
         now = time.time()

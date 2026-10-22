@@ -101,6 +101,13 @@ class DurableQueueManager:
         # session_id -> the deadline we already told the owner about; a queue of
         # jobs hitting the same suspension must not send one message each.
         self._account_notices: Dict[str, float] = {}
+        # session_id -> [consecutive no-client sweeps, next retry epoch, last
+        # warn epoch]. A dead/offline session used to re-log and re-defer every
+        # one of its queued jobs every 15s, which is how a single unregistered
+        # session produced ~14k identical ERRORs and kept the queue spinning.
+        # Backoff is per session, not per job, because every job on that
+        # session is blocked by the same missing client.
+        self._no_client_backoff: Dict[str, list] = {}
 
         self._workers: List[asyncio.Task] = []
         self._watchdog_task: Optional[asyncio.Task] = None
@@ -713,6 +720,28 @@ class DurableQueueManager:
                 worker_id, job.rule_id[:8], exc,
             )
 
+    def _note_no_client(self, session_id: str) -> tuple:
+        """Backoff for a session with no live client. Returns (delay, first, reminder).
+
+        A session with no client blocks every job queued on it, so the counter
+        lives per session rather than per job: the first miss is loud, repeats
+        are quiet (the operator already knows), and a reminder lands every 15
+        minutes so a permanently dead session is still visible in the log.
+        """
+        now = time.time()
+        state = self._no_client_backoff.get(session_id)
+        if not state:
+            state = [0, 0.0, 0.0]
+            self._no_client_backoff[session_id] = state
+        state[0] += 1
+        delay = min(300.0, 15.0 * (2 ** min(state[0] - 1, 5)))
+        state[1] = now + delay
+        first = state[0] == 1
+        reminder = (now - float(state[2] or 0.0)) >= 900.0
+        if first or reminder:
+            state[2] = now
+        return (delay, first, reminder)
+
     async def _defer_job(self, job: DeliveryJob, reason: str, backoff: float) -> None:
         """Postpone a job whose blocker is transient, without spending an attempt.
 
@@ -846,11 +875,19 @@ class DurableQueueManager:
         client = route or (self._pool.get(session_id) if self._pool is not None else None)
         if client is None:
             _bump_target("retried")
-            logger.error(
-                "[PIPELINE:NO_CLIENT] [%s] Cannot deliver job %s: No live client for session %s (rule=%s, tgt=%s)",
-                worker_id, job.id, session_id, job.rule_id[:8], target,
-            )
-            if self._log_client is not None:
+            backoff, first, reminder = self._note_no_client(str(session_id or ""))
+            if first or reminder:
+                logger.error(
+                    "[PIPELINE:NO_CLIENT] [%s] Cannot deliver job %s: No live client for session %s "
+                    "(rule=%s, tgt=%s); retrying in %.0fs",
+                    worker_id, job.id, session_id, job.rule_id[:8], target, backoff,
+                )
+            else:
+                logger.debug(
+                    "[PIPELINE:NO_CLIENT] [%s] job %s deferred again for session %s (%.0fs)",
+                    worker_id, job.id, session_id, backoff,
+                )
+            if self._log_client is not None and (first or reminder):
                 try:
                     self._log_client.error(
                         "queue", "forward",
@@ -861,11 +898,18 @@ class DurableQueueManager:
                     pass
             # A session that is offline is not a failed delivery. Deferring keeps
             # the message for when the account comes back, instead of
-            # dead-lettering it after five one-second polls.
-            await self._defer_job(job, f"No live client for session {session_id}", 15.0)
+            # dead-lettering it after five one-second polls. The backoff grows
+            # with consecutive misses so a session that is gone (rather than
+            # momentarily reconnecting) stops costing an attempt every 15s.
+            await self._defer_job(job, f"No live client for session {session_id}", backoff)
             return None
 
         # Attempt delivery to Telegram
+        if session_id and self._no_client_backoff.pop(str(session_id), None) is not None:
+            logger.info(
+                "[PIPELINE:NO_CLIENT] session %s is live again; retry backoff cleared",
+                str(session_id)[:8],
+            )
         t0 = time.monotonic()
         logger.info(
             "[PIPELINE:DISPATCH] [%s] Dispatching rule=%s src=%s:%s -> tgt=%s (session=%s, attempt=%d)",

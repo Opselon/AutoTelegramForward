@@ -185,6 +185,54 @@ export const endpointDetail: Record<string, EndpointDetail> = {
     summary: 'Versioned alias of /api/health/services.',
     statuses: ok,
   },
+  'GET /api/healthz': {
+    summary:
+      'Liveness at the /api prefix: identical to /healthz, for callers that prefix every path with /api.',
+    statuses: ok,
+  },
+  'GET /api/health': {
+    summary: 'Liveness alias at the /api prefix.',
+    statuses: ok,
+  },
+  'GET /api/v1/health': {
+    summary: 'Liveness versioned alias.',
+    statuses: ok,
+  },
+  'GET /api/readyz': {
+    summary:
+      'Readiness at the /api prefix: identical to /readyz (pings the rate-limiter store; 503 when a wired limiter cannot enforce its budget).',
+    statuses: ['200', '503'],
+  },
+  'GET /api/ready': {
+    summary: 'Readiness alias at the /api prefix.',
+    statuses: ['200', '503'],
+  },
+  'GET /api/v1/ready': {
+    summary: 'Readiness versioned alias.',
+    statuses: ['200', '503'],
+  },
+  'GET /api/system/ready': {
+    summary: 'Readiness under the system prefix (same readiness gate).',
+    statuses: ['200', '503'],
+  },
+  'GET /api/gateway': {
+    summary:
+      'Gateway/runtime info for the dashboard header: whether core is reachable, its version and uptime, session and rule counts and the service ports the panel shows.',
+    note: 'Always answers 200 — even when core is unreachable, atf_core_online is then false, so the panel degrades instead of erroring.',
+    statuses: ok,
+    response: `{
+  "atf_core_online": true,
+  "version": "2.2.4",
+  "uptime_seconds": 1043,
+  "total_rules": 3,
+  "total_sessions": 2,
+  "grpc_port": 8080
+}`,
+  },
+  'GET /api/v1/gateway': {
+    summary: 'Versioned alias of /api/gateway.',
+    statuses: ok,
+  },
   'GET /api/openapi.yaml': {
     summary:
       'The control plane’s own OpenAPI 3.1 document. It ships inside the image next to the code that serves it, so the published contract cannot drift from the binary.',
