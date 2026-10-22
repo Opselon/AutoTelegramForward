@@ -61,6 +61,14 @@ const SQLITE_IOERR: i32 = 10;
 const SQLITE_BUSY_SNAPSHOT: i32 = 517;
 /// SQLite's `SQLITE_BUSY_TIMEOUT`.
 const SQLITE_BUSY_TIMEOUT: i32 = 773;
+/// SQLite's `SQLITE_FULL`: the database (or its journal/WAL) hit the disk
+/// limit. An environmental condition, not a statement bug, so it must be
+/// retryable and distinguishable from a broken statement.
+const SQLITE_FULL: i32 = 13;
+/// `SQLITE_IOERR_WRITE` / `SQLITE_IOERR_FSYNC`: the write/fsync itself failed
+/// (typically "no space left on device" surfaces here rather than as FULL).
+const SQLITE_IOERR_WRITE: i32 = 778;
+const SQLITE_IOERR_FSYNC: i32 = 582;
 
 /// The Python engine's schema, verbatim in behaviour.
 pub const CREATE_TABLE: &str = "\
@@ -379,6 +387,12 @@ fn map_error(err: rusqlite::Error, context: &str) -> StorageError {
                     StorageError::Busy(format!("{context}: {text}"))
                 }
                 SQLITE_IOERR => StorageError::Transient(format!("{context}: {text}")),
+                // Disk-full is a retryable environment condition: ingest keeps
+                // refusing, producers keep their records, and the recovery is
+                // free space - not a code change.
+                SQLITE_FULL | SQLITE_IOERR_WRITE | SQLITE_IOERR_FSYNC => {
+                    StorageError::Transient(format!("{context}: disk-full: {text}"))
+                }
                 _ => StorageError::Backend(format!("{context}: {text}")),
             }
         }
@@ -496,6 +510,15 @@ impl Storage for SqliteStorage {
         self.timed(&self.metrics.storage_read_seconds, || {
             self.read_one_i64(&plan)
         })
+    }
+
+    /// The write-ahead journal lives next to the archive as `<path>-wal`
+    /// whenever the connection is in WAL mode; the same connection that set it
+    /// up is the one that can read its size.
+    fn wal_size_bytes(&self) -> i64 {
+        std::fs::metadata(format!("{}-wal", self.path))
+            .map(|m| m.len() as i64)
+            .unwrap_or(0)
     }
 
     fn table_rows(&self) -> Result<i64, StorageError> {
@@ -1724,5 +1747,95 @@ mod tests {
             .unwrap();
         assert_eq!(stats.total, 4);
         assert_eq!(stats.by_rule.get("rule-a"), Some(&6));
+    }
+
+    #[test]
+    fn disk_full_and_io_write_failures_are_transient_not_backend() {
+        // Classification decides whether a producer keeps its record, so pin
+        // the codes, not just the enum name. `SqliteFailure` carries an
+        // extended code in `ErrorCode::Extended`; the primary code is implied.
+        fn sqlite_failure(extended: i32, message: &str) -> rusqlite::Error {
+            rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(extended),
+                Some(message.to_string()),
+            )
+        }
+        for code in [SQLITE_FULL, SQLITE_IOERR_WRITE, SQLITE_IOERR_FSYNC] {
+            let err = sqlite_failure(code, "database or disk is full");
+            let mapped = map_error(err, "insert batch");
+            assert!(mapped.is_retryable(), "code {code} must be retryable");
+            let rendered = format!("{mapped}");
+            assert!(
+                rendered.contains("disk-full"),
+                "code {code} must name the condition for the runbook: {rendered}"
+            );
+        }
+        // A genuinely broken statement stays in the Backend bucket.
+        let err = rusqlite::Error::InvalidQuery;
+        assert!(!map_error(err, "prepare read").is_retryable());
+        // ... and a Busy lock is still Busy, unchanged behaviour.
+        let err = sqlite_failure(SQLITE_BUSY, "database is locked");
+        assert!(matches!(map_error(err, "x"), StorageError::Busy(_)));
+    }
+
+    #[test]
+    fn wal_size_reflects_the_journal_file_and_zero_without_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("waltest.db").to_string_lossy().to_string();
+        let cfg = Config::default();
+        let backend = BackendConfig {
+            backend: Backend::Sqlite,
+            sqlite_path: path,
+            postgres_dsn: None,
+            busy_timeout_ms: 5_000,
+            read_pool_size: 1,
+            pool_timeout_ms: 5_000,
+            statement_timeout_ms: 0,
+            transaction_timeout_ms: 0,
+            max_rows_per_statement: 500,
+        };
+        let metrics = Arc::new(Metrics::new());
+        let storage = SqliteStorage::open(&cfg, &backend, Arc::clone(&metrics)).unwrap();
+        // Fresh open with no writes yet: the journal may exist but is empty.
+        assert!(storage.wal_size_bytes() >= 0);
+
+        // A committed batch must materialise WAL bytes while the connection is
+        // open (the storage never checkpoints away an in-flight journal before
+        // close). Not exact-size: WAL growth is SQLite's business. The gauge's
+        // contract is "unreported = 0", "reported = what fs says".
+        let record = Record {
+            id: 0,
+            ts: 1_700_000_000,
+            level: "INFO".into(),
+            service: "core".into(),
+            category: "system".into(),
+            message: "wal gauge".into(),
+            detail: String::new(),
+            rule_id: String::new(),
+            user_id: 0,
+            correlation_id: String::new(),
+            request_id: String::new(),
+            trace_id: String::new(),
+            module: String::new(),
+            fingerprint: String::new(),
+        };
+        storage.insert_batch(&[record]).unwrap();
+        assert!(
+            storage.wal_size_bytes() > 0,
+            "a commit must leave journal bytes on disk, fs said {}",
+            storage.wal_size_bytes()
+        );
+
+        // The absent file case: a never-opened path reports 0 (via map_or), never
+        // a failure.
+        assert_eq!(
+            std::fs::metadata(format!(
+                "{}-wal",
+                dir.path().join("none.db").to_string_lossy()
+            ))
+            .map(|m| m.len() as i64)
+            .unwrap_or(0),
+            0
+        );
     }
 }

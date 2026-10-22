@@ -259,12 +259,25 @@ What remains genuinely missing:
   size gauge, so an operator sees "storage failures" without "why / how close
   to full".
 
-**Fix (PR-3)** (bounded):
+**Fix (PR-3) — DONE in `feat/logger-rate-and-disk`** (bounded):
 - map `SQLITE_FULL`/`SQLITE_IOERR_WRITE` to a retryable class
   (`StorageError::Transient`), documented.
-- `storage_failures_total{source}` labeled counter + `wal_size_bytes` gauge;
-  ingest keeps refusing when full and recovers when space returns — proven by a
-  forced disk-full test (SQLite `max_page_count` sandbox).
+- `atf_logger_storage_failures_total{kind}` labelled counter fired at the one
+  place a batch fails (`commit_batch`), with the `StorageError` taxonomy label
+  (`busy|transient|backend|unavailable|config|unsupported`) — never the message,
+  which would leak arbitrary text into series;
+  `atf_logger_wal_size_bytes` gauge, sampled every ~30 s per writer together
+  with the previously-declared-but-never-set `atf_logger_storage_rows` gauge;
+  WAL bytes come from the `<db>-wal` file (0 = not reported, PostgreSQL's
+  journal is the server's lifecycle, not this process's).
+- Validation is unit-level on the classification (codes 13/778/582 →
+  `Transient` naming "disk-full", `SQLITE_BUSY` → `Busy`, `InvalidQuery` →
+  `Backend`) plus a real archive test that a committed batch materialises WAL
+  bytes while the storage is open. A forced `max_page_count` disk-full is
+  deliberately not part of the suite: the limit is a per-connection pragma, and
+  driving the writer's connection below its own page count would prove
+  rusqlite's behaviour, not this crate's mapping — the mapping is the thing
+  that decides whether a producer keeps its record.
 
 ## 3. Deliberately not built (and why)
 

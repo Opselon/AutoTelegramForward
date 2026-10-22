@@ -136,3 +136,26 @@ Everything remaining is under PR-3 (see `docs/logger-hardening-audit.md`).
   is still *never* sent to the logger (different trust domain, unchanged).
 - **Compat**: both consumers send nothing when nothing is configured; every
   existing e2e/binary test path is unchanged with default config.
+
+## PR-3 additions (operational edges: disk-full, storage kinds, WAL, verbose cap)
+
+- **Disk-full is a classified condition, not a backend bug**: SQLite codes
+  `SQLITE_FULL` (13), `SQLITE_IOERR_WRITE` (778) and `SQLITE_IOERR_FSYNC` (582)
+  map to the retryable `Transient` class and the message names `disk-full`, so
+  producers keep their records and the runbook says "free space", not "your
+  statement is malformed". PostgreSQL's `53100` (disk_full) and `53400`
+  (configuration_limit) join the retryable SQLSTATE set for parity.
+- **Storage failures by kind**: `atf_logger_storage_failures_total{kind}` at the
+  single batch-failure site; bounded label set, message text never becomes a
+  series.
+- **Footprint gauges**: `atf_logger_wal_size_bytes` (from `<db>-wal`) and
+  `atf_logger_storage_rows` are sampled every ~30 s per writer thread — gauges
+  that previously were declared but never set, and a `count(*)` per batch would
+  be waste.
+- **Verbose admission cap** (`ATF_LOGGER_ADMISSION_RATE`, records/s, 0 = off):
+  a token bucket in the transport refuses DEBUG/INFO above the rate with
+  `RATE_LIMITED` and `atf_logger_admission_rate_limited_total{level}`. WARN,
+  ERROR, CRITICAL and the protected categories (audit, security) bypass
+  unconditionally: the records that explain an incident are never throttled.
+  Burst = one second of tokens; refill from real elapsed time; off by default so
+  the deployment keeps its current behaviour until an operator opts in.

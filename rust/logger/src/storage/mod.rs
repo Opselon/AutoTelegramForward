@@ -338,6 +338,14 @@ pub trait Storage: Send + Sync {
     /// Total rows in the archive.
     fn table_rows(&self) -> Result<i64, StorageError>;
 
+    /// Disk bytes the write-ahead log currently occupies. 0 = "not reported":
+    /// the SQLite backend reads `<path>-wal`; PostgreSQL's journal activity is
+    /// the server's own lifecycle and is out of this process's control, so it
+    /// stays 0 rather than a made-up number.
+    fn wal_size_bytes(&self) -> i64 {
+        0
+    }
+
     /// The `LogStats` aggregate.
     fn stats(&self, scope: &StatsScope) -> Result<Stats, StorageError>;
 

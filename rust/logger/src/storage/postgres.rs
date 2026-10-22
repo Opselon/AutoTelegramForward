@@ -93,7 +93,10 @@ CREATE TABLE IF NOT EXISTS logs (
 ///
 /// `40001` serialization_failure, `40P01` deadlock_detected, `55P03`
 /// lock_not_available, `53300` too_many_connections, `57P01/57P02/57P03`
-/// shutdown/crash/cannot_connect_now, `08000/08003/08006` connection exceptions.
+/// shutdown/crash/cannot_connect_now, `08000/08003/08006` connection exceptions,
+/// `53100` disk_full / `53400` configuration_limit — a full volume is an
+/// environmental, retryable condition (parity with the SQLite `SQLITE_FULL`
+/// mapping).
 pub fn is_retryable_sqlstate(code: &str) -> bool {
     matches!(
         code,
@@ -101,6 +104,8 @@ pub fn is_retryable_sqlstate(code: &str) -> bool {
             | "40P01"
             | "55P03"
             | "53300"
+            | "53100"
+            | "53400"
             | "57P01"
             | "57P02"
             | "57P03"
@@ -1193,6 +1198,7 @@ mod tests {
         assert!(is_retryable_sqlstate("57P03")); // cannot_connect_now
         assert!(is_retryable_sqlstate("08006")); // connection_failure
                                                  // A constraint or syntax error must never be retried: retrying cannot fix it.
+        assert!(is_retryable_sqlstate("53100")); // disk_full: retry when space returns
         assert!(!is_retryable_sqlstate("23505")); // unique_violation
         assert!(!is_retryable_sqlstate("42601")); // syntax_error
         assert!(!is_retryable_sqlstate("42P01")); // undefined_table

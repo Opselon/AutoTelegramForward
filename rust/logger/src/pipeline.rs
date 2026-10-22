@@ -763,7 +763,22 @@ fn writer_loop(shared: Arc<Shared>) {
             .unwrap_or(Duration::from_millis(50))
             .max(Duration::from_millis(5)),
     );
+    // Footprint sampling throttle: rows/WAL are gauges, not counters, and a
+    // count(*) on every batch is waste; one sample every ~30 s per writer is
+    // always an honest number without measurable load.
+    let sample_interval = Duration::from_secs(30);
+    let mut last_sample = std::time::Instant::now() - sample_interval;
     loop {
+        if last_sample.elapsed() >= sample_interval && !shared.stopped.load(Ordering::SeqCst) {
+            last_sample = std::time::Instant::now();
+            if let Ok(rows) = shared.storage.table_rows() {
+                shared.metrics.storage_rows.set(rows);
+            }
+            shared
+                .metrics
+                .wal_size_bytes
+                .set(shared.storage.wal_size_bytes());
+        }
         let batch = shared.queues.take_batch(
             shared.config.batch_size,
             shared.config.batch_delay,
@@ -833,6 +848,12 @@ fn commit_batch(shared: &Arc<Shared>, items: Vec<Item>) {
                 .with("storage")
                 .add(records.len() as u64);
             metrics.storage_transaction_failures.inc();
+            // By kind, not by message: disk-full vs busy vs a broken statement
+            // are different runbooks; the taxonomy label is bounded, the message
+            // never becomes a series.
+            metrics
+                .storage_failures
+                .inc(crate::metrics::storage_error_label(&err));
             // A failed batch must not look healthy: readiness is lowered with the
             // storage error as the reason, and it is restored on the next success.
             metrics.storage_up.set(0);
