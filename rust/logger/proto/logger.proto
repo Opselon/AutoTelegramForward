@@ -102,14 +102,15 @@ message LogStatsResponse {
   int64 newest_ts = 7;               // v18: newest record on disk
   // ---- Error aggregation (additive) ----
   // Recurring-error groups: the identifying fields of a failing event plus how
-  // often and how recently it fired. Bounded to `MAX_FINGERPRINT_GROUPS` entries
+  // often and how recently it fired. Bounded to `MAX_ERROR_GROUPS` entries
   // so a producer that invents a message per request cannot grow the response.
   repeated ErrorGroup error_groups = 8;
 }
 
 // One recurring-error signature, for the "same failure, N times" view.
 message ErrorGroup {
-  string fingerprint = 1;  // stable id of the signature (level+service+category+module+message)
+  string fingerprint = 1;  // engine-computed signature id (category+module+
+                           // number-masked message; severity/service reported, not hashed)
   string level = 2;
   string service = 3;
   string category = 4;

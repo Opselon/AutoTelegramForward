@@ -735,7 +735,8 @@ message LogStatsResponse {
 
 // One recurring-error signature, for the "same failure, N times" view.
 message ErrorGroup {
-  string fingerprint = 1;  // stable id of the signature (level+service+category+module+message)
+  string fingerprint = 1;  // engine-computed signature id (category+module+
+                           // number-masked message; severity/service reported, not hashed)
   string level = 2;
   string service = 3;
   string category = 4;
