@@ -114,6 +114,39 @@ func TestListChats_ScopesToCallerIdentityAndForwardsFilters(t *testing.T) {
 	}
 }
 
+// Every picker (bot, dashboard, app) leads with the chats the user pinned, so
+// the pin state has to survive the wire. `false` is omitted (proto3/omitempty),
+// which each client parses as "not pinned" — the same default an older server
+// produces, so a client never has to special-case the missing key.
+func TestListChats_ExposesPinStateForThePickers(t *testing.T) {
+	fc := &fakeChatClient{resp: &pb.ListChatsResponse{
+		SessionId: "sess-1",
+		Chats: []*pb.ChatSummary{
+			{ChatId: "-1001", Title: "Pinned", ChatType: "channel", Pinned: true},
+			{ChatId: "-1002", Title: "Loose", ChatType: "channel"},
+		},
+		Count: 2, Total: 2,
+	}}
+	h := &Handlers{c: &grpcclient.Clients{Sessions: fc}}
+
+	rec := httptest.NewRecorder()
+	h.ListChats(rec, chatRequest(111, "sess-1", ""))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	chats, ok := decodeBody(t, rec)["chats"].([]any)
+	if !ok || len(chats) != 2 {
+		t.Fatalf("chats = %v, want two entries", decodeBody(t, rec)["chats"])
+	}
+	if pinned, ok := chats[0].(map[string]any)["pinned"].(bool); !ok || !pinned {
+		t.Fatalf("pinned chat lost its pin state: %v", chats[0])
+	}
+	if _, present := chats[1].(map[string]any)["pinned"]; present {
+		t.Fatalf("an unpinned chat must omit the field, not send false: %v", chats[1])
+	}
+}
+
 // A foreign or unknown session is a 404 — the caller learns only that it is not
 // theirs, exactly what the contract promises.
 func TestListChats_ForeignSessionIsNotFound(t *testing.T) {

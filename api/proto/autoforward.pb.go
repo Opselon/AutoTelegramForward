@@ -1948,13 +1948,18 @@ func (x *ListChatsRequest) GetOffset() int32 {
 }
 
 type ChatSummary struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ChatId        string                 `protobuf:"bytes,1,opt,name=chat_id,json=chatId,proto3" json:"chat_id,omitempty"`       // canonical numeric id (string-formatted)
-	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`                       // chat display name
-	Username      string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`                 // public @username (empty for private chats)
-	ChatType      string                 `protobuf:"bytes,4,opt,name=chat_type,json=chatType,proto3" json:"chat_type,omitempty"` // channel | supergroup | group | private | bot (lowercase)
-	Members       int64                  `protobuf:"varint,5,opt,name=members,proto3" json:"members,omitempty"`                  // participant count when the peer exposes it (0 = unknown)
-	IsForum       bool                   `protobuf:"varint,6,opt,name=is_forum,json=isForum,proto3" json:"is_forum,omitempty"`   // forum-enabled supergroup (topic-based)
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	ChatId   string                 `protobuf:"bytes,1,opt,name=chat_id,json=chatId,proto3" json:"chat_id,omitempty"`       // canonical numeric id (string-formatted)
+	Title    string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`                       // chat display name
+	Username string                 `protobuf:"bytes,3,opt,name=username,proto3" json:"username,omitempty"`                 // public @username (empty for private chats)
+	ChatType string                 `protobuf:"bytes,4,opt,name=chat_type,json=chatType,proto3" json:"chat_type,omitempty"` // channel | supergroup | group | private | bot (lowercase)
+	Members  int64                  `protobuf:"varint,5,opt,name=members,proto3" json:"members,omitempty"`                  // participant count when the peer exposes it (0 = unknown)
+	IsForum  bool                   `protobuf:"varint,6,opt,name=is_forum,json=isForum,proto3" json:"is_forum,omitempty"`   // forum-enabled supergroup (topic-based)
+	// The chat is pinned in the source session. Pickers list pinned chats first:
+	// the chats a user pinned deliberately are the ones a task is usually built
+	// around, and the bot's own pickers already sort that way. Older servers omit
+	// it, which parses as false — the client then keeps the server's order.
+	Pinned        bool `protobuf:"varint,7,opt,name=pinned,proto3" json:"pinned,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2027,6 +2032,13 @@ func (x *ChatSummary) GetMembers() int64 {
 func (x *ChatSummary) GetIsForum() bool {
 	if x != nil {
 		return x.IsForum
+	}
+	return false
+}
+
+func (x *ChatSummary) GetPinned() bool {
+	if x != nil {
+		return x.Pinned
 	}
 	return false
 }
@@ -14477,14 +14489,15 @@ const file_autoforward_proto_rawDesc = "" +
 	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\x12\x14\n" +
 	"\x05query\x18\x03 \x01(\tR\x05query\x12\x14\n" +
 	"\x05limit\x18\x04 \x01(\x05R\x05limit\x12\x16\n" +
-	"\x06offset\x18\x05 \x01(\x05R\x06offset\"\xaa\x01\n" +
+	"\x06offset\x18\x05 \x01(\x05R\x06offset\"\xc2\x01\n" +
 	"\vChatSummary\x12\x17\n" +
 	"\achat_id\x18\x01 \x01(\tR\x06chatId\x12\x14\n" +
 	"\x05title\x18\x02 \x01(\tR\x05title\x12\x1a\n" +
 	"\busername\x18\x03 \x01(\tR\busername\x12\x1b\n" +
 	"\tchat_type\x18\x04 \x01(\tR\bchatType\x12\x18\n" +
 	"\amembers\x18\x05 \x01(\x03R\amembers\x12\x19\n" +
-	"\bis_forum\x18\x06 \x01(\bR\aisForum\"\xac\x01\n" +
+	"\bis_forum\x18\x06 \x01(\bR\aisForum\x12\x16\n" +
+	"\x06pinned\x18\a \x01(\bR\x06pinned\"\xac\x01\n" +
 	"\x11ListChatsResponse\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12.\n" +

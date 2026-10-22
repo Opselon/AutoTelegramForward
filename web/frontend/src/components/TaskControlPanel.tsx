@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { AlertCircle, Check, Loader2, Plus, Save, X } from 'lucide-react'
 import { api } from '../api'
+import { ChatPicker } from './ChatPicker'
 import type {
   BotTokenInfo,
   ForwardRule,
@@ -314,6 +315,36 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
   }
   const hint: React.CSSProperties = { fontSize: '11px', color: '#94a3b8', marginTop: '2px' }
 
+  /**
+   * Add several chats at once from the browser.
+   *
+   * The browser already dims what this task uses, but the check is repeated
+   * here with the same normalisation the server applies: one write per pick
+   * would be N renders, and a duplicate would then be rejected by the server
+   * with a message about a row the user never typed.
+   */
+  const addMany = (side: 'source' | 'target', picks: { id: string; title: string }[]) => {
+    const current = side === 'source' ? sources : targets
+    const seen = new Set(current.map((entry) => normalizeChat(entry)))
+    const ids: string[] = []
+    const names: string[] = []
+    for (const pick of picks) {
+      const key = normalizeChat(pick.id)
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      ids.push(pick.id)
+      names.push((pick.title || '').trim() || pick.id)
+    }
+    if (ids.length === 0) return
+    const next = [...current, ...ids]
+    const nextNames = [...namesFor(rule, side), ...names]
+    if (side === 'source') {
+      onRulePatch({ source_chat_ids: next, source_chat_id: next[0], source_chat_names: nextNames })
+    } else {
+      onRulePatch({ target_chat_ids: next, target_chat_id: next[0], target_chat_names: nextNames })
+    }
+  }
+
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'}>
       {/* ---------------------------------------------------------- sources */}
@@ -333,6 +364,9 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
           onAdd={addSource}
           onRemove={removeSource}
           validate={validateSource}
+          sessionId={rule.session_id}
+          existing={[...sources, ...targets]}
+          onAddMany={(picks) => addMany('source', picks)}
         />
         <div style={hint}>{t('ui_save_the_task_to_apply_source_changes')}</div>
       </div>
@@ -354,6 +388,9 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
           onAdd={addTarget}
           onRemove={removeTarget}
           validate={validateTarget}
+          sessionId={rule.session_id}
+          existing={[...sources, ...targets]}
+          onAddMany={(picks) => addMany('target', picks)}
         />
         <div style={hint}>{t('ui_save_the_task_to_apply_target_changes')}</div>
       </div>
@@ -528,6 +565,12 @@ interface ChatListEditorProps {
   onRemove: (value: string) => void
   /** Returns an error message naming the offending entry, or null when it is ok. */
   validate: (raw: string) => string | null
+  /** The rule's session, whose dialogs the chat browser lists. */
+  sessionId: string
+  /** Every id already used by this task (either side), so the browser can dim them. */
+  existing: string[]
+  /** Confirm in the browser with one or more picked chats. */
+  onAddMany: (picks: { id: string; title: string }[]) => void
 }
 
 /**
@@ -550,11 +593,15 @@ function ChatListEditor({
   onAdd,
   onRemove,
   validate,
+  sessionId,
+  existing,
+  onAddMany,
 }: ChatListEditorProps) {
   const isRtl = isRtlLang(lang)
   const t = makeT(lang)
   const [draft, setDraft] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
+  const [browsing, setBrowsing] = useState(false)
 
   const submit = () => {
     const value = draft.trim()
@@ -687,6 +734,43 @@ function ChatListEditor({
           <AlertCircle size={12} />
           <span>{localError}</span>
         </div>
+      )}
+
+      {/*
+        The browse affordance sits *below* the id field on purpose: the sheet is
+        a convenience over typing, never a replacement for it. A session with no
+        live client still configures a task by id.
+      */}
+      <button
+        type="button"
+        onClick={() => setBrowsing(true)}
+        style={{
+          marginTop: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          background: 'none',
+          border: '1px dashed #334155',
+          borderRadius: '8px',
+          color: '#93c5fd',
+          padding: '7px 10px',
+          fontSize: '11px',
+          cursor: 'pointer',
+          width: '100%',
+          justifyContent: 'center',
+        }}
+      >
+        {t('ui_browse_chats')}
+      </button>
+
+      {browsing && (
+        <ChatPicker
+          sessionId={sessionId}
+          lang={lang}
+          alreadyIn={existing}
+          onPick={onAddMany}
+          onClose={() => setBrowsing(false)}
+        />
       )}
     </div>
   )
