@@ -103,11 +103,10 @@ def test_a_clean_fixture_has_no_critical_or_major_findings(tmp_path):
     assert result.stats["wrapped_handlers"] == 1
 
 
-def test_the_real_tree_has_no_critical_findings():
-    """The repository itself must pass what CI enforces."""
-    result = audit_mod.audit(REPO)
-    critical = [f for f in result.findings if f.severity == "critical"]
-    assert critical == [], [(f.path, f.line, f.detail) for f in critical]
+# `test_the_real_tree_has_no_critical_findings` was deleted: `scripts/
+# i18n_audit.py --fail-on major` runs the same `audit()` over this same tree
+# a few steps later in the CI job, fail-closed on critical findings too, so
+# the scan inside pytest duplicated the slowest audit without adding one.
 
 
 # --------------------------------------------------------------------------- #
