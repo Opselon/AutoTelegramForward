@@ -13,6 +13,7 @@ to do with it. No Telegram type appears in this module.
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, replace
 from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Sequence, Tuple
@@ -43,6 +44,18 @@ EMOJI: Dict[str, str] = {
 }
 
 
+def _numeric_id_key(token: str) -> str:
+    """The spelling-insensitive key of a numeric chat id, or the token.
+
+    ``-1001206461239`` (Bot API) and ``1206461239`` (the unique id clients
+    display) are one chat, so the leading ``-100`` never changes what a
+    pasted id resolves to.
+    """
+    text = str(token or "").strip().lower()
+    match = re.fullmatch(r"(?:-100)?(\d{1,20})", text)
+    return match.group(1) if match else text
+
+
 def classify(raw_type: Any, is_self: bool = False) -> str:
     """Map a Telegram chat type onto one of the five catalog kinds.
 
@@ -70,6 +83,10 @@ class ChatEntry:
     title: str
     kind: str
     username: str = ""
+    #: The chat is pinned in the source session. Pinned chats sort first
+    #: inside their kind: the chats a user deliberately pinned are the ones
+    #: most likely to be the task they are building.
+    pinned: bool = False
 
     @property
     def emoji(self) -> str:
@@ -92,6 +109,7 @@ class ChatEntry:
             "emoji": self.emoji,
             "kind": self.kind,
             "username": self.username,
+            "pinned": self.pinned,
         }
 
 
@@ -175,12 +193,21 @@ class DialogCatalog:
             return None
 
     def find(self, token: str) -> Optional[ChatEntry]:
-        """Resolve a typed id, @username or title — the text-input fallback."""
+        """Resolve a typed id, @username or title — the text-input fallback.
+
+        A numeric id matches in either spelling: the raw unique id a user
+        pastes from the client and the ``-100…`` Bot-API spelling the catalog
+        stores are the same chat. The collision is computed locally — this is
+        an application-layer module and must not import from infrastructure.
+        """
         wanted = (token or "").strip().lstrip("@").lower()
         if not wanted:
             return None
+        wanted_key = _numeric_id_key(wanted)
         for entry in self._entries:
-            if wanted in {entry.id.lower(), entry.username.lower()}:
+            if wanted_key and wanted_key == _numeric_id_key(entry.id.lower()):
+                return entry
+            if wanted == entry.username.lower():
                 return entry
             if wanted == entry.title.lower():
                 return entry
@@ -205,6 +232,7 @@ class DialogCatalog:
                     title=str(row.get("title") or row.get("id")),
                     kind=str(row.get("kind") or KIND_USER),
                     username=str(row.get("username") or ""),
+                    pinned=bool(row.get("pinned")),
                 )
             )
         return cls(entries)
@@ -243,9 +271,13 @@ class ListDialogsUseCase:
                     title=title,
                     kind=kind,
                     username=str(chat.get("username") or ""),
+                    pinned=bool(chat.get("pinned")),
                 )
             )
-        entries.sort(key=lambda e: (PRIORITY.get(e.kind, 99), e.title.lower()))
+        # Pinned chats lead within their kind: the kind order stays the
+        # broadcast-first contract, but inside a kind a chat the user pinned
+        # outranks alphabetical position.
+        entries.sort(key=lambda e: (PRIORITY.get(e.kind, 99), not e.pinned, e.title.lower()))
         return DialogCatalog(entries)
 
     async def execute(

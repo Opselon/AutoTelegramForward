@@ -161,7 +161,8 @@ class DiscoveryHandlers:
         ]
         for idx, entry in enumerate(p.entries, start=p.start + 1):
             handle = f" • {entry.handle}" if entry.handle else ""
-            lines.append(f"{entry.emoji} **{idx}. {entry.title}**\n   🆔 `{entry.id}`{handle}")
+            pin = "📌 " if entry.pinned else ""
+            lines.append(f"{entry.emoji} {pin}**{idx}. {entry.title}**\n   🆔 `{entry.id}`{handle}")
         lines.append("────────────────────")
         lines.append(
             self._t(

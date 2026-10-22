@@ -193,7 +193,15 @@ class ReplaceBotMixin:
             target = str(item.get("to") or "")
             preview = f"→ {target[:22]}" if target else _t("ui_rpl_deletes")
             label = f"{icon} {name} · {preview}"
-            rows.append([(label[:64], _cb("v", item.get("id")))])
+            # Every row carries its own switch: the state a rule is in must be
+            # one tap away, not two screens deep in its detail card.
+            toggle = _t(
+                "ui_rpl_btn_disable" if item.get("enabled") else "ui_rpl_btn_enable",
+            )
+            rows.append([
+                (label[:64], _cb("v", item.get("id"))),
+                (toggle, _cb("swl", item.get("id"), "0" if item.get("enabled") else "1")),
+            ])
 
         # Navigation: filters first, then paging, then the two create actions.
         rows.append([
@@ -713,6 +721,24 @@ class ReplaceBotMixin:
                 return await cq.answer(_t("ui_internal_error"), show_alert=True)
             await cq.answer(_t("ui_rpl_enabled_alert") if rule.enabled else _t("ui_rpl_disabled_alert"))
             return await render(cq, uid, self._render_rpl_detail, arg1)
+
+        if verb == "swl":
+            # The list row's switch: same write as `sw`, but the user stays on
+            # the list — toggling should never cost them their page position.
+            want = arg2 in ("1", "true", "on")
+            try:
+                rule = await service.update(uid, arg1, {"enabled": want})
+            except ReplaceRuleError as exc:
+                return await self._rpl_refuse(cq, exc, uid)
+            except Exception as exc:
+                logger.warning("[PIPELINE:REPLACE] enable failed for %s: %s", uid, exc)
+                return await cq.answer(_t("ui_internal_error"), show_alert=True)
+            logger.info(
+                "[PIPELINE:REPLACE] owner=%s list-toggle rule=%s enabled=%s",
+                uid, arg1, rule.enabled,
+            )
+            await cq.answer(_t("ui_rpl_enabled_alert") if rule.enabled else _t("ui_rpl_disabled_alert"))
+            return await render(cq, uid, self._render_rpl_list)
 
         if verb == "del":
             await cq.answer()

@@ -18,6 +18,7 @@ enforced in one place instead of being re-derived at every call site.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import Iterable, List, Optional, Sequence, Tuple
 
@@ -86,6 +87,26 @@ def strip_link_prefix(token: str) -> str:
         if low.startswith(prefix):
             return text[len(prefix):].strip()
     return text
+
+
+#: One numeric id, in either spelling: the raw unique id Telegram shows in
+#: clients (``1234567890``) or the Bot-API spelling of the same chat
+#: (``-1001234567890``). ``chat.id`` around the bot is the second spelling,
+#: while what a user pastes from the app is the first — so both must collapse
+#: to one lookup key everywhere a pasted id is resolved.
+UNIQUE_ID_MATCH = re.compile(r"^(?:-100)?(?P<raw>\d{1,20})$")
+
+
+def unique_peer_key(token: str) -> str:
+    """Key that collides both spellings of one numeric id.
+
+    ``-1001234567890`` and ``1234567890`` are one chat; a username or a
+    ``t.me`` link is spelling-sensitive like before.
+    """
+    text = strip_link_prefix(token)
+    stripped = text.lstrip("@").strip().lower()
+    match = UNIQUE_ID_MATCH.match(stripped)
+    return match.group("raw") if match else stripped
 
 
 def peer_key(token: str) -> str:

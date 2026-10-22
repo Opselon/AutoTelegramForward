@@ -25,7 +25,7 @@ import time
 import uuid
 from functools import wraps
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, List, Optional, Tuple
+from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 from urllib.parse import quote
 
 from pyrogram import Client, filters
@@ -118,6 +118,7 @@ from .route_lists import (
     parse_route_list,
     short_id,
     strip_link_prefix,
+    unique_peer_key,
     validate_resolved_uniqueness,
     validate_route_lists,
 )
@@ -3372,7 +3373,11 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
                 # The stored key is usually the source text, but a managed rule
                 # is keyed by id; the source is what the user typed either way.
                 label = entry.name or entry.source
-                lines.append(f"{idx}. `{label[:40]}` ➔ {rep_display}  `{entry.badge()}`{name}")
+                # A paused marker belongs to the line, not only to the button:
+                # the user reads the list first and asks later why a row
+                # stopped firing.
+                paused = "" if entry.enabled else f" · {self._t('ui_rpl_status_off', lang=lang)}"
+                lines.append(f"{idx}. `{label[:40]}` ➔ {rep_display}  `{entry.badge()}`{name}{paused}")
             lines.append("")
 
         lines.extend([
@@ -3392,9 +3397,13 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             for idx, old in enumerate(list(reps.keys())[:6]):
                 entry = entry_from_value(old, reps.get(old))
                 display_k = (entry.name or entry.source)[:10]
+                toggle_label = self._t(
+                    "ui_rpl_btn_disable" if entry.enabled else "ui_rpl_btn_enable", lang=lang
+                )
                 rows.append([
                     (self._t("ui_rep_btn_entry", lang=lang, source=display_k),
                      f"rtxe:{rule.id}:{idx}:{version}"),
+                    (toggle_label, f"rtxt:{rule.id}:{idx}:{version}"),
                     (f"❌ {display_k}", f"rtxd:{rule.id}:{idx}:{version}"),
                 ])
             rows.append([(self._t("ui_rep_btn_clear", lang=lang), f"rtxc:{rule.id}")])
@@ -3444,6 +3453,8 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             [(self._t("ui_rep_btn_word", lang=lang,
                       state=self._t("ui_yes" if entry.whole_word else "ui_no", lang=lang)),
               f"rtxef:{rule.id}:{idx}:{version}:w")],
+            [(self._t("ui_rpl_btn_disable" if entry.enabled else "ui_rpl_btn_enable", lang=lang),
+              f"rtxt:{rule.id}:{idx}:{version}")],
             [(self._t("ui_delete", lang=lang), f"rtxd:{rule.id}:{idx}:{version}")],
             [(self._btn("ui_rule_back_rule", lang=lang), f"rtx:{rule.id}")],
         ]
@@ -4017,7 +4028,8 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             for idx, item in enumerate(page_items, start=start + 1):
                 clean_title = _clean_md(item["title"])
                 uname = f" • @{item['username']}" if item.get("username") else ""
-                lines.append(f"{item['emoji']} **{idx}. {clean_title}**\n   🆔 `{item['id']}`{uname}")
+                pin = "📌 " if item.get("pinned") else ""
+                lines.append(f"{item['emoji']} {pin}**{idx}. {clean_title}**\n   🆔 `{item['id']}`{uname}")
 
             lines.append("────────────────────")
             lines.append(self._t("ui_picker_page_info", lang=cur_lang, page=page + 1, total=total_pages, count=total_items))
@@ -6205,6 +6217,87 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         async def _cb_rule_replace_flag(_, cq: CallbackQuery):
             raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
             await _replace_toggle(cq, raw.rsplit(":", 1)[-1])
+
+        @b.on_callback_query(filters.regex(r"^rtxt:(.+):(\d+):(\d+)$"))
+        @self._localized_handler
+        async def _cb_rule_replace_enable(_, cq: CallbackQuery):
+            """Enable / disable one replacement entry — the rule wizard's own toggle.
+
+            A managed rule (one id, many tasks) is toggled on the task it is
+            rendered for and the state is cascaded to every other task the
+            owner runs that rule on, so one rule stays one truth: pressing
+            "disable" twice in two tasks cannot end with one task running it
+            and the other silently skipping it.
+            """
+            uid = cq.from_user.id if cq.from_user else 0
+            lang = self._resolve_lang(uid)
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, bytes) else str(cq.data or "")
+            parts = raw.split(":")
+            rule_id, idx_str, ver_str = parts[1], parts[2], parts[3]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule or not rule.replacements:
+                return await cq.answer(self._t("ui_rep_none_found_alert", lang=lang), show_alert=True)
+            key = self._resolve_replace_click(rule, int(idx_str), ver_str)
+            if key is None:
+                await cq.answer(self._t("ui_rep_list_changed_alert", lang=lang), show_alert=True)
+                text, kbd = self._render_replace_menu(rule)
+                return await self._safe_edit(cq, text, reply_markup=kbd)
+            replacements = dict(rule.replacements)
+            try:
+                entry = entry_from_value(key, replacements.get(key))
+                updated = entry_with(replacements, key, enabled=not entry.enabled)
+            except ReplaceError:
+                return await cq.answer(self._t("ui_rep_err_unknown_option", lang=lang), show_alert=True)
+            value = updated.to_rule_value() if updated.rid else updated.to_value()
+            replacements[key] = value
+            if not isinstance(rule.metadata, dict):
+                rule.metadata = {}
+            rule.metadata["replacements"] = replacements
+            await self._save_owned_rule(rule, uid)
+
+            cascade = 0
+            if updated.rid:
+                # Same rule id under other tasks of the same owner: keep every
+                # copy identical, write under each task's own stored key.
+                try:
+                    siblings = await self._rules.list_by_owner(uid) or []
+                except Exception as exc:
+                    logger.warning("[PIPELINE:REPLACE] cascade read failed %s: %s", uid, exc)
+                    siblings = []
+                for task in siblings:
+                    task_id = str(getattr(task, "id", "") or "")
+                    if not task_id or task_id == str(rule_id):
+                        continue
+                    task_reps = getattr(task, "replacements", None)
+                    if not isinstance(task_reps, dict):
+                        continue
+                    sibling_key = next(
+                        (str(k) for k, v in task_reps.items()
+                         if isinstance(v, Mapping) and str(v.get("id") or "") == updated.rid),
+                        None,
+                    )
+                    if sibling_key is None:
+                        continue
+                    task_reps = dict(task_reps)
+                    task_reps[sibling_key] = value
+                    if not isinstance(task.metadata, dict):
+                        task.metadata = {}
+                    task.metadata["replacements"] = task_reps
+                    await self._save_owned_rule(task, uid)
+                    cascade += 1
+                    logger.info(
+                        "[PIPELINE:REPLACE] owner=%s rule=%s task=%s cascade enabled=%s",
+                        uid, updated.rid, task_id[:8], updated.enabled,
+                    )
+            logger.info(
+                "[PIPELINE:REPLACE] owner=%s rule=%s task=%s key=%s enabled=%s",
+                uid, str(rule_id)[:8], str(rule_id)[:8], key[:24], updated.enabled,
+            )
+            await cq.answer(
+                self._t("ui_rpl_enabled_alert" if updated.enabled else "ui_rpl_disabled_alert", lang=lang)
+            )
+            text, kbd = self._render_replace_entry(rule, key)
+            await self._safe_edit(cq, text, reply_markup=kbd)
 
         @b.on_callback_query(filters.regex(r"^rhf:(.+)$"))
         @self._localized_handler
@@ -11215,34 +11308,66 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
                 pass  # api_hash is sensitive — best-effort cleanup only
 
     # ---------------- rule FSM ----------------
+    async def _resolve_wizard_chat(
+        self, uid: int, st: UiState, raw: str, role: str,
+    ) -> Tuple[str, str]:
+        """One chat token -> (id, display title) for the rule wizard.
+
+        The buffered dialog list answers first by id in either spelling
+        (``-100…`` Bot-API and the raw unique id both match) or by username;
+        otherwise the connected client resolves it, exactly like the route
+        wizard and the rule editor do through ``_resolve_chat_token``. Every
+        outcome is logged under ``[PIPELINE:WIZARD]`` so a pasted chat that
+        fails to resolve is diagnosable from the logs.
+        """
+        token = str(raw or "").strip()
+        buffer = st.buffer if isinstance(st.buffer, dict) else {}
+        if "chats" in buffer:
+            wanted = unique_peer_key(token)
+            for chat in buffer.get("chats") or []:
+                if unique_peer_key(str(chat.get("id") or "")) == wanted and wanted:
+                    title = f"{chat.get('emoji') or ''} {chat.get('title') or ''}".strip()
+                    logger.info(
+                        "[PIPELINE:WIZARD] role=%s uid=%s token=%r matched=%s buffered",
+                        role, uid, token[:32], chat.get("id"),
+                    )
+                    return str(chat.get("id") or token), title or token
+                username = str(chat.get("username") or "").lower()
+                if username and username == token.lstrip("@").lower():
+                    title = f"{chat.get('emoji') or ''} {chat.get('title') or ''}".strip()
+                    logger.info(
+                        "[PIPELINE:WIZARD] role=%s uid=%s token=%r matched=@%s buffered",
+                        role, uid, token[:32], username,
+                    )
+                    return str(chat.get("id") or token), title or token
+
+        cid, title, status = await self._resolve_chat_token(uid, st, token)
+        logger.info(
+            "[PIPELINE:WIZARD] role=%s uid=%s token=%r status=%s cid=%s",
+            role, uid, token[:32], status, cid[:32],
+        )
+        return cid, title
+
     async def _step_rule_source(self, message: Message, st: UiState, text: str) -> None:
         raw = text.strip()
         uid = int(message.from_user.id if message.from_user else (message.chat.id if message.chat else 0))
+        lang = self._lang_for(st)
 
-        matched_title = raw
-        if isinstance(st.buffer, dict) and "chats" in st.buffer:
-            for c in st.buffer["chats"]:
-                if c["id"] == raw or (c.get("username") and c["username"].lower() == raw.lstrip("@").lower()):
-                    matched_title = f"{c['emoji']} {c['title']}"
-                    raw = c["id"]
-                    break
+        if raw.lower() in cancel_aliases():
+            # Typing a cancel word is an exit from the wizard, never the id
+            # of a chat: the flow is settled so the NEXT message goes to the
+            # menu instead of being swallowed as a target selection.
+            st.step = ""
+            st.rule_source = ""
+            st.rule_target = ""
+            if isinstance(st.buffer, dict):
+                st.buffer = {}
+            await self._persist(uid, st)
+            await message.reply_text(
+                self._t("ui_cancel_back", lang=lang), reply_markup=self._main_menu(uid))
+            return
 
-        if matched_title == raw:
-            try:
-                _fsm_uid = self._scope_uid(uid)
-                sessions = (await self._sessions.list_all() if _fsm_uid is None
-                            else await self._sessions.list_by_owner(uid))
-                if sessions:
-                    client = self._pool.get(sessions[0].id)
-                    if client and getattr(client, "is_connected", False):
-                        chat_obj = await client.get_chat(raw)
-                        c_id = getattr(chat_obj, "id", None)
-                        if chat_obj and c_id is not None:
-                            raw = str(c_id)
-                            c_title = getattr(chat_obj, "title", None) or getattr(chat_obj, "first_name", None) or raw
-                            matched_title = f"📢 {c_title}"
-            except Exception:
-                pass
+        raw, matched_title = await self._resolve_wizard_chat(uid, st, raw, role="source")
 
         st.rule_source = raw
         if not isinstance(st.buffer, dict):
@@ -11261,37 +11386,28 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         st.buffer["page"] = 0
         await self._persist(uid, st)
 
-        picker_text, markup = self._render_chat_picker(st, role="target", page=0)
+        picker_text, markup = self._render_chat_picker(st, role="target", page=0, uid=uid)
         await message.reply_text(picker_text, reply_markup=markup)
 
     async def _step_rule_target(self, message: Message, st: UiState, text: str) -> None:
         raw = text.strip()
         uid = int(message.from_user.id if message.from_user else (message.chat.id if message.chat else 0))
+        lang = self._lang_for(st)
 
-        matched_title = raw
-        if isinstance(st.buffer, dict) and "chats" in st.buffer:
-            for c in st.buffer["chats"]:
-                if c["id"] == raw or (c.get("username") and c["username"].lower() == raw.lstrip("@").lower()):
-                    matched_title = f"{c['emoji']} {c['title']}"
-                    raw = c["id"]
-                    break
+        if raw.lower() in cancel_aliases():
+            # Same contract as the source step: a cancel word leaves the
+            # wizard with no half-built rule left behind.
+            st.step = ""
+            st.rule_source = ""
+            st.rule_target = ""
+            if isinstance(st.buffer, dict):
+                st.buffer = {}
+            await self._persist(uid, st)
+            await message.reply_text(
+                self._t("ui_cancel_back", lang=lang), reply_markup=self._main_menu(uid))
+            return
 
-        if matched_title == raw:
-            try:
-                _fsm_uid = self._scope_uid(uid)
-                sessions = (await self._sessions.list_all() if _fsm_uid is None
-                            else await self._sessions.list_by_owner(uid))
-                if sessions:
-                    client = self._pool.get(sessions[0].id)
-                    if client and getattr(client, "is_connected", False):
-                        chat_obj = await client.get_chat(raw)
-                        c_id = getattr(chat_obj, "id", None)
-                        if chat_obj and c_id is not None:
-                            raw = str(c_id)
-                            c_title = getattr(chat_obj, "title", None) or getattr(chat_obj, "first_name", None) or raw
-                            matched_title = f"📢 {c_title}"
-            except Exception:
-                pass
+        raw, matched_title = await self._resolve_wizard_chat(uid, st, raw, role="target")
 
         st.rule_target = raw
         source_title = st.buffer.get("source_name") or st.rule_source
