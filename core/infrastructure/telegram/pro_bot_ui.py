@@ -2535,10 +2535,18 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             return "", "", ROUTE_FAILED
         buffer = st.buffer if isinstance(st.buffer, dict) else {}
         if "chats" in buffer:
+            token_key = unique_peer_key(token)
             for chat in buffer.get("chats") or []:
                 chat_id = str(chat.get("id") or "")
                 username = str(chat.get("username") or "")
-                if chat_id == token or (username and username.lower() == token.lstrip("@").lower()):
+                # Exact spelling first; then the raw unique id matches the
+                # `-100…` Bot-API spelling and vice versa, so an id copied
+                # from any list resolves to the buffered chat without a
+                # network probe.
+                if chat_id == token or (
+                    chat_id and token_key.isdigit()
+                    and unique_peer_key(chat_id) == token_key
+                ) or (username and username.lower() == token.lstrip("@").lower()):
                     title = "{} {}".format(chat.get("emoji") or "", chat.get("title") or "").strip()
                     return chat_id or token, title or chat_id or token, ROUTE_RESOLVED
         try:

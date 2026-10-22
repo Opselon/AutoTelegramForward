@@ -80,13 +80,28 @@ class Saver:
         self.saved += 1
 
 
+_CATALOG_CACHE: dict = {}
+_I18N_CACHE: dict[str, I18n] = {}
+
+
+def _i18n(lang: str) -> I18n:
+    """One I18n per locale: I18n() re-parses the 1.5 MB catalog table, and the
+    render walks below translate thousands of strings."""
+    inst = _I18N_CACHE.get(lang)
+    if inst is None:
+        inst = _I18N_CACHE[lang] = I18n()
+    return inst
+
+
 def catalog() -> dict:
-    return json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
+    if not _CATALOG_CACHE:
+        _CATALOG_CACHE.update(json.loads(CATALOG_PATH.read_text(encoding="utf-8")))
+    return _CATALOG_CACHE
 
 
 def translate(lang: str):
     def _t(key, **params):
-        text = I18n().t(key, lang=lang, **params)
+        text = _i18n(lang).t(key, lang=lang, **params)
         assert text and text != key, f"{key} is missing from the {lang} catalog"
         return text
 
@@ -107,8 +122,8 @@ def lenient_editor(lang: str = "fa") -> RegistryEditor:
     itself rather than on what the probe is about.
     """
     return RegistryEditor(
-        translate=lambda key, **params: I18n().t(key, lang=lang, **params),
-        contains=I18n().contains,
+        translate=lambda key, **params: _i18n(lang).t(key, lang=lang, **params),
+        contains=_i18n(lang).contains,
         save=Saver(),
     )
 

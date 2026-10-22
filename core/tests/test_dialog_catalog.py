@@ -98,12 +98,15 @@ def test_catalog_find_accepts_id_username_and_title():
 
 def test_entries_expose_name_and_id_together():
     entry = _entry("-1001", "News", username="news_chan")
+    # `pinned` rides on every as_dict row (default False) so a picker render
+    # needs no second lookup to mark 📌 rows.
     assert entry.as_dict() == {
         "id": "-1001",
         "title": "News",
         "emoji": "📢",
         "kind": KIND_CHANNEL,
         "username": "news_chan",
+        "pinned": False,
     }
     assert entry.label == "📢 News (@news_chan)"
 

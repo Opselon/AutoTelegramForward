@@ -31,15 +31,25 @@ from core.application.discovery import (
     KIND_BOT,
     KIND_CHANNEL,
     KIND_GROUP,
+    KIND_SAVED,
     KIND_USER,
+    PRIORITY,
     BrowseDialogsUseCase,
+    ChatListQuery,
+    ChatQueryError,
     DialogCatalog,
+    parse_chat_list_query,
 )
 
 logger = logging.getLogger(__name__)
 
 #: Chats per page in the discovery browser.
 PAGE_SIZE = 6
+
+#: Chats per page of the copy-ready `-id` list. The list is one line per chat
+#: and the message must stay far under Telegram's 4096-char limit even when
+#: titles are long, so the page is deliberately generous but bounded.
+PLAIN_PAGE_SIZE = 20
 
 #: The kinds a page offers a switch to, in the catalog's display order. "saved"
 #: is deliberately absent: Saved Messages is a session artefact, not a task
@@ -71,26 +81,102 @@ class DiscoveryHandlers:
         await self._cmd_discovery(message, KIND_BOT, args)
 
     async def _cmd_discovery(self, message: Message, kind: str, args: str = "") -> None:
-        """Render one page of `kind`; a numeric argument is a 1-based page."""
+        """Answer one `/get…` command, flag-aware.
+
+        Bare `/getchannel` (or `/getchannel 2`) keeps the interactive paged
+        sheet. `-id` answers the copy-ready one-line list (name → id, the
+        exact spelling `/forward add` accepts); `-all` widens a kind command
+        to every kind; a page number pages the plain list. The grammar lives
+        in :func:`core.application.discovery.parse_chat_list_query`; unknown
+        tokens are refused with a usage line, never guessed.
+        """
         uid = message.from_user.id if message.from_user else 0
         lang = self._resolve_lang(uid)
-        page = self._page_argument(args)
-        catalog = await self._discovery_catalog(uid)
+        try:
+            query = parse_chat_list_query(args)
+        except ChatQueryError as exc:
+            return await message.reply_text(
+                self._t("ui_gch_bad_query", lang=lang, detail=exc.detail),
+            )
+        # The plain `-id` list is the user asking for the truth now: it backs
+        # itself with a live rescan, which also keeps its freshness line honest.
+        catalog = await self._discovery_catalog(uid, force=query.with_ids)
+        if query.with_ids:
+            return await self._reply_plain_catalog(
+                message, catalog, kind=kind, query=query, lang=lang,
+            )
         if not catalog.of_kind(kind):
             return await message.reply_text(
                 self._t("ui_gch_empty", lang=lang, kind=self._kind_label(kind, lang)),
                 reply_markup=self._main_menu(uid),
             )
-        text, kbd = self._render_discovery_page(catalog, kind=kind, page=page, lang=lang)
+        text, kbd = self._render_discovery_page(catalog, kind=kind, page=query.page, lang=lang)
         await message.reply_text(text, reply_markup=kbd)
 
-    @staticmethod
-    def _page_argument(args: str) -> int:
-        """`/getchannel 3` means the third page; anything else means the first."""
-        token = (args or "").strip().split(None, 1)[0] if (args or "").strip() else ""
-        if not token.isdigit():
-            return 0
-        return max(0, int(token) - 1)
+    def _query_kinds(self, kind: str, query: ChatListQuery) -> Tuple[str, ...]:
+        """The kinds one answer covers: the command's kind, or all of them.
+
+        `-all` walks the catalog's own display priority and skips Saved
+        Messages: it is a session artefact, not a chat a task routes through.
+        """
+        if query.all_kinds:
+            by_priority = tuple(
+                k for k, _rank in sorted(PRIORITY.items(), key=lambda item: item[1])
+            )
+            return tuple(k for k in by_priority if k != KIND_SAVED)
+        return (kind,)
+
+    async def _reply_plain_catalog(
+        self,
+        message: Message,
+        catalog: DialogCatalog,
+        kind: str,
+        query: ChatListQuery,
+        lang: str,
+    ) -> None:
+        """The copy-ready one-line list: `N. Name → `<id>``.
+
+        No buttons by design — this answer exists to be copied from, and one
+        id per line pastes straight into `/forward add`. A live rescan backs
+        it (counts as an explicit refresh), so the freshness line is honest.
+        """
+        kinds = self._query_kinds(kind, query)
+        entries = [entry for entry in catalog.entries if entry.kind in kinds]
+        if not entries:
+            return await message.reply_text(
+                self._t("ui_gch_empty", lang=lang, kind=self._kind_label(kind, lang)),
+            )
+        total = len(entries)
+        total_pages = max(1, -(-total // PLAIN_PAGE_SIZE))
+        index = max(0, min(query.page, total_pages - 1))
+        chunk = entries[index * PLAIN_PAGE_SIZE:(index + 1) * PLAIN_PAGE_SIZE]
+
+        header = self._t("cmd_kind_all", lang=lang) if query.all_kinds else self._kind_label(kind, lang)
+        lines: List[str] = [self._t("ui_gch_title", lang=lang, kind=header, n=total)]
+        lines.append(f"*{self._t('ui_gch_refreshed', lang=lang)}*")
+        lines.append("────────────────────")
+        last_kind: Optional[str] = None
+        for offset, entry in enumerate(chunk):
+            number = index * PLAIN_PAGE_SIZE + offset + 1
+            if query.all_kinds and entry.kind != last_kind:
+                last_kind = entry.kind
+                lines.append(f"{entry.emoji} **{self._kind_label(entry.kind, lang)}**")
+            handle = f" • {entry.handle}" if entry.handle else ""
+            lines.append(f"`{number}.` **{entry.title}** \u2192 `{entry.id}`{handle}")
+        lines.append("────────────────────")
+        if total_pages > 1:
+            lines.append(
+                self._t(
+                    "ui_picker_page_info",
+                    lang=lang, page=index + 1, total=total_pages, count=total,
+                )
+            )
+            lines.append(self._t(
+                "ui_gch_plain_pages", lang=lang,
+                next=min(index + 2, total_pages),
+            ))
+        lines.append(self._t("ui_gch_plain_footer", lang=lang))
+        await message.reply_text("\n".join(lines))
 
     # ------------------------------------------------------------------ #
     # Application integration

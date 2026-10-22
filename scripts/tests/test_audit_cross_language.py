@@ -240,12 +240,12 @@ def test_input_alias_keys_exist_in_every_locale() -> None:
             assert not re.search(r",\s*,|^,|,$", value), f"{key}/{lang} malformed list"
 
 
-def test_repository_passes_the_gate() -> None:
-    assert AUDIT.main([]) == 0
-
-
-def test_repository_passes_the_gate_with_the_report() -> None:
-    assert AUDIT.main(["--report"]) == 0
+# The twin `test_repository_passes_the_gate` scans used to re-run the whole
+# tree gate here (150+ seconds of pytest) while the same CI job needs only
+# four steps later (`python scripts/audit_cross_language.py`, the same gate,
+# fail-closed). The rule/mutation tests above prove the scanner *works*; the
+# dedicated CI step proves the tree *passes* — pytest does not need to do
+# both.
 
 
 # --------------------------------------------------------------------------- #

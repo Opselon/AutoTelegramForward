@@ -54,10 +54,13 @@ jobs:
         # ATF_TEST_REDIS_ADDR arms the real-Redis suites (lease coordination
         # and the API's limiter when its Go numbers carry over). Suites without
         # the variable skip, so a fork running this job without the service
-        # still goes green on everything else.
+        # still goes green on everything else. `--dist loadfile` keeps every
+        # file's tests in order on one worker: xdist's default could interleave
+        # them with another file's and break write-order assumptions, and the
+        # big locale-scan files (80s+ each) still land on separate workers.
         env:
           ATF_TEST_REDIS_ADDR: 127.0.0.1:6379
-        run: python -m pytest -q core/tests scripts/tests
+        run: python -m pytest -q -n auto --dist loadfile core/tests scripts/tests
 
       - name: Telegram UI hardcoded-string guard
         # New visible strings in Telegram UI handlers, callbacks, and button

@@ -36,6 +36,11 @@ LINK_PREFIXES: Tuple[str, ...] = (
     "telegram.me/",
 )
 
+#: A fully numeric entry is one id spelled either way: ``-1001234567890``
+#: (Bot-API) and ``1234567890`` (the raw unique id) name the same channel,
+#: so duplicate and self-loop detection must treat them as one token.
+UNIQUE_ID_MATCH = re.compile(r"^(?:-100)?(?P<raw>\d{1,20})$")
+
 MAX_CALLBACK_BYTES = 64
 
 #: Per-entry resolution states shared by the wizard, `/route` and the
@@ -89,14 +94,6 @@ def strip_link_prefix(token: str) -> str:
     return text
 
 
-#: One numeric id, in either spelling: the raw unique id Telegram shows in
-#: clients (``1234567890``) or the Bot-API spelling of the same chat
-#: (``-1001234567890``). ``chat.id`` around the bot is the second spelling,
-#: while what a user pastes from the app is the first — so both must collapse
-#: to one lookup key everywhere a pasted id is resolved.
-UNIQUE_ID_MATCH = re.compile(r"^(?:-100)?(?P<raw>\d{1,20})$")
-
-
 def unique_peer_key(token: str) -> str:
     """Key that collides both spellings of one numeric id.
 
@@ -112,12 +109,15 @@ def unique_peer_key(token: str) -> str:
 def peer_key(token: str) -> str:
     """Normalized comparison key for one entry.
 
-    Two spellings of the same chat (`@News`, `news`, `https://t.me/news`)
-    must collide, so duplicate and self-loop detection is spelled-insensitively
-    identical to how Telegram resolves the entry.
+    Two spellings of the same chat (`@News`, `news`, `https://t.me/news`,
+    `-100123…` and its raw unique id) must collide, so duplicate and
+    self-loop detection is spelled-insensitively identical to how Telegram
+    resolves the entry.
     """
     text = strip_link_prefix(token)
-    return text.lstrip("@").strip().lower()
+    stripped = text.lstrip("@").strip().lower()
+    match = UNIQUE_ID_MATCH.match(stripped)
+    return match.group("raw") if match else stripped
 
 
 def looks_like_peer(token: str) -> bool:
