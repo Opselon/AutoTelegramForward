@@ -117,6 +117,16 @@ class RepoContext:
         self._env_file_values = values
         return values
 
+    def refresh_env(self) -> None:
+        """Drop the parsed `.env` cache, after something rewrote the file.
+
+        `atf config set` writes through the store, not through this context, so
+        the cache the earlier reads filled would keep answering with the values
+        it saw before the write for the rest of the invocation.
+        """
+        self._env_file_values = None
+        self._env = None
+
     def env(self, key: str, default: str = "") -> str:
         """Process env wins over `.env`, matching how compose behaves."""
         if key in os.environ and os.environ[key]:

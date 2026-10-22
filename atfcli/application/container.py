@@ -11,11 +11,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ..domain.errors import NotSupportedError
+
 from .gateways import FileWriter, Gateways
 from .use_cases import admin as admin_uc
 from .use_cases import audit as audit_uc
 from .use_cases import backup as backup_uc
 from .use_cases import delivery as delivery_uc
+from .use_cases import envconfig as envconfig_uc
 from .use_cases import logs as logs_uc
 from .use_cases import ops as ops_uc
 from .use_cases import resources as resources_uc
@@ -38,6 +41,7 @@ class UseCases:
     admin: admin_uc.Administration
     audit: audit_uc.Audit
     ops: ops_uc.Operations
+    env: envconfig_uc.Environment
 
     def resources_for(self, spec: Any) -> resources_uc.Resources:
         """The use case set for a :class:`ResourceSpec` (menu-driven callers)."""
@@ -47,7 +51,49 @@ class UseCases:
         raise KeyError(f"no use case bundle for resource {getattr(spec, 'plural', spec)!r}")
 
 
-def build_use_cases(gateways: Gateways, *, files: FileWriter | None = None) -> UseCases:
+class _UnwiredEnvStore:
+    """A `.env` port for callers that built the use cases without a host.
+
+    The API-only contract tests never touch the filesystem; they should not have
+    to know a `.env` exists. Reading answers "empty", writing explains itself.
+    """
+
+    path = ".env"
+
+    def exists(self) -> bool:
+        return False
+
+    def mode(self) -> int:
+        return 0
+
+    def read(self) -> str:
+        return ""
+
+    def text_or_empty(self) -> str:
+        return ""
+
+    def write(self, text: str) -> Any:  # pragma: no cover - not reachable from the API path
+        raise NotSupportedError(
+            "this CLI was built without a host — there is no `.env` to write",
+            hint="run the command against an installation (`--root <dir>` or the repo checkout)",
+        )
+
+    def backups(self) -> list[Any]:
+        return []
+
+    def restore(self, name: str) -> Any:  # pragma: no cover - see write()
+        raise NotSupportedError(
+            "this CLI was built without a host — there are no backups to restore",
+            hint="run the command against an installation (`--root <dir>` or the repo checkout)",
+        )
+
+
+def build_use_cases(
+    gateways: Gateways,
+    *,
+    files: FileWriter | None = None,
+    env_store: Any = None,
+) -> UseCases:
     """Wire the ports into use cases. The only place that knows both sides."""
     return UseCases(
         tasks=tasks_uc.Tasks(gateways.tasks),
@@ -61,6 +107,7 @@ def build_use_cases(gateways: Gateways, *, files: FileWriter | None = None) -> U
         admin=admin_uc.Administration(gateways.admin),
         audit=audit_uc.Audit(gateways.audit),
         ops=ops_uc.Operations(gateways.ops),
+        env=envconfig_uc.Environment(env_store if env_store is not None else _UnwiredEnvStore()),
     )
 
 

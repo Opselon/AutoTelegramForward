@@ -202,6 +202,15 @@ def add_parser(subparsers, parents) -> None:
     sp.set_defaults(func=_admin_remove)
 
     # Extensions
+    # `atf admin console` is the guided surface over exactly these verbs — one
+    # application layer, two presentations. Registered here as well as at the top
+    # level because an administrator looks for it under `admin`.
+    p = sub.add_parser("console", help="open the guided administration console", parents=parents)
+    from . import console as console_cmd  # local: keeps the console module off the parser path until used
+
+    console_cmd._add_flags(p)
+    p.set_defaults(func=console_cmd._entry)
+
     p = sub.add_parser("extensions", help="manage platform extensions", parents=parents)
     p.set_defaults(func=sh.help_handler(p))
     xsub = sh.add_group(p)
