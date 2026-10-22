@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from .discovery import DiscoveryHandlers
 from .forward_manage import ForwardManageHandlers
+from .forward_select import ForwardSelectHandlers
 from .forwarding import ForwardingHandlers
 from .registry import (
     HandlerModuleSpec,
@@ -39,6 +40,13 @@ HANDLER_MODULES = (
         name="forward_manage",
         register="register_forward_manage_handlers",
     ),
+    # The multi-select route picker: one screen family that owns sources,
+    # targets, direct ids, validation and the pre-create plan.
+    HandlerModuleSpec(
+        cls=ForwardSelectHandlers,
+        name="forward_select",
+        register="register_forward_select_handlers",
+    ),
 )
 
 
@@ -49,6 +57,7 @@ def build_handler_registry() -> HandlerRegistry:
 
 __all__ = [
     "DiscoveryHandlers",
+    "ForwardSelectHandlers",
     "ForwardManageHandlers",
     "ForwardingHandlers",
     "HANDLER_MODULES",

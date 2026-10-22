@@ -125,7 +125,7 @@ def test_discovery_module_declares_exactly_what_it_implements():
 def test_registry_builds_for_the_real_panel():
     registry = build_handler_registry()
     assert [m.name for m in registry.modules] == [
-        "discovery", "forwarding", "forward_manage",
+        "discovery", "forwarding", "forward_manage", "forward_select",
     ]
     assert registry.owner_of("getchannel") == "discovery"
 

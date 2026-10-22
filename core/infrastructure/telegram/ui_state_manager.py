@@ -93,6 +93,10 @@ UI_STEPS = frozenset({
     "user_set_first_name",
     # replace-rule manager (/replace): search, field prompts and the test sample
     "replace_search", "replace_field_input", "replace_test_sample",
+    # multi-source/target picker (/sel): the ids and search prompts. Declared
+    # here, or the fail-closed step gate would downgrade them to "" on persist
+    # and the next message would answer "use the menu" mid-flow.
+    "sel_ids_s", "sel_ids_t", "sel_query_s", "sel_query_t",
     # backup / migration passphrases and the file it waits for
     "session_backup_passphrase", "migrate_passphrase",
     "migrate_import_passphrase", "migrate_await_file",

@@ -51,6 +51,12 @@ from core.infrastructure.persistence.sqlite_repositories import (
 from core.infrastructure.security.crypto import CryptoService
 from core.infrastructure.telegram.i18n import I18n
 
+# pyrogram calls `asyncio.get_event_loop()` once, at import time. Importing it
+# here (collection time) keeps that call out of a test that runs after a
+# pytest-asyncio test closed the loop — otherwise the *harness* would fail to
+# construct with "no current event loop" purely because of file ordering.
+from core.infrastructure.telegram import pro_bot_ui as _pro_bot_ui  # noqa: E402,F401
+
 
 class ContinuePropagation(Exception):
     """Stands in for pyrogram's signal that the next group must handle this."""
@@ -258,6 +264,7 @@ REGISTERING_MODULES = (
     "core.infrastructure.telegram.handlers.discovery",
     "core.infrastructure.telegram.handlers.forwarding",
     "core.infrastructure.telegram.handlers.forward_manage",
+    "core.infrastructure.telegram.handlers.forward_select",
 )
 
 
@@ -304,9 +311,15 @@ class BotHarness:
             importlib.import_module(name)
             for name in REGISTERING_MODULES
         ]
-        original_filters = [m.filters for m in registering_modules]
-        for module in registering_modules:
-            module.filters = self.bot.filters
+        # `filters` is a module-level import in every module that *reads* it
+        # while registering. A module that takes `filters` as a parameter
+        # (like `forward_select`) has no global to swap and needs none.
+        original_filters = [
+            (module, getattr(module, "filters", None)) for module in registering_modules
+        ]
+        for module, original in original_filters:
+            if original is not None:
+                module.filters = self.bot.filters
         try:
             self.ui = ui_module.ProBotUI(
                 bot=self.bot,
@@ -335,8 +348,9 @@ class BotHarness:
             # is complete here. Calling it again would double-register every
             # handler and make a test press the same button twice.
         finally:
-            for module, original in zip(registering_modules, original_filters):
-                module.filters = original
+            for module, original in original_filters:
+                if original is not None:
+                    module.filters = original
 
     # ------------------------------------------------------------------ #
     # The store
