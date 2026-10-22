@@ -26,7 +26,7 @@ from ...application.repositories import IDeliveryQueueRepository, IMessageMapRep
 from ...domain.entities import DeliveryJob, DeliveryStatus, ForwardMode, MessageMapping, MessagePayload
 from ...domain.services import AdvancedSettingsEngine
 from ...domain.value_objects import ContentMode
-from .errors import tg_detail, tg_error, wait_seconds
+from .errors import is_restricted_source_error, tg_detail, tg_error, wait_seconds
 from .failure_policy import classify_failure, error_code, rate_limit_seconds
 from .bot_transport import BotRouteAdapter, BotTransportCache, BotTransportUnsupported
 
@@ -1183,14 +1183,20 @@ class DurableQueueManager:
                 try:
                     src_msg = await client.get_messages(chat_id=src_chat, message_ids=src_msg_id)
                 except Exception as e:
-                    logger.debug("get_messages failed in _reupload_media: %s", e)
+                    logger.warning(
+                        "[PIPELINE:PROTECTED] get_messages failed while preparing re-upload src=%s msg=%s (%s)",
+                        src_chat, src_msg_id, tg_detail(e) or type(e).__name__,
+                    )
 
             # Try downloading media file
             if src_msg is not None and hasattr(client, "download_media"):
                 try:
                     temp_path = await client.download_media(src_msg)
                 except Exception as dl_err:
-                    logger.debug("download_media failed in _reupload_media: %s", dl_err)
+                    logger.warning(
+                        "[PIPELINE:PROTECTED] download failed src=%s msg=%s (%s) — degrading to text if nothing else delivers",
+                        src_chat, src_msg_id, tg_detail(dl_err) or type(dl_err).__name__,
+                    )
 
             if temp_path and os.path.exists(temp_path):
                 mtype = str(media_type).lower()
@@ -1430,11 +1436,10 @@ class DurableQueueManager:
                         return getattr(res[0], "id", 0)
                     return getattr(res, "id", 0)
                 except Exception as hop_err:
-                    err_str = str(hop_err).lower()
-                    if any(k in err_str for k in ("restrict", "protect", "forbidden", "chatforwardsrestricted")):
-                        logger.info(
-                            "[PIPELINE:BRANDING] forward from C=%s restricted (%s) — copying C's post instead",
-                            c_chat, hop_err,
+                    if is_restricted_source_error(hop_err):
+                        logger.warning(
+                            "[PIPELINE:PROTECTED] forward from C=%s restricted (%s) — copying C's post instead",
+                            c_chat, tg_detail(hop_err) or type(hop_err).__name__,
                         )
                     else:
                         raise
@@ -1457,11 +1462,10 @@ class DurableQueueManager:
                     last_id = getattr(res, "id", last_id) or last_id
                 return last_id
             except Exception as copy_err:
-                err_str = str(copy_err).lower()
-                if any(k in err_str for k in ("restrict", "protect", "forbidden", "chatforwardsrestricted")):
-                    logger.info(
-                        "[PIPELINE:BRANDING] copy from C=%s restricted (%s) — re-uploading",
-                        c_chat, copy_err,
+                if is_restricted_source_error(copy_err):
+                    logger.warning(
+                        "[PIPELINE:PROTECTED] copy from C=%s restricted (%s) — re-uploading",
+                        c_chat, tg_detail(copy_err) or type(copy_err).__name__,
                     )
                     return await self._reupload_media(
                         client, c_chat, c_ids[0], target,
@@ -1483,9 +1487,11 @@ class DurableQueueManager:
                     return res[0].id
                 return getattr(res, "id", 0)
             except Exception as fwd_err:
-                err_str = str(fwd_err).lower()
-                if "restrict" in err_str or "protect" in err_str or "forbidden" in err_str or "chatforwardsrestricted" in err_str:
-                    logger.info("Direct forward restricted (%s), falling back to copy/reupload", fwd_err)
+                if is_restricted_source_error(fwd_err):
+                    logger.warning(
+                        "[PIPELINE:PROTECTED] direct forward restricted (%s) — copy/re-upload bypass",
+                        tg_detail(fwd_err) or type(fwd_err).__name__,
+                    )
                 else:
                     raise
 
@@ -1551,8 +1557,11 @@ class DurableQueueManager:
                     )
                     return getattr(res, "id", 0)
                 except Exception as c_err:
-                    err_str = str(c_err).lower()
-                    if "restrict" in err_str or "protect" in err_str or "forbidden" in err_str or "chatforwardsrestricted" in err_str:
+                    if is_restricted_source_error(c_err):
+                        logger.warning(
+                            "[PIPELINE:PROTECTED] MEDIA_ONLY copy blocked src=%s (%s) — re-uploading",
+                            src_chat, tg_detail(c_err) or type(c_err).__name__,
+                        )
                         return await self._reupload_media(client, src_chat, src_msg_id, target, None, data.get("media_type", ""))
                     raise
             return 0
@@ -1569,9 +1578,11 @@ class DurableQueueManager:
                 )
                 return getattr(res, "id", 0)
             except Exception as c_err:
-                err_str = str(c_err).lower()
-                if "restrict" in err_str or "protect" in err_str or "forbidden" in err_str or "chatforwardsrestricted" in err_str:
-                    logger.info("copy_message restricted (%s), attempting re-upload bypass", c_err)
+                if is_restricted_source_error(c_err):
+                    logger.warning(
+                        "[PIPELINE:PROTECTED] copy_message blocked src=%s -> tgt=%s (%s) — re-upload bypass",
+                        src_chat, target, tg_detail(c_err) or type(c_err).__name__,
+                    )
                     return await self._reupload_media(client, src_chat, src_msg_id, target, caption, data.get("media_type", ""))
                 raise
 

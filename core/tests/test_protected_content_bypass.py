@@ -19,8 +19,10 @@ from core.domain.value_objects import ForwardMode
 from core.infrastructure.telegram.dispatcher import (
     MessageDispatcher,
     _extract_media_reference,
+    _media_shape_of,
     _send_media_reference,
 )
+from core.infrastructure.telegram.errors import is_restricted_source_error
 
 
 def _payload(media=True, text="VIP SIGNAL EURUSD", caption=""):
@@ -181,3 +183,84 @@ async def test_fallback_disabled_does_not_bypass():
             "VIP SIGNAL", "-1002222222222",
         )
     client.send_photo.assert_not_awaited()
+
+
+# ------------------------------------------------- classifier: one decision, many shapes
+
+
+def test_classifier_accepts_the_raw_error_id():
+    """A pyrogram ChatForwardsRestricted is restricted-source, decisively."""
+    assert is_restricted_source_error(ChatForwardsRestricted()) is True
+
+
+def test_classifier_accepts_the_bare_rpc_string():
+    """A raw RPC error string (what the tracer records) matches the same id."""
+    assert is_restricted_source_error(Exception("CHAT_FORWARDS_RESTRICTED")) is True
+
+
+def test_classifier_rejects_unrelated_400s():
+    """A bad-request from the *target* must not trigger the source bypass."""
+    assert is_restricted_source_error(ChatSendMediaForbidden()) is False
+    assert is_restricted_source_error(Exception("PEER_ID_INVALID")) is False
+    assert is_restricted_source_error(ValueError("no forwards here")) is False
+
+
+# ------------------------------------------------- reference-layer gate
+
+
+@pytest.mark.asyncio
+async def test_restricted_copy_logs_the_raw_telegram_error(caplog):
+    """The operator-visible contract: a copy blocked by channel content
+    protection emits a [PIPELINE:PROTECTED] warning carrying the raw
+    Telegram error, so a future fix does not need a live channel to
+    understand what Telegram actually said."""
+    client = MagicMock()
+    client.copy_message = AsyncMock(side_effect=ChatForwardsRestricted())
+    client.get_messages = AsyncMock(return_value=_media_msg("fileid-xyz"))
+    client.send_photo = AsyncMock(return_value=SimpleNamespace(id=777))
+
+    import logging
+
+    with caplog.at_level(logging.WARNING, logger="core.infrastructure.telegram.dispatcher"):
+        dispatcher = _make_dispatcher(client)
+        res = await dispatcher._deliver(
+            client, _payload(), _rule(mode="COPY_MESSAGE"), "VIP SIGNAL", "-1002222222222"
+        )
+    assert res is not None
+    protected = [r for r in caplog.records if "[PIPELINE:PROTECTED]" in r.message]
+    assert protected, "restricted copy must log a [PIPELINE:PROTECTED] warning"
+    # the raw Telegram error id rides along in the formatted record
+    assert "CHAT_FORWARDS_RESTRICTED" in protected[0].getMessage()
+
+
+@pytest.mark.asyncio
+async def test_unrestricted_failure_still_uses_the_reference_layer():
+    """A non-restricted copy failure keeps the old, higher-fidelity order:
+    reference first, download only as a fallback."""
+    client = MagicMock()
+    client.get_messages = AsyncMock(return_value=_media_msg("fileid-xyz"))
+    client.send_photo = AsyncMock(return_value=SimpleNamespace(id=555))
+    client.download_media = AsyncMock()
+
+    dispatcher = _make_dispatcher(client)
+    res = await dispatcher._reupload_media(client, _payload(), "-1002222222222", "cap", "AUTO")
+    assert res is not None and res.id == 555
+    client.send_photo.assert_awaited_once()
+    client.download_media.assert_not_awaited()
+
+
+# ------------------------------------------------- re-upload shape from the source message
+
+
+def test_media_shape_reads_the_source_message():
+    """A round video (video_note) re-uploads as a plain video — losing the
+    circle UI beats losing the content."""
+    msg = SimpleNamespace(video_note=SimpleNamespace(file_id="v1"), photo=None)
+    assert _media_shape_of(msg, _payload()) == "video"
+
+
+def test_media_shape_falls_back_to_the_declared_type():
+    """No populated attribute (synthetic harness) -> the payload's declared
+    type decides, defaulting to document (never a lost delivery)."""
+    assert _media_shape_of(SimpleNamespace(), _payload()) == "photo"
+    assert _media_shape_of(SimpleNamespace(), _payload(media=False)) == "document"
