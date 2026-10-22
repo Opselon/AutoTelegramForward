@@ -81,13 +81,78 @@ in one place only:
 | `logs` | stats, query, search, tail, export, purge, policy, health, diagnostics |
 | `sessions` | list, show, chats, backup, terminate |
 | `data` | queue, dlq, backup-export, backup-inspect, backup-import |
-| `admin` | overview, users, settings, admins, extensions, broadcast |
+| `admin` | overview, users, settings, admins, extensions, broadcast, console |
+| `config` | list, get, set, diff, schema, validate, backups, restore |
 | `audit` | events, outcomes |
+| `console` | the guided administration session (also `admin console`) |
 | `status`, `doctor`, `validate`, `docker`, `db`, `certs`, `net`, `deploy`, `system`, … | host lifecycle and diagnostics |
 
 Identifiers accept a full id, a unique id prefix (≥4 characters) or a name, and
 that resolution happens once in the use case, so every verb accepts the same
 forms and an ambiguous prefix is refused with the candidates listed.
+
+## The `.env` is a document, not a dict
+
+`atf config` edits the operator's `.env` in place. The obvious implementation —
+parse into a dict, mutate, re-render — silently deletes every comment, blank line
+and unknown key the first time the CLI touches the file, which is the file an
+operator hand-edits. So `domain/envschema.py` carries two things:
+
+* `EnvDocument`, a line-preserving value object. A patch rewrites the lines whose
+  keys changed and leaves every other byte alone, including duplicate keys (the
+  last assignment still wins, so the rewrite targets that one) and lines it
+  cannot parse.
+* `EnvVarSpec`, the schema for every documented key: kind, group, whether it is
+  required, its accepted values, its default. `atf config set` refuses a bad
+  value *before* writing, `atf config validate` audits a file that already has
+  one, and the console prompts run the same validator — one rule set, so "the
+  console refused it" and "the CLI refused it" cannot become two dialects.
+
+Two invariants are enforced in `infrastructure/host/envfile.py` (`EnvFileStore`)
+rather than in the use case:
+
+* **A write is atomic and verified.** Seeded temp file in the same directory,
+  `fsync`, `os.replace`, then read the bytes back; if they differ from what was
+  written, the previous text is restored before the error is raised. Mode `0600`
+  always — the file holds the bot token.
+* **A write is reversible.** `fill-then-revision`: the old bytes are copied to
+  `.env.bak.<timestamp>` *before* the replace, so `atf config restore <name>`
+  works even though the timestamp would otherwise be derived after the fact.
+  Backups are capped (`KEEP`) and trimmed oldest-first.
+
+`--dry-run` prints the plan and touches nothing; `atf config diff` is the same
+plan without the write. Masking is decided by name (`domain/envschema.is_masked`
+→ `is_secret_name`), never by a per-command list, so no subcommand can become the
+one path a token leaves through. `atf config get --reveal` is the single
+deliberate bypass.
+
+`.env` is read through `Environment` (a use case over the `EnvFileStore` port),
+not through the API-bound container: an administrator repairing configuration is
+usually doing it *because* the API is not answering.
+
+## The administration console
+
+`atf admin console` (or `atf console`) is a guided surface over the same use
+cases the verbs call. Its shape is deliberately boring:
+
+* `application/console/contracts.py` — `Action` (id, title, group, danger level,
+  runner), `Prompt`, `Confirmation`, and the `SessionIO` port so the session can
+  be driven without a terminal.
+* `application/console/actions.py` — the registry. An action is a **row**, not an
+  entry in a dispatch table: adding a capability is adding a row, which is the
+  same rule the rest of `atfcli` follows. Rows are ordered read-only first,
+  destructive last, and each carries its own confirmation.
+* `application/console/session.py` — the loop: menu, one line, one action.
+  A failing action prints its reason and returns to the menu; the session's exit
+  code is 1 if any action failed, so `--action` is usable from cron.
+* `commands/console.py` — the adapter: prompt rendering, `--action <id>` for
+  one-shot use, piped stdin for scripted sessions, and a JSON journal.
+
+Destructive actions require a **typed** confirmation (the user id being demoted,
+the backup name, the word `BROADCAST`). `--yes` does not bypass it: a script that
+gets past a typed confirmation is exactly what the typed confirmation exists to
+stop. Every action is journalled to `.atf/admin-console.log` (mode `0600`) with
+its outcome.
 
 ## Defects this structure fixed
 
@@ -138,6 +203,9 @@ predate the layout. The rules for placing a new module:
 | --- | --- | --- |
 | `domain/validators.py` | domain | Pure string rules. The layer's only `argparse` (the `type=` adapter) and its only `socket` (a bindability probe) live here. |
 | `domain/host.py` | domain | Service names, container names, log-level vocabulary. |
+| `domain/envschema.py` | domain | The `.env` document and key schema: line-preserving patches, value rules, groups. Pure. |
+| `infrastructure/host/envfile.py` | infrastructure | The only place `.env` is written: backup, atomic replace, read-back verification, `0600`. |
+| `application/console/*` | application | The console's actions as data, its confirmation rules, and the session loop. |
 | `domain/resources.py` | domain | The API's resource shapes: field lists, request field names, plural envelope keys. |
 | `infrastructure/host/{repo,platforms,services,ports,upgrade}.py` | infrastructure | Everything that shells out, reads `/proc`, binds a socket or runs git. |
 | `infrastructure/http/*` | infrastructure | The only place JSON becomes domain objects. |

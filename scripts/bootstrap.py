@@ -234,22 +234,54 @@ def install_deps(py: Path) -> None:
         ok("all dependencies installed")
 
 
+#: Where an `atf` link is attempted, in order. `/usr/local/bin` is the system
+#: location; `~/.local/bin` is where an unprivileged install may still write one
+#: (and is on PATH by default on most modern distributions).
+LINK_TARGETS: tuple[str, ...] = ("/usr/local/bin/atf", "~/.local/bin/atf")
+
+
 def link_cli(py: Path) -> None:
-    """Put `atf` on PATH when we can; otherwise print the command to use."""
+    """Put `atf` on PATH, falling back to a user directory before giving up.
+
+    "Automatically available to the server admin" means the admin can type `atf`
+    after `install.sh` returns — not "after they export PATH in this shell". A
+    non-root or container install usually cannot write `/usr/local/bin`, which is
+    why the user location is tried as well; only when both fail does this print
+    the command instead of silently leaving nothing behind.
+    """
     wrapper = ROOT / "atf"
-    target = "/usr/local/bin/atf"
     if platform.system().lower() == "windows":
         print(f"  {DIM if _color() else ''}run the CLI with: {py} {wrapper}{RESET}")
         return
     try:
-        if Path(target).is_symlink() or Path(target).exists():
-            ok(f"atf already on PATH ({target})")
-            return
-        os.symlink(wrapper, target)
         wrapper.chmod(wrapper.stat().st_mode | 0o111)
-        ok(f"linked {target} -> {wrapper}")
     except OSError:
-        print(f"  {DIM if _color() else ''}add to PATH: export PATH=\"{ROOT}:$PATH\"{RESET}")
+        pass
+
+    problems: list[str] = []
+    for raw in LINK_TARGETS:
+        target = Path(raw).expanduser()
+        try:
+            if target.is_symlink() or target.exists():
+                if target.is_symlink() and Path(os.path.realpath(target)) == wrapper.resolve():
+                    ok(f"atf already on PATH ({target})")
+                    return
+                # Something else owns the name: never replace another tool.
+                problems.append(f"{target} exists and is not this CLI")
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            os.symlink(wrapper, target)
+            ok(f"linked {target} -> {wrapper}")
+            if str(target.parent) not in os.environ.get("PATH", "").split(os.pathsep):
+                print(f"  {DIM if _color() else ''}add it to PATH: export PATH=\"{target.parent}:$PATH\"{RESET}")
+            return
+        except OSError as exc:
+            problems.append(f"{target}: {exc.strerror or exc}")
+
+    for problem in problems:
+        warn(f"could not link atf — {problem}")
+    print(f"  {DIM if _color() else ''}run the CLI with: {py} {wrapper}{RESET}")
+    print(f"  {DIM if _color() else ''}or add it to PATH: export PATH=\"{ROOT}:$PATH\"{RESET}")
 
 
 def run_wizard(py: Path, extra: list[str]) -> int:

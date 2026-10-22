@@ -46,6 +46,7 @@ COMMAND_MODULES: tuple[str, ...] = (
     "logs",
     "data",
     "admin",
+    "console",
     "audit",
     "docker",
     "deploy",
@@ -188,12 +189,34 @@ class CliContext:
         return self._gateways
 
     @property
+    def env_uc(self) -> Any:
+        """The `.env` use case — host-only, so it needs no API credential.
+
+        Kept apart from `uc` on purpose: `atf admin console` must still audit and
+        repair configuration on a host whose API is down, and wiring
+        `Environment` through the API-bound container would make an unreachable
+        server look like an unreadable `.env`.
+        """
+        from .application.use_cases.envconfig import Environment
+
+        return Environment(self.env_store)
+
+    @property
+    def env_store(self) -> Any:
+        """The `.env` store bound to this invocation's repo (see `atf config`)."""
+        from .infrastructure.host.envfile import RepoEnvFileStore
+
+        return RepoEnvFileStore(self.repo)
+
+    @property
     def uc(self) -> Any:
         """The use cases: what a command actually *does*."""
         if self._uc is None:
             from .application.container import build_use_cases
 
-            self._uc = build_use_cases(self.gateways, files=HostFiles(self.repo, self.out))
+            self._uc = build_use_cases(
+                self.gateways, files=HostFiles(self.repo, self.out), env_store=self.env_store
+            )
         return self._uc
 
     @property

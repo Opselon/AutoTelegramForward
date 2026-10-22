@@ -4,12 +4,12 @@
   "starsUrl": "https://img.shields.io/github/stars/Opselon/AutoTelegramForward?style=social",
   "docsUrl": "https://opselon.github.io/AutoTelegramForward/",
   "license": "MIT",
-  "version": "2.2.4",
-  "releaseTag": "v2.2.4",
+  "version": "2.3.0",
+  "releaseTag": "v2.3.0",
   "releaseDate": "2026-10-16",
-  "gitCommit": "b211b6e",
-  "gitDate": "2026-10-21T05:09:30+03:30",
-  "syncTimestamp": "2026-10-21T02:25:35.814Z",
+  "gitCommit": "235e7fb",
+  "gitDate": "2026-10-22T14:53:37+03:30",
+  "syncTimestamp": "2026-10-22T13:05:16.105Z",
   "author": "Opselon",
   "maintainer": {
     "name": "𝐂ap$iz𝗲Ʀ",
@@ -28,20 +28,20 @@
     "uz",
     "zh"
   ],
-  "i18nKeyCount": 1714,
+  "i18nKeyCount": 1844,
   "stats": {
-    "pythonTests": 165,
-    "goTests": 47,
+    "pythonTests": 181,
+    "goTests": 49,
     "grpcRpcCount": 109,
-    "cliGroups": 29,
+    "cliGroups": 30,
     "featureCatalogEntries": 19,
     "services": 4,
     "locales": 10,
-    "i18nKeys": 1714,
+    "i18nKeys": 1844,
     "implementedFeatures": 15,
     "partialFeatures": 2,
     "plannedFeatures": 2,
-    "apiRoutes": 136
+    "apiRoutes": 145
   },
   "featureCatalog": [
     "Create forwarding rule",
@@ -438,7 +438,7 @@
     {
       "category": "DevOps & Operations",
       "items": [
-        "29 CLI command groups covering setup, rules, logs, docker, k8s, certs and data",
+        "30 CLI command groups covering setup, rules, logs, docker, k8s, certs and data",
         "atf validate — read-only checks usable as a CI pre-deploy gate (--strict, --runtime, --deep)",
         "atf doctor and atf system upgrade: git pull → build → recreate → alias repair → health gate",
         "Boot persistence via systemd / launchd / Task Scheduler (atf system service install)",
@@ -1309,11 +1309,33 @@
           ]
         },
         {
+          "verb": "console",
+          "aliases": []
+        },
+        {
           "verb": "extensions",
           "aliases": []
         },
         {
           "verb": "toggle",
+          "aliases": []
+        }
+      ]
+    },
+    {
+      "group": "console",
+      "what": "Guided administration console: interactively manage users, settings, config, broadcasts",
+      "examples": [
+        "atf console list"
+      ],
+      "name": "console",
+      "help": "Guided administration console: interactively manage users, settings, config, broadcasts",
+      "summary": "Why a console when every verb already exists on the CLI? Two reasons:",
+      "module": "atfcli/commands/console.py",
+      "collection": false,
+      "subcommands": [
+        {
+          "verb": "list",
           "aliases": []
         }
       ]
@@ -1674,7 +1696,8 @@
       "examples": [
         "atf config list",
         "atf config get",
-        "atf config set"
+        "atf config set",
+        "atf config diff"
       ],
       "name": "config",
       "help": "Manage environment variables and configuration files (.env)",
@@ -1695,6 +1718,28 @@
         {
           "verb": "set",
           "aliases": []
+        },
+        {
+          "verb": "diff",
+          "aliases": []
+        },
+        {
+          "verb": "validate",
+          "aliases": [
+            "check"
+          ]
+        },
+        {
+          "verb": "schema",
+          "aliases": []
+        },
+        {
+          "verb": "backups",
+          "aliases": []
+        },
+        {
+          "verb": "restore",
+          "aliases": []
         }
       ]
     }
@@ -1703,8 +1748,22 @@
     {
       "group": "Service health & system",
       "method": "GET",
+      "path": "/api/health",
+      "handler": "h.Health",
+      "auth": "none"
+    },
+    {
+      "group": "Service health & system",
+      "method": "GET",
       "path": "/api/health/services",
       "handler": "h.ServicesHealth",
+      "auth": "none"
+    },
+    {
+      "group": "Service health & system",
+      "method": "GET",
+      "path": "/api/healthz",
+      "handler": "h.Health",
       "auth": "none"
     },
     {
@@ -1717,8 +1776,29 @@
     {
       "group": "Service health & system",
       "method": "GET",
+      "path": "/api/ready",
+      "handler": "h.Ready",
+      "auth": "none"
+    },
+    {
+      "group": "Service health & system",
+      "method": "GET",
+      "path": "/api/readyz",
+      "handler": "h.Ready",
+      "auth": "none"
+    },
+    {
+      "group": "Service health & system",
+      "method": "GET",
       "path": "/api/system/env",
       "handler": "h.EnvContractHandler",
+      "auth": "none"
+    },
+    {
+      "group": "Service health & system",
+      "method": "GET",
+      "path": "/api/system/ready",
+      "handler": "h.Ready",
       "auth": "none"
     },
     {
@@ -1731,8 +1811,22 @@
     {
       "group": "Service health & system",
       "method": "GET",
+      "path": "/api/v1/health",
+      "handler": "h.Health",
+      "auth": "none"
+    },
+    {
+      "group": "Service health & system",
+      "method": "GET",
       "path": "/api/v1/health/services",
       "handler": "h.ServicesHealth",
+      "auth": "none"
+    },
+    {
+      "group": "Service health & system",
+      "method": "GET",
+      "path": "/api/v1/ready",
+      "handler": "h.Ready",
       "auth": "none"
     },
     {
@@ -2172,6 +2266,13 @@
     {
       "group": "Authenticated control plane",
       "method": "GET",
+      "path": "/api/gateway",
+      "handler": "h.GatewayInfo",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
       "path": "/api/logs",
       "handler": "h.QueryLogs",
       "auth": "bearer"
@@ -2566,6 +2667,13 @@
       "method": "POST",
       "path": "/api/tasks/{id}/retry",
       "handler": "h.RetryTask",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/v1/gateway",
+      "handler": "h.GatewayInfo",
       "auth": "bearer"
     },
     {

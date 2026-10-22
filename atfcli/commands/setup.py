@@ -135,6 +135,13 @@ def _put(text: str, key: str, value: str) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _env_store(ctx):
+    """The `.env` store for this host (imported here: setup predates the port)."""
+    from ..infrastructure.host.envfile import RepoEnvFileStore
+
+    return RepoEnvFileStore(ctx.repo)
+
+
 def _needs_value(current: str) -> bool:
     value = (current or "").strip().strip('"').strip("'")
     if not value:
@@ -176,9 +183,12 @@ def bootstrap_env(ctx, args, runbook: Runbook, *, force: bool = False) -> dict[s
         return generated
 
     if created or generated or admin_id:
-        env_path.write_text(text, encoding="utf-8")
-        os.chmod(env_path, stat.S_IRUSR | stat.S_IWUSR)  # 0600: never group/world readable
-        detail = f"{'created' if created else 'updated'} .env (mode 0600)"
+        # Through the store, not `write_text`: the wizard's write is the same
+        # write `atf config set` performs — timestamped backup, atomic replace,
+        # read-back verification, 0600. A half-written `.env` from an interrupted
+        # first run is exactly the file the stack then fails to parse.
+        result = _env_store(ctx).write(text)
+        detail = f"{'created' if created else 'updated'} .env (mode {oct(result.mode)})"
         if generated:
             detail += " — generated " + ", ".join(f"{k} ({v})" for k, v in generated.items())
         runbook.add("env", "ok", detail)
@@ -219,9 +229,8 @@ def apply_answers(ctx, answers: dict[str, str], runbook: Runbook) -> list[str]:
     if ctx.repo.dry_run:
         runbook.add("answers", "skip", f"[dry-run] would set {', '.join(written)} in .env")
         return written
-    env_path.write_text(text, encoding="utf-8")
-    os.chmod(env_path, stat.S_IRUSR | stat.S_IWUSR)
-    runbook.add("answers", "ok", f"recorded {', '.join(written)} in .env (mode 0600)")
+    result = _env_store(ctx).write(text)
+    runbook.add("answers", "ok", f"recorded {', '.join(written)} in .env (mode {oct(result.mode)})")
     return written
 
 
@@ -757,6 +766,7 @@ def _setup(ctx, args) -> int:
 
 
 NEXT_STEPS = (
+    "atf admin console           guided administration: users, settings, config, broadcast",
     "atf status                  live board of services, rules and health",
     "atf validate --runtime      full health re-check of the live stack",
     "atf system services         microservice table with fix hints",
