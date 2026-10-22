@@ -372,7 +372,7 @@ class TextCommandMixin:
         if exc.code == EMPTY:
             return self._t("ui_sel_empty", lang=lang)
         return self._t("ui_sel_not_found", lang=lang, q=exc.detail or "",
-                       cmd="/replace list")
+                       hint=self._t("ui_sel_open_hint", lang=lang))
 
     async def _replace_rule_for(self, uid: int, token: str, lang: str):
         """``(rule, None)`` or ``(None, message)`` — never another tenant's rule.
@@ -394,8 +394,10 @@ class TextCommandMixin:
             try:
                 return await service.get(uid, selector.value), None
             except ReplaceRuleError:
-                return None, self._t("ui_sel_not_found", lang=lang, q=token,
-                                     cmd="/replace list")
+                return None, self._t(
+                    "ui_sel_not_found", lang=lang, q=token,
+                    hint=self._t("ui_sel_open_hint", lang=lang),
+                )
         try:
             data = await service.list(uid, per_page=MAX_PAGE_SIZE)
             return resolve_rule(data.get("items") or [], token), None
