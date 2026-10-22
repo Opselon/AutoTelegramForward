@@ -51,6 +51,15 @@ PUBLIC_ROOT_ROUTES = {
     ("GET", "/api/v1/system/setup"),
     ("GET", "/api/system/env"),
     ("GET", "/api/v1/system/env"),
+    # Public liveness/readiness aliases under the /api prefix (clients that
+    # prefix every path with /api): added with the gateway route fix.
+    ("GET", "/api/healthz"),
+    ("GET", "/api/health"),
+    ("GET", "/api/v1/health"),
+    ("GET", "/api/readyz"),
+    ("GET", "/api/ready"),
+    ("GET", "/api/v1/ready"),
+    ("GET", "/api/system/ready"),
 }
 
 # The credential-issuing half of /api/auth. Everything else mounted there

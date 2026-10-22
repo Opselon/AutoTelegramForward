@@ -13,11 +13,38 @@ application layer, which is why this file never imports the engine.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional
 
 from ...domain.autoreply import IncomingMessage, normalize_chat_id
 
 logger = logging.getLogger("atf.autoreply.bridge")
+
+
+def _epoch_seconds(value: Any) -> int:
+    """Epoch seconds for a Telegram timestamp, whatever shape it arrives in.
+
+    Pyrogram hands ``Message.date`` over as a naive UTC ``datetime`` while the
+    raw MTProto layer uses an int. ``int(datetime)`` raises TypeError, which
+    used to abort the whole auto-reply hand-off for every private message
+    ("int() argument must be ... not 'datetime.datetime'") — the bridge is the
+    one place that has to accept both representations.
+    """
+    if value is None:
+        return 0
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return int(value.timestamp())
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, (int, float)):
+        return int(value)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
 
 
 def _chat_type_name(chat: Any) -> str:
@@ -73,7 +100,7 @@ def inbound_from_pyrogram(message: Any, *, session_id: str = "",
         is_forwarded=bool(getattr(message, "forward_date", None)
                           or getattr(message, "forward_origin", None)),
         media_type=_media_name(message),
-        date=int(getattr(message, "date", 0) or 0),
+        date=_epoch_seconds(getattr(message, "date", 0)),
         session_id=session_id,
         owner_user_id=int(owner_user_id or 0),
     )

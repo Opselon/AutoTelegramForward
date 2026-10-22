@@ -19,6 +19,32 @@ logger = logging.getLogger("atf.boot")
 BOOT_CONCURRENCY = 3
 
 
+def _fatal_auth_errors() -> tuple:
+    """Pyrogram errors that mean the stored session can never come back.
+
+    ``AUTH_KEY_UNREGISTERED`` was missing from the original tuple while being
+    the *most* common terminal failure (the key is deleted from the account's
+    authorised devices), so a dead session was retried by the reconciler every
+    minute forever and every queued job for it was deferred every 15s. Each of
+    these means "log in again", never "wait": the session is deactivated so the
+    reconciler stops trying and the queue stops deferring against it.
+    """
+    try:
+        from pyrogram.errors import (
+            AuthKeyDuplicated, AuthKeyInvalid, AuthKeyPermEmpty,
+            AuthKeyUnregistered, SessionExpired, SessionRevoked,
+            UserDeactivated, UserDeactivatedBan,
+        )
+    except Exception:  # pragma: no cover - pyrogram absent in slim installs
+        return ()
+    return (
+        AuthKeyUnregistered, AuthKeyInvalid, AuthKeyPermEmpty,
+        AuthKeyDuplicated, SessionRevoked, SessionExpired,
+        UserDeactivated, UserDeactivatedBan,
+    )
+
+
+
 class SessionBootManager:
     """Owns boot-time restore + runtime health reconciliation."""
 
@@ -122,15 +148,18 @@ class SessionBootManager:
             logger.info("session %s live as @%s", session_id[:8], label)
             return status
         except Exception as exc:
-            from pyrogram.errors import AuthKeyInvalid, AuthKeyDuplicated, UserDeactivated
-            if isinstance(exc, (AuthKeyInvalid, AuthKeyDuplicated, UserDeactivated)):
+            fatal = _fatal_auth_errors()
+            if fatal and isinstance(exc, fatal):
                 self.statuses[session_id] = f"auth_revoked:{type(exc).__name__}"
                 try:
                     session.deactivate()
                     await self._sessions._repo.update(session)
                 except Exception:
                     pass
-                logger.error("session %s auth revoked (%s) — deactivated", session_id[:8], exc)
+                logger.error(
+                    "session %s auth revoked (%s) — deactivated; re-login required",
+                    session_id[:8], exc,
+                )
             else:
                 self.statuses[session_id] = f"error:{type(exc).__name__}"
                 logger.error("restore of session %s failed: %s", session_id[:8], exc)

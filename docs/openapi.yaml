@@ -304,6 +304,86 @@ paths:
           content:
             application/json:
               schema: { type: object }
+  /api/healthz:
+    get:
+      tags: [system]
+      summary: 'Liveness probe at the /api prefix (for clients that prefix every path)'
+      operationId: getApiHealthz
+      security: []
+      x-atf-authorization: public
+      responses: { "200": { description: OK } }
+  /api/health:
+    get:
+      tags: [system]
+      summary: 'Liveness probe alias at the /api prefix'
+      operationId: getApiHealth
+      security: []
+      x-atf-authorization: public
+      responses: { "200": { description: OK } }
+  /api/v1/health:
+    get:
+      tags: [system]
+      summary: 'Liveness probe (v1 alias)'
+      operationId: getApiV1Health
+      security: []
+      x-atf-authorization: public
+      responses: { "200": { description: OK } }
+  /api/readyz:
+    get:
+      tags: [system]
+      summary: 'Readiness at the /api prefix (answers 503 while a fail-closed dependency is down)'
+      operationId: getApiReadyz
+      security: []
+      x-atf-authorization: public
+      responses: { "200": { description: OK } }
+  /api/ready:
+    get:
+      tags: [system]
+      summary: 'Readiness alias at the /api prefix'
+      operationId: getApiReady
+      security: []
+      x-atf-authorization: public
+      responses: { "200": { description: OK } }
+  /api/v1/ready:
+    get:
+      tags: [system]
+      summary: 'Readiness probe (v1 alias)'
+      operationId: getApiV1Ready
+      security: []
+      x-atf-authorization: public
+      responses: { "200": { description: OK } }
+  /api/system/ready:
+    get:
+      tags: [system]
+      summary: 'Readiness probe under the system prefix'
+      operationId: getApiSystemReady
+      security: []
+      x-atf-authorization: public
+      responses: { "200": { description: OK } }
+  /api/gateway:
+    get:
+      tags: [system]
+      summary: 'Gateway/core runtime info: version, uptime, raw counts, failover map'
+      operationId: getApiGateway
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+  /api/v1/gateway:
+    get:
+      tags: [system]
+      summary: 'Gateway/core runtime info (v1 alias)'
+      operationId: getApiV1Gateway
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
   /api/auth/register:
     post:
       tags: [auth]
