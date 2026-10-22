@@ -107,5 +107,32 @@ place.
   dialects; legacy rows (`fingerprint = ''`) are excluded so one giant fiction
   of a group cannot be manufactured from pre-v19 history.
 
-Everything absent from this list is work remaining under PR-2/PR-3 (see
-`docs/logger-hardening-audit.md`).
+Everything remaining is under PR-3 (see `docs/logger-hardening-audit.md`).
+
+## PR-2 additions (capability-scoped authentication)
+
+- **One gate per capability, one secret per gate**:
+  `ATF_LOGGER_INGEST_TOKEN` / `ATF_LOGGER_READ_TOKEN` / `ATF_LOGGER_ADMIN_TOKEN`
+  on the logger; empty = that scope open (previous behaviour, deployment picks,
+  documented trade-off: an unattended rotation must not lock producers out).
+- **Enforcement**: inside each RPC before the body is read — `Log` = ingest,
+  `QueryLogs`/`LogStats` = read, `PurgeLogs` = admin; unknown method names
+  default to admin (deny-by-default for existing tokens). Absent/invalid
+  credential → `UNAUTHENTICATED`; a valid credential for a different capability
+  → `PERMISSION_DENIED` (never escalate, never turn into a master key).
+- **Comparison**: constant-time equality (`Failing lengths differ` is
+  observable only in a length-timing sense the wire already carries); dotenv
+  whitespace padding is trimmed so folded yaml cannot rot a secret into a
+  permanent lockout. Never logged, never a metric label.
+- **Observability**: `atf_logger_auth_failures_total{outcome}` with
+  `(ingest|read|admin)_(missing|malformed|mismatch|forbidden)` = 12 bounded
+  series; auth-refused RPCs also land in `rpc_status_total` as
+  UNAUTHENTICATED/PERMISSION_DENIED while `events_received` is NOT incremented
+  (a refused write never pretends to have arrived).
+- **Producers**: Python `LogClient(token=…)` (env `ATF_LOGGER_INGEST_TOKEN`,
+  wired in `core/main.py`) attaches `authorization: Bearer …` per call; Go API
+  dials via `grpcclient.DialLogger` and picks the token by method through
+  `LoggerAuthUnary/StreamClientInterceptor` — the shared `ATF_CORE_RPC_TOKEN`
+  is still *never* sent to the logger (different trust domain, unchanged).
+- **Compat**: both consumers send nothing when nothing is configured; every
+  existing e2e/binary test path is unchanged with default config.

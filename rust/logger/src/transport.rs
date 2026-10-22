@@ -27,6 +27,7 @@
 //! exporter reading them) can ever hold a bot token, session string, password or
 //! authorization header.
 
+use crate::auth::{Auth, Failure, Scope};
 use crate::config::{Config, TsUnit};
 use crate::health::{HealthState, REASON_ACK_MODE_QUEUED};
 use crate::ingest::{self, CollectPolicy, Limits, RawEntry, Reject};
@@ -66,6 +67,7 @@ pub struct LogControl {
     config_version: String,
     backend: String,
     ack_mode: &'static str,
+    auth: Auth,
 }
 
 impl LogControl {
@@ -97,6 +99,39 @@ impl LogControl {
             config_version: config.version_hash(),
             backend: String::new(),
             ack_mode: config.ack_mode.as_str(),
+            auth: Auth::from_config(config),
+        }
+    }
+
+    /// Authenticate the presented credential for `scope`. Counts the bounded
+    /// failure outcome and returns the gRPC status; never leaks which secret
+    /// matched (mismatch and wrong-class look identical from the wire).
+    // `tonic::Status` is large and is the error type the generated trait
+    // mandates; boxing it here would only move the cost to every caller.
+    #[allow(clippy::result_large_err)]
+    fn authorize(
+        &self,
+        request: &tonic::Request<impl prost::Message>,
+        scope: Scope,
+        guard: &RpcGuard,
+    ) -> Result<(), tonic::Status> {
+        match self.auth.check(scope, request.metadata()) {
+            Ok(()) => Ok(()),
+            Err(failure) => {
+                self.metrics.record_auth_failure(scope, failure);
+                let status = match failure {
+                    Failure::Forbidden => tonic::Status::permission_denied(format!(
+                        "credential is not authorized for {} operations",
+                        scope.as_str()
+                    )),
+                    _ => tonic::Status::unauthenticated(format!(
+                        "{} operations require a valid bearer token",
+                        scope.as_str()
+                    )),
+                };
+                guard.finish(status.code() as i32);
+                Err(status)
+            }
         }
     }
 
@@ -336,6 +371,7 @@ impl pb::log_control_service_server::LogControlService for LogControl {
         request: tonic::Request<pb::LogRequest>,
     ) -> Result<tonic::Response<pb::StatusResponse>, tonic::Status> {
         let guard = RpcGuard::start(&self.metrics, "Log");
+        self.authorize(&request, Scope::Ingest, &guard)?;
         self.metrics.events_received.inc();
 
         let entry = request.into_inner().entry;
@@ -437,6 +473,7 @@ impl pb::log_control_service_server::LogControlService for LogControl {
         request: tonic::Request<pb::QueryLogsRequest>,
     ) -> Result<tonic::Response<pb::QueryLogsResponse>, tonic::Status> {
         let guard = RpcGuard::start(&self.metrics, "QueryLogs");
+        self.authorize(&request, Scope::Read, &guard)?;
         let request = request.into_inner();
         let filter = QueryFilter {
             levels: request.levels,
@@ -493,6 +530,7 @@ impl pb::log_control_service_server::LogControlService for LogControl {
         request: tonic::Request<pb::LogStatsRequest>,
     ) -> Result<tonic::Response<pb::LogStatsResponse>, tonic::Status> {
         let guard = RpcGuard::start(&self.metrics, "LogStats");
+        self.authorize(&request, Scope::Read, &guard)?;
         let request = request.into_inner();
         let scope = StatsScope {
             rule_id: request.rule_id,
@@ -580,6 +618,7 @@ impl pb::log_control_service_server::LogControlService for LogControl {
         request: tonic::Request<pb::PurgeLogsRequest>,
     ) -> Result<tonic::Response<pb::PurgeLogsResponse>, tonic::Status> {
         let guard = RpcGuard::start(&self.metrics, "PurgeLogs");
+        self.authorize(&request, Scope::Admin, &guard)?;
         let request = request.into_inner();
         let category = request.category.trim().to_string();
         // An explicit request to delete an audit/security category is refused
@@ -1345,6 +1384,211 @@ mod tests {
             refused
         );
         assert!(harness.metrics.queue_rejected_full.total() >= refused);
+        harness.pipeline.stop(Duration::from_secs(10));
+    }
+
+    // ---- capability-scoped bearer auth at the RPC boundary ---------------
+
+    fn runtime_and_cfg() -> (tokio::runtime::Runtime, Config) {
+        let config = Config {
+            auth_ingest_token: "ingest-secret".to_string(),
+            auth_read_token: "read-secret".to_string(),
+            auth_admin_token: "admin-secret".to_string(),
+            ..Config::default()
+        };
+        let runtime = runtime();
+        (runtime, config)
+    }
+
+    fn put_bearer<T>(mut request: tonic::Request<T>, token: &str) -> tonic::Request<T> {
+        if !token.is_empty() {
+            request.metadata_mut().insert(
+                "authorization",
+                tonic::metadata::MetadataValue::try_from(format!("Bearer {token}"))
+                    .expect("ascii header"),
+            );
+        }
+        request
+    }
+
+    fn entry_request(token: &str, entry: pb::LogEntry) -> tonic::Request<pb::LogRequest> {
+        // The service never reads the body before it authorizes, so a default
+        // body keeps these boundary tests honest.
+        let inner = if entry.message.is_empty() {
+            pb::LogRequest { entry: None }
+        } else {
+            pb::LogRequest { entry: Some(entry) }
+        };
+        put_bearer(tonic::Request::new(inner), token)
+    }
+
+    fn empty_request<T: Default + prost::Message>(token: &str) -> tonic::Request<T> {
+        put_bearer(tonic::Request::new(T::default()), token)
+    }
+
+    #[test]
+    fn an_armed_ingest_gate_rejects_anonymous_and_foreign_tokens_before_storage() {
+        let (runtime, config) = runtime_and_cfg();
+        let harness = harness(config);
+        for token in ["", "wrong-secret"] {
+            let result = runtime.block_on(pb::log_control_service_server::LogControlService::log(
+                &harness.service,
+                entry_request(token, entry("ERROR", "never stored")),
+            ));
+            let status = result.expect_err("auth must refuse the caller");
+            assert_eq!(status.code(), tonic::Code::Unauthenticated, "{token:?}");
+        }
+        for token in ["read-secret", "admin-secret"] {
+            let result = runtime.block_on(pb::log_control_service_server::LogControlService::log(
+                &harness.service,
+                entry_request(token, entry("ERROR", "never stored")),
+            ));
+            let status = result.expect_err("a valid foreign secret must be escalated");
+            assert_eq!(status.code(), tonic::Code::PermissionDenied, "{token:?}");
+        }
+
+        assert_eq!(harness.metrics.events_received.get(), 0);
+        assert_eq!(harness.storage.table_rows().unwrap(), 0);
+        harness.pipeline.stop(Duration::from_secs(10));
+    }
+
+    #[test]
+    fn a_valid_ingest_token_is_still_forbidden_on_the_read_surface() {
+        let (runtime, config) = runtime_and_cfg();
+        let harness = harness(config);
+
+        let status = runtime
+            .block_on(
+                pb::log_control_service_server::LogControlService::query_logs(
+                    &harness.service,
+                    empty_request::<pb::QueryLogsRequest>("ingest-secret"),
+                ),
+            )
+            .expect_err("an ingest token must not read");
+        assert_eq!(status.code(), tonic::Code::PermissionDenied);
+        assert!(
+            status.message().contains("read"),
+            "surface is named: {status:?}"
+        );
+
+        harness.pipeline.stop(Duration::from_secs(10));
+    }
+
+    #[test]
+    fn each_scope_accepts_its_own_secret_on_each_of_its_rpcs() {
+        let (runtime, config) = runtime_and_cfg();
+        let harness = harness(config);
+
+        // ingest = Log
+        let accepted = runtime
+            .block_on(pb::log_control_service_server::LogControlService::log(
+                &harness.service,
+                entry_request("ingest-secret", entry("INFO", "accepted")),
+            ))
+            .unwrap()
+            .into_inner();
+        assert!(
+            accepted.success,
+            "a valid ingest secret is admitted: {accepted:?}"
+        );
+
+        // read = QueryLogs
+        let page = runtime
+            .block_on(
+                pb::log_control_service_server::LogControlService::query_logs(
+                    &harness.service,
+                    empty_request::<pb::QueryLogsRequest>("read-secret"),
+                ),
+            )
+            .unwrap()
+            .into_inner();
+        assert_eq!(page.total, 1);
+
+        // read = LogStats
+        let stats = runtime
+            .block_on(
+                pb::log_control_service_server::LogControlService::log_stats(
+                    &harness.service,
+                    empty_request::<pb::LogStatsRequest>("read-secret"),
+                ),
+            )
+            .unwrap()
+            .into_inner();
+        assert_eq!(stats.total, 1);
+
+        harness.pipeline.stop(Duration::from_secs(10));
+    }
+
+    #[test]
+    fn purge_requires_a_dedicated_admin_secret() {
+        let (runtime, config) = runtime_and_cfg();
+        let harness = harness(config);
+
+        for token in ["", "ingest-secret", "read-secret"] {
+            let status = runtime
+                .block_on(
+                    pb::log_control_service_server::LogControlService::purge_logs(
+                        &harness.service,
+                        empty_request::<pb::PurgeLogsRequest>(token),
+                    ),
+                )
+                .expect_err("purge without the admin secret must refuse");
+            assert_eq!(
+                status.code(),
+                if token.is_empty() {
+                    tonic::Code::Unauthenticated
+                } else {
+                    tonic::Code::PermissionDenied
+                }
+            );
+        }
+
+        let purged = runtime
+            .block_on(
+                pb::log_control_service_server::LogControlService::purge_logs(
+                    &harness.service,
+                    empty_request::<pb::PurgeLogsRequest>("admin-secret"),
+                ),
+            )
+            .unwrap()
+            .into_inner();
+        assert!(purged.success, "the admin secret purges: {purged:?}");
+
+        harness.pipeline.stop(Duration::from_secs(10));
+    }
+
+    #[test]
+    fn auth_failures_are_counted_by_bounded_outcome_never_by_token() {
+        let (runtime, config) = runtime_and_cfg();
+        let harness = harness(config);
+
+        for token in ["", "wrong-secret", "read-secret"] {
+            let _ = runtime.block_on(pb::log_control_service_server::LogControlService::log(
+                &harness.service,
+                entry_request(token, entry("ERROR", "nope")),
+            ));
+        }
+        let rendered = harness
+            .metrics
+            .render(&HealthState::new(), "auth", "sqlite", "durable");
+        assert!(
+            rendered.contains("atf_logger_auth_failures_total{outcome=\"ingest_missing\"} 1"),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("atf_logger_auth_failures_total{outcome=\"ingest_mismatch\"} 1"),
+            "{rendered}"
+        );
+        assert!(
+            rendered.contains("atf_logger_auth_failures_total{outcome=\"ingest_forbidden\"} 1"),
+            "{rendered}"
+        );
+        assert!(!rendered.contains("wrong-secret"), "{rendered}");
+        assert!(
+            !rendered.contains("ingest-secret"),
+            "secrets never become labels: {rendered}"
+        );
+
         harness.pipeline.stop(Duration::from_secs(10));
     }
 }

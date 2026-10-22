@@ -160,3 +160,70 @@ func TestTheEnvVarNameMatchesTheCores(t *testing.T) {
 		t.Fatalf("CoreRPCTokenEnv = %q, want ATF_CORE_RPC_TOKEN (core/config.py reads the same name)", CoreRPCTokenEnv)
 	}
 }
+
+// ---- logger per-capability tokens --------------------------------------------
+
+// The logger's surface is capability-scoped: ingesting (Log), reading the
+// archive (QueryLogs/LogStats) and erasing it (PurgeLogs) each have their own
+// secret, and the server refuses cross-class reuse. The client must therefore
+// pick the token to attach by method — a single shared header would either
+// under-attach (purge sent with a read token) or over-share (a producer token
+// reaching the reader).
+
+func captureLoggerUnary(t *testing.T, interp grpc.UnaryClientInterceptor, method string) (metadata.MD, error) {
+	t.Helper()
+	var seen metadata.MD
+	invoker := func(ctx context.Context, _ string, _, _ any, _ *grpc.ClientConn, _ ...grpc.CallOption) error {
+		seen, _ = metadata.FromOutgoingContext(ctx)
+		return nil
+	}
+	err := interp(context.Background(), method, &struct{}{}, &struct{}{}, nil, invoker)
+	return seen, err
+}
+
+func TestLoggerTokensAttachPerCapability(t *testing.T) {
+	interp := LoggerAuthUnaryClientInterceptor("ingest-tok", "read-tok", "admin-tok")
+
+	for _, tc := range []struct {
+		method string
+		want   string
+	}{
+		{"/autoforward.LogControlService/Log", "Bearer ingest-tok"},
+		{"/autoforward.LogControlService/QueryLogs", "Bearer read-tok"},
+		{"/autoforward.LogControlService/LogStats", "Bearer read-tok"},
+		{"/autoforward.LogControlService/PurgeLogs", "Bearer admin-tok"},
+	} {
+		seen, err := captureLoggerUnary(t, interp, tc.method)
+		if err != nil {
+			t.Fatalf("%s: interceptor returned an error: %v", tc.method, err)
+		}
+		got := seen.Get("authorization")
+		if len(got) != 1 || got[0] != tc.want {
+			t.Fatalf("%s: authorization = %v, want [%s]", tc.method, got, tc.want)
+		}
+	}
+}
+
+func TestLoggerUnconfiguredClassSendsNothingForThatClass(t *testing.T) {
+	// Only purge is armed: Log and QueryLogs must reach the (open) surface with
+	// no header at all, not with an empty one.
+	interp := LoggerAuthUnaryClientInterceptor("", "   ", "admin-tok")
+
+	for _, tc := range []struct {
+		method string
+		want   string
+	}{{"/autoforward.LogControlService/Log", ""}, {"/autoforward.LogControlService/QueryLogs", ""}, {"/autoforward.LogControlService/PurgeLogs", "Bearer admin-tok"}} {
+		seen, err := captureLoggerUnary(t, interp, tc.method)
+		if err != nil {
+			t.Fatalf("%s: interceptor returned an error: %v", tc.method, err)
+		}
+		got := seen.Get("authorization")
+		want := []string{}
+		if tc.want != "" {
+			want = []string{tc.want}
+		}
+		if len(got) != len(want) || (len(want) == 1 && got[0] != want[0]) {
+			t.Fatalf("%s: authorization = %v, want %v", tc.method, got, want)
+		}
+	}
+}

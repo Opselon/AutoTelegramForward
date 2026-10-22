@@ -91,6 +91,16 @@ services:
       # Bound to all interfaces so the container healthcheck and an operator's
       # scrape both reach it; the crate's own default is loopback-only.
       ATF_LOGGER_METRICS_LISTEN: 0.0.0.0:9109
+      # Capability gates for the gRPC surface: ingest (Log), read
+      # (QueryLogs/LogStats), admin (PurgeLogs). Unset = that scope is open —
+      # producers keep logging, previous behaviour. One token per capability:
+      # a producer credential can never read the archive, and the API's read
+      # credential cannot purge. Set them together with the consumers below
+      # (core: ATF_LOGGER_INGEST_TOKEN; api: the read/admin pair) — arming one
+      # side alone makes every call fail loudly with UNAUTHENTICATED.
+      ATF_LOGGER_INGEST_TOKEN: ${ATF_LOGGER_INGEST_TOKEN:-}
+      ATF_LOGGER_READ_TOKEN: ${ATF_LOGGER_READ_TOKEN:-}
+      ATF_LOGGER_ADMIN_TOKEN: ${ATF_LOGGER_ADMIN_TOKEN:-}
     volumes:
       - logger-rust-data:/app/data
     networks:
@@ -155,6 +165,8 @@ services:
       ATF_TASK_RETENTION_SECONDS: ${ATF_TASK_RETENTION_SECONDS:-2592000}
       ATF_DB_PATH: /app/data/atf.db
       ATF_LOGGER_ADDR: logger:50052
+      # The ingest credential the logger's Log gate requires when it is armed.
+      ATF_LOGGER_INGEST_TOKEN: ${ATF_LOGGER_INGEST_TOKEN:-}
       # Diagnostics, empty = off: ATF_RAW_API_TRACE dumps per-request MTProto
       # traffic, ATF_BUTTON_STYLES=0 disables styled keyboards and
       # ATF_BUTTON_STYLE_PROBE=<chat id> sends one styled message at boot so an
@@ -197,6 +209,10 @@ services:
       # Same value as the core's ATF_CORE_RPC_TOKEN (see the core service above).
       ATF_CORE_RPC_TOKEN: ${ATF_CORE_RPC_TOKEN:-}
       ATF_LOGGER_GRPC: logger:50052
+      # Read (queries/stats) and admin (purge) credentials for the logger —
+      # distinct secrets, so a leaked API key can never write or erase.
+      ATF_LOGGER_READ_TOKEN: ${ATF_LOGGER_READ_TOKEN:-}
+      ATF_LOGGER_ADMIN_TOKEN: ${ATF_LOGGER_ADMIN_TOKEN:-}
       ATF_API_ADDR: ":8080"
       ATF_API_KEY: ${ATF_API_KEY:-}
       # The web gateway runs in its own container, so the health handler must

@@ -29,11 +29,12 @@ class FakeStub:
         self.calls = 0
         self.delivered: list[str] = []
 
-    async def Log(self, request):  # noqa: N802 - mirrors the generated stub
+    async def Log(self, request, metadata=(), **kw):  # noqa: N802 - mirrors the generated stub
         self.calls += 1
         if self.calls in self.fail_on:
             raise RuntimeError("logger unavailable")
         self.delivered.append(request.entry.message)
+        self.last_metadata = tuple(metadata)
         return SimpleNamespace(success=True, message="logged")
 
 
@@ -41,13 +42,13 @@ class AlwaysFailStub:
     def __init__(self) -> None:
         self.calls = 0
 
-    async def Log(self, request):  # noqa: N802
+    async def Log(self, request, metadata=(), **kw):  # noqa: N802
         self.calls += 1
         raise RuntimeError("logger unavailable")
 
 
-def _client(stub, queue_size: int = 4096) -> LogClient:
-    client = LogClient("127.0.0.1:1", max_queue_size=queue_size)
+def _client(stub, queue_size: int = 4096, token: str = "") -> LogClient:
+    client = LogClient("127.0.0.1:1", max_queue_size=queue_size, token=token)
     client.connect = lambda: None       # never open a real channel in a unit test
     client._stub = stub
     client._backoff = lambda n: 0.005   # keep the retry loop fast and deterministic
@@ -220,7 +221,7 @@ def test_the_shutdown_drain_delivers_what_it_can():
         stub = FakeStub()
 
         class SlowStub(FakeStub):
-            async def Log(self, request):  # noqa: N802
+            async def Log(self, request, metadata=(), **kw):  # noqa: N802
                 await asyncio.sleep(0.01)
                 return await super().Log(request)
 
@@ -311,5 +312,36 @@ def test_a_suppressed_event_is_counted_not_silently_dropped():
         assert snapshot["emitted"] == 0
         assert client.counters()["dropped"] == 0, "suppression is not a queue drop"
         await client.close(drain_timeout=0.05)
+
+    _run(go())
+
+# ---- capability-scoped bearer token ---------------------------------------
+
+def test_empty_token_sends_no_authorization_metadata():
+    """Unarmed deployment: not one credential may be fabricated."""
+    client = LogClient()
+    assert client._bearer() == ()
+
+
+def test_token_becomes_a_bearer_header_and_nothing_else():
+    """The credential rides on the wire, never inside an entry's payload."""
+    client = LogClient(token="s3cr3t-ingest")
+    header = client._bearer()
+    assert len(header) == 1
+    assert header[0][0] == "authorization"
+    assert header[0][1] == "Bearer s3cr3t-ingest"
+
+
+def test_the_ingest_bearer_rides_on_every_delivery_attempt():
+    """When the gate is armed, every Log attempt carries it (or is refused)."""
+
+    async def go():
+        stub = FakeStub()
+        client = _client(stub, token="s3cr3t-ingest")
+        client.log("INFO", "core", "system", "delivered")
+        await client.start()
+        assert await _until(lambda: len(stub.delivered) == 1)
+        assert stub.last_metadata == (("authorization", "Bearer s3cr3t-ingest"),)
+        await client.close()
 
     _run(go())

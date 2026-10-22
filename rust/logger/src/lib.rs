@@ -15,6 +15,7 @@
 //! * [`metrics`]   — Prometheus text-format registry + HTTP exposition.
 //! * [`shutdown`]  — graceful drain coordination.
 
+pub mod auth;
 pub mod config;
 pub mod health;
 pub mod ingest;

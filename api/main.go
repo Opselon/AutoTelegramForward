@@ -31,10 +31,10 @@ func main() {
 	defer conn.Close()
 
 	clients := grpcclient.NewClients(conn)
-	// No credential for the logger: the shared secret authenticates this API to
-	// the core, and the logger is a separate trust domain (see
-	// grpcclient.DialWithoutCredential).
-	if loggerConn, lerr := grpcclient.DialWithoutCredential(loggerAddr); lerr == nil {
+	// The logger is a separate trust domain; it gets its own per-capability
+	// bearer tokens (ATF_LOGGER_{INGEST,READ,ADMIN}_TOKEN), never the shared
+	// core secret (see grpcclient.DialLogger).
+	if loggerConn, lerr := grpcclient.DialLogger(loggerAddr); lerr == nil {
 		grpcclient.AttachLogger(clients, loggerConn)
 		log.Printf("connected to logger service at %s", loggerAddr)
 	} else {

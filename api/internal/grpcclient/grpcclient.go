@@ -71,6 +71,91 @@ func Dial(addr string) (*grpc.ClientConn, error) {
 	return dial(addr, normalizeRPCToken(os.Getenv(CoreRPCTokenEnv)))
 }
 
+// Logger token environment variables, one per capability class. The server
+// compares in constant time and refuses cross-class reuse, so a leaked producer
+// token cannot read the archive from this API either.
+const (
+	LoggerIngestTokenEnv = "ATF_LOGGER_INGEST_TOKEN"
+	LoggerReadTokenEnv   = "ATF_LOGGER_READ_TOKEN"
+	LoggerAdminTokenEnv  = "ATF_LOGGER_ADMIN_TOKEN"
+)
+
+// LoggerAuthUnaryClientInterceptor picks the capability token by gRPC method:
+// `Log` (ingest), `QueryLogs`/`LogStats` (read), anything else (admin — the
+// server denies new methods by default, so this mapping must consciously grant
+// them). Tokens are normalised the same way the core token is: blank or
+// whitespace-only means "not configured", and then nothing is attached.
+func LoggerAuthUnaryClientInterceptor(ingest, read, admin string) grpc.UnaryClientInterceptor {
+	ingest = normalizeRPCToken(ingest)
+	read = normalizeRPCToken(read)
+	admin = normalizeRPCToken(admin)
+	return func(ctx context.Context, method string, req, reply any, cc *grpc.ClientConn, invoker grpc.UnaryInvoker, opts ...grpc.CallOption) error {
+		var token string
+		switch {
+		case strings.HasSuffix(method, ".LogControlService/Log"):
+			token = ingest
+		case strings.HasSuffix(method, ".LogControlService/QueryLogs"),
+			strings.HasSuffix(method, ".LogControlService/LogStats"):
+			token = read
+		default:
+			token = admin
+		}
+		if token != "" {
+			ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+token)
+		}
+		return invoker(ctx, method, req, reply, cc, opts...)
+	}
+}
+
+// LoggerAuthStreamClientInterceptor is the streaming counterpart: the logger
+// has no server streams today, but a boundary that only covers unary calls is
+// not a boundary (see InternalAuthStreamClientInterceptor).
+func LoggerAuthStreamClientInterceptor(ingest, read, admin string) grpc.StreamClientInterceptor {
+	ingest = normalizeRPCToken(ingest)
+	read = normalizeRPCToken(read)
+	admin = normalizeRPCToken(admin)
+	return func(ctx context.Context, desc *grpc.StreamDesc, cc *grpc.ClientConn, method string, streamer grpc.Streamer, opts ...grpc.CallOption) (grpc.ClientStream, error) {
+		var token string
+		switch {
+		case strings.HasSuffix(method, ".LogControlService/Log"):
+			token = ingest
+		case strings.HasSuffix(method, ".LogControlService/QueryLogs"),
+			strings.HasSuffix(method, ".LogControlService/LogStats"):
+			token = read
+		default:
+			token = admin
+		}
+		if token != "" {
+			ctx = metadata.AppendToOutgoingContext(ctx, "authorization", "Bearer "+token)
+		}
+		return streamer(ctx, desc, cc, method, opts...)
+	}
+}
+
+// DialLogger connects to the Rust logger service with the per-capability
+// credentials it may be configured to require. Empty variables on any class
+// leave that class open on an unconfigured server and harmlessly unattached
+// here — send-only-what-is-armed keeps a mixed deployment from half-arming.
+func DialLogger(addr string) (*grpc.ClientConn, error) {
+	ingest := normalizeRPCToken(os.Getenv(LoggerIngestTokenEnv))
+	read := normalizeRPCToken(os.Getenv(LoggerReadTokenEnv))
+	admin := normalizeRPCToken(os.Getenv(LoggerAdminTokenEnv))
+	conn, err := grpc.NewClient(addr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(
+			middleware.CorrelationUnaryClientInterceptor(),
+			LoggerAuthUnaryClientInterceptor(ingest, read, admin),
+		),
+		grpc.WithChainStreamInterceptor(
+			LoggerAuthStreamClientInterceptor(ingest, read, admin),
+		),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
 // DialWithoutCredential connects to an internal service that is NOT the core.
 //
 // The credential authenticates this API to the core; the logger is a different

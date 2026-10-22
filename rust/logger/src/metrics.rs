@@ -369,6 +369,31 @@ pub fn method_label(method: &str) -> &'static str {
     }
 }
 
+/// `(scope, failure)` folded into ONE bounded label value. 3 scopes x 4
+/// outcomes = 12 distinct series, regardless of how the deployment mixes
+/// tokens — cardinally safe, and the raw secret never leaves `auth.rs`.
+pub fn auth_outcome_label(
+    scope: crate::auth::Scope,
+    failure: crate::auth::Failure,
+) -> &'static str {
+    use crate::auth::Failure as F;
+    use crate::auth::Scope as S;
+    match (scope, failure) {
+        (S::Ingest, F::Missing) => "ingest_missing",
+        (S::Ingest, F::Malformed) => "ingest_malformed",
+        (S::Ingest, F::Mismatch) => "ingest_mismatch",
+        (S::Ingest, F::Forbidden) => "ingest_forbidden",
+        (S::Read, F::Missing) => "read_missing",
+        (S::Read, F::Malformed) => "read_malformed",
+        (S::Read, F::Mismatch) => "read_mismatch",
+        (S::Read, F::Forbidden) => "read_forbidden",
+        (S::Admin, F::Missing) => "admin_missing",
+        (S::Admin, F::Malformed) => "admin_malformed",
+        (S::Admin, F::Mismatch) => "admin_mismatch",
+        (S::Admin, F::Forbidden) => "admin_forbidden",
+    }
+}
+
 /// gRPC status codes, mapped to their canonical names.
 pub fn status_label(code: i32) -> &'static str {
     match code {
@@ -515,6 +540,10 @@ pub struct Metrics {
     pub retention_protected_rows_skipped: Counter,
     pub retention_budget_exhausted: Counter,
     pub retention_last_success_ts: Gauge,
+
+    // ---- auth ------------------------------------------------------------
+    /// One series per (scope, failure) pair — a closed set, never raw tokens.
+    pub auth_failures: LabeledCounter,
 
     // ---- service --------------------------------------------------------
     pub rpc_total: LabeledCounter, // method label; see `rpc_status`
@@ -681,6 +710,11 @@ impl Metrics {
             readiness: Gauge::default(),
             liveness: Gauge::default(),
             ready: Gauge::default(),
+            auth_failures: LabeledCounter::new(
+                "atf_logger_auth_failures_total",
+                "Rejected credentials by scope and outcome",
+                "outcome",
+            ),
             startup_ok: Gauge::default(),
             storage_up: Gauge::default(),
             pipeline_running: Gauge::default(),
@@ -690,6 +724,12 @@ impl Metrics {
                 "status",
             ),
         }
+    }
+
+    /// Record one rejected credential. The `(scope, outcome)` pair is folded
+    /// into one bounded label value; a raw token never becomes a metric label.
+    pub fn record_auth_failure(&self, scope: crate::auth::Scope, failure: crate::auth::Failure) {
+        self.auth_failures.inc(auth_outcome_label(scope, failure));
     }
 
     /// Record one RPC outcome. `status_code` is a tonic/gRPC code.
@@ -963,6 +1003,9 @@ impl Metrics {
             "atf_logger_retention_last_success_timestamp_seconds {}",
             self.retention_last_success_ts.get()
         );
+
+        // --- auth ----------------------------------------------------------
+        self.auth_failures.render(&mut out);
 
         // --- service ------------------------------------------------------
         self.rpc_total.render(&mut out);
