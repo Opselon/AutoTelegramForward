@@ -132,6 +132,7 @@ class SessionDialogGateway:
         rows: List[Dict[str, Any]] = []
         try:
             async with asyncio.timeout(SCAN_TIMEOUT):
+                pinned_ids = await self._pinned_ids(client)
                 async for dialog in client.get_dialogs(limit=100):
                     chat = getattr(dialog, "chat", None)
                     if chat is None:
@@ -140,7 +141,9 @@ class SessionDialogGateway:
                     if chat_id is None or chat_id in seen:
                         continue
                     seen.add(chat_id)
-                    rows.append(self._row(client, chat, dialog))
+                    row = self._row(client, chat)
+                    row["pinned"] = row["pinned"] or str(chat_id) in pinned_ids
+                    rows.append(row)
             logger.info(
                 "[PIPELINE:DIALOG_FETCH:SUCCESS] scanned=%d pinned=%d",
                 len(rows), sum(1 for row in rows if row.get("pinned")),
@@ -150,7 +153,66 @@ class SessionDialogGateway:
         return rows
 
     @staticmethod
-    def _row(client: Any, chat: Any, dialog: Any = None) -> Dict[str, Any]:
+    async def _pinned_ids(client: Any) -> set:
+        """The chat ids pinned in any of the account's folders (main included).
+
+        Pyrogram's ``Dialog`` does not expose the raw ``pinned`` flag (it is a
+        field of the TL ``Dialog``, not the high-level type), so the high-level
+        ``get_dialogs()`` stream can never tell a pinned chat apart. Pins are
+        per folder — the ``All chats`` folder (id 0) plus every custom folder —
+        so each folder's pin list is asked for explicitly. A folder that
+        refuses is skipped, and a total failure degrades to "nothing pinned":
+        discovery never depends on the pin list.
+        """
+        try:
+            from pyrogram import raw, utils as pg_utils
+        except Exception as exc:  # pragma: no cover - pyrogram always present in a live core
+            logger.warning("[PIPELINE:DIALOG_FETCH:PINNED_UNAVAILABLE] %s", exc)
+            return set()
+
+        folder_ids = [0]
+        try:
+            filters = await client.invoke(raw.functions.messages.GetDialogFilters())
+            for folder in getattr(filters, "filters", None) or []:
+                folder_id = getattr(folder, "id", None)
+                if isinstance(folder_id, int) and folder_id not in folder_ids:
+                    folder_ids.append(folder_id)
+        except Exception as exc:
+            logger.info("[PIPELINE:DIALOG_FETCH:PINNED_FOLDERS_UNKNOWN] %s", exc)
+
+        ids = set()
+        answered = 0
+        for folder_id in folder_ids:
+            try:
+                pinned = await client.invoke(
+                    raw.functions.messages.GetPinnedDialogs(folder_id=folder_id)
+                )
+            except Exception as exc:
+                logger.info(
+                    "[PIPELINE:DIALOG_FETCH:PINNED_FOLDER_SKIPPED] folder=%s reason=%s",
+                    folder_id, exc,
+                )
+                continue
+            answered += 1
+            for dialog in getattr(pinned, "dialogs", None) or []:
+                peer = getattr(dialog, "peer", None)
+                if peer is None:
+                    continue
+                try:
+                    ids.add(str(pg_utils.get_peer_id(peer)))
+                except Exception:
+                    continue
+        if not answered:
+            logger.warning("[PIPELINE:DIALOG_FETCH:PINNED_UNAVAILABLE] no folder answered")
+            return set()
+        logger.info(
+            "[PIPELINE:DIALOG_FETCH:PINNED] folders=%d/%d count=%d",
+            answered, len(folder_ids), len(ids),
+        )
+        return ids
+
+    @staticmethod
+    def _row(client: Any, chat: Any) -> Dict[str, Any]:
         me = getattr(client, "me", None)
         my_id = getattr(me, "id", None) if me is not None else None
         return {
@@ -159,5 +221,7 @@ class SessionDialogGateway:
             "username": getattr(chat, "username", "") or "",
             "type": getattr(getattr(chat, "type", ""), "value", getattr(chat, "type", "")),
             "is_self": bool(my_id is not None and getattr(chat, "id", None) == my_id),
-            "pinned": bool(getattr(dialog, "pinned", False)),
+            # Pinned is decided solely by the raw pin lookup in `scan`; in a
+            # real Telegram session the high-level dialog object never knows it.
+            "pinned": False,
         }
