@@ -48,6 +48,14 @@ pub struct Record {
     pub rule_id: String,
     pub user_id: i64,
     pub correlation_id: String,
+    /// Structured context columns. They ride the v19 additive migration, so an
+    /// old archive stores `''` and every read is unchanged. `fingerprint` is set
+    /// by the engine at ingest (never accepted from the wire key of the same
+    /// name on a read, because a client cannot forge a consistent identity).
+    pub request_id: String,
+    pub trace_id: String,
+    pub module: String,
+    pub fingerprint: String,
 }
 
 /// Which storage engine is in use.

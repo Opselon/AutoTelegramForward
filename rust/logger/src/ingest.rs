@@ -24,6 +24,8 @@
 
 use crate::pb;
 use crate::redaction;
+use regex::{NoExpand, Regex};
+use std::sync::OnceLock;
 
 /// The canonical severities, ordered as docs/logging-contract.md §2 defines them.
 pub const CANONICAL_LEVELS: [&str; 7] = [
@@ -316,6 +318,88 @@ impl Limits {
     }
 }
 
+// ---- error fingerprints ----------------------------------------------------
+
+/// Upper bound on the stored fingerprint (16 lowercase hex characters = 64 bits).
+///
+/// A 64-bit FNV-1a of a normalised signature is collision-safe at this service's
+/// realistic group count: birthday collisions become plausible around 10^9
+/// distinct signatures, which is orders of magnitude past `MAX_GROUPS` and any
+/// archive this engine can hold. A wrong grouping would be visible, not harmful
+/// (a group just holds two unrelated messages).
+pub const FINGERPRINT_LENGTH: usize = 16;
+
+/// Normalise a message for the error fingerprint: lowercase, collapse
+/// whitespace, then mask producer-supplied numeric and hex runs so "connection
+/// refused for user 12" and "… for user 13" share a signature.
+///
+/// This is deliberately *aggregate-only* — the stored `message` still holds the
+/// real text — and it deliberately masks ids used as *values* (the failure's
+/// subject), not ids serving as lookup keys.
+pub fn normalize_for_fingerprint(message: &str) -> String {
+    static UUID: OnceLock<Regex> = OnceLock::new();
+    static HEX_RUN: OnceLock<Regex> = OnceLock::new();
+    static NUMBER_RUN: OnceLock<Regex> = OnceLock::new();
+    static WHITESPACE: OnceLock<Regex> = OnceLock::new();
+    let uuid = UUID.get_or_init(|| {
+        Regex::new(r"(?i)\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
+            .expect("static uuid fingerprint regex")
+    });
+    let hex_run = HEX_RUN
+        .get_or_init(|| Regex::new(r"(?i)\b[0-9a-f]{8,}\b").expect("static hex fingerprint regex"));
+    let number_run =
+        NUMBER_RUN.get_or_init(|| Regex::new(r"\b\d{2,}\b").expect("static number regex"));
+    let whitespace =
+        WHITESPACE.get_or_init(|| Regex::new(r"\s+").expect("static whitespace regex"));
+
+    let lower = message.to_lowercase();
+    let without_uuid = uuid.replace_all(&lower, NoExpand("#"));
+    let without_hex = hex_run.replace_all(&without_uuid, NoExpand("#"));
+    let without_numbers = number_run.replace_all(&without_hex, NoExpand("#"));
+    // Collapse whitespace last: masking can leave runs of spaces.
+    let out = whitespace.replace_all(&without_numbers, " ").into_owned();
+    // 160 chars is enough to tell two failures apart and small enough that a
+    // producer cannot make the hash pay for a megabyte-long message.
+    out.trim().chars().take(160).collect()
+}
+
+/// The stable error signature for one record: FNV-1a (64-bit) over
+/// category + module + the normalised message, hex-encoded. `level`/`service`
+/// are accepted because every caller has them at hand, but only for symmetry —
+/// neither changes the value.
+///
+/// Both severity and service are deliberately *reported, not part of the
+/// identity*: the pre-existing aggregate contract (PARTITION BY category,
+/// message in `query::error_aggregates`, unchanged) treats "the same failure
+/// firing at WARN yesterday and ERROR today" — or in another service — as ONE
+/// recurring group whose reported level/service come from the newest row. The
+/// value has to survive producer timestamps, restarts and archive moves, so
+/// only record *shape* goes in — never `ts`, `user_id`, `detail`, `rule_id` or
+/// `correlation_id` (two identical failures in two tenants must share a
+/// signature; that is the entire point of the aggregate).
+pub fn fingerprint_of(
+    _level: &str,
+    _service: &str,
+    category: &str,
+    module: &str,
+    message: &str,
+) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    let mut feed = |bytes: &[u8]| {
+        for byte in bytes {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        hash ^= 0x1f;
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    };
+    // Level and service intentionally not hashed (see the doc-comment above).
+    feed(category.trim().to_lowercase().as_bytes());
+    feed(module.trim().to_lowercase().as_bytes());
+    feed(normalize_for_fingerprint(message).as_bytes());
+    format!("{hash:016x}")
+}
+
 /// The producer-side record, decoupled from the protobuf type so ingest rules can
 /// be unit-tested without a network or a prost default.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -329,6 +413,17 @@ pub struct RawEntry {
     pub rule_id: String,
     pub user_id: i64,
     pub correlation_id: String,
+    /// Structured context (v19, additive). A producer that predates the fields
+    /// sends nothing; the engine stores `''` and every read path is unchanged.
+    ///
+    /// `trace_id`/`request_id` are producer-owned ids: the engine never invents,
+    /// validates or upgrades them, it only bounds and credential-redacts them so
+    /// they stay lookup keys and never carry secrets.
+    pub request_id: String,
+    pub trace_id: String,
+    /// The emitting file/module ("handler.forward"). A plain bounded tag, like
+    /// `service`. Optional — the audit trail works without it.
+    pub module: String,
 }
 
 impl From<&pb::LogEntry> for RawEntry {
@@ -343,6 +438,9 @@ impl From<&pb::LogEntry> for RawEntry {
             rule_id: entry.rule_id.clone(),
             user_id: entry.user_id,
             correlation_id: entry.correlation_id.clone(),
+            request_id: entry.request_id.clone(),
+            trace_id: entry.trace_id.clone(),
+            module: entry.module.clone(),
         }
     }
 }
@@ -471,7 +569,31 @@ pub fn prepare(
         redact_identifiers,
         &mut adjustments,
     );
+    let request_id = bound_identifier(
+        &entry.request_id,
+        limits.max_tag_bytes,
+        redact_identifiers,
+        &mut adjustments,
+    );
+    let trace_id = bound_identifier(
+        &entry.trace_id,
+        limits.max_tag_bytes,
+        redact_identifiers,
+        &mut adjustments,
+    );
+    let module = bound_tag(&entry.module, "", limits.max_tag_bytes, &mut adjustments);
     let bounded_level = bound_tag(&level, "INFO", limits.max_tag_bytes, &mut adjustments);
+
+    // The fingerprint is engine-computed (never accepted from the wire): it runs
+    // over the *redacted and final* record shape, so a secret in the message can
+    // never distinguish two otherwise-identical failures.
+    let fingerprint = fingerprint_of(
+        &bounded_level,
+        &service,
+        &category_bounded,
+        &module,
+        &message,
+    );
 
     Ok(Prepared {
         record: crate::storage::Record {
@@ -485,6 +607,10 @@ pub fn prepare(
             rule_id,
             user_id: entry.user_id,
             correlation_id,
+            request_id,
+            trace_id,
+            module,
+            fingerprint,
         },
         severity: severity.unwrap_or(Severity::Info),
         unknown_level: severity.is_none(),
@@ -678,6 +804,9 @@ mod tests {
             detail: "y ".repeat(5_000),
             rule_id: "z-".repeat(400),
             correlation_id: String::new(),
+            request_id: String::new(),
+            trace_id: String::new(),
+            module: String::new(),
             user_id: 0,
         };
         let prepared = prepare(&entry, limits(), true, &CollectPolicy::permissive(), 42).unwrap();
@@ -772,6 +901,7 @@ mod tests {
             rule_id: "z".repeat(1_024),
             correlation_id: "Bearer abcdefghijklmnop".to_string(),
             user_id: 7,
+            ..RawEntry::default()
         };
         let prepared = prepare(&entry, limits(), true, &CollectPolicy::permissive(), 0).unwrap();
         assert_eq!(prepared.record.message, redaction::REPLACEMENT);
@@ -781,5 +911,151 @@ mod tests {
         assert!(prepared.adjustments.redacted);
         assert!(prepared.adjustments.message_truncated);
         assert!(prepared.adjustments.detail_truncated);
+    }
+
+    #[test]
+    fn structured_context_is_bounded_and_kept_lookup_safe() {
+        let entry = RawEntry {
+            ts: 11,
+            level: "ERROR".to_string(),
+            service: "api".to_string(),
+            category: "system".to_string(),
+            message: "boom".to_string(),
+            detail: String::new(),
+            module: " api.handler.forward ".to_string(),
+            request_id: "req-2026-10-22-1492 ".to_string(),
+            trace_id: format!("{:032x}", 0xabc_u64),
+            correlation_id: "corr-1".to_string(),
+            rule_id: String::new(),
+            user_id: 0,
+        };
+        let prepared = prepare(&entry, limits(), true, &CollectPolicy::permissive(), 0).unwrap();
+        // Producer-owned ids are lookup keys: stored verbatim (trimmed), never
+        // rebuilt or upgraded by the engine, and the 32-hex W3C trace id is not
+        // treated as a secret.
+        assert_eq!(prepared.record.request_id, "req-2026-10-22-1492");
+        assert_eq!(prepared.record.trace_id, format!("{:032x}", 0xabc_u64));
+        assert_eq!(prepared.record.module, "api.handler.forward");
+    }
+
+    /// A credential-shaped context field must not reach storage: same rule the
+    /// message and detail already follow (a producer bug cannot leak a session
+    /// string through a column that predates redaction).
+    #[test]
+    fn credential_shaped_structured_context_is_redacted() {
+        let entry = RawEntry {
+            ts: 3,
+            level: "ERROR".to_string(),
+            category: "system".to_string(),
+            trace_id: "Bearer abcdefghijklmnop".to_string(),
+            request_id: format!("x{}", "y".repeat(120)),
+            detail: String::new(),
+            ..RawEntry::default()
+        };
+        let prepared = prepare(&entry, limits(), true, &CollectPolicy::permissive(), 0).unwrap();
+        assert!(!prepared.record.trace_id.contains("abcdefghijklmnop"));
+        // The oversized id is blob-shaped (parity fixture `session_blob`), so it
+        // is replaced rather than truncated: a run of 80+ chars is never a real
+        // request id, and half a secret is still a secret.
+        assert!(prepared.record.request_id.len() <= limits().max_tag_bytes);
+        assert!(!prepared.record.request_id.contains('y'));
+        // The fingerprint folds the *final, redacted* message: two failures
+        // whose only difference was a credential are ONE group, because a
+        // hotfix cannot be gated on a value the redactor was right to erase.
+        let fp_of_message = |message: &str| {
+            let entry = RawEntry {
+                ts: 1,
+                level: "ERROR".to_string(),
+                category: "system".to_string(),
+                message: message.to_string(),
+                ..RawEntry::default()
+            };
+            prepare(&entry, limits(), true, &CollectPolicy::permissive(), 0)
+                .unwrap()
+                .record
+                .fingerprint
+        };
+        assert_eq!(
+            fp_of_message("Bearer abcdefghijklmnop"),
+            fp_of_message("Bearer toppedmercifullyx"),
+            "a masked secret must not make two different records share a signature"
+        );
+    }
+
+    #[test]
+    fn fingerprint_is_stable_and_normalises_producer_supplied_ids() {
+        fn fp(message: &str) -> String {
+            let entry = RawEntry {
+                ts: 1,
+                level: "ERROR".to_string(),
+                service: "core".to_string(),
+                category: "forward".to_string(),
+                message: message.to_string(),
+                ..RawEntry::default()
+            };
+            prepare(&entry, limits(), true, &CollectPolicy::permissive(), 0)
+                .unwrap()
+                .record
+                .fingerprint
+        }
+        // Producer-supplied numbers do not split the signature...
+        assert_eq!(
+            fp("send failed: user 42 quota"),
+            fp("send failed: user 43 quota")
+        );
+        // ...and the W3C trace id format expects 32 hex; ids of 8+ hex chars are
+        // masked by the normaliser too.
+        assert_eq!(
+            fp("upstream refused 8badf00d and -1001234567890"),
+            fp("upstream refused deadbeef and -1009876543210")
+        );
+        // ...but a different failure is a different signature, and the value is
+        // the documented 16-hex FNV-1a shape.
+        assert_ne!(fp("send failed"), fp("send success"));
+        let one = fp("send failed");
+        assert_eq!(one.len(), 16);
+        assert!(one.chars().all(|c| c.is_ascii_hexdigit()));
+        // Timestamps, users and correlation ids are not part of the signature:
+        // two identical failures from two tenants share one group.
+        let entry = RawEntry {
+            ts: 1,
+            level: "ERROR".to_string(),
+            service: "core".to_string(),
+            category: "forward".to_string(),
+            message: "boom".to_string(),
+            user_id: 7,
+            correlation_id: "c-a".to_string(),
+            ..RawEntry::default()
+        };
+        let mut other = entry.clone();
+        other.ts = 999_999;
+        other.user_id = 8;
+        other.correlation_id = "c-b".to_string();
+        let a = prepare(&entry, limits(), true, &CollectPolicy::permissive(), 0)
+            .unwrap()
+            .record;
+        let b = prepare(&other, limits(), true, &CollectPolicy::permissive(), 0)
+            .unwrap()
+            .record;
+        assert_ne!(a.fingerprint, "", "the fingerprint must never be empty");
+        assert_eq!(a.fingerprint, b.fingerprint);
+        // Level and service are NOT part of the signature (severity is
+        // reported, never partitioned — see ingest::fingerprint_of): the same
+        // failure at WARN in another service is the same group. The
+        // fingerprint fixture uses category "forward" for both records.
+        assert_eq!(fp("send failed"), {
+            let entry = RawEntry {
+                ts: 1,
+                level: "WARN".to_string(),
+                service: "another-service".to_string(),
+                category: "forward".to_string(),
+                message: "send failed".to_string(),
+                ..RawEntry::default()
+            };
+            prepare(&entry, limits(), true, &CollectPolicy::permissive(), 0)
+                .unwrap()
+                .record
+                .fingerprint
+        });
     }
 }
