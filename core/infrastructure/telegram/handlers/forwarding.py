@@ -36,6 +36,12 @@ from core.application.quick_add import (
 from core.application.repositories import ConcurrencyError
 from core.domain.value_objects import ChannelReference
 from core.infrastructure.telegram.errors import tg_detail
+from core.infrastructure.telegram.handlers.forward_manage import (
+    BULK_VERBS,
+    DELETE_VERBS,
+    EDIT_VERBS,
+    LIST_VERBS,
+)
 from core.infrastructure.telegram.quick_add import QuickAddParseError, parse_quick_add
 from core.infrastructure.telegram.route_lists import (
     STATUS_RESOLVED,
@@ -125,6 +131,23 @@ class ForwardingHandlers:
         if first_arg == "add":
             await self._handle_forward_add(message, uid, lang)
             return
+        # Management verbs live in `forward_manage.py`; routing them here keeps
+        # one `/forward` entry point and one help text.
+        if first_arg in LIST_VERBS:
+            rest = args.split(None, 1)
+            query = rest[1].strip() if len(rest) > 1 else ""
+            return await self._handle_forward_list(message, uid, lang, query)
+        if first_arg in EDIT_VERBS:
+            rest = args.split(None, 1)
+            return await self._handle_forward_edit(
+                message, uid, lang, rest[1].strip() if len(rest) > 1 else "")
+        if first_arg in DELETE_VERBS:
+            rest = args.split(None, 1)
+            return await self._handle_forward_delete(
+                message, uid, lang, rest[1].strip() if len(rest) > 1 else "")
+        if first_arg in BULK_VERBS:
+            text, kbd = await self._render_forward_bulk(uid)
+            return await message.reply_text(text, reply_markup=kbd)
         if first_arg in {"status", "st"}:
             rest = args.split(None, 1)
             await self._handle_forward_status(message, uid, lang, rest[1].strip() if len(rest) > 1 else "")
