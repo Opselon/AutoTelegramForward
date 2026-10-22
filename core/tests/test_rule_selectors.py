@@ -8,7 +8,6 @@ than re-derived in three handlers.
 
 from __future__ import annotations
 
-import uuid
 from types import SimpleNamespace
 
 import pytest
@@ -27,7 +26,10 @@ from core.application.rule_selectors import (
     rule_label,
 )
 
-UUID4 = str(uuid.uuid4())
+#: A fixed uuid: parametrised test ids are the test ids pytest reports, and a
+#: random one at import time makes xdist workers collect different ids and
+#: abort the whole run ("Different tests were collected between gw0 and gw3").
+UUID4 = "b31fc230-956b-43d6-9138-3201442df04f"
 HEX16 = "0123456789abcdef"
 
 
