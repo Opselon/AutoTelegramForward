@@ -64,15 +64,103 @@ def test_find_accepts_both_spellings_of_one_id():
     assert raw_spelling.id == bot_spelling.id == "-1001206461239"
 
 
-def test_dialog_gateway_row_carries_pinned():
+def test_dialog_gateway_row_is_unpinned_by_default():
+    """The row carries no pin claim of its own — only the raw lookup decides."""
     from core.infrastructure.telegram.dialog_gateway import SessionDialogGateway
 
-    def _attr(obj, name):
-        return None
-
     chat = SimpleNamespace(id=-1001, title="C", username="", type=SimpleNamespace(value="CHANNEL"))
-    dialog = SimpleNamespace(chat=chat, pinned=True)
-    row = SessionDialogGateway._row(object(), chat, dialog)
-    assert row["pinned"] is True
-    row = SessionDialogGateway._row(object(), chat, None)
+    row = SessionDialogGateway._row(object(), chat)
     assert row["pinned"] is False
+
+
+class _PinnedClient:
+    """A client whose high-level dialogs know nothing about pins.
+
+    That is exactly what pyrogram 2.0.106 gives us: ``Dialog`` has no
+    ``pinned`` attribute, so the pin list must come from the raw
+    ``messages.GetPinnedDialogs`` call. A regression to ``dialog.pinned``
+    would leave every row unpinned here.
+    """
+
+    def __init__(self, chats, pinned_peers=(), fail_pins=False, folder_pins=None, folders=()):
+        self.me = SimpleNamespace(id=999)
+        self._chats = list(chats)
+        self._pinned_peers = list(pinned_peers)
+        self._fail_pins = fail_pins
+        self._folder_pins = dict(folder_pins or {})
+        self._folders = list(folders)
+        self.invoked = []
+
+    async def invoke(self, query):
+        name = type(query).__name__
+        self.invoked.append(name)
+        if name == "GetDialogFilters":
+            return SimpleNamespace(filters=[SimpleNamespace(id=f) for f in self._folders])
+        if self._fail_pins:
+            raise RuntimeError("pins unavailable")
+        folder_id = getattr(query, "folder_id", 0)
+        peers = self._folder_pins.get(folder_id, self._pinned_peers)
+        return SimpleNamespace(dialogs=[SimpleNamespace(peer=p) for p in peers])
+
+    def get_dialogs(self, limit=100):
+        async def _gen():
+            for chat in self._chats:
+                yield SimpleNamespace(chat=chat, pinned=True)  # attr must be ignored
+
+        return _gen()
+
+
+async def test_scan_marks_pins_from_the_raw_pin_lookup():
+    from pyrogram.raw.types import PeerChannel, PeerUser
+
+    from core.application.discovery import ListDialogsUseCase
+    from core.infrastructure.telegram.dialog_gateway import SessionDialogGateway
+
+    chats = [
+        SimpleNamespace(id=-1001000000001, title="Alpha", username="", type="channel"),
+        SimpleNamespace(id=-1001000000002, title="Beta", username="", type="channel"),
+        SimpleNamespace(id=555000111, title="Someone", username="", type="private"),
+    ]
+    client = _PinnedClient(chats, pinned_peers=[PeerChannel(channel_id=1000000002), PeerUser(user_id=555000111)])
+    gateway = SessionDialogGateway(sessions=None, pool=None)
+
+    rows = await gateway.scan(client, set())
+
+    assert "GetPinnedDialogs" in client.invoked
+    by_id = {row["id"]: row["pinned"] for row in rows}
+    assert by_id == {"-1001000000001": False, "-1001000000002": True, "555000111": True}
+
+    catalog = ListDialogsUseCase.build(rows)
+    assert [e.title for e in catalog.of_kind("channel").entries] == ["Beta", "Alpha"]
+
+
+async def test_scan_reads_pins_from_custom_folders_too():
+    """A chat pinned only inside a custom folder is still pinned for the user."""
+    from pyrogram.raw.types import PeerChannel
+
+    from core.infrastructure.telegram.dialog_gateway import SessionDialogGateway
+
+    chats = [SimpleNamespace(id=-1001000000009, title="Forex", username="", type="channel")]
+    client = _PinnedClient(
+        chats,
+        folder_pins={0: [], 7: [PeerChannel(channel_id=1000000009)]},
+        folders=[7],
+    )
+
+    rows = await SessionDialogGateway(sessions=None, pool=None).scan(client, set())
+
+    assert client.invoked.count("GetPinnedDialogs") == 2  # main folder + folder 7
+    assert rows[0]["pinned"] is True
+
+
+async def test_scan_still_returns_rows_when_the_pin_lookup_fails():
+    from core.infrastructure.telegram.dialog_gateway import SessionDialogGateway
+
+    chats = [SimpleNamespace(id=-1001000000001, title="Alpha", username="", type="channel")]
+    client = _PinnedClient(chats, fail_pins=True)
+
+    rows = await SessionDialogGateway(sessions=None, pool=None).scan(client, set())
+
+    assert [row["id"] for row in rows] == ["-1001000000001"]
+    assert rows[0]["pinned"] is False
+
