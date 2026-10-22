@@ -409,12 +409,19 @@ class ForwardSelectHandlers:
             except Exception:
                 pass
             chats = await self._selector_chats(uid, refresh=True)
-            self._selector_store(uid, chats)
-            selection = self._sel_selection(st)
-            known = [str(chat.get("id") or "") for chat in chats]
-            selection.prune(ROLE_SOURCE, known or None)
-            selection.prune(ROLE_TARGET, known or None)
-            self._sel_save(st, selection)
+        else:
+            # A resume without a fetch still owes Telegram an answer: a
+            # callback left unanswered holds the presser's client for the
+            # whole ask-and-never-answer duration (end to end this showed
+            # up as a ten-second spinner on the real bot).
+            await self._safe_answer(event)
+            chats = await self._selector_chats(uid, refresh=False)
+        self._selector_store(uid, chats)
+        selection = self._sel_selection(st)
+        known = [str(chat.get("id") or "") for chat in chats]
+        selection.prune(ROLE_SOURCE, known or None)
+        selection.prune(ROLE_TARGET, known or None)
+        self._sel_save(st, selection)
         await self._persist(uid, st)
         text, markup = self.render_selector(st, role_key(role), lang, self._sel_note(st))
         await self._safe_edit(event, text, reply_markup=markup)
@@ -425,6 +432,14 @@ class ForwardSelectHandlers:
         await self._persist(uid, st)
         text, markup = self.render_selector(st, role, self._resolve_lang(uid), note)
         await self._safe_edit(event, text, reply_markup=markup)
+
+    @staticmethod
+    async def _safe_answer(event: Any, **kw) -> None:
+        """Terminate the inline query, errors and old queries included."""
+        try:
+            await event.answer(**kw)
+        except Exception:
+            pass
 
     def _sel_lookup(self, uid: int, chat_id: str) -> Optional[Dict[str, Any]]:
         """The caller's own row for this id, or None when it is not theirs."""
@@ -532,6 +547,7 @@ class ForwardSelectHandlers:
 
     async def create_from_selection(self, event: Any, uid: int) -> None:
         """Create every planned rule and report one outcome per source."""
+        await self._safe_answer(event)
         lang = self._resolve_lang(uid)
         st = self._state(uid)
         selection = self._sel_selection(st)
@@ -644,6 +660,7 @@ class ForwardSelectHandlers:
             handler._sel_buffer(st)[ROLE_KEY] = role
             handler._sel_buffer(st)[PAGE_KEY] = 0
             await handler._persist(uid, st)
+            await handler._safe_answer(cq)
             await handler._sel_show(cq, uid, role)
 
         @b.on_callback_query(filters.regex(rf"^{prefix}:pg:([st]):(\d{{1,4}})$"))
@@ -655,6 +672,7 @@ class ForwardSelectHandlers:
             handler._sel_buffer(st)[ROLE_KEY] = role
             handler._sel_buffer(st)[PAGE_KEY] = page
             await handler._persist(uid, st)
+            await handler._safe_answer(cq)
             await handler._sel_show(cq, uid, role)
 
         @b.on_callback_query(filters.regex(rf"^{prefix}:t:([st]):(.+)$"))
@@ -722,6 +740,7 @@ class ForwardSelectHandlers:
         async def _cb_back(_client, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             st = handler._state(uid)
+            await handler._safe_answer(cq)
             await handler._sel_show(cq, uid, handler._sel_role(st))
 
         @b.on_callback_query(filters.regex(rf"^{prefix}:cancel$"))
