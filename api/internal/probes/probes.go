@@ -28,6 +28,17 @@ var paths = []string{
 	"/api/version",
 	"/api/health/services",
 	"/api/v1/health/services",
+	// The same surface under prefixes callers that prefix every path with /api
+	// probe: these are the routes the sweep fix registered, and WITHOUT the
+	// listing here the API-key gate answers 401 to a credential-less probe of a
+	// healthy stack (the deploy-gate reads that as broken).
+	"/api/healthz",
+	"/api/health",
+	"/api/readyz",
+	"/api/ready",
+	"/api/v1/health",
+	"/api/v1/ready",
+	"/api/system/ready",
 }
 
 var set = func() map[string]bool {

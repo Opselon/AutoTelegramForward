@@ -21,7 +21,8 @@ var routeRe = regexp.MustCompile(`(?m)^	mux\.HandleFunc\("(?:GET|POST|PUT|PATCH|
 // session and no key. Anything shaped like one of these must be served without
 // credentials, or the gate reads 401 from a healthy stack.
 var probeShape = regexp.MustCompile(
-	`^/(health|healthz|ready|readyz)$|^/api/version$|^/api(/v1)?/health/services$`)
+	`^/(health|healthz|ready|readyz)$|^/api/version$|^/api(/v1)?/health/services$|` +
+		`^/api(/v1)?/health(z)?$|^/api(/v1)?/ready(z)?$|^/api/system/ready$`)
 
 // TestEveryHealthRouteInMainIsListed is the drift guard for this package.
 //
