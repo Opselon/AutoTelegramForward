@@ -158,6 +158,10 @@ fn entry(level: &str, message: &str) -> pb::LogEntry {
         rule_id: String::new(),
         user_id: 0,
         correlation_id: String::new(),
+        request_id: String::new(),
+        trace_id: String::new(),
+        module: String::new(),
+        fingerprint: String::new(),
     }
 }
 
@@ -186,6 +190,7 @@ async fn stats(client: &mut Client, rule_id: &str, user_id: i64) -> pb::LogStats
         client.log_stats(pb::LogStatsRequest {
             rule_id: rule_id.to_string(),
             user_id,
+            include_errors: false,
         }),
     )
     .await
@@ -382,6 +387,10 @@ async fn every_supported_event_field_round_trips() {
         rule_id: "rule-77".to_string(),
         user_id: 4242,
         correlation_id: "corr-direct-1".to_string(),
+        request_id: "req-e2e-1".to_string(),
+        trace_id: format!("{:032x}", 7u64),
+        module: String::new(),
+        fingerprint: String::new(),
     };
     let response = log(&mut server.client, sent.clone()).await;
     assert!(response.success, "{response:?}");

@@ -33,7 +33,8 @@ use std::collections::BTreeMap;
 
 /// Explicit column list — the single source of truth for read statements.
 pub const COLUMNS: &str =
-    "id, ts, level, service, category, message, detail, rule_id, user_id, correlation_id";
+    "id, ts, level, service, category, message, detail, rule_id, user_id, correlation_id, \
+     request_id, trace_id, module, fingerprint";
 
 /// Upper bound on rows returned by one read, matching the Python engine's cap.
 pub const MAX_PAGE: usize = 1000;
@@ -156,6 +157,13 @@ pub struct QueryFilter {
     pub until: i64,
     /// Substring search over `message` and `detail`.
     pub search: String,
+    /// Structured-context lookups. Exact match on indexed/lookup columns, never
+    /// substring: jumping to one trace or one request must answer from an index,
+    /// not from a scan. An empty value means "no predicate".
+    pub trace_id: String,
+    pub request_id: String,
+    /// Engine-computed error signature: every occurrence of one recurring event.
+    pub fingerprint: String,
 }
 
 impl QueryFilter {
@@ -168,6 +176,9 @@ impl QueryFilter {
             && self.category.trim().is_empty()
             && self.rule_id.trim().is_empty()
             && self.correlation_id.trim().is_empty()
+            && self.trace_id.trim().is_empty()
+            && self.request_id.trim().is_empty()
+            && self.fingerprint.trim().is_empty()
             && self.user_id == 0
             && self.since == 0
             && self.until == 0
@@ -204,6 +215,15 @@ impl QueryFilter {
         }
         if !self.correlation_id.trim().is_empty() {
             parts.push("correlation_id=*".to_string());
+        }
+        if !self.trace_id.trim().is_empty() {
+            parts.push("trace_id=*".to_string());
+        }
+        if !self.request_id.trim().is_empty() {
+            parts.push("request_id=*".to_string());
+        }
+        if !self.fingerprint.trim().is_empty() {
+            parts.push("fingerprint=*".to_string());
         }
         if self.user_id != 0 {
             parts.push("user_id=*".to_string());
@@ -406,6 +426,14 @@ pub struct ErrorAgg {
     pub message: String,
     pub count: i64,
     pub last_ts: i64,
+    /// The engine-computed signature the group is keyed on (v19). Empty only in
+    /// a caller that did not ask for fingerprints — the aggregate below refuses
+    /// the group, so a legacy row (no fingerprint) is never folded into a
+    /// bogus "one giant group".
+    pub fingerprint: String,
+    pub service: String,
+    pub module: String,
+    pub first_ts: i64,
 }
 
 /// Build the shared `WHERE` clause.
@@ -446,6 +474,18 @@ pub fn where_clause(
     if !filter.correlation_id.trim().is_empty() {
         let placeholder = builder.bind_text(filter.correlation_id.trim());
         sql.push_str(&format!(" AND correlation_id={placeholder}"));
+    }
+    if !filter.trace_id.trim().is_empty() {
+        let placeholder = builder.bind_text(filter.trace_id.trim());
+        sql.push_str(&format!(" AND trace_id={placeholder}"));
+    }
+    if !filter.request_id.trim().is_empty() {
+        let placeholder = builder.bind_text(filter.request_id.trim());
+        sql.push_str(&format!(" AND request_id={placeholder}"));
+    }
+    if !filter.fingerprint.trim().is_empty() {
+        let placeholder = builder.bind_text(filter.fingerprint.trim());
+        sql.push_str(&format!(" AND fingerprint={placeholder}"));
     }
     if filter.user_id != 0 {
         let placeholder = builder.bind_int(filter.user_id);
@@ -667,15 +707,26 @@ pub fn time_buckets(
     }
 }
 
-/// Recurring-error aggregate: identical messages collapsed, newest first.
+/// Recurring-error aggregate: identical signatures collapsed, newest first.
 ///
-/// The group key is the message *signature* (`category`, `message`); severity is
-/// an attribute of the pattern, not part of its identity. Adding `level` to the
-/// group key split a single recurring failure into one row per severity — 15
-/// `ERROR` + 15 `WARN` occurrences of the same message reported as two groups,
-/// each with half the real count. The reported `level` is the level of the
-/// group's newest occurrence, i.e. the row `last_ts` points at, so the caller
+/// The group key is the engine-computed fingerprint over level, service,
+/// category and module plus the message *with producer-supplied numbers/ids
+/// masked out* — not the raw message, so "connection refused for user 12" and
+/// "… for user 13" are one group instead of hundreds. Severity is an attribute
+/// of the signature, not part of its identity. The reported `level` is the
+/// newest occurrence's level, i.e. the row `last_ts` points at, so the caller
 /// still sees the severity the pattern currently fires at.
+///
+/// Rows written before fingerprints existed are excluded: an empty fingerprint
+/// is not a group, and folding every legacy row into one would be a lie.
+///
+/// Row budget: the window functions only ever see the newest
+/// [`MAX_ERROR_SCAN_ROWS`] matching rows, so this cannot pay for a full-archive
+/// scan however large the archive grows.
+pub const MAX_ERROR_GROUPS: usize = 50;
+/// See [`MAX_ERROR_GROUPS`].
+pub const MAX_ERROR_SCAN_ROWS: usize = 10_000;
+
 pub fn error_aggregates(filter: &QueryFilter, limit: usize, dialect: SqlDialect) -> Plan {
     let mut scoped = filter.clone();
     // Errors only: the caller may pass a narrower level set, but the aggregate is
@@ -689,15 +740,27 @@ pub fn error_aggregates(filter: &QueryFilter, limit: usize, dialect: SqlDialect)
     }
     let mut builder = Builder::new(dialect);
     let where_sql = where_clause(&scoped, None, false, &[], &mut builder);
+    let scan_ph = builder.bind_int(MAX_ERROR_SCAN_ROWS as i64);
     let limit_ph = builder.bind_int(limit.max(1) as i64);
+    // The group key is the engine-computed fingerprint, not the raw message, so
+    // "connection refused for user 12" and "… for user 13" are one group instead
+    // of hundreds. Rows written before fingerprints existed are excluded here —
+    // an empty fingerprint is not a group. The scan is capped at the newest
+    // [`MAX_ERROR_SCAN_ROWS`] matching rows, so the window functions never pay
+    // for a full-archive scan.
     Plan {
         sql: format!(
-            "SELECT level, category, message, c, last_ts FROM (\
-             SELECT level, category, message, \
-             COUNT(*) OVER (PARTITION BY category, message) AS c, \
-             MAX(ts) OVER (PARTITION BY category, message) AS last_ts, \
-             ROW_NUMBER() OVER (PARTITION BY category, message ORDER BY ts DESC, id DESC) AS rn \
-             FROM logs{where_sql}) AS pattern WHERE rn = 1 \
+            "SELECT fingerprint, level, service, category, module, message, c, first_ts, last_ts \
+             FROM (\
+             SELECT fingerprint, level, service, category, module, message, \
+             COUNT(*) OVER (PARTITION BY fingerprint) AS c, \
+             MIN(ts) OVER (PARTITION BY fingerprint) AS first_ts, \
+             MAX(ts) OVER (PARTITION BY fingerprint) AS last_ts, \
+             ROW_NUMBER() OVER (PARTITION BY fingerprint ORDER BY ts DESC, id DESC) AS rn \
+             FROM (SELECT id, ts, level, service, category, module, message, fingerprint \
+                   FROM logs{where_sql} AND fingerprint != '' \
+                   ORDER BY ts DESC, id DESC LIMIT {scan_ph}) recent \
+             ) AS pattern WHERE rn = 1 \
              ORDER BY c DESC, last_ts DESC LIMIT {limit_ph}"
         ),
         params: builder.params(),
@@ -1146,11 +1209,12 @@ mod tests {
     fn error_aggregates_default_to_failure_levels() {
         let plan = error_aggregates(&QueryFilter::default(), 20, SqlDialect::Sqlite);
         assert!(plan.sql.contains("level IN (?, ?, ?)"));
-        // Regression: the group key is the message signature. Severity is an
-        // attribute of the pattern, so it must not partition the group (grouping on
-        // it reported 15 ERROR + 15 WARN of one message as two groups of 15).
+        // Regression: the group key is the engine-computed fingerprint (which folds
+        // category, module and the number-masked message; severity and service are
+        // reported, not partitioned — grouping on level reported 15 ERROR + 15 WARN
+        // of one message as two groups of 15).
         assert!(
-            plan.sql.contains("PARTITION BY category, message"),
+            plan.sql.contains("PARTITION BY fingerprint"),
             "{}",
             plan.sql
         );
@@ -1193,7 +1257,7 @@ mod tests {
                 let plan = error_aggregates(filter, 20, dialect);
                 assert!(
                     plan.sql
-                        .contains("COUNT(*) OVER (PARTITION BY category, message)"),
+                        .contains("COUNT(*) OVER (PARTITION BY fingerprint)"),
                     "{label}: one count per message signature expected: {}",
                     plan.sql
                 );
@@ -1205,8 +1269,9 @@ mod tests {
                 assert_plan_is_bindable(&plan, dialect, &format!("error_aggregates {label}"));
             }
         }
-        // Levels are inlined when the caller names none, then the limit — the same
-        // order the placeholders appear in the statement text.
+        // Levels are inlined when the caller names none, then the scan-row budget
+        // (the newest-window cap), then the returned-group limit — the same order
+        // the placeholders appear in the statement text.
         let sqlite = error_aggregates(&QueryFilter::default(), 20, SqlDialect::Sqlite);
         assert_eq!(
             sqlite.params,
@@ -1214,6 +1279,7 @@ mod tests {
                 Param::Text("WARN".to_string()),
                 Param::Text("ERROR".to_string()),
                 Param::Text("CRITICAL".to_string()),
+                Param::Int(MAX_ERROR_SCAN_ROWS as i64),
                 Param::Int(20),
             ]
         );
@@ -1425,6 +1491,9 @@ mod tests {
                     since: 1_700_000_000,
                     until: 1_700_000_999,
                     search: "needle".to_string(),
+                    trace_id: String::new(),
+                    request_id: String::new(),
+                    fingerprint: String::new(),
                 },
             ),
         ]

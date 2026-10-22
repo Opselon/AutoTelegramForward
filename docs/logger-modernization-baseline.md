@@ -79,3 +79,33 @@ in `pipeline.py` shares no gate with the log emission.
 ≈215 ms against the Python Logger with commit-per-insert and no admission control.
 These numbers are from an earlier session and are **not** re-confirmed on this
 branch; the benchmark that produced them is in the tree and re-runnable.
+
+## PR-1 additions on this branch (structured context + recurring-error signature)
+
+Additive only — every migration is `ADD COLUMN ... DEFAULT ''` (SQLite) or
+`ADD COLUMN IF NOT EXISTS` (PostgreSQL); no renumbering, no rebuild, and the
+legacy archive tests still open a Python-built v18 archive and migrate it in
+place.
+
+- **Schema v19**: `logs.request_id`, `logs.trace_id`, `logs.module`,
+  `logs.fingerprint` (text, `''` default) + two equality indexes
+  (`idx_logs_trace`, `idx_logs_fingerprint`).
+- **Wire**: `LogEntry` grows fields 10–13; `QueryLogsRequest` grows exact-match
+  filters 14–16 (indexed equality, never substring); `LogStatsRequest.include_errors`
+  is opt-in; `LogStatsResponse.error_groups` carries the new `ErrorGroup`
+  message. `proto/autoforward.proto` mirrors all of it.
+- **Fingerprint**: computed by the engine at ingest (`ingest::fingerprint_of`,
+  FNV-1a → 16 hex chars: birthday-safe far beyond this project's error count)
+  over the *redacted and final* record shape — category + module + number-masked
+  message. Severity and service are **reported** from the newest occurrence, not
+  partitioned (the engine's pre-existing aggregate contract). Producer numbers,
+  UUIDs and hex runs are masked so "quota for user 42" and "43" share a group;
+  ids used as lookup keys are never part of the hash. The field is never read
+  from the wire: the caller has no say in what counts as "the same failure".
+- **Aggregate budget**: `MAX_ERROR_GROUPS = 50`, `MAX_ERROR_SCAN_ROWS = 10_000` —
+  a window over the newest matching rows, never a full-archive scan, in both
+  dialects; legacy rows (`fingerprint = ''`) are excluded so one giant fiction
+  of a group cannot be manufactured from pre-v19 history.
+
+Everything absent from this list is work remaining under PR-2/PR-3 (see
+`docs/logger-hardening-audit.md`).

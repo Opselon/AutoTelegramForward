@@ -59,6 +59,10 @@ fn record(
         rule_id: format!("rule-{service}"),
         user_id: 7,
         correlation_id: corr.to_string(),
+        request_id: String::new(),
+        trace_id: String::new(),
+        module: String::new(),
+        fingerprint: String::new(),
     }
 }
 

@@ -74,8 +74,14 @@ CREATE TABLE IF NOT EXISTS logs (
     detail TEXT NOT NULL DEFAULT ''
 )";
 
-/// The v18 attribution columns, added by migration rather than a rebuild.
-pub const MIGRATION_COLUMNS: [(&str, &str); 3] = [
+/// The v18 attribution columns plus the v19 structured-context columns, added
+/// by migration rather than a rebuild.
+///
+/// Every statement is `ADD COLUMN ... NOT NULL DEFAULT`, which SQLite applies
+/// without rewriting the table, so opening an archive written by an older engine
+/// is an in-place, non-destructive migration (the case `tests/grpc_end_to_end.rs`
+/// pins with a Python-created database).
+pub const MIGRATION_COLUMNS: [(&str, &str); 7] = [
     (
         "rule_id",
         "ALTER TABLE logs ADD COLUMN rule_id TEXT NOT NULL DEFAULT ''",
@@ -88,10 +94,34 @@ pub const MIGRATION_COLUMNS: [(&str, &str); 3] = [
         "correlation_id",
         "ALTER TABLE logs ADD COLUMN correlation_id TEXT NOT NULL DEFAULT ''",
     ),
+    (
+        "request_id",
+        "ALTER TABLE logs ADD COLUMN request_id TEXT NOT NULL DEFAULT ''",
+    ),
+    (
+        "trace_id",
+        "ALTER TABLE logs ADD COLUMN trace_id TEXT NOT NULL DEFAULT ''",
+    ),
+    (
+        "module",
+        "ALTER TABLE logs ADD COLUMN module TEXT NOT NULL DEFAULT ''",
+    ),
+    (
+        "fingerprint",
+        "ALTER TABLE logs ADD COLUMN fingerprint TEXT NOT NULL DEFAULT ''",
+    ),
 ];
 
-/// The Python engine's index set, same names, same columns.
-pub const INDEXES: [(&str, &str); 7] = [
+/// The Python engine's index set (same names, same columns) plus the two
+/// indexes the structured-context queries need.
+///
+/// Only `trace_id` and `fingerprint` get one: both are high-selectivity
+/// equality/lookup keys on a hot path (`QueryLogs(trace_id=…)`,
+/// `QueryLogs(fingerprint=…)`, and the error-group aggregate). `request_id` is
+/// deliberately left unindexed — it is almost always accompanied by a
+/// `trace_id`/`correlation_id` predicate in practice, and a third index would
+/// cost every insert to speed up a lookup that already has a bound.
+pub const INDEXES: [(&str, &str); 9] = [
     (
         "idx_logs_ts",
         "CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts)",
@@ -119,6 +149,14 @@ pub const INDEXES: [(&str, &str); 7] = [
     (
         "idx_logs_corr",
         "CREATE INDEX IF NOT EXISTS idx_logs_corr ON logs(correlation_id)",
+    ),
+    (
+        "idx_logs_trace",
+        "CREATE INDEX IF NOT EXISTS idx_logs_trace ON logs(trace_id)",
+    ),
+    (
+        "idx_logs_fingerprint",
+        "CREATE INDEX IF NOT EXISTS idx_logs_fingerprint ON logs(fingerprint)",
     ),
 ];
 
@@ -364,6 +402,19 @@ fn row_to_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<Record> {
         correlation_id: row
             .get::<_, Option<String>>("correlation_id")?
             .unwrap_or_default(),
+        // Read through `Option` so a row selected by an older statement (or a
+        // hand-built archive) cannot fail the whole page: an absent structured
+        // column means "no context", not "broken row".
+        request_id: row
+            .get::<_, Option<String>>("request_id")?
+            .unwrap_or_default(),
+        trace_id: row
+            .get::<_, Option<String>>("trace_id")?
+            .unwrap_or_default(),
+        module: row.get::<_, Option<String>>("module")?.unwrap_or_default(),
+        fingerprint: row
+            .get::<_, Option<String>>("fingerprint")?
+            .unwrap_or_default(),
     })
 }
 
@@ -389,7 +440,7 @@ impl Storage for SqliteStorage {
             let mut statement = transaction
                 .prepare(&sql)
                 .map_err(|err| map_error(err, "prepare insert"))?;
-            let mut values: Vec<rusqlite::types::Value> = Vec::with_capacity(chunk.len() * 9);
+            let mut values: Vec<rusqlite::types::Value> = Vec::with_capacity(chunk.len() * 13);
             for record in chunk {
                 values.push(rusqlite::types::Value::Integer(record.ts));
                 values.push(rusqlite::types::Value::Text(record.level.clone()));
@@ -400,6 +451,10 @@ impl Storage for SqliteStorage {
                 values.push(rusqlite::types::Value::Text(record.rule_id.clone()));
                 values.push(rusqlite::types::Value::Integer(record.user_id));
                 values.push(rusqlite::types::Value::Text(record.correlation_id.clone()));
+                values.push(rusqlite::types::Value::Text(record.request_id.clone()));
+                values.push(rusqlite::types::Value::Text(record.trace_id.clone()));
+                values.push(rusqlite::types::Value::Text(record.module.clone()));
+                values.push(rusqlite::types::Value::Text(record.fingerprint.clone()));
             }
             let affected = statement
                 .execute(rusqlite::params_from_iter(values.iter()))
@@ -532,11 +587,15 @@ impl Storage for SqliteStorage {
         self.timed(&self.metrics.storage_read_seconds, || {
             self.read_rows(&plan, |row| {
                 Ok(ErrorAgg {
-                    level: row.get::<_, Option<String>>(0)?.unwrap_or_default(),
-                    category: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
-                    message: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
-                    count: row.get(3)?,
-                    last_ts: row.get::<_, Option<i64>>(4)?.unwrap_or(0),
+                    fingerprint: row.get::<_, Option<String>>(0)?.unwrap_or_default(),
+                    level: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+                    service: row.get::<_, Option<String>>(2)?.unwrap_or_default(),
+                    category: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                    module: row.get::<_, Option<String>>(4)?.unwrap_or_default(),
+                    message: row.get::<_, Option<String>>(5)?.unwrap_or_default(),
+                    count: row.get(6)?,
+                    first_ts: row.get::<_, Option<i64>>(7)?.unwrap_or(0),
+                    last_ts: row.get::<_, Option<i64>>(8)?.unwrap_or(0),
                 })
             })
         })
@@ -761,13 +820,14 @@ enum GroupTarget {
 /// `INSERT INTO logs (...) VALUES (...), (...), ...` for `rows` rows.
 pub fn insert_sql(rows: usize) -> String {
     let mut sql = String::from(
-        "INSERT INTO logs (ts, level, service, category, message, detail, rule_id, user_id, correlation_id) VALUES ",
+        "INSERT INTO logs (ts, level, service, category, message, detail, rule_id, user_id, \
+         correlation_id, request_id, trace_id, module, fingerprint) VALUES ",
     );
     for index in 0..rows {
         if index > 0 {
             sql.push_str(", ");
         }
-        sql.push_str("(?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        sql.push_str("(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
     }
     sql
 }
@@ -849,6 +909,10 @@ mod tests {
             rule_id: "rule-1".to_string(),
             user_id: 42,
             correlation_id: "corr-1".to_string(),
+            request_id: String::new(),
+            trace_id: String::new(),
+            module: String::new(),
+            fingerprint: String::new(),
         }
     }
 
@@ -858,6 +922,9 @@ mod tests {
         let (storage, _metrics) = archive.storage();
         let conn = Connection::open(archive.sqlite_path()).unwrap();
         let columns = column_names(&conn).unwrap();
+        // The v19 archive carries the structured-context columns on top of the
+        // ten the Python engine laid down: additive `ADD COLUMN ... DEFAULT ''`
+        // migration, so an old archive grows them in place.
         assert_eq!(
             columns,
             vec![
@@ -870,7 +937,11 @@ mod tests {
                 "detail",
                 "rule_id",
                 "user_id",
-                "correlation_id"
+                "correlation_id",
+                "request_id",
+                "trace_id",
+                "module",
+                "fingerprint"
             ]
         );
         let journal: String = conn
@@ -898,17 +969,76 @@ mod tests {
     }
 
     #[test]
-    fn migration_reads_an_existing_python_archive() {
+    fn an_old_archive_is_migrated_in_place_with_the_structured_context_columns() {
         let archive = TempArchive::new();
-        // Build the archive exactly as `logger/main.py` would: base table, then the
-        // v18 ALTERs, then its index set, then a row.
         {
             let conn = Connection::open(archive.sqlite_path()).unwrap();
             conn.execute_batch(CREATE_TABLE).unwrap();
-            for (_column, ddl) in MIGRATION_COLUMNS {
+            conn.execute(
+                "ALTER TABLE logs ADD COLUMN rule_id TEXT NOT NULL DEFAULT ''",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "ALTER TABLE logs ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "ALTER TABLE logs ADD COLUMN correlation_id TEXT NOT NULL DEFAULT ''",
+                [],
+            )
+            .unwrap();
+            conn.execute(
+                "INSERT INTO logs (ts, level, service, category, message, detail) \
+                 VALUES (?, ?, ?, ?, ?, ?)",
+                rusqlite::params![1i64, "ERROR", "core", "system", "old row", ""],
+            )
+            .unwrap();
+        }
+        // Opening the archive runs the v19 ADD COLUMN migration: no rebuild, no
+        // copy, and the pre-existing row reads back with empty context fields.
+        let (storage, _metrics) = archive.storage();
+        let (rows, _total) = storage
+            .query(&QueryFilter::default(), &Page::clamped(10, 0, true))
+            .unwrap();
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert_eq!(row.request_id, "");
+        assert_eq!(row.trace_id, "");
+        assert_eq!(row.module, "");
+        // A stored fingerprint exists even for a legacy row: it is computed at
+        // ingest for new records, and the migration leaves the column default
+        // empty rather than backfilling a value that cannot be honest about its
+        // derivation time.
+        assert_eq!(row.fingerprint, "");
+    }
+
+    #[test]
+    fn migration_reads_an_existing_python_archive() {
+        let archive = TempArchive::new();
+        // Build the archive exactly as `logger/main.py` would: base table, then the
+        // v18 ALTERs (NOT the ones this engine added later — the point is that the
+        // v18 shape opens in place), then the Python index set, then a row.
+        {
+            let conn = Connection::open(archive.sqlite_path()).unwrap();
+            conn.execute_batch(CREATE_TABLE).unwrap();
+            for ddl in [
+                "ALTER TABLE logs ADD COLUMN rule_id TEXT NOT NULL DEFAULT ''",
+                "ALTER TABLE logs ADD COLUMN user_id INTEGER NOT NULL DEFAULT 0",
+                "ALTER TABLE logs ADD COLUMN correlation_id TEXT NOT NULL DEFAULT ''",
+            ] {
                 conn.execute(ddl, []).unwrap();
             }
-            for (_name, ddl) in INDEXES {
+            for ddl in [
+                "CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts)",
+                "CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level)",
+                "CREATE INDEX IF NOT EXISTS idx_logs_category ON logs(category)",
+                "CREATE INDEX IF NOT EXISTS idx_logs_service ON logs(service)",
+                "CREATE INDEX IF NOT EXISTS idx_logs_rule ON logs(rule_id)",
+                "CREATE INDEX IF NOT EXISTS idx_logs_user ON logs(user_id)",
+                "CREATE INDEX IF NOT EXISTS idx_logs_corr ON logs(correlation_id)",
+            ] {
                 conn.execute(ddl, []).unwrap();
             }
             conn.execute(
@@ -1141,6 +1271,10 @@ mod tests {
                 String::new()
             };
             row.user_id = if index < 4 { 1 } else { 2 };
+            // One signature for every row: category/module/message identical and
+            // severity/service deliberately ignored (LEVEL and SERVICE are
+            // reported, not partitioned -- see ingest::fingerprint_of).
+            row.fingerprint = "system||m".to_string();
             batch.push(row);
         }
         storage.insert_batch(&batch).unwrap();
@@ -1179,12 +1313,16 @@ mod tests {
             )
             .unwrap();
         assert_eq!(with_errors, vec![("ERROR".to_string(), 4)]);
+        // Recurring-error groups only look at failure levels by default (the
+        // 8 INFO rows are out of scope for the *aggregate*), but severity does
+        // not partition within a signature.
         let aggregates = storage
             .error_aggregates(&QueryFilter::default(), 10)
             .unwrap();
         assert_eq!(aggregates.len(), 1, "{aggregates:?}");
         assert_eq!(aggregates[0].count, 4);
         assert_eq!(aggregates[0].message, "m");
+        assert_eq!(aggregates[0].level, "ERROR");
 
         // Time buckets.
         let buckets = storage
@@ -1211,16 +1349,19 @@ mod tests {
                 "flaky publish",
             );
             row.category = "publish".to_string();
+            row.fingerprint = "publish|flaky publish".to_string();
             batch.push(row);
         }
         // Same message, different category: a different signature, so its own group
         // (the aggregate reports the category, it cannot report an arbitrary one).
         let mut other_category = record(1_700_000_100, "ERROR", "flaky publish");
         other_category.category = "billing".to_string();
+        other_category.fingerprint = "billing|flaky publish".to_string();
         batch.push(other_category);
         // A different message in the same category is a different failure too.
         let mut other_message = record(1_700_000_200, "ERROR", "timeout");
         other_message.category = "publish".to_string();
+        other_message.fingerprint = "publish|timeout".to_string();
         batch.push(other_message);
         storage.insert_batch(&batch).unwrap();
 
@@ -1433,6 +1574,9 @@ mod tests {
             since: 1_000,
             until: 9_999_999_999,
             search: "m".to_string(),
+            trace_id: String::new(),
+            request_id: String::new(),
+            fingerprint: String::new(),
         });
 
         for filter in filters {

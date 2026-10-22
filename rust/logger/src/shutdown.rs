@@ -338,6 +338,9 @@ mod tests {
                 rule_id: String::new(),
                 user_id: 0,
                 correlation_id: String::new(),
+                request_id: String::new(),
+                trace_id: String::new(),
+                module: String::new(),
             },
             crate::ingest::Limits {
                 max_message_bytes: 1 << 16,

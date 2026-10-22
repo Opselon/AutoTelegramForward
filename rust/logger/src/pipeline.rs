@@ -973,6 +973,9 @@ mod tests {
             rule_id: String::new(),
             user_id,
             correlation_id: String::new(),
+            request_id: String::new(),
+            trace_id: String::new(),
+            module: String::new(),
         };
         crate::ingest::prepare(
             &entry,

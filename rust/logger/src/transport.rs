@@ -34,6 +34,7 @@ use crate::metrics::{self, Metrics};
 use crate::pb;
 use crate::pipeline::{Ack, AdmitError, Pipeline};
 use crate::query::{self, Exporter, GroupBy, Page, PurgeFilter, QueryFilter, StatsScope, MAX_PAGE};
+use crate::redaction;
 use crate::storage::{PurgeReport, Record, Storage, StorageError};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -270,6 +271,12 @@ impl LogControl {
             rule_id: record.rule_id.clone(),
             user_id: record.user_id,
             correlation_id: record.correlation_id.clone(),
+            request_id: record.request_id.clone(),
+            trace_id: record.trace_id.clone(),
+            module: record.module.clone(),
+            // The engine-computed error signature, so a client can group
+            // recurring failures without re-deriving the normalisation.
+            fingerprint: record.fingerprint.clone(),
         }
     }
 
@@ -442,6 +449,9 @@ impl pb::log_control_service_server::LogControlService for LogControl {
             user_id: request.user_id,
             since: request.since,
             until: request.until,
+            trace_id: request.trace_id,
+            request_id: request.request_id,
+            fingerprint: request.fingerprint,
         };
         let page = Page::clamped(request.limit, request.offset, request.ascending);
         let storage = Arc::clone(&self.storage);
@@ -488,10 +498,29 @@ impl pb::log_control_service_server::LogControlService for LogControl {
             rule_id: request.rule_id,
             user_id: request.user_id,
         };
+        // Recurring-error groups are opt-in (`include_errors`): an old client
+        // sends nothing and pays for the base aggregates only, exactly as before.
+        // A scan of the newest `MAX_ERROR_SCAN_ROWS` matching rows serves each
+        // group query, so this can never turn into a full-archive scan.
+        let include_errors = request.include_errors;
         let storage = Arc::clone(&self.storage);
-        let join = tokio::task::spawn_blocking(move || storage.stats(&scope)).await;
+        let join = tokio::task::spawn_blocking(move || {
+            let stats = storage.stats(&scope)?;
+            let error_groups = if include_errors {
+                let filter = QueryFilter {
+                    rule_id: scope.rule_id.clone(),
+                    user_id: scope.user_id,
+                    ..QueryFilter::default()
+                };
+                storage.error_aggregates(&filter, query::MAX_ERROR_GROUPS)?
+            } else {
+                Vec::new()
+            };
+            Ok::<(query::Stats, Vec<query::ErrorAgg>), StorageError>((stats, error_groups))
+        })
+        .await;
         match join {
-            Ok(Ok(stats)) => {
+            Ok(Ok((stats, error_groups))) => {
                 let to_map = |source: &std::collections::BTreeMap<String, i64>| {
                     source
                         .iter()
@@ -507,6 +536,24 @@ impl pb::log_control_service_server::LogControlService for LogControl {
                     by_service: to_map(&stats.by_service),
                     oldest_ts: stats.oldest_ts,
                     newest_ts: stats.newest_ts,
+                    error_groups: error_groups
+                        .iter()
+                        .map(|group| pb::ErrorGroup {
+                            fingerprint: group.fingerprint.clone(),
+                            level: group.level.clone(),
+                            service: group.service.clone(),
+                            category: group.category.clone(),
+                            module: group.module.clone(),
+                            message: {
+                                // Bounded: a first occurrence longer than this is
+                                // answered truncated, never refused.
+                                redaction::truncate_chars(&group.message, 512).0.to_string()
+                            },
+                            count: group.count,
+                            first_ts: group.first_ts,
+                            last_ts: group.last_ts,
+                        })
+                        .collect(),
                 }))
             }
             Ok(Err(err)) => {
@@ -740,6 +787,10 @@ mod tests {
             rule_id: String::new(),
             user_id: 0,
             correlation_id: String::new(),
+            request_id: String::new(),
+            trace_id: String::new(),
+            module: String::new(),
+            fingerprint: String::new(),
         }
     }
 
@@ -905,6 +956,10 @@ mod tests {
                 rule_id: String::new(),
                 user_id: if index < 10 { 7 } else { 8 },
                 correlation_id: format!("corr-{index}"),
+                request_id: String::new(),
+                trace_id: String::new(),
+                module: String::new(),
+                fingerprint: String::new(),
             });
         }
         for entry in entries {
@@ -1045,6 +1100,7 @@ mod tests {
                     tonic::Request::new(pb::LogStatsRequest {
                         rule_id: String::new(),
                         user_id: 0,
+                        include_errors: true,
                     }),
                 ),
             )
@@ -1069,6 +1125,7 @@ mod tests {
                     tonic::Request::new(pb::LogStatsRequest {
                         rule_id: "rule-a".to_string(),
                         user_id: 0,
+                        include_errors: false,
                     }),
                 ),
             )
@@ -1171,6 +1228,9 @@ mod tests {
                             rule_id: String::new(),
                             user_id: 0,
                             correlation_id: String::new(),
+                            request_id: String::new(),
+                            trace_id: String::new(),
+                            module: String::new(),
                         },
                         Limits::from_config(&Config::default()),
                         true,

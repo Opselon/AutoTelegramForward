@@ -70,9 +70,13 @@ CREATE TABLE IF NOT EXISTS logs (
     "ALTER TABLE logs ADD COLUMN IF NOT EXISTS rule_id TEXT NOT NULL DEFAULT ''",
     "ALTER TABLE logs ADD COLUMN IF NOT EXISTS user_id BIGINT NOT NULL DEFAULT 0",
     "ALTER TABLE logs ADD COLUMN IF NOT EXISTS correlation_id TEXT NOT NULL DEFAULT ''",
-    // Same seven indexes and the same names as the SQLite archive, justified by the
+    "ALTER TABLE logs ADD COLUMN IF NOT EXISTS request_id TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE logs ADD COLUMN IF NOT EXISTS trace_id TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE logs ADD COLUMN IF NOT EXISTS module TEXT NOT NULL DEFAULT ''",
+    "ALTER TABLE logs ADD COLUMN IF NOT EXISTS fingerprint TEXT NOT NULL DEFAULT ''",
+    // Same index set and the same names as the SQLite archive, justified by the
     // predicates `query::where_clause` builds: equality on level/service/category/
-    // rule_id/user_id/correlation_id and range on ts.
+    // rule_id/user_id/correlation_id/trace_id/fingerprint and range on ts.
     "CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts)",
     "CREATE INDEX IF NOT EXISTS idx_logs_level ON logs(level)",
     "CREATE INDEX IF NOT EXISTS idx_logs_category ON logs(category)",
@@ -80,6 +84,8 @@ CREATE TABLE IF NOT EXISTS logs (
     "CREATE INDEX IF NOT EXISTS idx_logs_rule ON logs(rule_id)",
     "CREATE INDEX IF NOT EXISTS idx_logs_user ON logs(user_id)",
     "CREATE INDEX IF NOT EXISTS idx_logs_corr ON logs(correlation_id)",
+    "CREATE INDEX IF NOT EXISTS idx_logs_trace ON logs(trace_id)",
+    "CREATE INDEX IF NOT EXISTS idx_logs_fingerprint ON logs(fingerprint)",
 ];
 
 /// SQLSTATEs worth retrying: the transaction did not commit, so re-running it
@@ -490,13 +496,22 @@ fn row_to_record(row: &postgres::Row) -> Result<Record, StorageError> {
         correlation_id: row
             .get::<_, Option<String>>("correlation_id")
             .unwrap_or_default(),
+        request_id: row
+            .get::<_, Option<String>>("request_id")
+            .unwrap_or_default(),
+        trace_id: row.get::<_, Option<String>>("trace_id").unwrap_or_default(),
+        module: row.get::<_, Option<String>>("module").unwrap_or_default(),
+        fingerprint: row
+            .get::<_, Option<String>>("fingerprint")
+            .unwrap_or_default(),
     })
 }
 
-/// `INSERT INTO logs (...) VALUES ($1, ..., $9), ($10, ...)` for `rows` rows.
+/// `INSERT INTO logs (...) VALUES ($1, ..., $13), ($14, ...)` for `rows` rows.
 pub fn insert_sql(rows: usize, dialect_start: usize) -> String {
     let mut sql = String::from(
-        "INSERT INTO logs (ts, level, service, category, message, detail, rule_id, user_id, correlation_id) VALUES ",
+        "INSERT INTO logs (ts, level, service, category, message, detail, rule_id, user_id, \
+         correlation_id, request_id, trace_id, module, fingerprint) VALUES ",
     );
     let mut parameter = dialect_start;
     for row in 0..rows {
@@ -504,7 +519,7 @@ pub fn insert_sql(rows: usize, dialect_start: usize) -> String {
             sql.push_str(", ");
         }
         sql.push('(');
-        for column in 0..9 {
+        for column in 0..13 {
             if column > 0 {
                 sql.push_str(", ");
             }
@@ -529,12 +544,12 @@ impl Storage for PgStorage {
         let chunk_rows = self.max_rows_per_statement;
         let mut written = 0usize;
         // Chunked so the parameter count stays far below PostgreSQL's 65535 limit
-        // (chunk × 9 placeholders), with one transaction for the whole batch: a batch
-        // either commits entirely or not at all.
+        // (chunk × 13 placeholders), with one transaction for the whole batch: a
+        // batch either commits entirely or not at all.
         self.with_transaction("insert batch", |transaction| {
             for chunk in records.chunks(chunk_rows) {
                 let sql = insert_sql(chunk.len(), 1);
-                let mut owned: Vec<Box<dyn ToSql + Sync>> = Vec::with_capacity(chunk.len() * 9);
+                let mut owned: Vec<Box<dyn ToSql + Sync>> = Vec::with_capacity(chunk.len() * 13);
                 for record in chunk {
                     owned.push(Box::new(record.ts));
                     owned.push(Box::new(record.level.clone()));
@@ -545,6 +560,10 @@ impl Storage for PgStorage {
                     owned.push(Box::new(record.rule_id.clone()));
                     owned.push(Box::new(record.user_id));
                     owned.push(Box::new(record.correlation_id.clone()));
+                    owned.push(Box::new(record.request_id.clone()));
+                    owned.push(Box::new(record.trace_id.clone()));
+                    owned.push(Box::new(record.module.clone()));
+                    owned.push(Box::new(record.fingerprint.clone()));
                 }
                 let params: Vec<&(dyn ToSql + Sync)> = owned
                     .iter()
@@ -673,11 +692,15 @@ impl Storage for PgStorage {
         self.timed(&self.metrics.storage_read_seconds, || {
             self.read_rows(&plan, |row| {
                 Ok(ErrorAgg {
-                    level: row.get::<_, Option<String>>(0).unwrap_or_default(),
-                    category: row.get::<_, Option<String>>(1).unwrap_or_default(),
-                    message: row.get::<_, Option<String>>(2).unwrap_or_default(),
-                    count: row.get::<_, i64>(3),
-                    last_ts: row.get::<_, Option<i64>>(4).unwrap_or(0),
+                    fingerprint: row.get::<_, Option<String>>(0).unwrap_or_default(),
+                    level: row.get::<_, Option<String>>(1).unwrap_or_default(),
+                    service: row.get::<_, Option<String>>(2).unwrap_or_default(),
+                    category: row.get::<_, Option<String>>(3).unwrap_or_default(),
+                    module: row.get::<_, Option<String>>(4).unwrap_or_default(),
+                    message: row.get::<_, Option<String>>(5).unwrap_or_default(),
+                    count: row.get::<_, i64>(6),
+                    first_ts: row.get::<_, Option<i64>>(7).unwrap_or(0),
+                    last_ts: row.get::<_, Option<i64>>(8).unwrap_or(0),
                 })
             })
         })
@@ -879,8 +902,8 @@ mod tests {
     #[test]
     fn insert_sql_numbers_parameters_from_one() {
         let sql = insert_sql(2, 1);
-        assert!(sql.starts_with("INSERT INTO logs (ts, level, service, category, message, detail, rule_id, user_id, correlation_id) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9), ($10, $11, $12, $13, $14, $15, $16, $17, $18)"), "{sql}");
-        assert_eq!(insert_sql(1, 5).matches('$').count(), 9);
+        assert!(sql.starts_with("INSERT INTO logs (ts, level, service, category, message, detail, rule_id, user_id, correlation_id, request_id, trace_id, module, fingerprint) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13), ($14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)"), "{sql}");
+        assert_eq!(insert_sql(1, 5).matches('$').count(), 13);
         assert!(insert_sql(1, 1).contains("$1"));
     }
 
@@ -903,6 +926,9 @@ mod tests {
             until: 1_700_000_999,
             search: "needle".to_string(),
             level: String::new(),
+            trace_id: String::new(),
+            request_id: String::new(),
+            fingerprint: String::new(),
         };
         let scope = StatsScope {
             rule_id: "rule-1".to_string(),
@@ -986,7 +1012,7 @@ mod tests {
             let sql = insert_sql(rows, 1);
             assert_eq!(
                 placeholder_order(&sql),
-                (1..=rows * 9).collect::<Vec<_>>(),
+                (1..=rows * 13).collect::<Vec<_>>(),
                 "insert of {rows} rows: {sql}"
             );
         }
@@ -1060,6 +1086,10 @@ mod tests {
                 rule_id: if i < 6 { "rule-a" } else { "" }.to_string(),
                 user_id: if i < 4 { 1 } else { 2 },
                 correlation_id: format!("{tag}-{i}"),
+                request_id: String::new(),
+                trace_id: String::new(),
+                module: String::new(),
+                fingerprint: String::new(),
             })
             .collect();
         assert_eq!(storage.insert_batch(&rows).expect("batched insert"), 12);

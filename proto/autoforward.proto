@@ -648,6 +648,14 @@ message LogEntry {
   string rule_id = 7;         // owning task, when the event belongs to one
   int64 user_id = 8;          // tenant the event belongs to (0 = system-wide)
   string correlation_id = 9;  // ties a log to its audit event / API request
+  // --- Structured context (additive; 10-12 were unused) ------------------
+  // A producer that predates these fields sends nothing, the engine stores '',
+  // and every existing read path answers exactly as before.
+  string request_id = 10;     // one API request / bot update
+  string trace_id = 11;       // W3C trace id shared across services
+  string module = 12;         // the file/module that emitted the event
+  // Engine-computed error signature, returned on reads and ignored on writes.
+  string fingerprint = 13;
 }
 
 message LogRequest {
@@ -670,6 +678,11 @@ message QueryLogsRequest {
   repeated string levels = 11; // v18: multi-select severity filter
   int64 user_id = 12;         // v18: tenant scope (0 = every tenant)
   string correlation_id = 13; // v18: jump straight to one request's trail
+  // --- Structured context (additive) ---------------------------------------
+  // Exact-match lookups on indexed columns (unlike `search`, which is substring).
+  string trace_id = 14;
+  string request_id = 15;
+  string fingerprint = 16;    // every occurrence of one error signature
 }
 
 message PurgeLogsRequest {
@@ -700,6 +713,10 @@ message QueryLogsResponse {
 message LogStatsRequest {
   string rule_id = 1;  // v18: scope the counts to one task ("" = all)
   int64 user_id = 2;   // v18: tenant scope (0 = every tenant)
+  // Additive: when true, the answer also carries the recurring-error groups
+  // (LogStatsResponse.error_groups). An old client sends nothing and pays for
+  // the base aggregates only, exactly as before.
+  bool include_errors = 3;
 }
 
 message LogStatsResponse {
@@ -710,6 +727,24 @@ message LogStatsResponse {
   map<string, int32> by_service = 5; // v18: which service produced how much
   int64 oldest_ts = 6;               // v18: how far back history actually goes
   int64 newest_ts = 7;               // v18: newest record on disk
+  // Recurring-error groups: the identifying fields of a failing event plus how
+  // often and how recently it fired. Bounded so a producer that invents a new
+  // message per request cannot grow the response.
+  repeated ErrorGroup error_groups = 8;
+}
+
+// One recurring-error signature, for the "same failure, N times" view.
+message ErrorGroup {
+  string fingerprint = 1;  // engine-computed signature id (category+module+
+                           // number-masked message; severity/service reported, not hashed)
+  string level = 2;
+  string service = 3;
+  string category = 4;
+  string module = 5;
+  string message = 6;      // the first occurrence's message, truncated
+  int64 count = 7;
+  int64 first_ts = 8;
+  int64 last_ts = 9;
 }
 
 // -----------------------------------------------------------------------------
