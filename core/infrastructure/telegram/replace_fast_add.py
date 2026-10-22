@@ -24,7 +24,10 @@ import re
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-ARROW_MARKER = " -> "
+#: The arrow is what tells the two grammars apart; the legacy form
+#: (`add [task] NAME -"OLD" -"NEW" --regex`) has the same flags but no arrow.
+ARROW_RE = re.compile(r"(?:->|=>)")
+LEGACY_ENTRY_RE = re.compile(r"""(?:^|\s)-["'`]""")
 
 #: Stable refusal codes; the command maps each to a catalog key.
 EMPTY = "empty"
@@ -70,19 +73,29 @@ def _unquote(text: str) -> str:
     return text.strip() if match is None else match.group("q").strip()
 
 
-def has_fast_flags(rest: str) -> bool:
-    """True when the rest of the line means the fast form, not the legacy one."""
-    if ARROW_MARKER in rest:
-        return True
-    return bool(re.search(r"--(task|name|priority|regex|delete)\b", rest))
+def is_arrow_form(rest: str) -> bool:
+    """True when the line is the arrow grammar, not the legacy entry grammar.
+
+    Flags alone cannot decide this: `--regex -i -w` is valid in both forms, so
+    only the arrow is a safe discriminator. A legacy entry marker (`-"`) before
+    the arrow means the user is writing per-task entries whose text happens to
+    contain an arrow.
+    """
+    text = (rest or "").strip()
+    arrow = ARROW_RE.search(text)
+    if arrow is None:
+        return False
+    legacy = LEGACY_ENTRY_RE.search(text)
+    return legacy is None or legacy.start() > arrow.start()
 
 
 def parse_replace_fast_add(raw: str) -> FastReplaceAdd:
     """Parse the line, flags last-to-first so values may contain words."""
     text = (raw or "").strip()
-    if ARROW_MARKER not in text:
+    arrow = ARROW_RE.search(text)
+    if arrow is None:
         raise FastReplaceAddError(MISSING_ARROW, text[:40])
-    head, rest = text.split(ARROW_MARKER, 1)
+    head, rest = text[:arrow.start()], text[arrow.end():]
 
     mode: Optional[str] = None
     delete: bool = False

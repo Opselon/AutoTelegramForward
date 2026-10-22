@@ -216,6 +216,20 @@ def test_another_tenants_rule_id_is_not_found_and_never_rendered(harness):
 
 
 # --------------------------------------------------------------------------- #
+# grammar detection
+# --------------------------------------------------------------------------- #
+def test_the_arrow_alone_decides_the_grammar():
+    from core.infrastructure.telegram.replace_fast_add import is_arrow_form
+
+    # Flags are legal in the legacy form too, so they must not switch grammars.
+    assert is_arrow_form('"a" -> "b" --regex')
+    assert is_arrow_form('"a"->"b"')
+    assert not is_arrow_form('-\"old\" -\"new\" --regex -i -w -n yearly')
+    # A per-task entry whose *text* contains an arrow is still the legacy form.
+    assert not is_arrow_form('name -"a -> b" -"c"')
+
+
+# --------------------------------------------------------------------------- #
 # back-compat
 # --------------------------------------------------------------------------- #
 def test_the_legacy_entry_grammar_still_writes_the_task(harness):

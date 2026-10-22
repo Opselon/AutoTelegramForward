@@ -37,7 +37,7 @@ from core.application.rule_selectors import (
 )
 from core.infrastructure.telegram.replace_fast_add import (
     FastReplaceAddError,
-    has_fast_flags,
+    is_arrow_form,
     parse_replace_fast_add,
 )
 from core.domain.text_replace import (
@@ -299,7 +299,7 @@ class TextCommandMixin:
         if sub in ("add", "set", "new"):
             # Two grammars share one verb: the fast form ("a" -> "b" [--task])
             # and the legacy per-task entry. Flags decide, never a guess.
-            if has_fast_flags(rest):
+            if is_arrow_form(rest):
                 return await self._cmd_replace_fast_add(message, uid, lang, rest)
             return await self._cmd_replace_add(message, uid, lang, rest)
 
