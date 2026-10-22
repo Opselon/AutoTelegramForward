@@ -82,8 +82,10 @@ class _Chat:
 
 
 class _Dialog:
-    def __init__(self, chat):
+    def __init__(self, chat, pinned=False):
         self.chat = chat
+        # pyrogram carries the user's own ordering on the dialog, not the chat.
+        self.pinned = pinned
 
 
 class _MalformedDialog:
@@ -211,6 +213,38 @@ def test_list_chats_maps_and_normalises_every_field():
     assert second.members == 0
     assert second.is_forum is True
     assert resp.count == 2 and resp.total == 2 and resp.truncated is False
+
+
+def test_list_chats_reports_the_users_pin_state_per_row():
+    """`pinned` is per-dialog and must survive the mapping, both ways.
+
+    Every picker (bot, dashboard, app) leads with pinned chats. The field is
+    read off the *dialog*; reading it off the chat would silently report every
+    row as unpinned and quietly undo the ordering on all three surfaces.
+    """
+    dialogs = [
+        _Dialog(_Chat(-100111, "channel", title="Pinned"), pinned=True),
+        _Dialog(_Chat(-100222, "channel", title="Loose")),
+    ]
+    svc = _servicer([_Session("s1", 42)], _Client(dialogs))
+    resp, _ = _call(svc, session_id="s1", owner_user_id=42)
+
+    assert [c.pinned for c in resp.chats] == [True, False]
+    assert [c.title for c in resp.chats] == ["Pinned", "Loose"]
+
+
+def test_list_chats_maps_a_dialog_without_a_pin_attribute_as_unpinned():
+    """An older/mocked dialog without `pinned` must not break the page."""
+
+    class _BareDialog:
+        def __init__(self, chat):
+            self.chat = chat
+
+    svc = _servicer([_Session("s1", 42)], _Client([_BareDialog(_Chat(-100333, "channel"))]))
+    resp, ctx = _call(svc, session_id="s1", owner_user_id=42)
+
+    assert ctx.code is None
+    assert len(resp.chats) == 1 and resp.chats[0].pinned is False
 
 
 def test_list_chats_uses_first_name_for_a_private_chat_title():

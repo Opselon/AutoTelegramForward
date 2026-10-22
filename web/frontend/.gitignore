@@ -30,3 +30,6 @@ dist-ssr
 
 # Compiled in CI to run the catalog parity test directly
 .catalog-build/
+
+# Compiled in CI to run the chat picker ordering test directly
+.chatorder-build/

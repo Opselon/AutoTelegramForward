@@ -263,6 +263,11 @@ message ChatSummary {
   string chat_type = 4;  // channel | supergroup | group | private | bot (lowercase)
   int64 members = 5;     // participant count when the peer exposes it (0 = unknown)
   bool is_forum = 6;     // forum-enabled supergroup (topic-based)
+  // The chat is pinned in the source session. Pickers list pinned chats first:
+  // the chats a user pinned deliberately are the ones a task is usually built
+  // around, and the bot's own pickers already sort that way. Older servers omit
+  // it, which parses as false — the client then keeps the server's order.
+  bool pinned = 7;
 }
 
 message ListChatsResponse {

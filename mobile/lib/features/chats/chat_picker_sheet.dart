@@ -188,15 +188,19 @@ class _ChatPickerSheetState extends State<ChatPickerSheet> {
   List<ChatSummary> get _visible {
     switch (_typeFilter) {
       case 'channels':
-        return _chats.where((c) => !c.isUserChat).toList(growable: false);
+        // Pinned first *inside* the filter: a filter is a narrowing, not a
+        // re-sort, so the same row leads whether or not a chip is active.
+        return pinnedFirst(_chats.where((c) => !c.isUserChat));
       case 'groups':
-        return _chats
-            .where((c) => c.chatType == 'group' || c.chatType == 'supergroup')
-            .toList(growable: false);
+        return pinnedFirst(
+          _chats.where(
+            (c) => c.chatType == 'group' || c.chatType == 'supergroup',
+          ),
+        );
       case 'users':
-        return _chats.where((c) => c.isUserChat).toList(growable: false);
+        return pinnedFirst(_chats.where((c) => c.isUserChat));
       default:
-        return _chats;
+        return pinnedFirst(_chats);
     }
   }
 
@@ -433,7 +437,9 @@ class _ChatPickerSheetState extends State<ChatPickerSheet> {
           onChanged: (_) => _toggle(chat),
           secondary: Icon(_iconFor(chat)),
           title: Text(
-            chat.displayTitle,
+            // 📌 is the same marker the bot's pickers use, so one glance says
+            // why this row is above the rest.
+            chat.pinned ? '📌 ${chat.displayTitle}' : chat.displayTitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),

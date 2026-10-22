@@ -305,6 +305,18 @@ jobs:
             --module esnext --target es2022 --moduleResolution bundler --skipLibCheck
           node tests/sessionIdentity.test.mjs
 
+      - name: Chat picker ordering
+        # Every picker (bot, dashboard, app) leads with the chats the user
+        # pinned; this runs the dashboard's ordering rule directly, so a
+        # comparator that reshuffles the unpinned tail fails here rather than on
+        # a screen where the difference looks like "the list just moved".
+        working-directory: web/frontend
+        run: |
+          node node_modules/typescript/bin/tsc src/chatOrder.ts \
+            --ignoreConfig --outDir .chatorder-build \
+            --module esnext --target es2022 --moduleResolution bundler --skipLibCheck
+          node tests/chatOrder.test.mjs
+
       - name: UI catalog contract
         # The dashboard ships one key set across the ten locales, so a locale
         # that lags is a defect rather than an English screen: this test counts

@@ -37,6 +37,7 @@ import type {
   RoutePathQuickSetRequest,
   RuleLiveStat,
   RuleSettingsResponse,
+  ChatListPage,
   CheckProviderKeyRequest,
   CheckProviderKeyResponse,
   SaveAIConfigRequest,
@@ -281,6 +282,27 @@ export const api = {
     fetchJson<{ success: boolean; message?: string }>(`${API_BASE}/sessions/${sessionId}`, {
       method: 'DELETE',
     }),
+  /**
+   * Browse one session's dialogs — the source/target picker feed.
+   *
+   * A session that exists but has no live Telegram client answers 503; the
+   * picker treats that as "manual entry only" rather than an empty account.
+   * Older servers may not have the route at all (404), which the picker shows
+   * as unavailable, again without blocking the id field.
+   */
+  listChats: (
+    sessionId: string,
+    params: { query?: string; limit?: number; offset?: number } = {},
+  ): Promise<ChatListPage> => {
+    const q = new URLSearchParams()
+    if (params.query) q.set('query', params.query)
+    if (params.limit) q.set('limit', String(params.limit))
+    if (params.offset) q.set('offset', String(params.offset))
+    const qs = q.toString()
+    return fetchJson<ChatListPage>(
+      `${API_BASE}/sessions/${encodeURIComponent(sessionId)}/chats${qs ? `?${qs}` : ''}`,
+    )
+  },
 
   // AI Configurations
   getAIConfigs: async (): Promise<AIConfig[]> => {

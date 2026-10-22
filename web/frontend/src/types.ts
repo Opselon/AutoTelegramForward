@@ -308,6 +308,33 @@ export interface Session {
   updated_at: number
 }
 
+/**
+ * One dialog a session can see, as `GET /api/sessions/{id}/chats` returns it.
+ *
+ * `chat_id` is the canonical numeric id and the only value a rule stores —
+ * everything else is display. `pinned` is the user's own ordering in their
+ * Telegram chat list: pickers lead with it. It is omitted when false (proto3
+ * omitempty), so a missing key means "not pinned", never "unknown".
+ */
+export interface ChatSummary {
+  chat_id: string
+  title?: string
+  username?: string
+  chat_type?: string
+  members?: number
+  is_forum?: boolean
+  pinned?: boolean
+}
+
+/** One page of a session's dialogs, plus the arithmetic a "showing N of M" row needs. */
+export interface ChatListPage {
+  session_id: string
+  chats: ChatSummary[]
+  count: number
+  total: number
+  truncated: boolean
+}
+
 export interface AIConfig {
   id: string
   name: string

@@ -1852,6 +1852,7 @@ class ChatSummary {
     this.chatType = '',
     this.members = 0,
     this.isForum = false,
+    this.pinned = false,
   });
 
   final String chatId;
@@ -1865,6 +1866,12 @@ class ChatSummary {
   /// A forum (topic-enabled supergroup): a task can target one topic, so the
   /// distinction is worth surfacing rather than flattening into "group".
   final bool isForum;
+
+  /// The chat is pinned in the source session. Advisory only — pickers lead
+  /// with pinned rows (they are the chats a task is usually built around) and
+  /// nothing routes on it. A server that cannot report it parses as `false`,
+  /// and the picker then keeps the server's order with no visible change.
+  final bool pinned;
 
   /// What to show on a row: the chat's name, else its @username, else the id.
   String get displayTitle {
@@ -1894,6 +1901,7 @@ class ChatSummary {
     chatType: (json['chat_type']?.toString() ?? '').toLowerCase(),
     members: jsonInt(json['members']),
     isForum: json['is_forum'] as bool? ?? false,
+    pinned: json['pinned'] as bool? ?? false,
   );
 
   @override
@@ -1905,6 +1913,27 @@ class ChatSummary {
 
   @override
   String toString() => 'ChatSummary($chatId, $chatType)';
+}
+
+/// Pinned chats first, everything else in the order the server sent it.
+///
+/// The bot's pickers already lead with pinned chats (the chats a user pinned
+/// deliberately are the ones a task is usually built around); this is the same
+/// rule for the app. The sort is **stable** by construction — Dart's `List.sort`
+/// is not, so the server's newest-first order would otherwise be scrambled
+/// among the unpinned rows on every rebuild. A list with nothing pinned comes
+/// back untouched, which is what an older server (no `pinned` field) produces.
+List<ChatSummary> pinnedFirst(Iterable<ChatSummary> chats) {
+  final indexed = chats.indexed.toList(growable: false);
+  if (!indexed.any((entry) => entry.$2.pinned)) {
+    return List<ChatSummary>.unmodifiable(indexed.map((entry) => entry.$2));
+  }
+  final ordered = indexed.toList()
+    ..sort((a, b) {
+      if (a.$2.pinned != b.$2.pinned) return a.$2.pinned ? -1 : 1;
+      return a.$1.compareTo(b.$1);
+    });
+  return List<ChatSummary>.unmodifiable(ordered.map((entry) => entry.$2));
 }
 
 /// One page of a session's chat list (`GET /api/sessions/{id}/chats`).

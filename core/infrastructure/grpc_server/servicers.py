@@ -599,6 +599,11 @@ def _chat_summary_from_dialog(dialog) -> "pb.ChatSummary":
         chat_type=_chat_type_of(chat),
         members=_chat_members(chat),
         is_forum=bool(getattr(chat, "is_forum", False)),
+        # `pinned` lives on the *dialog*, not the chat: it is the user's own
+        # ordering of their chat list. It is advisory only — a picker sorts on
+        # it, nothing routes on it — so a client that cannot see it must not
+        # lose the row.
+        pinned=bool(getattr(dialog, "pinned", False)),
     )
 
 
