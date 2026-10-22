@@ -45,7 +45,7 @@ owned by exactly one method — the property the registry and
 
 | Module | Owns | Registered by |
 | --- | --- | --- |
-| `handlers/discovery.py` | `/getchannel`, `/getgroup`, `/getuser`, `/getbot`, the chat catalog render and its callbacks | text-command router (group `-2`) |
+| `handlers/discovery.py` | `/getchannel`, `/getgroup`, `/getuser`, `/getbot` (with `-id` for the copy-ready one-line list, `-all` for every kind, an optional page number), the chat catalog render and its callbacks | text-command router (group `-2`) |
 | `handlers/forwarding.py` | `/forward`, `/rules`, the task list and (next) the forwarding status screen | `register_forwarding_handlers` (group `0`) |
 | `command_router.py` (`TextCommandMixin`) | Filters, discovery lists, account commands, `/replace`, clone, guide | text-command router |
 | `autoreply_bot_ui.py` | v28 auto-reply panel | `register_autoreply_handlers` |

@@ -346,3 +346,114 @@ async def test_a_second_tenant_cannot_confirm_someone_elses_delete(harness):
 
     assert (await harness.rules_repo.get_by_id(RULE_ID)) is not None
     assert any("not found" in t.lower() or "owner" in t.lower() for t in cq.answers.texts)
+
+
+# --------------------------------------------------------------------------- #
+# `/getchannel -id` — the copy-ready one-line list
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.asyncio
+async def test_getchannel_id_answers_the_plain_copy_ready_list(harness):
+    msg = message(OWNER, "/getchannel -id")
+    await harness.ui._cmd_getchannel(msg, "-id")
+
+    assert msg.sent, "the flag must be answered"
+    text, kwargs = msg.sent[-1][1], msg.sent[-1][2]
+    assert f"**{CHANNEL_TITLE}** \u2192 `{CHANNEL_ID}`" in text
+    # The answer exists to be copied from: one row, no buttons.
+    assert not buttons(kwargs["reply_markup"]) if kwargs.get("reply_markup") else True
+    assert not payloads(kwargs["reply_markup"]) if kwargs.get("reply_markup") else True
+    assert "/forward add" in text, "the next command is written under the list"
+
+
+@pytest.mark.asyncio
+async def test_getchannel_without_the_flag_keeps_the_interactive_sheet(harness):
+    msg = message(OWNER, "/getchannel")
+    await harness.ui._cmd_getchannel(msg, "")
+
+    text, kwargs = msg.sent[-1][1], msg.sent[-1][2]
+    assert CHANNEL_TITLE in text
+    assert any(CHANNEL_TITLE in label for label, _p in buttons(kwargs["reply_markup"]))
+
+
+@pytest.mark.asyncio
+async def test_getchannel_id_pages_and_names_the_next_command(harness, monkeypatch):
+    from core.infrastructure.telegram.dialog_gateway import SessionDialogGateway
+
+    rows = [
+        {"id": f"-1001000000{i:04d}", "title": f"Chat {i}", "username": "",
+         "type": "channel", "is_self": False}
+        for i in range(25)
+    ]
+
+    async def many_rows(self, owner_user_id: int):
+        return rows
+
+    monkeypatch.setattr(SessionDialogGateway, "fetch", many_rows)
+    msg = message(OWNER, "/getchannel -id 2")
+    await harness.ui._cmd_getchannel(msg, "-id 2")
+
+    text = msg.sent[-1][1]
+    assert "`21.`" in text and "`25.`" in text, "page two shows chats 21..25"
+    assert "`20.`" not in text
+    assert "Page 2 of 2" in text
+    assert "/getchannel -id 2" in text  # last page: the hint names page 2 again
+
+
+@pytest.mark.asyncio
+async def test_an_unknown_command_token_is_refused_with_usage(harness):
+    msg = message(OWNER, "/getchannel -summery")
+    await harness.ui._cmd_getchannel(msg, "-summery")
+
+    text, kwargs = msg.sent[-1][1], msg.sent[-1][2]
+    assert "-summery" in text, "the refusal names the offending token"
+    assert "/getchannel -id" in text, "and shows the working spellings"
+    assert not payloads(kwargs["reply_markup"]) if kwargs.get("reply_markup") else True
+
+
+@pytest.mark.asyncio
+async def test_getchannel_all_lists_every_kind_in_order(harness, monkeypatch):
+    from core.infrastructure.telegram.dialog_gateway import SessionDialogGateway
+
+    rows = [
+        *DIALOGS,
+        {"id": "5094837833", "title": "Just Me", "username": "me",
+         "type": "user", "is_self": False},
+        {"id": "777000111", "title": "Helper Bot", "username": "helper",
+         "type": "bot", "is_self": False},
+    ]
+
+    async def many_rows(self, owner_user_id: int):
+        return rows
+
+    monkeypatch.setattr(SessionDialogGateway, "fetch", many_rows)
+    msg = message(OWNER, "/getchannel -all -id")
+    await harness.ui._cmd_getchannel(msg, "-all -id")
+
+    text = msg.sent[-1][1]
+    positions = {
+        CHANNEL_ID: text.find(CHANNEL_ID),
+        TARGET_ID: text.find(TARGET_ID),
+        "5094837833": text.find("5094837833"),
+        "777000111": text.find("777000111"),
+    }
+    assert all(p >= 0 for p in positions.values()), text
+    sources = sorted(positions, key=positions.__getitem__)
+    # Catalog priority: channels, then bots, then users.
+    assert sources == [CHANNEL_ID, TARGET_ID, "777000111", "5094837833"], sources
+    assert text.count("→") == len(rows), "one line per chat"
+
+
+@pytest.mark.asyncio
+async def test_getchannel_id_on_an_empty_catalog_stays_a_plain_refusal(harness, monkeypatch):
+    from core.infrastructure.telegram.dialog_gateway import SessionDialogGateway
+
+    async def no_rows(self, owner_user_id: int):
+        return []
+
+    monkeypatch.setattr(SessionDialogGateway, "fetch", no_rows)
+    msg = message(OWNER, "/getchannel -id")
+    await harness.ui._cmd_getchannel(msg, "-id")
+    text, kwargs = msg.sent[-1][1], msg.sent[-1][2]
+    assert text, "the empty state must still answer"
+    assert not payloads(kwargs["reply_markup"]) if kwargs.get("reply_markup") else True
