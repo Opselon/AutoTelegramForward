@@ -414,6 +414,7 @@ SEV_ICON = diagnostics.SEVERITY_ICON
 from core.infrastructure.telegram.autoreply_bot_ui import AutoReplyBotMixin
 from core.infrastructure.telegram.handlers import build_handler_registry
 from core.infrastructure.telegram.handlers.forward_manage import ForwardManageHandlers
+from core.infrastructure.telegram.handlers.forward_select import ForwardSelectHandlers
 from core.infrastructure.telegram.handlers.discovery import DiscoveryHandlers
 from core.infrastructure.telegram.handlers.forwarding import ForwardingHandlers
 from core.infrastructure.telegram.replace_bot_ui import ReplaceBotMixin
@@ -436,7 +437,7 @@ from core.domain.text_replace import (
 
 
 class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHandlers,
-               ForwardingHandlers, ForwardManageHandlers):
+               ForwardingHandlers, ForwardManageHandlers, ForwardSelectHandlers):
     """Renders and routes the entire button-based control panel.
 
     Every handler surface is a mixin that owns one file; ``_handler_registry``
@@ -1688,6 +1689,12 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         cur_lang = lang or _BOT_RENDER_LANGUAGE.get() or "en"
         rows: List[List[Tuple[str, str]]] = [
             [(self._btn("ui_rule_add", lang=cur_lang), CB["rule_add"])],
+            # The multi-select route: pick many sources and targets on one
+            # screen family, then create the whole route in one confirmation.
+            [
+                (self._t("ui_sel_menu_sources", lang=cur_lang), "sel:open:s"),
+                (self._t("ui_sel_menu_targets", lang=cur_lang), "sel:open:t"),
+            ],
             # Start a route by listing its sources and targets; the task is
             # created on save and carries as many of each as the user sends.
             [
