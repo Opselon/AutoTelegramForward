@@ -547,6 +547,36 @@ def _classify_by_type(event: TelegramErrorEvent) -> None:
 # deterministic classification — there is no second mapping table.
 
 
+#: Telegram's raw "the source chat forbids exporting its content" error id.
+#: A fully restricted (noforwards) channel answers *copy* paths with the same
+#: class it answers forwards, so every bypass caller keys on this single id
+#: instead of a private substring list.
+RESTRICTED_SOURCE_ERROR_IDS = frozenset({"CHAT_FORWARDS_RESTRICTED"})
+
+
+def is_restricted_source_error(exc: BaseException) -> bool:
+    """True when Telegram itself blocked this because the *source* forbids
+    copies or forwards (channel content protection), not because the target
+    refused.
+
+    Decision order, most canonical first: the raw error id Telegram returned,
+    then the typed pyrogram class name, then the exception text for shapes
+    that never reach the classifier (httpx errors, wrapped reprs). Never
+    raises — a classification miss only costs one extra bypass layer.
+    """
+    try:
+        if str(extract(exc).error_type or "").upper() in RESTRICTED_SOURCE_ERROR_IDS:
+            return True
+    except Exception:
+        pass
+    # e.g. pyrogram's ChatForwardsRestricted — the raw class name survives
+    # even when the exception never hit the raw tracer.
+    if "forwardsrestricted" in type(exc).__name__.lower():
+        return True
+    text = str(exc).lower()
+    return "forwardsrestricted" in text or "forwards_restricted" in text or "forwards restricted" in text
+
+
 def tg_error(exc: BaseException, operation: str = "") -> tuple:
     """``(i18n_key, severity, retryable)`` for a raised exception."""
     event = extract(exc, operation=operation)

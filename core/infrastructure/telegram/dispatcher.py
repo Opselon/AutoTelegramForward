@@ -29,7 +29,7 @@ from ...domain.services import AdvancedSettingsEngine, CaptionManagementEngine, 
 from ...domain.value_objects import ContentMode, ForwardMode
 from .album_aggregator import AlbumAggregator
 from .client_pool import ClientPool, payload_from_pyrogram
-from .errors import tg_detail, tg_error, wait_seconds
+from .errors import is_restricted_source_error, tg_detail, tg_error, wait_seconds
 from ..persistence.coercion import enum_str
 
 logger = logging.getLogger(__name__)
@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 # downloading is also blocked.
 _MEDIA_ATTRIBUTES = (
     ("photo", "photo", "send_photo"),
+    ("video_note", "video", "send_video"),
     ("video", "video", "send_video"),
     ("audio", "audio", "send_audio"),
     ("voice", "voice", "send_voice"),
@@ -111,6 +112,31 @@ async def _send_media_reference(client: Any, target: Any, ref: dict, caption: Op
     if kind != "sticker":
         kw["caption"] = cap
     return await method(chat_id=target, **kw)
+
+
+def _media_shape_of(src_msg: Any, payload: MessagePayload) -> str:
+    """The send_* shape to re-upload this message as.
+
+    Ground truth is the source message's populated media attribute; the
+    payload's declared ``media_type`` is only a fallback, because it is
+    recorded at ingest and can disagree with what the channel actually
+    holds by the time the bypass runs (album lead frame, round video,
+    sticker vs document). ``video_note`` re-uploads as ``video`` — a
+    round video delivered as a plain video is still delivered.
+    """
+    for attr, kind in (
+        ("photo", "photo"), ("video", "video"), ("video_note", "video"),
+        ("audio", "audio"), ("voice", "voice"), ("animation", "animation"),
+        ("sticker", "sticker"), ("document", "document"),
+    ):
+        if getattr(src_msg, attr, None) is not None:
+            return kind
+    declared = str(getattr(payload.media_type, "value", payload.media_type or "")).lower()
+    return {
+        "photo": "photo", "video": "video", "round_video": "video",
+        "voice": "voice", "audio": "audio", "animation": "animation",
+        "sticker": "sticker", "document": "document",
+    }.get(declared, "document")
 
 
 class MessageDispatcher:
@@ -900,22 +926,43 @@ class MessageDispatcher:
                 try:
                     temp_path = await client.download_media(src_msg)
                 except Exception as dl_err:
-                    logger.debug("download_media for protected message failed: %s", dl_err)
+                    # Warn, not debug: when this layer fails the delivery is
+                    # degraded to bare text, and the operator needs the raw
+                    # Telegram error to know why (source-level protection, DC
+                    # trouble, stale file reference...).
+                    logger.warning(
+                        "[PIPELINE:PROTECTED] download failed src=%s msg=%s (%s) — degrading to text if nothing else delivers",
+                        int(payload.chat_id), payload.message_id, tg_detail(dl_err) or type(dl_err).__name__,
+                    )
 
             if temp_path and os.path.exists(temp_path):
-                mtype = payload.media_type.value if hasattr(payload.media_type, "value") else str(payload.media_type)
+                # The source message is ground truth for what the media *is*:
+                # the payload type is recorded at ingest and can drift (album
+                # lead frame, round video), and a mismatched send call would
+                # look like a delivery bug instead of a shape bug.
+                kind = _media_shape_of(src_msg, payload)
                 m_caption = caption if mode_val != "MEDIA_ONLY" else None
-                if mtype == "photo" and hasattr(client, "send_photo"):
-                    return await client.send_photo(chat_id=target, photo=temp_path, caption=m_caption)
-                elif mtype in ("video", "round_video") and hasattr(client, "send_video"):
-                    return await client.send_video(chat_id=target, video=temp_path, caption=m_caption)
-                elif mtype == "voice" and hasattr(client, "send_voice"):
-                    return await client.send_voice(chat_id=target, voice=temp_path, caption=m_caption)
-                elif mtype == "audio" and hasattr(client, "send_audio"):
-                    return await client.send_audio(chat_id=target, audio=temp_path, caption=m_caption)
-                elif mtype == "animation" and hasattr(client, "send_animation"):
-                    return await client.send_animation(chat_id=target, animation=temp_path, caption=m_caption)
-                elif hasattr(client, "send_document"):
+                senders = {
+                    "photo": "send_photo", "video": "send_video",
+                    "audio": "send_audio", "voice": "send_voice",
+                    "animation": "send_animation", "document": "send_document",
+                    "sticker": "send_sticker",
+                }
+                method = getattr(client, senders.get(kind, "send_document"), None)
+                if method is not None:
+                    kw: dict = {kind if kind != "document" else "document": temp_path}
+                    if kind != "sticker":
+                        kw["caption"] = m_caption
+                    try:
+                        return await method(chat_id=target, **kw)
+                    except Exception as shape_err:
+                        # A wrong shape choice must not lose the delivery —
+                        # the catch-all document upload below still runs.
+                        logger.warning(
+                            "[PIPELINE:PROTECTED] re-upload as %s rejected (%s) — trying document",
+                            kind, tg_detail(shape_err) or type(shape_err).__name__,
+                        )
+                if hasattr(client, "send_document"):
                     return await client.send_document(chat_id=target, document=temp_path, caption=m_caption)
         finally:
             if temp_path and os.path.exists(temp_path):
@@ -959,9 +1006,14 @@ class MessageDispatcher:
                     **thread_kwargs,
                 )
             except Exception as copy_exc:
-                err_str = str(copy_exc).lower()
-                if any(k in err_str for k in ("forward", "restrict", "protected", "chatforwardsrestricted", "not_allowed")):
-                    logger.info("copy_message blocked by channel content protection (%s) — downloading & re-uploading content", copy_exc)
+                if is_restricted_source_error(copy_exc):
+                    # Telegram blocked the copy because the *source* chat
+                    # forbids exporting its content; the re-upload chain below
+                    # is the one path that can survive that id.
+                    logger.warning(
+                        "[PIPELINE:PROTECTED] server copy blocked src=%s -> tgt=%s (%s) — descending bypass chain",
+                        src_chat, target, tg_detail(copy_exc) or type(copy_exc).__name__,
+                    )
                     res = await self._reupload_media(client, payload, target, formatted_caption, mode_val)
                 else:
                     raise copy_exc
