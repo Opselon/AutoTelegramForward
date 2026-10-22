@@ -133,6 +133,11 @@ pub struct Config {
     pub max_detail_bytes: usize,
     pub max_tag_bytes: usize,
 
+    /// Engine-side admission cap for *verbose* records (DEBUG/INFO), records
+    /// per second; 0 = off (policy + bounded lanes stay the only admission
+    /// controls). High severities and protected categories always bypass.
+    pub admission_rate_per_sec: u64,
+
     /// Capability-scoped bearer tokens for the gRPC surface. Empty string =
     /// scope open (previous behaviour; documented trade-off in the audit):
     /// producers keep logging through an unattended rotation window.
@@ -175,6 +180,7 @@ impl Default for Config {
             max_message_bytes: 1 << 20,
             max_detail_bytes: 1 << 20,
             max_tag_bytes: 4096,
+            admission_rate_per_sec: 0,
             auth_ingest_token: String::new(),
             auth_read_token: String::new(),
             auth_admin_token: String::new(),
@@ -223,6 +229,7 @@ impl Config {
                 "--priority-capacity" => cfg.priority_capacity = parse_usize(flag, &take(&mut i)?)?,
                 "--batch-size" => cfg.batch_size = parse_usize(flag, &take(&mut i)?)?,
                 "--batch-delay-ms" => cfg.batch_delay_ms = parse_u64(flag, &take(&mut i)?)?,
+                "--admission-rate" => cfg.admission_rate_per_sec = parse_u64(flag, &take(&mut i)?)?,
                 "--poll-interval-ms" => cfg.poll_interval_ms = parse_u64(flag, &take(&mut i)?)?,
                 "--ack-mode" => {
                     let v = take(&mut i)?;
@@ -328,6 +335,11 @@ impl Config {
         }
         set_str("ATF_LOGGER_METRICS_LISTEN", &mut self.metrics_listen);
 
+        if let Some(v) = env("ATF_LOGGER_ADMISSION_RATE") {
+            if !v.is_empty() {
+                self.admission_rate_per_sec = parse_u64("ATF_LOGGER_ADMISSION_RATE", &v)?;
+            }
+        }
         set_str("ATF_LOGGER_INGEST_TOKEN", &mut self.auth_ingest_token);
         set_str("ATF_LOGGER_READ_TOKEN", &mut self.auth_read_token);
         set_str("ATF_LOGGER_ADMIN_TOKEN", &mut self.auth_admin_token);
@@ -475,6 +487,12 @@ impl Config {
         if self.drain_timeout_ms == 0 {
             return Err(ConfigError::new("--drain-timeout-ms", "must be > 0"));
         }
+        if self.admission_rate_per_sec > 1_000_000 {
+            return Err(ConfigError::new(
+                "--admission-rate",
+                "must be <= 1000000 (0 disables)",
+            ));
+        }
         if self.read_pool_size == 0 || self.read_pool_size > 16 {
             return Err(ConfigError::new("--read-pool-size", "must be in 1..=16"));
         }
@@ -542,6 +560,7 @@ impl Config {
         for c in &self.protected_categories {
             feed(c);
         }
+        feed(&self.admission_rate_per_sec.to_string());
         // Auth tokens change the config fingerprint too, but only their
         // presence ever enters the hash: the hash is rendered by /metrics and
         // must never echo a secret.
@@ -790,6 +809,24 @@ mod tests {
         assert_eq!(a.version_hash(), b.version_hash());
         b.batch_size += 1;
         assert_ne!(a.version_hash(), b.version_hash());
+    }
+
+    #[test]
+    fn admission_rate_defaults_off_and_parses_from_env() {
+        assert_eq!(Config::default().admission_rate_per_sec, 0);
+        let env = |key: &str| -> Option<String> {
+            if key == "ATF_LOGGER_ADMISSION_RATE" {
+                Some("120".into())
+            } else {
+                None
+            }
+        };
+        let cfg = Config::from_parts(&[], &env).expect("valid config");
+        assert_eq!(cfg.admission_rate_per_sec, 120);
+        let bad = |_key: &str| -> Option<String> { Some("1000001".into()) };
+        assert!(Config::from_parts(&[], &bad).is_err());
+        // Arming the limiter changes the config fingerprint.
+        assert_ne!(Config::default().version_hash(), cfg.version_hash());
     }
 
     #[test]

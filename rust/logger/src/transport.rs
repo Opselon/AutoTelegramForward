@@ -30,7 +30,7 @@
 use crate::auth::{Auth, Failure, Scope};
 use crate::config::{Config, TsUnit};
 use crate::health::{HealthState, REASON_ACK_MODE_QUEUED};
-use crate::ingest::{self, CollectPolicy, Limits, RawEntry, Reject};
+use crate::ingest::{self, CollectPolicy, Limits, RawEntry, Reject, Severity};
 use crate::metrics::{self, Metrics};
 use crate::pb;
 use crate::pipeline::{Ack, AdmitError, Pipeline};
@@ -50,6 +50,58 @@ pub const MAX_PURGE_ROWS: u64 = 1_000_000;
 /// Stable error code for a record that never reached storage.
 pub const CODE_DROPPED: &str = "STORAGE_DROPPED";
 
+/// Engine-side admission cap for verbose records.
+///
+/// Why only DEBUG/INFO: the collection policy already decides what is
+/// *collected*; this cap decides what a flood of low-value records may do to
+/// the lanes when the policy admits them. WARN and above, and the protected
+/// categories (audit, security), never reach it — requirement: critical and
+/// security events must never be lost to a throttle. `per_sec == 0` = off
+/// (default), so nothing changes for deployments that do not opt in.
+struct Admission {
+    per_sec: u64,
+    burst: u64,
+    tokens: std::sync::Mutex<u64>,
+    last: std::sync::Mutex<std::time::Instant>,
+}
+
+impl Admission {
+    fn from_config(config: &Config) -> Self {
+        let per_sec = config.admission_rate_per_sec;
+        Admission {
+            per_sec,
+            // A producer may burst without waiting: one full second of tokens.
+            burst: per_sec.max(1),
+            tokens: std::sync::Mutex::new(per_sec),
+            last: std::sync::Mutex::new(std::time::Instant::now()),
+        }
+    }
+
+    /// Refill by real elapsed time and take one token, exactly like every
+    /// bounded budget in this crate: no locks held across I/O, no allocation.
+    fn try_acquire(&self, now: std::time::Instant) -> bool {
+        if self.per_sec == 0 {
+            return true; // off
+        }
+        let mut tokens = self.tokens.lock().unwrap_or_else(|e| e.into_inner());
+        let mut last = self.last.lock().unwrap_or_else(|e| e.into_inner());
+        let elapsed = now.duration_since(*last).as_secs_f64();
+        if elapsed >= f64::EPSILON {
+            let refill = (elapsed * self.per_sec as f64).floor() as u64;
+            if refill > 0 {
+                *tokens = (*tokens + refill).min(self.burst);
+                *last = now;
+            }
+        }
+        if *tokens > 0 {
+            *tokens -= 1;
+            true
+        } else {
+            false
+        }
+    }
+}
+
 /// The gRPC service.
 pub struct LogControl {
     pipeline: Arc<Pipeline>,
@@ -68,6 +120,7 @@ pub struct LogControl {
     backend: String,
     ack_mode: &'static str,
     auth: Auth,
+    admission: Admission,
 }
 
 impl LogControl {
@@ -100,6 +153,7 @@ impl LogControl {
             backend: String::new(),
             ack_mode: config.ack_mode.as_str(),
             auth: Auth::from_config(config),
+            admission: Admission::from_config(config),
         }
     }
 
@@ -181,6 +235,7 @@ impl LogControl {
             "OVERLOAD" => "overload",
             "SHUTTING_DOWN" => "shutdown",
             "DUPLICATE" => "duplicate",
+            "RATE_LIMITED" => "rate_limited",
             "TIMEOUT" => "timeout",
             _ => "storage",
         };
@@ -402,6 +457,29 @@ impl pb::log_control_service_server::LogControlService for LogControl {
                 return Ok(tonic::Response::new(response));
             }
         };
+
+        // Verbose admission cap (see Admission): DEBUG/INFO pay the per-second
+        // rate before they can touch the lanes; WARN/ERROR/CRITICAL and the
+        // protected categories (audit, security) never reach this check, so the
+        // records an operator counts on cannot be throttled away.
+        if matches!(prepared.severity, Severity::Debug | Severity::Info)
+            && !self.protected_categories.iter().any(|c| {
+                c.trim()
+                    .eq_ignore_ascii_case(prepared.record.category.trim())
+            })
+            && !self.admission.try_acquire(std::time::Instant::now())
+        {
+            self.metrics
+                .admission_rate_limited
+                .inc(metrics::level_label(&prepared.record.level));
+            guard.finish(0);
+            let mut response = self.reject("RATE_LIMITED", Some(&prepared.record.level), true);
+            response.message = format!(
+                "admission rate limit ({}/s) reached at level {}; WARN/ERROR/CRITICAL and protected categories bypass",
+                self.admission.per_sec, prepared.record.level
+            );
+            return Ok(tonic::Response::new(response));
+        }
 
         let ack = match self.admit_with_backpressure(prepared).await {
             Ok(ack) => ack,
@@ -1385,6 +1463,108 @@ mod tests {
         );
         assert!(harness.metrics.queue_rejected_full.total() >= refused);
         harness.pipeline.stop(Duration::from_secs(10));
+    }
+
+    // ---- engine-side verbose admission cap --------------------------------
+
+    fn rate_config(per_sec: u64) -> Config {
+        Config {
+            admission_rate_per_sec: per_sec,
+            ..Config::default()
+        }
+    }
+
+    fn send(
+        runtime: &tokio::runtime::Runtime,
+        harness: &Harness,
+        level: &str,
+        category: &str,
+        message: &str,
+    ) -> pb::StatusResponse {
+        let mut entry = entry(level, message);
+        entry.category = category.to_string();
+        runtime
+            .block_on(pb::log_control_service_server::LogControlService::log(
+                &harness.service,
+                tonic::Request::new(pb::LogRequest { entry: Some(entry) }),
+            ))
+            .expect("an admission refusal is an answer, not an RPC error")
+            .into_inner()
+    }
+
+    #[test]
+    fn the_admission_cap_refuses_verbose_records_and_never_high_severity() {
+        let harness = harness(rate_config(1)); // one token in total
+        let runtime = runtime();
+
+        // First verbose record fits the burst, the second cannot.
+        let first = send(&runtime, &harness, "INFO", "system", "first");
+        assert!(first.success, "{first:?}");
+        let second = send(&runtime, &harness, "INFO", "system", "second");
+        assert!(!second.success);
+        assert_eq!(second.error_code, "RATE_LIMITED", "{second:?}");
+        assert!(second.message.contains("WARN/ERROR/CRITICAL"));
+        assert_eq!(harness.metrics.admission_rate_limited.with("INFO").get(), 1);
+
+        // The token budget is spent, but severity outranks the cap.
+        for level in ["WARN", "ERROR", "CRITICAL"] {
+            let response = send(&runtime, &harness, level, "system", "important");
+            assert!(
+                response.success,
+                "{level} must never be throttled away: {response:?}"
+            );
+        }
+
+        harness.pipeline.stop(Duration::from_secs(10));
+    }
+
+    #[test]
+    fn protected_categories_bypass_the_admission_cap() {
+        let harness = harness(rate_config(1));
+        let runtime = runtime();
+        // Spend the only token on a plain INFO …
+        assert!(send(&runtime, &harness, "INFO", "system", "plain").success);
+        // … and security/audit records still get in.
+        for category in ["security", "audit"] {
+            let response = send(&runtime, &harness, "INFO", category, "event");
+            assert!(
+                response.success,
+                "{category} is protected from every throttle: {response:?}"
+            );
+        }
+        harness.pipeline.stop(Duration::from_secs(10));
+    }
+
+    #[test]
+    fn a_cap_of_zero_keeps_every_verbose_record() {
+        let harness = harness(rate_config(0));
+        let runtime = runtime();
+        for i in 0..5 {
+            let response = send(&runtime, &harness, "INFO", "system", &format!("m{i}"));
+            assert!(response.success, "off must mean off: {response:?}");
+        }
+        assert_eq!(harness.metrics.admission_rate_limited.with("INFO").get(), 0);
+        harness.pipeline.stop(Duration::from_secs(10));
+    }
+
+    #[test]
+    fn the_token_bucket_refills_with_elapsed_time() {
+        let admission = Admission::from_config(&rate_config(10));
+        let start = std::time::Instant::now();
+        // A full second of tokens is available immediately (burst = rate).
+        for _ in 0..10 {
+            assert!(admission.try_acquire(start));
+        }
+        assert!(
+            !admission.try_acquire(start),
+            "burst is spent, not infinite"
+        );
+        // 300 ms at 10/s refills three tokens: exactly three more.
+        let later = start + Duration::from_millis(300);
+        assert!(admission.try_acquire(later));
+        assert!(admission.try_acquire(later));
+        assert!(admission.try_acquire(later));
+        assert!(!admission.try_acquire(later));
     }
 
     // ---- capability-scoped bearer auth at the RPC boundary ---------------

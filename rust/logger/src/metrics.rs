@@ -344,6 +344,20 @@ pub fn level_label(level: &str) -> &'static str {
 }
 
 /// Map a free-form rejection/status reason to a bounded label value.
+/// The StorageError taxonomy as one bounded label set — never the message,
+/// which would leak arbitrary text (paths, SQL) into metric series.
+pub fn storage_error_label(kind: &crate::storage::StorageError) -> &'static str {
+    use crate::storage::StorageError as E;
+    match kind {
+        E::Busy(_) => "busy",
+        E::Transient(_) => "transient",
+        E::Backend(_) => "backend",
+        E::Unavailable(_) => "unavailable",
+        E::Config(_) => "config",
+        E::Unsupported(_) => "unsupported",
+    }
+}
+
 pub fn reason_label(reason: &str) -> &'static str {
     match reason {
         "invalid" => "invalid",
@@ -531,6 +545,12 @@ pub struct Metrics {
     pub storage_pool_timeouts: Counter,
     pub storage_probe_failures: Counter,
     pub storage_rows: Gauge,
+    /// Failures by StorageError kind (busy/transient/backend/unavailable/
+    /// config/unsupported): an operator sees "disk-full" against "code bug"
+    /// without opening a log.
+    pub storage_failures: LabeledCounter,
+    /// WAL file size on disk, sampled periodically.
+    pub wal_size_bytes: Gauge,
 
     // ---- retention ------------------------------------------------------
     pub retention_cycles: Counter,
@@ -544,6 +564,8 @@ pub struct Metrics {
     // ---- auth ------------------------------------------------------------
     /// One series per (scope, failure) pair — a closed set, never raw tokens.
     pub auth_failures: LabeledCounter,
+    /// Verbose records refused by the engine-side admission cap, by level.
+    pub admission_rate_limited: LabeledCounter,
 
     // ---- service --------------------------------------------------------
     pub rpc_total: LabeledCounter, // method label; see `rpc_status`
@@ -660,6 +682,12 @@ impl Metrics {
                 LATENCY_BUCKETS,
             ),
             storage_transaction_failures: Counter::default(),
+            storage_failures: LabeledCounter::new(
+                "atf_logger_storage_failures_total",
+                "Storage write failures, by error kind",
+                "kind",
+            ),
+            wal_size_bytes: Gauge::default(),
             storage_busy_errors: Counter::default(),
             storage_pool_in_use: Gauge::default(),
             storage_pool_capacity: Gauge::default(),
@@ -714,6 +742,11 @@ impl Metrics {
                 "atf_logger_auth_failures_total",
                 "Rejected credentials by scope and outcome",
                 "outcome",
+            ),
+            admission_rate_limited: LabeledCounter::new(
+                "atf_logger_admission_rate_limited_total",
+                "Verbose records refused by the admission rate cap, by level",
+                "level",
             ),
             startup_ok: Gauge::default(),
             storage_up: Gauge::default(),
@@ -912,6 +945,7 @@ impl Metrics {
         ] {
             histogram.render(&mut out);
         }
+        self.storage_failures.render(&mut out);
         for (name, help, counter) in [
             (
                 "atf_logger_storage_transaction_failures_total",
@@ -953,6 +987,11 @@ impl Metrics {
                 "atf_logger_storage_rows",
                 "Rows currently in the archive (last observed)",
                 &self.storage_rows,
+            ),
+            (
+                "atf_logger_wal_size_bytes",
+                "Bytes the write-ahead log occupies (0 = not reported by this backend)",
+                &self.wal_size_bytes,
             ),
         ] {
             let _ = writeln!(out, "# HELP {name} {help}");
@@ -1006,6 +1045,7 @@ impl Metrics {
 
         // --- auth ----------------------------------------------------------
         self.auth_failures.render(&mut out);
+        self.admission_rate_limited.render(&mut out);
 
         // --- service ------------------------------------------------------
         self.rpc_total.render(&mut out);

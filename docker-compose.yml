@@ -101,6 +101,10 @@ services:
       ATF_LOGGER_INGEST_TOKEN: ${ATF_LOGGER_INGEST_TOKEN:-}
       ATF_LOGGER_READ_TOKEN: ${ATF_LOGGER_READ_TOKEN:-}
       ATF_LOGGER_ADMIN_TOKEN: ${ATF_LOGGER_ADMIN_TOKEN:-}
+      # Engine-side admission cap for DEBUG/INFO records per second; 0/unset =
+      # off (default). WARN/ERROR/CRITICAL and audit/security categories always
+      # bypass — this only bounds a verbose flood.
+      ATF_LOGGER_ADMISSION_RATE: ${ATF_LOGGER_ADMISSION_RATE:-}
     volumes:
       - logger-rust-data:/app/data
     networks:
