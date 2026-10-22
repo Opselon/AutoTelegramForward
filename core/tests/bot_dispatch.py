@@ -257,6 +257,7 @@ REGISTERING_MODULES = (
     "core.infrastructure.telegram.replace_bot_ui",
     "core.infrastructure.telegram.handlers.discovery",
     "core.infrastructure.telegram.handlers.forwarding",
+    "core.infrastructure.telegram.handlers.forward_manage",
 )
 
 

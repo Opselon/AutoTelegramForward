@@ -26,6 +26,20 @@ from pyrogram import filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message
 
 from core.application.command_registry import ROUTED_TOKENS, guide_text, resolve
+from core.application.replace_rules import MAX_PAGE_SIZE, ReplaceRuleError
+from core.application.rule_selectors import (
+    AMBIGUOUS,
+    EMPTY,
+    ID,
+    SelectorError,
+    parse_selector,
+    resolve_rule,
+)
+from core.infrastructure.telegram.replace_fast_add import (
+    FastReplaceAddError,
+    is_arrow_form,
+    parse_replace_fast_add,
+)
 from core.domain.text_replace import (
     MAX_ENTRIES,
     ReplaceError,
@@ -104,7 +118,14 @@ class TextCommandMixin:
             return []
 
     async def _cmd_rule_for(self, uid: int, token: str = "") -> Optional[Any]:
-        """Resolve a task from a command argument (id, id prefix, name, chat)."""
+        """Resolve a task from a command argument through the shared resolver.
+
+        Precedence (id, explicit ``#prefix``, exact name, chat, unique substring)
+        is owned by :func:`core.application.rule_selectors.resolve_rule`, so a
+        slash command and a button can never disagree about which task a token
+        names. Ambiguity answers ``None`` here — the callers that can explain it
+        (see ``handlers/forward_manage.py``) ask the resolver directly.
+        """
         rules = await self._cmd_rules(uid)
         if not rules:
             return None
@@ -117,25 +138,10 @@ class TextCommandMixin:
                     if str(getattr(rule, "id", "")) == str(sticky):
                         return rule
             return rules[0] if len(rules) == 1 else None
-        low = wanted.lower()
-        for rule in rules:
-            if str(getattr(rule, "id", "")) == wanted:
-                return rule
-        for rule in rules:
-            rid = str(getattr(rule, "id", ""))
-            if len(wanted) >= 4 and rid.lower().startswith(low):
-                return rule
-        for rule in rules:
-            name_val = str(getattr(rule, "name", "") or "")
-            if name_val and name_val.lower() == low:
-                return rule
-        for rule in rules:
-            if str(getattr(rule, "source_chat_id", "")) == wanted:
-                return rule
-            src_name = str(getattr(rule, "source_chat_name", "") or "").lstrip("@").lower()
-            if src_name and src_name == low.lstrip("@"):
-                return rule
-        return None
+        try:
+            return resolve_rule(rules, wanted)
+        except SelectorError:
+            return None
 
     def _kind_label(self, kind: str, lang: str) -> str:
         """The localized word for a list kind.
@@ -286,12 +292,28 @@ class TextCommandMixin:
         rest = rest.strip()
 
         if sub in ("", "list", "show"):
-            return await self._cmd_replace_panel(message, uid, lang)
+            # `list <word>` pre-loads the panel's search box, so the argument
+            # filters the same query the dashboard offers instead of being lost.
+            return await self._cmd_replace_panel(message, uid, lang, query=rest)
 
         if sub in ("add", "set", "new"):
+            # Two grammars share one verb: the fast form ("a" -> "b" [--task])
+            # and the legacy per-task entry. Flags decide, never a guess.
+            if is_arrow_form(rest):
+                return await self._cmd_replace_fast_add(message, uid, lang, rest)
             return await self._cmd_replace_add(message, uid, lang, rest)
 
+        if sub in ("edit", "open"):
+            return await self._cmd_replace_edit(message, uid, lang, rest)
+
         if sub in ("del", "delete", "remove", "rm"):
+            # A stable id belongs to the unified manager (its delete screen and
+            # its service); any other spelling keeps the legacy per-task entry
+            # deletion, so existing muscle memory is not reinterpreted.
+            bare = parse_selector(rest) if rest else None
+            if bare is not None and bare.is_id:
+                return await self._cmd_replace_edit(
+                    message, uid, lang, rest, delete=True)
             return await self._cmd_replace_del(message, uid, lang, rest)
 
         if sub in ("clear", "reset"):
@@ -313,7 +335,8 @@ class TextCommandMixin:
         text, kbd = self._render_replace_menu(rule)
         await message.reply_text(text, reply_markup=kbd)
 
-    async def _cmd_replace_panel(self, message: Message, uid: int, lang: str) -> None:
+    async def _cmd_replace_panel(self, message: Message, uid: int, lang: str,
+                                 query: str = "") -> None:
         """Open the unified manager list, scoping to the caller's own rules."""
         service = getattr(self, "_replace_rules", None)
         if service is None:
@@ -325,8 +348,162 @@ class TextCommandMixin:
                 return
             text, kbd = self._render_replace_menu(rule)
             return await message.reply_text(text, reply_markup=kbd)
+        if query:
+            # The argument becomes the panel's search, one source of truth for
+            # what the list shows: no command-private filtering pass.
+            panel = self._rpl_state(uid)
+            panel["query"] = query[:80]
+            panel["page"] = 1
+            await self._rpl_store(uid)
         body, kbd = await self._render_rpl_list(uid)
         await message.reply_text(body, reply_markup=kbd)
+
+
+    # -- unified manager by id ------------------------------------------- #
+    def _replace_selector_error(self, exc: SelectorError, lang: str) -> str:
+        """Explain a selector refusal in the caller's language.
+
+        The hint points at the surface that shows ids, because "not found" is
+        only actionable when the user can see the id they should have used.
+        """
+        if exc.code == AMBIGUOUS and exc.candidates:
+            return self._t("ui_sel_ambiguous", lang=lang, q=exc.detail,
+                           candidates="\n".join(f"• {c}" for c in exc.candidates))
+        if exc.code == EMPTY:
+            return self._t("ui_sel_empty", lang=lang)
+        return self._t("ui_sel_not_found", lang=lang, q=exc.detail or "",
+                       hint=self._t("ui_sel_open_hint", lang=lang))
+
+    async def _replace_rule_for(self, uid: int, token: str, lang: str):
+        """``(rule, None)`` or ``(None, message)`` — never another tenant's rule.
+
+        A full id is a direct lookup in the service (which scopes by owner); a
+        name or ``#prefix`` is resolved over the caller's own list, with the
+        same resolver every other surface uses.
+        """
+        service = getattr(self, "_replace_rules", None)
+        if service is None:
+            return None, self._t("ui_rpl_unavailable", lang=lang)
+        try:
+            selector = parse_selector(token)
+        except SelectorError as exc:
+            return None, self._replace_selector_error(exc, lang)
+        # Only a *full* id is a direct lookup: a `#prefix` has to be resolved
+        # against the owner's list, because the service's `get` takes ids only.
+        if selector.kind == ID:
+            try:
+                return await service.get(uid, selector.value), None
+            except ReplaceRuleError:
+                return None, self._t(
+                    "ui_sel_not_found", lang=lang, q=token,
+                    hint=self._t("ui_sel_open_hint", lang=lang),
+                )
+        try:
+            data = await service.list(uid, per_page=MAX_PAGE_SIZE)
+            return resolve_rule(data.get("items") or [], token), None
+        except SelectorError as exc:
+            return None, self._replace_selector_error(exc, lang)
+        except Exception as exc:  # noqa: BLE001 - the panel must still answer
+            logger.warning("[PIPELINE:REPLACE] selector failed for %s: %s", uid, exc)
+            return None, self._t("ui_rpl_unavailable", lang=lang)
+
+    async def _cmd_replace_edit(self, message: Message, uid: int, lang: str,
+                                token: str = "", delete: bool = False) -> None:
+        """`/replace edit|delete <id|#prefix|name>` — straight to the rule."""
+        if not (token or "").strip():
+            await message.reply_text(self._t("ui_rpl_edit_usage", lang=lang))
+            return await self._cmd_replace_panel(message, uid, lang)
+        rule, error = await self._replace_rule_for(uid, token, lang)
+        if error:
+            await message.reply_text(error)
+            return await self._cmd_replace_panel(message, uid, lang)
+        # `resolve_rule` hands back the stored row (a dict), while a direct
+        # lookup returns the domain object; both are addressed by their id.
+        rid = rule.get("id") if isinstance(rule, dict) else getattr(rule, "id", "")
+        if delete:
+            text, kbd = await self._render_rpl_confirm_delete(uid, rid)
+        else:
+            text, kbd = await self._render_rpl_detail(uid, rid)
+        await message.reply_text(text, reply_markup=kbd)
+
+    async def _cmd_replace_fast_add(self, message: Message, uid: int, lang: str,
+                                    rest: str) -> None:
+        """`/replace add "a" -> "b" [--task id|name] [--name X] [--regex]`."""
+        service = getattr(self, "_replace_rules", None)
+        if service is None:
+            return await message.reply_text(self._t("ui_rpl_unavailable", lang=lang))
+        try:
+            parsed = parse_replace_fast_add(rest)
+        except FastReplaceAddError as exc:
+            key = {
+                "missing_arrow": "ui_forward_add_need_arrow",
+                "missing_source": "ui_rpl_add_usage_fast",
+                "empty": "ui_rpl_add_usage_fast",
+                "bad_priority": "ui_rpl_add_bad_priority",
+                "bad_flag": "ui_rpl_add_usage_fast",
+            }.get(exc.code, "ui_rpl_add_usage_fast")
+            return await message.reply_text(
+                self._t(key, lang=lang, flag=exc.detail or "", q=exc.detail or ""))
+
+        try:
+            tasks = await service.tasks(uid)
+        except Exception as exc:  # noqa: BLE001 - report, never crash the router
+            logger.warning("[PIPELINE:REPLACE] tasks failed for %s: %s", uid, exc)
+            return await message.reply_text(self._t("ui_rpl_unavailable", lang=lang))
+        if not tasks:
+            return await message.reply_text(self._t("ui_rpl_err_no_tasks", lang=lang))
+
+        task_names = ", ".join(f"{t['name']} · `#{t['id'][:8]}`" for t in tasks[:8])
+        if parsed.task:
+            try:
+                task = resolve_rule(tasks, parsed.task)
+            except SelectorError:
+                return await message.reply_text(
+                    self._t("ui_rpl_add_task_unknown", lang=lang, q=parsed.task, tasks=task_names))
+        elif len(tasks) == 1:
+            task = tasks[0]
+        else:
+            return await message.reply_text(
+                self._t("ui_rpl_add_task_needed", lang=lang, tasks=task_names))
+
+        data: dict = {
+            "source": parsed.source,
+            "to": parsed.to,
+            "task_ids": [task["id"]],
+        }
+        if parsed.name:
+            data["name"] = parsed.name
+        if parsed.mode:
+            data["mode"] = parsed.mode
+        if parsed.flags:
+            data["flags"] = "".join(sorted(parsed.flags))
+        if parsed.priority is not None:
+            data["priority"] = parsed.priority
+
+        try:
+            rule = await service.create(uid, data)
+        except ReplaceRuleError as exc:
+            return await message.reply_text(self._t(error_key(exc.code), lang=lang,
+                                                    max=MAX_ENTRIES))
+        except ReplaceError as exc:
+            return await message.reply_text(self._t(error_key(exc.code), lang=lang,
+                                                    max=MAX_ENTRIES))
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("[PIPELINE:REPLACE] fast add failed for %s: %s", uid, exc)
+            return await message.reply_text(self._t("ui_internal_error", lang=lang))
+
+        logger.info("[PIPELINE:REPLACE] uid=%s fast-add rule=%s task=%s mode=%s",
+                    uid, rule.id, task["id"], rule.mode)
+        label = rule.name or rule.source
+        await message.reply_text(
+            self._t("ui_rpl_add_created", lang=lang, name=label[:40], rid=rule.id[:8],
+                    source=rule.source, target=rule.to or self._t("ui_rpl_deletes", lang=lang),
+                    tasks=task["name"]),
+            reply_markup=self._kbd([
+                [(self._t("ui_rpl_btn_edit", lang=lang), f"rpl:v:{rule.id}")],
+                [(self._t("ui_back", lang=lang), "rpl:list")],
+            ]),
+        )
 
     async def _cmd_replace_add(self, message: Message, uid: int, lang: str, rest: str) -> None:
         rule, payload = await self._cmd_split_task(uid, rest)

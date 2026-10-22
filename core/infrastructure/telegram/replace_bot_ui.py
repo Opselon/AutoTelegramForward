@@ -41,8 +41,11 @@ from typing import Any, Dict, List, Optional, Tuple
 from pyrogram import filters
 from pyrogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 
+from ...application import bulk_ops
+from ...application.rule_selectors import rule_label
 from ...application.replace_rules import (
     DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
     ReplaceRuleError,
     STATUS_ALL,
     STATUS_DISABLED,
@@ -81,6 +84,20 @@ STATUS_ORDER = (STATUS_ALL, STATUS_ENABLED, STATUS_DISABLED)
 #: a screen — they are exempt from the "navigation disarms the prompt" sweep in
 #: `_rpl_dispatch` (a `noop` tap is not a decision to walk away).
 ARMING_VERBS = frozenset({"q", "tr", "df", "ef", "nx", "noop"})
+
+#: Bulk mode lists fewer rows per page than the normal list: every row is a
+#: checkbox, and a selection is easier to scan when it fits one screen.
+BULK_PAGE_SIZE = 8
+
+#: Where a pending selection lives inside the panel slice of the UI state.
+BULK_KEY = "bulk"
+
+BULK_ROW_KEYS = {
+    bulk_ops.OK: "ui_bulk_row_ok",
+    bulk_ops.UNCHANGED: "ui_bulk_row_unchanged",
+    bulk_ops.MISSING: "ui_bulk_row_missing",
+    bulk_ops.FAILED: "ui_bulk_row_failed",
+}
 
 
 def _cb(*parts: Any) -> str:
@@ -219,10 +236,138 @@ class ReplaceBotMixin:
             pager.append((_t("ui_rpl_btn_next"), _cb("p", int(data["page"]) + 1)))
         if pager:
             rows.append(pager)
-        rows.append([(_t("ui_rpl_btn_new"), _cb("new"))])
+        rows.append([(_t("ui_rpl_btn_new"), _cb("new")), (_t("ui_bulk_open"), _cb("b"))])
         rows.append([(self._btn("ui_back_main_menu"), "m")])
         await self._rpl_store(uid)
         return "\n".join(lines), self._kbd(rows)
+
+    # -- bulk ------------------------------------------------------------
+    def _rpl_bulk_selection(self, uid: int) -> bulk_ops.Selection:
+        panel = self._rpl_state(uid)
+        return bulk_ops.Selection.from_buffer(panel.get(BULK_KEY))
+
+    async def _rpl_bulk_save(self, uid: int, selection: bulk_ops.Selection) -> None:
+        self._rpl_state(uid)[BULK_KEY] = selection.to_buffer()
+        await self._rpl_store(uid)
+
+    async def _rpl_bulk_items(self, uid: int) -> List[Dict[str, Any]]:
+        """Every rule the current list filter shows, across all pages.
+
+        The bulk screen must agree with the list it was opened from, so it asks
+        the service for the same query and status — not for "all rules". The
+        loop is bounded by MAX_PAGE_SIZE pages; beyond that a single batch would
+        be unusable anyway, and the selection cap is lower still.
+        """
+        service = self._rpl
+        if service is None:
+            return []
+        status, query, _page = self._rpl_filters(uid)
+        items: List[Dict[str, Any]] = []
+        page = 1
+        while page <= MAX_PAGE_SIZE:
+            data = await service.list(uid, query=query, status=status,
+                                      page=page, per_page=MAX_PAGE_SIZE)
+            items.extend(data.get("items") or [])
+            if page >= int(data.get("pages") or 1):
+                break
+            page += 1
+        return items
+
+    async def _render_rpl_bulk(self, uid: int, page: int = 0) -> Tuple[str, InlineKeyboardMarkup]:
+        """The bulk screen: one checkbox per rule, then the shared actions."""
+        lang = self._rpl_lang(uid)
+        _t = lambda key, **kw: self._t(key, lang=lang, **kw)  # noqa: E731
+        if self._rpl is None:
+            return _t("ui_rpl_unavailable"), self._kbd([[(self._btn("ui_back"), _cb("list"))]])
+
+        items = await self._rpl_bulk_items(uid)
+        selection = self._rpl_bulk_selection(uid)
+        if selection.expired():
+            selection = selection.clear()
+        selection = selection.prune([str(item.get("id")) for item in items])
+        await self._rpl_bulk_save(uid, selection)
+
+        total = len(items)
+        pages = max(1, (total + BULK_PAGE_SIZE - 1) // BULK_PAGE_SIZE)
+        current = max(0, min(int(page), pages - 1))
+        start = current * BULK_PAGE_SIZE
+
+        lines = [_t("ui_bulk_title", sel=len(selection), total=total)]
+        if total:
+            lines.append(_t("ui_bulk_hint", max=bulk_ops.MAX_SELECTION))
+        lines.append("")
+        rows: List[List[tuple]] = []
+        for item in items[start:start + BULK_PAGE_SIZE]:
+            rid = str(item.get("id"))
+            mark = "✅" if rid in selection else "⬜"
+            label = f"{mark} {rule_label(item)}"
+            lines.append(label)
+            rows.append([(label[:62], _cb("bt", rid))])
+
+        if not total:
+            lines.append(_t("ui_rpl_empty_query"))
+
+        if pages > 1:
+            nav: List[tuple] = []
+            if current > 0:
+                nav.append((_t("ui_rpl_btn_prev"), _cb("bp", current - 1)))
+            nav.append((_t("ui_rpl_page_short", page=current + 1, pages=pages), _cb("noop")))
+            if current < pages - 1:
+                nav.append((_t("ui_rpl_btn_next"), _cb("bp", current + 1)))
+            rows.append(nav)
+
+        if total:
+            rows.append([(_t("ui_bulk_sel_all"), _cb("ba")), (_t("ui_bulk_none"), _cb("bn"))])
+            rows.append([(_t("ui_bulk_enable"), _cb("bop", bulk_ops.ENABLE)),
+                         (_t("ui_bulk_disable"), _cb("bop", bulk_ops.DISABLE))])
+            rows.append([(_t("ui_bulk_delete"), _cb("bconf", bulk_ops.DELETE))])
+        rows.append([(_t("ui_rpl_btn_back"), _cb("list"))])
+        return "\n".join(lines), self._kbd(rows)
+
+    async def _rpl_bulk_apply(self, uid: int, op: str) -> Tuple[List[bulk_ops.Outcome], Dict[str, str], int]:
+        """Run ``op`` on every selected rule, one result per rule."""
+        service = self._rpl
+        if service is None:
+            return [], {}, 0
+        items = await self._rpl_bulk_items(uid)
+        labels = {str(item.get("id")): rule_label(item) for item in items}
+        selection = self._rpl_bulk_selection(uid).prune(labels.keys())
+        if selection.expired():
+            selection = selection.clear()
+        if not selection:
+            return [], labels, 0
+
+        async def act(rid: str) -> str:
+            try:
+                if op == bulk_ops.DELETE:
+                    await service.delete(uid, rid)
+                    return bulk_ops.OK
+                rule = await service.get(uid, rid)
+                want = op == bulk_ops.ENABLE
+                if bool(rule.enabled) == want:
+                    return bulk_ops.UNCHANGED
+                await service.update(uid, rid, {"enabled": want})
+                return bulk_ops.OK
+            except ReplaceRuleError as exc:
+                return bulk_ops.MISSING if exc.code == "not_found" else bulk_ops.FAILED
+
+        outcomes = await bulk_ops.apply_each(selection.ids, act)
+        await self._rpl_bulk_save(uid, selection.clear())
+        logger.info("[PIPELINE:REPLACE] owner=%s bulk op=%s selected=%d", uid, op, len(selection))
+        return outcomes, labels, len(selection)
+
+    def _rpl_bulk_report(self, outcomes: List[bulk_ops.Outcome], labels: Dict[str, str],
+                         lang: str) -> str:
+        summary = bulk_ops.summarize(outcomes)
+        lines = [self._t("ui_bulk_report", lang=lang, ok=summary.ok,
+                         unchanged=summary.unchanged, missing=summary.missing,
+                         failed=summary.failed), ""]
+        for outcome in outcomes:
+            key = BULK_ROW_KEYS.get(outcome.code, "ui_bulk_row_failed")
+            lines.append(self._t(key, lang=lang,
+                                 label=labels.get(outcome.rule_id, outcome.rule_id),
+                                 detail=outcome.detail or ""))
+        return "\n".join(lines)
 
     # -- detail ----------------------------------------------------------
     async def _render_rpl_detail(self, uid: int, rule_id: str) -> Tuple[str, InlineKeyboardMarkup]:
@@ -675,6 +820,7 @@ class ReplaceBotMixin:
         if verb == "list":
             panel["editing"] = {}
             panel["draft"] = None
+            panel[BULK_KEY] = None
             await self._rpl_store(uid)
             await cq.answer()
             return await render(cq, uid, self._render_rpl_list)
@@ -709,6 +855,82 @@ class ReplaceBotMixin:
         if verb == "v":
             await cq.answer()
             return await render(cq, uid, self._render_rpl_detail, arg1)
+
+        # -- bulk mode -------------------------------------------------- #
+        if verb in ("b", "bp", "bt", "ba", "bn", "bop", "bconf", "bgo"):
+            if verb in ("b", "bp"):
+                try:
+                    page = int(arg1 or 0)
+                except (TypeError, ValueError):
+                    page = 0
+                body, kbd = await self._render_rpl_bulk(uid, page)
+                await self._safe_edit(cq, body, reply_markup=kbd)
+                return await cq.answer()
+
+            items = await self._rpl_bulk_items(uid)
+            selection = self._rpl_bulk_selection(uid).prune(
+                [str(item.get("id")) for item in items])
+            if selection.expired():
+                selection = selection.clear()
+
+            if verb == "bt":
+                try:
+                    selection = selection.toggle(arg1)
+                except ValueError:
+                    return await cq.answer(
+                        _t("ui_bulk_limit", max=bulk_ops.MAX_SELECTION), show_alert=True)
+                await self._rpl_bulk_save(uid, selection)
+                body, kbd = await self._render_rpl_bulk(uid)
+                await self._safe_edit(cq, body, reply_markup=kbd)
+                return await cq.answer()
+
+            if verb in ("ba", "bn"):
+                if verb == "ba":
+                    selection = selection.select_all(str(item.get("id")) for item in items)
+                else:
+                    selection = selection.clear()
+                await self._rpl_bulk_save(uid, selection)
+                body, kbd = await self._render_rpl_bulk(uid)
+                await self._safe_edit(cq, body, reply_markup=kbd)
+                return await cq.answer()
+
+            if not selection:
+                return await cq.answer(_t("ui_bulk_none_selected"), show_alert=True)
+
+            if verb == "bconf" and arg1 == bulk_ops.DELETE:
+                await self._safe_edit(
+                    cq,
+                    _t("ui_bulk_confirm", n=len(selection)),
+                    reply_markup=self._kbd([
+                        [(_t("ui_bulk_yes", n=len(selection)), _cb("bgo", bulk_ops.DELETE))],
+                        [(_t("ui_bulk_none"), _cb("b"))],
+                    ]),
+                )
+                return await cq.answer()
+
+            if verb == "bop" and arg1 in (bulk_ops.ENABLE, bulk_ops.DISABLE):
+                outcomes, labels, _n = await self._rpl_bulk_apply(uid, arg1)
+                await self._safe_edit(
+                    cq, self._rpl_bulk_report(outcomes, labels, lang),
+                    reply_markup=self._kbd([
+                        [(_t("ui_bulk_open"), _cb("b"))],
+                        [(_t("ui_rpl_btn_back"), _cb("list"))],
+                    ]),
+                )
+                return await cq.answer(_t("ui_done"))
+
+            if verb == "bgo" and arg1 == bulk_ops.DELETE:
+                outcomes, labels, _n = await self._rpl_bulk_apply(uid, bulk_ops.DELETE)
+                await self._safe_edit(
+                    cq, self._rpl_bulk_report(outcomes, labels, lang),
+                    reply_markup=self._kbd([
+                        [(_t("ui_bulk_open"), _cb("b"))],
+                        [(_t("ui_rpl_btn_back"), _cb("list"))],
+                    ]),
+                )
+                return await cq.answer(_t("ui_done"))
+
+            return await cq.answer()
 
         if verb == "sw":
             want = arg2 in ("1", "true", "on")

@@ -9,6 +9,7 @@ the architecture test reads: adding a handler module means adding one row here.
 from __future__ import annotations
 
 from .discovery import DiscoveryHandlers
+from .forward_manage import ForwardManageHandlers
 from .forwarding import ForwardingHandlers
 from .registry import (
     HandlerModuleSpec,
@@ -30,6 +31,14 @@ HANDLER_MODULES = (
         name="forwarding",
         register="register_forwarding_handlers",
     ),
+    # Task management is a separate module on purpose: `/forward add` and the
+    # status console kept growing, and list/edit/delete/bulk answer from their
+    # own file with their own tests.
+    HandlerModuleSpec(
+        cls=ForwardManageHandlers,
+        name="forward_manage",
+        register="register_forward_manage_handlers",
+    ),
 )
 
 
@@ -40,6 +49,7 @@ def build_handler_registry() -> HandlerRegistry:
 
 __all__ = [
     "DiscoveryHandlers",
+    "ForwardManageHandlers",
     "ForwardingHandlers",
     "HANDLER_MODULES",
     "HandlerModuleSpec",
