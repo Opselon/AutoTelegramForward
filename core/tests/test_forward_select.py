@@ -308,6 +308,23 @@ def test_duplicates_and_unknown_shapes_are_reported_not_swallowed(stack):
     assert sel.source_ids == (NEWS,)
 
 
+def test_cancel_word_in_the_users_language_exits_the_ids_step(stack):
+    """The catalog decides what means cancel, not an English-only tuple."""
+    run(_seed(stack))
+    run(_wire(stack))
+    run(stack.press("sel:open:s", OWNER))
+    run(stack.press("sel:ids:s", OWNER))
+    assert stack.ui._state(OWNER).step == "sel_ids_s"
+
+    st = stack.ui._state(OWNER)
+    st.lang = "ru"
+    msg = TMsg("\u043e\u0442\u043c\u0435\u043d\u0430", OWNER)      # отмена - Russian cancel
+    run(stack.ui._route_text(msg))
+    assert stack.ui._state(OWNER).step == ""
+    reply = msg.replies[0][0] if msg.replies else ""
+    assert reply, "the user is told the step closed"
+
+
 def test_an_abandoned_ids_prompt_expires_and_frees_the_next_message(stack):
     """Timeout is a state rule: an unanswered prompt must not eat later text."""
     import time

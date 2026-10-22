@@ -74,8 +74,18 @@ STEP_SEARCH_SOURCE = "sel_query_s"
 STEP_SEARCH_TARGET = "sel_query_t"
 STEPS = (STEP_IDS_SOURCE, STEP_IDS_TARGET, STEP_SEARCH_SOURCE, STEP_SEARCH_TARGET)
 
-CANCEL_WORDS = ("/cancel", "cancel", "لغو", "انصراف", "отмена", "annuler",
-                "cancelar", "annulla", "bekor", "取消")
+def is_cancel_word(text: Any) -> bool:
+    """True when the text is the user's own cancel word.
+
+    Resolved from the catalog (`cancel_aliases`) so a Russian, Chinese or
+    Indonesian speaker can escape the ids step with the same word the screen
+    offers — a hardcoded tuple can only ever know some of the ten locales.
+    Imported lazily: the panel imports this module through the handler
+    registry, so a module-level import would be circular.
+    """
+    from core.infrastructure.telegram.pro_bot_ui import cancel_aliases
+
+    return str(text or "").strip().lower() in cancel_aliases()
 
 
 def _plain(text: Any) -> str:
@@ -561,7 +571,7 @@ class ForwardSelectHandlers:
                             role: str) -> None:
         """Direct id entry: only this step reads ids, never a list screen."""
         lang = self._resolve_lang(int(message.from_user.id if message.from_user else 0))
-        if (text or "").strip().lower() in CANCEL_WORDS:
+        if is_cancel_word(text):
             st.step = ""
             await self._persist(int(message.from_user.id if message.from_user else 0), st)
             return await message.reply_text(self._t("ui_cancel_back", lang=lang),
