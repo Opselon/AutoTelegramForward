@@ -642,3 +642,52 @@ def test_the_armed_search_prompt_survives_its_own_button(tmp_path):
         assert panel._state(OWNER).step == "replace_search"
 
     asyncio.run(body())
+
+
+# --------------------------------------------------------------------------- #
+# the list rows carry their own switch
+# --------------------------------------------------------------------------- #
+
+def test_list_rows_carry_a_working_switch(tmp_path):
+    """Every list row offers one-tap enable/disable, and it writes."""
+    async def body():
+        db, repo, service = build(tmp_path)
+        await seed(db, repo)
+        panel = Harness(service)
+        # Create a rule on t1 through the guided pass (the surface's own path).
+        await press(panel, OWNER, "rpl:new")
+        for value in ("Promo", "buy now", "SALE"):
+            msg = FakeMessage(OWNER, value)
+            await panel._step_replace_field_input(msg, panel._state(OWNER), msg.text)
+        await press(panel, OWNER, "rpl:dtg:t1")
+        await press(panel, OWNER, "rpl:dcreate")
+        rid = await _created_id(service, OWNER)
+
+        _, kbd = await panel._render_rpl_list(OWNER)
+        switch = [item for row in kbd["rows"] for item in row
+                  if item[1] == f"rpl:swl:{rid}:0"]
+        assert len(switch) == 1, "the row must carry its own toggle button"
+        assert "Disable" in switch[0][0]
+
+        cq = await press(panel, OWNER, f"rpl:swl:{rid}:0")
+        stored = await service.get(OWNER, rid)
+        assert stored.enabled is False
+        assert "Rule disabled" in cq.answers[-1]
+        # The user stays on the list, not drilled into the detail.
+        _, kbd2 = await panel._render_rpl_list(OWNER)
+        switch2 = [item for row in kbd2["rows"] for item in row
+                   if item[1] == f"rpl:swl:{rid}:1"]
+        assert switch2 and "Enable" in switch2[0][0]
+
+        await press(panel, OWNER, f"rpl:swl:{rid}:1")
+        stored = await service.get(OWNER, rid)
+        assert stored.enabled is True
+
+        # Ownership closes the switch: another tenant's toggle is refused.
+        cq_other = await press(panel, OTHER, f"rpl:swl:{rid}:0")
+        assert "not found" in cq_other.answers[-1].lower()
+        stored = await service.get(OWNER, rid)
+        assert stored.enabled is True
+
+    asyncio.run(body())
+

@@ -140,14 +140,17 @@ class SessionDialogGateway:
                     if chat_id is None or chat_id in seen:
                         continue
                     seen.add(chat_id)
-                    rows.append(self._row(client, chat))
-            logger.info("[PIPELINE:DIALOG_FETCH:SUCCESS] scanned=%d", len(rows))
+                    rows.append(self._row(client, chat, dialog))
+            logger.info(
+                "[PIPELINE:DIALOG_FETCH:SUCCESS] scanned=%d pinned=%d",
+                len(rows), sum(1 for row in rows if row.get("pinned")),
+            )
         except Exception as exc:
             logger.warning("[PIPELINE:DIALOG_FETCH:ERROR] scan failed: %s", exc)
         return rows
 
     @staticmethod
-    def _row(client: Any, chat: Any) -> Dict[str, Any]:
+    def _row(client: Any, chat: Any, dialog: Any = None) -> Dict[str, Any]:
         me = getattr(client, "me", None)
         my_id = getattr(me, "id", None) if me is not None else None
         return {
@@ -156,4 +159,5 @@ class SessionDialogGateway:
             "username": getattr(chat, "username", "") or "",
             "type": getattr(getattr(chat, "type", ""), "value", getattr(chat, "type", "")),
             "is_self": bool(my_id is not None and getattr(chat, "id", None) == my_id),
+            "pinned": bool(getattr(dialog, "pinned", False)),
         }

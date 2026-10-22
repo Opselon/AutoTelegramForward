@@ -84,6 +84,10 @@ class ChatEntry:
     title: str
     kind: str
     username: str = ""
+    #: The chat is pinned in the source session. Pinned chats sort first
+    #: inside their kind: the chats a user deliberately pinned are the ones
+    #: most likely to be the task they are building.
+    pinned: bool = False
 
     @property
     def emoji(self) -> str:
@@ -106,6 +110,7 @@ class ChatEntry:
             "emoji": self.emoji,
             "kind": self.kind,
             "username": self.username,
+            "pinned": self.pinned,
         }
 
 
@@ -224,6 +229,7 @@ class DialogCatalog:
                     title=str(row.get("title") or row.get("id")),
                     kind=str(row.get("kind") or KIND_USER),
                     username=str(row.get("username") or ""),
+                    pinned=bool(row.get("pinned")),
                 )
             )
         return cls(entries)
@@ -262,9 +268,13 @@ class ListDialogsUseCase:
                     title=title,
                     kind=kind,
                     username=str(chat.get("username") or ""),
+                    pinned=bool(chat.get("pinned")),
                 )
             )
-        entries.sort(key=lambda e: (PRIORITY.get(e.kind, 99), e.title.lower()))
+        # Pinned chats lead within their kind: the kind order stays the
+        # broadcast-first contract, but inside a kind a chat the user pinned
+        # outranks alphabetical position.
+        entries.sort(key=lambda e: (PRIORITY.get(e.kind, 99), not e.pinned, e.title.lower()))
         return DialogCatalog(entries)
 
     async def execute(
