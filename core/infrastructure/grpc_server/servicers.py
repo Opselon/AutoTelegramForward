@@ -19,6 +19,7 @@ from ...application.backup_service import (  # noqa: E402
 )
 from ...application.log_policy import LogPolicyError  # noqa: E402
 from ..telegram.bot_transport import BotApiTransport, token_looks_valid  # noqa: E402
+from ..telegram.dialog_gateway import pinned_chat_ids  # noqa: E402
 
 
 def _status(success: bool, message: str = "", error_code: str = "") -> pb.StatusResponse:
@@ -577,12 +578,18 @@ def _chat_members(chat) -> int:
     return 0
 
 
-def _chat_summary_from_dialog(dialog) -> "pb.ChatSummary":
+def _chat_summary_from_dialog(dialog, pinned_ids: "Set[str]" = frozenset()) -> "pb.ChatSummary":
     """Map one dialog to a ChatSummary, raising so the caller can skip the row.
 
     ``dialog.chat`` is accessed directly rather than with a default: a malformed
     dialog then raises here, where the caller logs the count and continues,
     instead of silently emitting an empty entry the UI cannot act on.
+
+    ``pinned_ids`` is the account's pin set, resolved once per listing by the
+    same lookup discovery uses. It cannot be read off the dialog: pyrogram's
+    high-level ``Dialog`` never carries the raw pin flag, so asking it would
+    report every row as unpinned and quietly undo the ordering on every surface
+    (that dead read is what #241 fixed for the bot's own pickers).
     """
     chat = dialog.chat
     username = getattr(chat, "username", "") or ""
@@ -599,11 +606,10 @@ def _chat_summary_from_dialog(dialog) -> "pb.ChatSummary":
         chat_type=_chat_type_of(chat),
         members=_chat_members(chat),
         is_forum=bool(getattr(chat, "is_forum", False)),
-        # `pinned` lives on the *dialog*, not the chat: it is the user's own
-        # ordering of their chat list. It is advisory only — a picker sorts on
-        # it, nothing routes on it — so a client that cannot see it must not
-        # lose the row.
-        pinned=bool(getattr(dialog, "pinned", False)),
+        # The user's own ordering of their chat list. Advisory only — a picker
+        # sorts and marks on it, nothing routes on it — so a client that cannot
+        # see it keeps the server order and loses no row.
+        pinned=str(getattr(chat, "id", "")) in pinned_ids,
     )
 
 
@@ -850,10 +856,18 @@ class SessionControlServicer(pb_grpc.SessionControlServiceServicer):
         # if the total is known before slicing.
         snapshot: List[Any] = []
         skipped = 0
+        pinned_ids: Set[str] = set()
+        try:
+            pinned_ids = await pinned_chat_ids(client)
+        except Exception as exc:  # noqa: BLE001 - a listing must survive a pin lookup failure
+            logger.warning(
+                "[PIPELINE:CHAT_LIST:PINNED_UNAVAILABLE] owner=%s reason=%s",
+                owner, type(exc).__name__,
+            )
         try:
             async for dialog in client.get_dialogs(limit=_CHAT_LIST_MAX_DIALOGS):
                 try:
-                    snapshot.append(_chat_summary_from_dialog(dialog))
+                    snapshot.append(_chat_summary_from_dialog(dialog, pinned_ids))
                 except Exception as exc:  # noqa: BLE001 - one bad row must not kill the page
                     skipped += 1
                     logger.warning(
@@ -868,6 +882,12 @@ class SessionControlServicer(pb_grpc.SessionControlServiceServicer):
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             context.set_details(f"dialog_fetch_failed: {type(exc).__name__}")
             return pb.ListChatsResponse()
+
+        # Order before paging: the pickers lead with pinned chats, and a page
+        # that is sorted only after the slice would put a pinned chat on page
+        # three and defeat the point of the ordering. `sorted` is stable, so
+        # within each group the server's newest-first order survives.
+        snapshot.sort(key=lambda c: not c.pinned)
 
         matched = [c for c in snapshot if _chat_matches_query(c, query)]
         total = len(matched)

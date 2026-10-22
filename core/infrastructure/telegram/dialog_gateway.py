@@ -225,3 +225,16 @@ class SessionDialogGateway:
             # real Telegram session the high-level dialog object never knows it.
             "pinned": False,
         }
+
+
+async def pinned_chat_ids(client: Any) -> set:
+    """The pinned chat ids of one client — the module-level pin truth.
+
+    ``SessionDialogGateway._pinned_ids`` is the single implementation (the raw
+    pin lists, one per folder); readers outside the gateway's own scan — the
+    gRPC ``ListChats`` browse path that feeds the app and dashboard pickers —
+    see the same pins through this entry point rather than a second
+    implementation that could drift. A total failure degrades to an empty set,
+    so the browse path never depends on the pin list either.
+    """
+    return await SessionDialogGateway._pinned_ids(client)

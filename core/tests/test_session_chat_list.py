@@ -215,15 +215,21 @@ def test_list_chats_maps_and_normalises_every_field():
     assert resp.count == 2 and resp.total == 2 and resp.truncated is False
 
 
-def test_list_chats_reports_the_users_pin_state_per_row():
-    """`pinned` is per-dialog and must survive the mapping, both ways.
+def test_list_chats_reports_the_users_pin_state_per_row(monkeypatch):
+    """`pinned` is per-chat and must survive the mapping, both ways.
 
-    Every picker (bot, dashboard, app) leads with pinned chats. The field is
-    read off the *dialog*; reading it off the chat would silently report every
-    row as unpinned and quietly undo the ordering on all three surfaces.
+    The pin set is the raw pin lookup discovery already uses. It deliberately
+    is *not* read off the dialog: pyrogram's high-level ``Dialog`` never
+    carries the raw pin flag, so a `getattr(dialog, "pinned", False)` mapping
+    would report every row unpinned and quietly undo the ordering on all three
+    surfaces.
     """
+    async def _pins(client):
+        return {"-100111"}
+
+    monkeypatch.setattr(S, "pinned_chat_ids", _pins)
     dialogs = [
-        _Dialog(_Chat(-100111, "channel", title="Pinned"), pinned=True),
+        _Dialog(_Chat(-100111, "channel", title="Pinned")),
         _Dialog(_Chat(-100222, "channel", title="Loose")),
     ]
     svc = _servicer([_Session("s1", 42)], _Client(dialogs))
@@ -233,18 +239,40 @@ def test_list_chats_reports_the_users_pin_state_per_row():
     assert [c.title for c in resp.chats] == ["Pinned", "Loose"]
 
 
-def test_list_chats_maps_a_dialog_without_a_pin_attribute_as_unpinned():
-    """An older/mocked dialog without `pinned` must not break the page."""
+def test_list_chats_leads_with_pinned_rows_before_paging(monkeypatch):
+    """The order must be applied to the snapshot, not to one page of it.
 
-    class _BareDialog:
-        def __init__(self, chat):
-            self.chat = chat
+    A picker asks for one page at a time; sorting after the slice would leave
+    a pinned chat on the third page and defeat the ordering entirely.
+    """
+    async def _pins(client):
+        return {"-100005"}
 
-    svc = _servicer([_Session("s1", 42)], _Client([_BareDialog(_Chat(-100333, "channel"))]))
+    monkeypatch.setattr(S, "pinned_chat_ids", _pins)
+    dialogs = [_Dialog(_Chat(-100000 - i, "channel", title=f"C{i}")) for i in range(1, 6)]
+    svc = _servicer([_Session("s1", 42)], _Client(dialogs))
+
+    first_page, _ = _call(svc, session_id="s1", owner_user_id=42, limit=2, offset=0)
+    assert [c.chat_id for c in first_page.chats] == ["-100005", "-100001"]
+    assert first_page.total == 5
+
+    # The pinned row is not duplicated into later pages.
+    second_page, _ = _call(svc, session_id="s1", owner_user_id=42, limit=2, offset=2)
+    assert [c.chat_id for c in second_page.chats] == ["-100002", "-100003"]
+
+
+def test_list_chats_survives_a_failed_pin_lookup(monkeypatch):
+    """A pin lookup that blows up must not cost the user their chat list."""
+    async def _boom(client):
+        raise RuntimeError("pins unavailable")
+
+    monkeypatch.setattr(S, "pinned_chat_ids", _boom)
+    svc = _servicer([_Session("s1", 42)], _Client([_Dialog(_Chat(-100333, "channel", title="Only"))]))
     resp, ctx = _call(svc, session_id="s1", owner_user_id=42)
 
     assert ctx.code is None
-    assert len(resp.chats) == 1 and resp.chats[0].pinned is False
+    assert [c.chat_id for c in resp.chats] == ["-100333"]
+    assert resp.chats[0].pinned is False
 
 
 def test_list_chats_uses_first_name_for_a_private_chat_title():
