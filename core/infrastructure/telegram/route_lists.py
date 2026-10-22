@@ -22,24 +22,21 @@ import re
 from dataclasses import dataclass, field
 from typing import Iterable, List, Optional, Sequence, Tuple
 
+from core.domain import peer_ids as domain_peers
+
 # ASCII comma plus the Persian/Arabic comma. Both are spelled as escapes so
 # this file carries no literal non-ASCII punctuation.
 LIST_SEPARATORS: Tuple[str, ...] = (",", "\u060c")
 ASCII_ARROW = "->"
 UNICODE_ARROWS: Tuple[str, ...] = ("\u2192", "\u27f6")  # → and ⟶
-LINK_PREFIXES: Tuple[str, ...] = (
-    "https://t.me/",
-    "http://t.me/",
-    "https://telegram.me/",
-    "http://telegram.me/",
-    "t.me/",
-    "telegram.me/",
-)
-
 #: A fully numeric entry is one id spelled either way: ``-1001234567890``
 #: (Bot-API) and ``1234567890`` (the raw unique id) name the same channel,
-#: so duplicate and self-loop detection must treat them as one token.
-UNIQUE_ID_MATCH = re.compile(r"^(?:-100)?(?P<raw>\d{1,20})$")
+#: so duplicate and self-loop detection must treat them as one token. The
+#: rules live in the domain (``core.domain.peer_ids``) so the picker, the
+#: editor and the command can never disagree; these names stay for the
+#: existing call sites.
+LINK_PREFIXES: Tuple[str, ...] = domain_peers.LINK_PREFIXES
+UNIQUE_ID_MATCH = domain_peers.UNIQUE_ID_MATCH
 
 MAX_CALLBACK_BYTES = 64
 
@@ -86,51 +83,22 @@ class ParsedList:
 
 def strip_link_prefix(token: str) -> str:
     """Drop a t.me/telegram.me prefix from one entry (keeps `@name`)."""
-    text = str(token or "").strip()
-    low = text.lower()
-    for prefix in LINK_PREFIXES:
-        if low.startswith(prefix):
-            return text[len(prefix):].strip()
-    return text
+    return domain_peers.strip_link_prefix(token)
 
 
 def unique_peer_key(token: str) -> str:
-    """Key that collides both spellings of one numeric id.
-
-    ``-1001234567890`` and ``1234567890`` are one chat; a username or a
-    ``t.me`` link is spelling-sensitive like before.
-    """
-    text = strip_link_prefix(token)
-    stripped = text.lstrip("@").strip().lower()
-    match = UNIQUE_ID_MATCH.match(stripped)
-    return match.group("raw") if match else stripped
+    """Key that collides both spellings of one numeric id."""
+    return domain_peers.unique_peer_key(token)
 
 
 def peer_key(token: str) -> str:
-    """Normalized comparison key for one entry.
-
-    Two spellings of the same chat (`@News`, `news`, `https://t.me/news`,
-    `-100123…` and its raw unique id) must collide, so duplicate and
-    self-loop detection is spelled-insensitively identical to how Telegram
-    resolves the entry.
-    """
-    text = strip_link_prefix(token)
-    stripped = text.lstrip("@").strip().lower()
-    match = UNIQUE_ID_MATCH.match(stripped)
-    return match.group("raw") if match else stripped
+    """Normalized comparison key for one entry (same rule as the picker)."""
+    return domain_peers.peer_key(token)
 
 
 def looks_like_peer(token: str) -> bool:
     """True when an entry plausibly names a chat rather than a task name."""
-    text = str(token or "").strip()
-    if not text:
-        return False
-    if text.startswith("@") or text.startswith("-") or text.startswith("+"):
-        return True
-    low = text.lower()
-    if any(low.startswith(prefix) for prefix in LINK_PREFIXES):
-        return True
-    return text.isdigit()
+    return domain_peers.looks_like_peer(token)
 
 
 def parse_route_list(raw) -> ParsedList:
