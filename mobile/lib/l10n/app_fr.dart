@@ -169,7 +169,7 @@ class AppMessagesFr {
     'filters_kind_summary': 'Type: {kind}',
     'filters_kind_whitelist': 'Whitelist',
     'filters_pattern': 'Pattern',
-    'filters_pattern_hint': 'ex.: badword, @channel, http…',
+    'filters_pattern_hint': 'ex.: badword, @channel, http… ou une phrase entière comme « Whale Update on a VIP call » (casse et espaces ignorées)',
     'filters_title': 'Filters',
     'incompatible_server': 'Ce serveur exécute une version plus ancienne d\'AutoTelegramForward. Mettez-la à jour vers {version} ou plus récente.',
     'lang_label': 'Langue',

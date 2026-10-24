@@ -658,8 +658,9 @@ class RegistryEditor:
             if str(raw).strip() == "-":
                 value = []
             else:
-                parts = [p.strip() for p in str(raw).split(",")]
-                value = [p for p in parts if p]
+                from ...domain.content_policy import split_word_list
+
+                value = list(split_word_list(str(raw)))
         elif spec.kind == "dict":
             try:
                 decoded = json.loads(raw)

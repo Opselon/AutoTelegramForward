@@ -1768,8 +1768,9 @@ export function TaskOverviewModal({
                       if (e.key === 'Enter' && newBlWord.trim()) {
                         e.preventDefault()
                         const list = draft.blacklist_keywords || []
-                        if (!list.includes(newBlWord.trim())) {
-                          setDraft({ ...draft, blacklist_keywords: [...list, newBlWord.trim()] })
+                        const adds = newBlWord.split(/[\n,]/).map((s: string) => s.trim()).filter((s: string) => s && !list.includes(s))
+                        if (adds.length) {
+                          setDraft({ ...draft, blacklist_keywords: [...list, ...adds] })
                           setNewBlWord('')
                         }
                       }
@@ -1789,8 +1790,9 @@ export function TaskOverviewModal({
                     onClick={() => {
                       if (!newBlWord.trim()) return
                       const list = draft.blacklist_keywords || []
-                      if (!list.includes(newBlWord.trim())) {
-                        setDraft({ ...draft, blacklist_keywords: [...list, newBlWord.trim()] })
+                      const adds = newBlWord.split(/[\n,]/).map((s: string) => s.trim()).filter((s: string) => s && !list.includes(s))
+                      if (adds.length) {
+                        setDraft({ ...draft, blacklist_keywords: [...list, ...adds] })
                         setNewBlWord('')
                       }
                     }}
@@ -1863,6 +1865,9 @@ export function TaskOverviewModal({
                   )}
                 </div>
               </div>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                {t('ui_words_matching_help')}
+              </div>
             </div>
           )}
 
@@ -1910,8 +1915,9 @@ export function TaskOverviewModal({
                       if (e.key === 'Enter' && newWlWord.trim()) {
                         e.preventDefault()
                         const list = draft.whitelist_keywords || []
-                        if (!list.includes(newWlWord.trim())) {
-                          setDraft({ ...draft, whitelist_keywords: [...list, newWlWord.trim()] })
+                        const adds = newWlWord.split(/[\n,]/).map((s: string) => s.trim()).filter((s: string) => s && !list.includes(s))
+                        if (adds.length) {
+                          setDraft({ ...draft, whitelist_keywords: [...list, ...adds] })
                           setNewWlWord('')
                         }
                       }
@@ -1931,8 +1937,9 @@ export function TaskOverviewModal({
                     onClick={() => {
                       if (!newWlWord.trim()) return
                       const list = draft.whitelist_keywords || []
-                      if (!list.includes(newWlWord.trim())) {
-                        setDraft({ ...draft, whitelist_keywords: [...list, newWlWord.trim()] })
+                      const adds = newWlWord.split(/[\n,]/).map((s: string) => s.trim()).filter((s: string) => s && !list.includes(s))
+                      if (adds.length) {
+                        setDraft({ ...draft, whitelist_keywords: [...list, ...adds] })
                         setNewWlWord('')
                       }
                     }}
@@ -2004,6 +2011,9 @@ export function TaskOverviewModal({
                     <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t('ui_no_whitelist_restrictions_all_permitted')}</span>
                   )}
                 </div>
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+                {t('ui_words_matching_help')}
               </div>
             </div>
           )}

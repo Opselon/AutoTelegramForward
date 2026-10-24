@@ -674,6 +674,7 @@ export const ru: Catalog = {
   "ui_no_text_replacements_configured": "Замены текста не настроены.",
   "ui_no_token_received": "Токен не получен",
   "ui_no_whitelist_restrictions_all_permitted": "Ограничений белого списка нет (разрешено всё).",
+  "ui_words_matching_help": "Запись целиком и сопоставляется целиком: «Whale Update on a VIP call» совпадает с этой полной фразой, а «5x» — с 5x. Сопоставление не учитывает регистр, лишние пробелы и переводы строк между словами фразы. Несколько записей разделяйте запятой.",
   "ui_no_words_in_blacklist": "В чёрном списке нет слов.",
   "ui_none": "— нет —",
   "ui_none_environment": "Нет / Окружение",

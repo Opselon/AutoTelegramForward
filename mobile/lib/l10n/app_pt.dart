@@ -171,7 +171,7 @@ class AppMessagesPt {
     'filters_kind_summary': 'Tipo: {kind}',
     'filters_kind_whitelist': 'Whitelist',
     'filters_pattern': 'Pattern',
-    'filters_pattern_hint': 'ex.: badword, @channel, http…',
+    'filters_pattern_hint': 'ex.: badword, @channel, http… ou uma frase inteira como “Whale Update on a VIP call” (maiúsculas e espaços são ignorados)',
     'filters_title': 'Filters',
     'incompatible_server': 'Este servidor está a executar uma versão mais antiga do AutoTelegramForward. Atualize para {version} ou mais recente.',
     'lang_label': 'Idioma',

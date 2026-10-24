@@ -86,6 +86,7 @@ from ...application.use_cases import (
     SessionUseCases,
 )
 from ...domain import branding as branding_policy
+from ...domain.content_policy import split_word_list
 from ...domain.entities import (
     AIConfig,
     FilterRule,
@@ -3747,6 +3748,8 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             + "────────────────────\n"
             + self._t("ui_bl_desc", lang=lang)
             + f"{items_str}\n\n"
+            + self._t("ui_words_help_title", lang=lang)
+            + "\n\n"
             + self._t("ui_bl_hint", lang=lang)
         )
 
@@ -3777,6 +3780,8 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             + "────────────────────\n"
             + self._t("ui_wl_desc", lang=lang)
             + f"{items_str}\n\n"
+            + self._t("ui_words_help_title", lang=lang)
+            + "\n\n"
             + self._t("ui_wl_hint", lang=lang)
         )
 
@@ -10266,7 +10271,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             st.step = ""
             await self._persist(uid, st)
             return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
-        new_words = [w.strip() for w in text.replace("\n", ",").split(",") if w.strip()]
+        new_words = list(split_word_list(text))
         bl = list(rule.blacklist or [])
         for w in new_words:
             if w not in bl:
@@ -10285,7 +10290,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             st.step = ""
             await self._persist(uid, st)
             return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
-        new_words = [w.strip() for w in text.replace("\n", ",").split(",") if w.strip()]
+        new_words = list(split_word_list(text))
         wl = list(rule.whitelist or [])
         for w in new_words:
             if w not in wl:
@@ -11750,7 +11755,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             await message.reply_text(self._t("ui_cancelled"), reply_markup=menu_kbd)
             return
 
-        words = [w.strip() for w in text.replace("\n", ",").split(",") if w.strip()]
+        words = list(split_word_list(text))
         if not isinstance(rule.metadata, dict):
             rule.metadata = {}
         rule.metadata["clean_words"] = words
@@ -11936,7 +11941,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             rule.detection_criteria.pop("keywords", None)
             ans = self._t("ui_step_keywords_removed")
         else:
-            kws = [k.strip() for k in raw.replace("،", ",").split(",") if k.strip()]
+            kws = list(split_word_list(raw))
             rule.detection_criteria["text_contains"] = kws
             rule.detection_criteria["keywords"] = kws
             ans = self._t("ui_step_keywords_saved", count=len(kws), keywords=", ".join(f"`{k}`" for k in kws))
@@ -12036,7 +12041,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             cfg["keywords"] = []
             ans = self._t("ui_brand_cleared")
         else:
-            words = [w.strip() for w in raw.replace("،", ",").replace("\n", ",").split(",") if w.strip()]
+            words = list(split_word_list(raw))
             cfg["keywords"] = words
             ans = self._t("ui_brand_words_saved", value=", ".join(f"`{w}`" for w in words))
         cfg["triggers_enabled"] = bool(cfg["origin_titles"] or cfg["origin_ids"] or cfg["keywords"])
@@ -12213,7 +12218,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
     async def _step_filter_blacklist(self, message: Message, st: UiState, text: str) -> None:
         lang = self._lang_for(st)
         st.step = ""
-        blacklist = [w.strip() for w in text.replace("،", ",").split(",") if w.strip()]
+        blacklist = list(split_word_list(text))
         try:
             fr = FilterRule(
                 name=st.buffer.get("name", "filter"), blacklist_keywords=blacklist,

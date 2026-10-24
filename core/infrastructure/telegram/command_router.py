@@ -40,6 +40,7 @@ from core.infrastructure.telegram.replace_fast_add import (
     is_arrow_form,
     parse_replace_fast_add,
 )
+from core.domain.content_policy import split_word_list
 from core.domain.text_replace import (
     MAX_ENTRIES,
     ReplaceError,
@@ -574,7 +575,21 @@ class TextCommandMixin:
         label = self._kind_label(kind, lang)
         attr = "whitelist_words" if kind == "whitelist" else "blacklist_words"
         renderer = self._render_whitelist_menu if kind == "whitelist" else self._render_blacklist_menu
-        verbs = ("list", "show", "add", "set", "del", "delete", "remove", "rm", "clear", "reset")
+        verbs = ("list", "show", "add", "set", "del", "delete", "remove", "rm",
+                 "clear", "reset", "help")
+
+        if sub == "help":
+            # The explanation is the task's own help, so it answers before the
+            # rule picker: a user can read how matching works before owning a
+            # task, and `help` never has to resolve one to be useful.
+            return await message.reply_text(
+                self._t("ui_words_help_title", lang=lang)
+                + "\n\n"
+                + self._t("ui_words_phrase_example", lang=lang)
+                + "\n\n"
+                + self._t("cmd_words_verbs_hint", lang=lang, cmd=f"/{kind}"),
+                reply_markup=self._main_menu(uid),
+            )
 
         if sub not in verbs:
             # No verb: the whole argument is a task selector.
@@ -596,7 +611,7 @@ class TextCommandMixin:
             return await message.reply_text(text, reply_markup=kbd)
 
         if sub in ("add", "set"):
-            words = [w.strip() for w in payload.replace("\n", ",").split(",") if w.strip()]
+            words = list(split_word_list(payload))
             if not words:
                 return await message.reply_text(
                     self._t("cmd_words_empty", lang=lang, kind=label)
@@ -614,7 +629,7 @@ class TextCommandMixin:
             return await message.reply_text(text, reply_markup=kbd)
 
         if sub in ("del", "delete", "remove", "rm"):
-            words = [w.strip() for w in payload.replace("\n", ",").split(",") if w.strip()]
+            words = list(split_word_list(payload))
             current = list(getattr(rule, attr) or [])
             kept = [w for w in current if w not in words]
             removed = len(current) - len(kept)

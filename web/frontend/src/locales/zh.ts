@@ -674,6 +674,7 @@ export const zh: Catalog = {
   "ui_no_text_replacements_configured": "未配置文本替换。",
   "ui_no_token_received": "未收到令牌",
   "ui_no_whitelist_restrictions_all_permitted": "没有白名单限制（全部允许）。",
+  "ui_words_matching_help": "每个条目作为一个整体匹配：“Whale Update on a VIP call” 匹配该完整短语，“5x” 匹配 5x。匹配忽略大小写、多余空格和短语单词之间的换行。用逗号分隔多个条目。",
   "ui_no_words_in_blacklist": "黑名单中没有词。",
   "ui_none": "— 无 —",
   "ui_none_environment": "无 / 环境变量",

@@ -172,7 +172,7 @@ class AppMessagesFa {
     'filters_kind_summary': 'نوع: {kind}',
     'filters_kind_whitelist': 'لیست سفید',
     'filters_pattern': 'الگو / کلمات کلیدی',
-    'filters_pattern_hint': 'مثلاً badword، @channel، http…',
+    'filters_pattern_hint': 'مثلاً badword، @channel، http… یا یک عبارت کامل مثل «Whale Update on a VIP call» (بزرگی/کوچکی و فاصله در نظر گرفته نمی‌شود)',
     'filters_title': 'فیلترها',
     'incompatible_server': 'این سرور نسخه قدیمی‌تری از AutoTelegramForward را اجرا می‌کند. آن را به {version} یا جدیدتر به‌روز کنید.',
     'lang_label': 'زبان',

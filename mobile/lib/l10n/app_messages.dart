@@ -180,7 +180,7 @@ class AppMessagesEn {
     'filters_kind_summary': 'Type: {kind}',
     'filters_kind_whitelist': 'Whitelist',
     'filters_pattern': 'Pattern',
-    'filters_pattern_hint': 'e.g. badword, @channel, http…',
+    'filters_pattern_hint': 'e.g. badword, @channel, http… or a whole phrase like “Whale Update on a VIP call” (case and spacing are ignored)',
     'filters_title': 'Filters',
     'incompatible_server': 'This server is running an older AutoTelegramForward release. Update it to {version} or newer.',
     'lang_label': 'Language',

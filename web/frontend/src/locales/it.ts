@@ -674,6 +674,7 @@ export const it: Catalog = {
   "ui_no_text_replacements_configured": "Nessuna sostituzione di testo configurata.",
   "ui_no_token_received": "Nessun token ricevuto",
   "ui_no_whitelist_restrictions_all_permitted": "Nessuna restrizione della lista bianca (tutto consentito).",
+  "ui_words_matching_help": "Una voce intera corrisponde nel suo insieme: “Whale Update on a VIP call” corrisponde a quella frase completa, “5x” a 5x. La corrispondenza ignora maiuscole, spazi ripetuti e a capo tra le parole della frase. Separa più voci con una virgola.",
   "ui_no_words_in_blacklist": "Nessuna parola nella lista nera.",
   "ui_none": "— nessuno —",
   "ui_none_environment": "Nessuno / Ambiente",
