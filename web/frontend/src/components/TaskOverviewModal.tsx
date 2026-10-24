@@ -1886,12 +1886,12 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
-                  {t('ui_rp_mode_regex')} (Block)
+                  {t('ui_filter_regex_block_title')}
                 </div>
                 <div style={{ display: 'flex', gap: '8px', marginBottom: blRegexError ? '4px' : '0px' }}>
                   <input
                     type="text"
-                    placeholder="Enter regex pattern e.g. (crypto|airdrop)"
+                    placeholder={t('ui_filter_regex_block_placeholder')}
                     value={newBlRegex}
                     onChange={(e) => {
                       setNewBlRegex(e.target.value)
@@ -2001,7 +2001,7 @@ export function TaskOverviewModal({
                   ))}
                   {(draft.regex_block || []).length === 0 && (
                     <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                      No blocked regex patterns. Messages matching these patterns will be dropped.
+                      {t('ui_filter_regex_block_empty')}
                     </span>
                   )}
                 </div>
@@ -2165,12 +2165,12 @@ export function TaskOverviewModal({
                 }}
               >
                 <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
-                  {t('ui_rp_mode_regex')} (Require)
+                  {t('ui_filter_regex_require_title')}
                 </div>
                 <div style={{ display: 'flex', gap: '8px', marginBottom: wlRegexError ? '4px' : '0px' }}>
                   <input
                     type="text"
-                    placeholder="Enter regex pattern e.g. (buy|sell|signal)"
+                    placeholder={t('ui_filter_regex_require_placeholder')}
                     value={newWlRegex}
                     onChange={(e) => {
                       setNewWlRegex(e.target.value)
@@ -2280,7 +2280,7 @@ export function TaskOverviewModal({
                   ))}
                   {(draft.regex_require || []).length === 0 && (
                     <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                      No required regex patterns. Messages must match at least one required pattern to proceed.
+                      {t('ui_filter_regex_require_empty')}
                     </span>
                   )}
                 </div>
@@ -2302,7 +2302,12 @@ export function TaskOverviewModal({
                   {(['any', 'all', 'phrase'] as const).map((mode) => {
                     const currentMode = draft.whitelist_mode || 'any'
                     const isSel = currentMode === mode
-                    const label = mode === 'any' ? 'Match Any' : mode === 'all' ? 'Match All' : 'Exact Phrase'
+                    const label =
+                      mode === 'any'
+                        ? t('ui_filter_whitelist_mode_any')
+                        : mode === 'all'
+                          ? t('ui_filter_whitelist_mode_all')
+                          : t('ui_filter_whitelist_mode_phrase')
                     return (
                       <button
                         key={mode}
