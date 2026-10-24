@@ -305,6 +305,7 @@ export const it: Catalog = {
   "ui_badge_task_title": "Questo valore è stato scelto dall’attività; il predefinito del bot non lo cambierà",
   "ui_blacklist": "Lista Nera",
   "ui_blacklist_keywords_comma_separated": "Parole chiave della lista nera (separate da virgole):",
+  "ui_blacklist_keywords_placeholder": "JOIN, SCAM, PROMO… o una frase intera come “Whale Update on a VIP call”",
   "ui_blacklist_whitelist": "Lista nera e lista bianca",
   "ui_blacklisted": "In lista nera:",
   "ui_block_audio": "Blocca Audio",

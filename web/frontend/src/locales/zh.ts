@@ -305,6 +305,7 @@ export const zh: Catalog = {
   "ui_badge_task_title": "此值由任务自行设置，机器人默认值不会覆盖它",
   "ui_blacklist": "黑名单",
   "ui_blacklist_keywords_comma_separated": "黑名单关键词（用逗号分隔）：",
+  "ui_blacklist_keywords_placeholder": "JOIN、SCAM、PROMO… 或完整短语,如 “Whale Update on a VIP call”",
   "ui_blacklist_whitelist": "黑名单与白名单",
   "ui_blacklisted": "黑名单：",
   "ui_block_audio": "阻止音频音乐",

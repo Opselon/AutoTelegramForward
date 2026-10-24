@@ -305,6 +305,7 @@ export const fa: Catalog = {
   "ui_badge_task_title": "این مقدار را خود تسک انتخاب کرده است؛ مقدار پیش‌فرض ربات آن را تغییر نمی‌دهد",
   "ui_blacklist": "کلمات مسدود (Blacklist):",
   "ui_blacklist_keywords_comma_separated": "کلمات مسدود (با ویرگول جدا کنید):",
+  "ui_blacklist_keywords_placeholder": "JOIN, SCAM, PROMO… یا یک عبارت کامل مثل «Whale Update on a VIP call»",
   "ui_blacklist_whitelist": "لیست سیاه و سفید",
   "ui_blacklisted": "در لیست سیاه:",
   "ui_block_audio": "مسدود کردن صدا",

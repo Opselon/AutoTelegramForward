@@ -2328,12 +2328,22 @@ export function App({ me }: { me?: MeInfo } = {}) {
                   onChange={(e) =>
                     setFilterFormData({
                       ...filterFormData,
-                      blacklist_keywords: e.target.value.split(',').map((s) => s.trim()).filter(Boolean),
+                      // The same separators the engine's split_word_list
+                      // accepts: comma, Persian/Arabic comma, newline. A pasted
+                      // "spam, scam" or a phrase with a comma-less space both
+                      // land as the entries the matcher will see.
+                      blacklist_keywords: e.target.value
+                        .split(/[\n,،]/)
+                        .map((s) => s.trim())
+                        .filter(Boolean),
                     })
                   }
                   className="input-field"
-                  placeholder="JOIN, SCAM, PROMO"
+                  placeholder={t('ui_blacklist_keywords_placeholder')}
                 />
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 4 }}>
+                  {t('ui_words_matching_help')}
+                </div>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>

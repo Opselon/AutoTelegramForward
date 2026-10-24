@@ -305,6 +305,7 @@ export const uz: Catalog = {
   "ui_badge_task_title": "Bu qiymatni vazifa o‘zi tanlagan; bot standarti uni o‘zgartirmaydi",
   "ui_blacklist": "Qora ro'yxat",
   "ui_blacklist_keywords_comma_separated": "Qora ro‘yxat kalit so‘zlari (vergul bilan):",
+  "ui_blacklist_keywords_placeholder": "JOIN, SCAM, PROMO… yoki “Whale Update on a VIP call” kabi to‘liq ibora",
   "ui_blacklist_whitelist": "Qora va oq ro‘yxat",
   "ui_blacklisted": "Qora ro‘yxat:",
   "ui_block_audio": "Audioni bloklash",
