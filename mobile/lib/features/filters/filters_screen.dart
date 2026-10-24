@@ -327,9 +327,11 @@ class _FiltersScreenState extends State<FiltersScreen> {
 String _kindLabel(AppMessages t, FilterRule f) {
   final hasBl = f.blacklistKeywords.isNotEmpty;
   final hasWl = f.whitelistKeywords.isNotEmpty;
+  final hasRx = f.regexPatterns.isNotEmpty;
   if (hasBl && hasWl) return t.get('filters_kind_both');
   if (hasBl) return t.get('filters_kind_blacklist');
   if (hasWl) return t.get('filters_kind_whitelist');
+  if (hasRx) return t.get('filters_option_regex');
   return t.get('filters_kind_empty');
 }
 
@@ -449,14 +451,13 @@ class _FilterEditorState extends State<_FilterEditor> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   for (final option in FilterKind.values)
-                    if (option != FilterKind.mixed)
-                      RadioListTile<FilterKind>(
-                        dense: true,
-                        contentPadding: EdgeInsets.zero,
-                        value: option,
-                        title: Text(_optionTitle(t, option)),
-                        subtitle: Text(_optionSub(t, option)),
-                      ),
+                    RadioListTile<FilterKind>(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      value: option,
+                      title: Text(_optionTitle(t, option)),
+                      subtitle: Text(_optionSub(t, option)),
+                    ),
                 ],
               ),
             ),
@@ -539,7 +540,7 @@ class _FilterEditorState extends State<_FilterEditor> {
       case FilterKind.empty:
         return t.get('filters_option_longtext_sub');
       case FilterKind.mixed:
-        return '';
+        return '${t.get('filters_option_keyword_sub')} & ${t.get('filters_option_regex_sub')}';
     }
   }
 
@@ -562,7 +563,11 @@ class _FilterEditorState extends State<_FilterEditor> {
           ? widget.nameCtrl.text.trim()
           : (blacklist.isNotEmpty
                 ? t.get('filters_kind_blacklist')
-                : t.get('filters_kind_whitelist'));
+                : (whitelist.isNotEmpty
+                      ? t.get('filters_kind_whitelist')
+                      : (regex.isNotEmpty
+                            ? t.get('filters_option_regex')
+                            : 'Filter')));
       final client = context.read<AppState>().buildApiClient();
       if (widget.existing == null) {
         await client.createFilter(

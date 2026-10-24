@@ -336,3 +336,103 @@ class TestIsolationAndCompatibility:
         assert not task.evaluate("spam").allowed
         assert not override.evaluate("scam").allowed
         assert task.evaluate("clean").allowed and override.evaluate("clean").allowed
+
+
+class TestWhitelistBlacklistPlatformSeparation:
+    """Verifies that Whitelist and Blacklist rule collections, regex patterns,
+    menus, and callbacks are strictly separated across domain and UI flows."""
+
+    def test_forward_rule_regex_properties_and_draft_roundtrip(self):
+        from core.domain.entities import ForwardRule
+
+        rule = ForwardRule(id="rule-test-1", session_id="s1", source_chat_id="100", target_chat_id="200")
+        assert rule.regex_block == []
+        assert rule.regex_require == []
+
+        rule.regex_block = ["(scam|spam)", r"^\[AD\]"]
+        rule.regex_require = [r"\bVIP\b", r"signal\s+\d+"]
+
+        assert rule.regex_block == ["(scam|spam)", r"^\[AD\]"]
+        assert rule.regex_require == [r"\bVIP\b", r"signal\s+\d+"]
+
+        draft = rule.to_draft()
+        assert draft["regex_block"] == ["(scam|spam)", r"^\[AD\]"]
+        assert draft["regex_require"] == [r"\bVIP\b", r"signal\s+\d+"]
+
+        rule2 = ForwardRule(id="rule-test-2", session_id="s1", source_chat_id="100", target_chat_id="200")
+        rule2.apply_draft(draft)
+        assert rule2.regex_block == ["(scam|spam)", r"^\[AD\]"]
+        assert rule2.regex_require == [r"\bVIP\b", r"signal\s+\d+"]
+
+    def test_three_way_flows_cancel_and_direction_routing(self):
+        from unittest.mock import MagicMock
+        from core.domain.entities import ForwardRule
+        from core.infrastructure.telegram.three_way_flows import ThreeWayFlows
+
+        ui_mock = MagicMock()
+        ui_mock._resolve_lang.return_value = "en"
+        ui_mock._t = lambda key, **kwargs: key
+        ui_mock._kbd = lambda rows: rows
+        flows = ThreeWayFlows(ui_mock)
+
+        rule = ForwardRule(id="r123", session_id="s1", source_chat_id="100", target_chat_id="200")
+
+        # Whitelist regex prompt cancel targets whitelist menu
+        _txt, kbd_wl = flows.render_regex_prompt(rule, direction="require")
+        assert any(cb == "rfl_wl:r123" for row in kbd_wl for _, cb in row)
+
+        # Blacklist regex prompt cancel targets blacklist menu
+        _txt, kbd_bl = flows.render_regex_prompt(rule, direction="block")
+        assert any(cb == "rfl_bl:r123" for row in kbd_bl for _, cb in row)
+
+        # Whitelist longtext cancel targets whitelist menu
+        _txt, kbd_lt_wl = flows.render_longtext_prompt(rule, direction="whitelist")
+        assert any(cb == "rfl_wl:r123" for row in kbd_lt_wl for _, cb in row)
+
+        # Blacklist longtext cancel targets blacklist menu
+        _txt, kbd_lt_bl = flows.render_longtext_prompt(rule, direction="blacklist")
+        assert any(cb == "rfl_bl:r123" for row in kbd_lt_bl for _, cb in row)
+
+        # Test prompt origin routing
+        _txt, kbd_test_wl = flows.render_test_prompt(rule, origin="whitelist")
+        assert any(cb == "rfl_wl:r123" for row in kbd_test_wl for _, cb in row)
+
+        _txt, kbd_test_bl = flows.render_test_prompt(rule, origin="blacklist")
+        assert any(cb == "rfl_bl:r123" for row in kbd_test_bl for _, cb in row)
+
+    def test_legacy_filter_row_sync_preserves_whitelist_regex_semantics(self):
+        from unittest.mock import MagicMock
+        from core.domain.entities import ForwardRule
+        from core.infrastructure.telegram.three_way_flows import ThreeWayFlows
+
+        legacy_row = MagicMock()
+        legacy_row.whitelist_keywords = []
+        legacy_row.blacklist_keywords = []
+        legacy_row.regex_patterns = []
+
+        ui_mock = MagicMock()
+        ui_mock._resolve_lang.return_value = "en"
+        ui_mock._t = lambda key, **kwargs: key
+        ui_mock._filters = MagicMock()
+        ui_mock._filters.get.return_value = legacy_row
+
+        flows = ThreeWayFlows(ui_mock)
+        rule = ForwardRule(
+            id="r123", session_id="s1", source_chat_id="100", target_chat_id="200",
+            filter_rule_id="legacy-filter-1",
+        )
+        flows._legacy_filter_row = lambda rule: legacy_row
+
+        # Applying config with regex_block and regex_require
+        flows._apply_policy(rule, {
+            "whitelist_words": ["pass"],
+            "blacklist_words": ["block"],
+            "regex_require": [r"^\[ALLOW\]"],
+            "regex_block": [r"^\[DENY\]"],
+        }, uid=1)
+
+        assert legacy_row.whitelist_keywords == ["pass"]
+        assert legacy_row.blacklist_keywords == ["block"]
+        # regex_patterns in FilterEngine acts as require-any (whitelist).
+        # Must sync regex_require, NOT regex_block!
+        assert legacy_row.regex_patterns == [r"^\[ALLOW\]"]

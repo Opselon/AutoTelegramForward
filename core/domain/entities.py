@@ -1106,6 +1106,22 @@ class ForwardRule:
         self._set_policy_key("whitelist_words", list(val or []))
 
     @property
+    def regex_block(self) -> List[str]:
+        return [str(x) for x in (self._policy_key("regex_block", []) or [])]
+
+    @regex_block.setter
+    def regex_block(self, val: Any) -> None:
+        self._set_policy_key("regex_block", list(val or []))
+
+    @property
+    def regex_require(self) -> List[str]:
+        return [str(x) for x in (self._policy_key("regex_require", []) or [])]
+
+    @regex_require.setter
+    def regex_require(self, val: Any) -> None:
+        self._set_policy_key("regex_require", list(val or []))
+
+    @property
     def whitelist_mode(self) -> str:
         mode = str(self._policy_key("whitelist_mode", "any") or "any").lower()
         return mode if mode in ("any", "all", "phrase") else "any"

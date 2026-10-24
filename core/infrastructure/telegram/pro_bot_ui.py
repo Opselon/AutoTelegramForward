@@ -3758,15 +3758,24 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
         bl = list(rule.blacklist or [])
+        rx = list(rule.regex_block or [])
 
         items_str = "\n".join([f"• `{w}`" for w in bl[:20]]) if bl else self._t("ui_bl_empty", lang=lang)
         if len(bl) > 20:
             items_str += self._t("ui_bl_more", lang=lang, more=len(bl) - 20)
 
+        if rx:
+            rx_lines = "\n".join([f"• regex: `{p}`" for p in rx[:10]])
+            if len(rx) > 10:
+                rx_lines += f"\n... +{len(rx) - 10}"
+            items_str = f"{items_str}\n\nRegex (block):\n{rx_lines}"
+
+        total_count = len(bl) + len(rx)
+
         text = (
             self._t("ui_bl_title", lang=lang)
             + self._t("ui_hf_rule_line", lang=lang, src=src_label, dst=dst_label)
-            + self._t("ui_bl_count", lang=lang, count=len(bl))
+            + self._t("ui_bl_count", lang=lang, count=total_count)
             + "────────────────────\n"
             + self._t("ui_bl_desc", lang=lang)
             + f"{items_str}\n\n"
@@ -3787,7 +3796,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
                 (self._t("ui_bl_btn_longtext", lang=lang), f"rfl_bl_long:{rule.id}"),
             ],
             [
-                (self._t("ui_filters_btn_test", lang=lang), f"rfl_test:{rule.id}"),
+                (self._t("ui_filters_btn_test", lang=lang), f"rfl_test:{rule.id}:bl"),
             ],
             [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
@@ -3799,15 +3808,24 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         src_label = rule.source_chat_name or rule.source_chat_id
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
         wl = list(rule.whitelist or [])
+        rx = list(rule.regex_require or [])
 
         items_str = "\n".join([f"• `{w}`" for w in wl[:20]]) if wl else self._t("ui_wl_empty", lang=lang)
         if len(wl) > 20:
             items_str += self._t("ui_wl_more", lang=lang, more=len(wl) - 20)
 
+        if rx:
+            rx_lines = "\n".join([f"• regex: `{p}`" for p in rx[:10]])
+            if len(rx) > 10:
+                rx_lines += f"\n... +{len(rx) - 10}"
+            items_str = f"{items_str}\n\nRegex (require):\n{rx_lines}"
+
+        total_count = len(wl) + len(rx)
+
         text = (
             self._t("ui_wl_title", lang=lang)
             + self._t("ui_hf_rule_line", lang=lang, src=src_label, dst=dst_label)
-            + self._t("ui_wl_count", lang=lang, count=len(wl))
+            + self._t("ui_wl_count", lang=lang, count=total_count)
             + "────────────────────\n"
             + self._t("ui_wl_desc", lang=lang)
             + f"{items_str}\n\n"
@@ -3828,7 +3846,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
                 (self._t("ui_wl_btn_longtext", lang=lang), f"rfl_wl_long:{rule.id}"),
             ],
             [
-                (self._t("ui_filters_btn_test", lang=lang), f"rfl_test:{rule.id}"),
+                (self._t("ui_filters_btn_test", lang=lang), f"rfl_test:{rule.id}:wl"),
             ],
             [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
@@ -7793,6 +7811,13 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            if st.step.startswith("tw_") or st.step.startswith("add_bl_") or st.step.startswith("add_wl_"):
+                st.step = ""
+            st.buffer.pop("tw_direction", None)
+            st.buffer.pop("tw_mode", None)
+            st.buffer.pop("tw_origin", None)
+            await self._persist(uid, st)
             text, kbd = self._render_blacklist_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
@@ -7826,6 +7851,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.blacklist = []
+            rule.regex_block = []
             await self._save_owned_rule(rule, uid)
             await cq.answer(self._t("ui_blacklist_cleared_alert"))
             text, kbd = self._render_blacklist_menu(rule)
@@ -7865,6 +7891,13 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            if st.step.startswith("tw_") or st.step.startswith("add_bl_") or st.step.startswith("add_wl_"):
+                st.step = ""
+            st.buffer.pop("tw_direction", None)
+            st.buffer.pop("tw_mode", None)
+            st.buffer.pop("tw_origin", None)
+            await self._persist(uid, st)
             text, kbd = self._render_whitelist_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
@@ -7898,6 +7931,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             rule.whitelist = []
+            rule.regex_require = []
             await self._save_owned_rule(rule, uid)
             await cq.answer(self._t("ui_whitelist_cleared_alert"))
             text, kbd = self._render_whitelist_menu(rule)
@@ -7917,7 +7951,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
-            text, kbd = self.three_way.start_regex(rule)
+            text, kbd = self.three_way.start_regex(rule, direction="block")
             st = self._state(uid)
             st.buffer["tw_direction"] = "block"
             st.step = f"tw_regex_{rule.id}"
@@ -7934,7 +7968,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
-            text, kbd = self.three_way.render_longtext_prompt(rule)
+            text, kbd = self.three_way.render_longtext_prompt(rule, direction="blacklist")
             st = self._state(uid)
             st.buffer["tw_direction"] = "blacklist"
             st.step = f"tw_longtext_{rule.id}"
@@ -7951,7 +7985,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
-            text, kbd = self.three_way.start_regex(rule)
+            text, kbd = self.three_way.start_regex(rule, direction="require")
             st = self._state(uid)
             st.buffer["tw_direction"] = "require"
             st.step = f"tw_regex_{rule.id}"
@@ -7968,7 +8002,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
-            text, kbd = self.three_way.render_longtext_prompt(rule)
+            text, kbd = self.three_way.render_longtext_prompt(rule, direction="whitelist")
             st = self._state(uid)
             st.buffer["tw_direction"] = "whitelist"
             st.step = f"tw_longtext_{rule.id}"
@@ -7976,17 +8010,21 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             await self._safe_edit(cq, text, reply_markup=kbd)
             await cq.answer()
 
-        @b.on_callback_query(filters.regex(r"^rfl_test:(.+)$"))
+        @b.on_callback_query(filters.regex(r"^rfl_test:([^:]+)(?::(wl|bl))?$"))
         @self._localized_handler
         async def _cb_rule_test(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
-            rule_id = raw.split(":", 1)[1]
+            parts = raw.split(":")
+            rule_id = parts[1]
+            origin_tag = parts[2] if len(parts) > 2 else ""
+            origin = "whitelist" if origin_tag == "wl" else "blacklist"
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
-            text, kbd = self.three_way.render_test_prompt(rule)
+            text, kbd = self.three_way.render_test_prompt(rule, origin=origin)
             st = self._state(uid)
+            st.buffer["tw_origin"] = origin
             st.step = f"tw_test_{rule.id}"
             await self._persist(uid, st)
             await self._safe_edit(cq, text, reply_markup=kbd)
@@ -10455,24 +10493,29 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             await self._persist(uid, st)
             return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
         pattern = (text or "").strip()
+        direction = st.buffer.get("tw_direction") or "block"
+        back_cb = f"rfl_wl:{rule.id}" if direction == "require" else f"rfl_bl:{rule.id}"
         diag = self.three_way.validate_pattern(pattern)
         if diag is not None:
             # One readable line per failure shape; the catalog already carries
             # these semantics under the reason-* family.
             key = {"empty": "ui_prompt_add_regex", "too_long": "ui_reason_invalid_regex"}.get(
                 diag, "ui_reason_invalid_regex")
-            kbd = self._kbd([[(self._t("ui_cancel_back"), f"rfl_bl:{rule.id}")]])
+            kbd = self._kbd([[(self._t("ui_cancel_back"), back_cb)]])
             return await message.reply_text(self._t(key), reply_markup=kbd)
-        direction = st.buffer.get("tw_direction") or "block"
         ok, _key = await self.three_way.save_regex(rule, pattern, direction, uid)
         if not ok:
-            kbd = self._kbd([[(self._t("ui_cancel_back"), f"rfl_bl:{rule.id}")]])
+            kbd = self._kbd([[(self._t("ui_cancel_back"), back_cb)]])
             return await message.reply_text(self._t("ui_reason_invalid_regex"), reply_markup=kbd)
         st.buffer.pop("tw_direction", None)
         st.step = ""
         await self._persist(uid, st)
-        card_text, kbd = self._render_blacklist_menu(rule)
-        await message.reply_text(self._t("ui_step_blacklist_saved", count=1), reply_markup=kbd)
+        if direction == "require":
+            card_text, kbd = self._render_whitelist_menu(rule)
+            await message.reply_text(self._t("ui_step_whitelist_saved", count=1), reply_markup=kbd)
+        else:
+            card_text, kbd = self._render_blacklist_menu(rule)
+            await message.reply_text(self._t("ui_step_blacklist_saved", count=1), reply_markup=kbd)
 
     async def _step_tw_longtext(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
         """Long-Text entries: words or phrases anywhere in the full message.
@@ -10486,17 +10529,18 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
         mode = st.buffer.get("tw_mode") or "any"
         direction = st.buffer.get("tw_direction") or "blacklist"
+        back_cb = f"rfl_wl:{rule.id}" if direction == "whitelist" else f"rfl_bl:{rule.id}"
         ok, n = await self.three_way.save_longtext(rule, text, mode, uid, direction)
         if not ok:
-            kbd = self._kbd([[(self._t("ui_cancel_back"), f"rfl_bl:{rule.id}")]])
+            kbd = self._kbd([[(self._t("ui_cancel_back"), back_cb)]])
             return await message.reply_text(self._t("ui_prompt_add_longtext"), reply_markup=kbd)
         st.buffer.pop("tw_mode", None)
         st.buffer.pop("tw_direction", None)
         st.step = ""
         await self._persist(uid, st)
-        render = self._render_blacklist_menu if direction == "blacklist" else self._render_whitelist_menu
+        render = self._render_whitelist_menu if direction == "whitelist" else self._render_blacklist_menu
         card_text, kbd = render(rule)
-        msg_key = "ui_step_blacklist_saved" if direction == "blacklist" else "ui_step_whitelist_saved"
+        msg_key = "ui_step_whitelist_saved" if direction == "whitelist" else "ui_step_blacklist_saved"
         await message.reply_text(self._t(msg_key, count=n), reply_markup=kbd)
 
     async def _step_tw_test(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
@@ -10508,13 +10552,15 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             st.step = ""
             await self._persist(uid, st)
             return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
+        origin = st.buffer.get("tw_origin") or "blacklist"
         try:
             preview = self.three_way.test(rule, (text or ""))
-            card_text, kbd = self.three_way.render_test_result(rule, preview)
+            card_text, kbd = self.three_way.render_test_result(rule, preview, origin=origin)
         except Exception:
             logger.exception("[BOT:FILTER_TEST] rule=%s", str(rule_id)[:8])
             return await message.reply_text(self._t("ui_ai_test_unknown_error"), reply_markup=self._kbd([]))
         finally:
+            st.buffer.pop("tw_origin", None)
             st.step = ""
             await self._persist(uid, st)
         await message.reply_text(card_text, reply_markup=kbd)

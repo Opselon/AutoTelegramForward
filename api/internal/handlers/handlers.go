@@ -417,6 +417,11 @@ func formatRuleJSON(rl *pb.ForwardRule) map[string]any {
 		"proxy":                            decodedJSONValue(rl.ProxyJson),
 		"proxy_json":                       rl.ProxyJson,
 		"prompt_id":                        preferString(rl.PromptId, metaMap["prompt_id"]),
+		"whitelist_words":                  preferSlice(metaMap["whitelist_words"], metaMap["whitelist_keywords"]),
+		"blacklist_words":                  preferSlice(metaMap["blacklist_words"], metaMap["blacklist_keywords"]),
+		"regex_block":                      preferSlice(metaMap["regex_block"], nil),
+		"regex_require":                    preferSlice(metaMap["regex_require"], nil),
+		"whitelist_mode":                   preferString("", metaMap["whitelist_mode"]),
 	}
 	// The full settings snapshot: every per-task setting the server knows about,
 	// keyed by name, so a client can render the whole task from one response
@@ -469,6 +474,8 @@ func enrichCustomMetadata(rawBody []byte, rule *pb.ForwardRule) {
 		"ocr_image_ai", "smart_ai_rewrite", "news_digest", "watermark", "watermark_text",
 		"ai_creativity", "ai_max_tokens", "paid_addons",
 		"whitelist_keywords", "blacklist_keywords", "link_buttons", "affiliate_kit",
+		"whitelist_words", "blacklist_words", "whitelist_mode",
+		"regex_block", "regex_require", "content_policy",
 		// v2.0 app update: Cleaner, reply sync, language preference.
 		"cleaner_enabled", "cleaner_config",
 		"sync_replies", "sync_edits", "sync_deletes",
@@ -797,6 +804,35 @@ func preferString(protoValue string, fallback any) any {
 		return ""
 	}
 	return fallback
+}
+
+func preferSlice(a, b any) []string {
+	if s := toStringSlice(a); len(s) > 0 {
+		return s
+	}
+	if s := toStringSlice(b); len(s) > 0 {
+		return s
+	}
+	return []string{}
+}
+
+func toStringSlice(val any) []string {
+	if val == nil {
+		return nil
+	}
+	switch v := val.(type) {
+	case []string:
+		return v
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s, ok := item.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
 }
 
 func containsString(list []string, want string) bool {
@@ -2230,8 +2266,12 @@ func (h *Handlers) TestFilterRule(w http.ResponseWriter, r *http.Request) {
 		Sample            string   `json:"sample"`
 		Name              string   `json:"name"`
 		WhitelistKeywords []string `json:"whitelist_keywords"`
+		WhitelistWords    []string `json:"whitelist_words"`
 		BlacklistKeywords []string `json:"blacklist_keywords"`
+		BlacklistWords    []string `json:"blacklist_words"`
 		RegexPatterns     []string `json:"regex_patterns"`
+		RegexBlock        []string `json:"regex_block"`
+		RegexRequire      []string `json:"regex_require"`
 	}
 	if !bind(w, r, &req) {
 		return
@@ -2241,6 +2281,19 @@ func (h *Handlers) TestFilterRule(w http.ResponseWriter, r *http.Request) {
 			"error": "sample too long",
 		})
 		return
+	}
+	wl := req.WhitelistKeywords
+	if len(wl) == 0 {
+		wl = req.WhitelistWords
+	}
+	bl := req.BlacklistKeywords
+	if len(bl) == 0 {
+		bl = req.BlacklistWords
+	}
+	rx := req.RegexPatterns
+	if len(rx) == 0 {
+		rx = append(rx, req.RegexRequire...)
+		rx = append(rx, req.RegexBlock...)
 	}
 	// A stored rule the caller does not own is not a base for the draft:
 	// resolve it through the ownership check the Core performs, so a foreign
@@ -2253,9 +2306,9 @@ func (h *Handlers) TestFilterRule(w http.ResponseWriter, r *http.Request) {
 		Sample:      req.Sample,
 		Filter: &pb.FilterRule{
 			Name:              req.Name,
-			WhitelistKeywords: req.WhitelistKeywords,
-			BlacklistKeywords: req.BlacklistKeywords,
-			RegexPatterns:     req.RegexPatterns,
+			WhitelistKeywords: wl,
+			BlacklistKeywords: bl,
+			RegexPatterns:     rx,
 		},
 	})
 	if err != nil {
