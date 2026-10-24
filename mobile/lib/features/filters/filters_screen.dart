@@ -92,102 +92,101 @@ class _FiltersScreenState extends State<FiltersScreen> {
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-          title: Text(
-            existing == null ? t.get('filters_title') : t.get('action_edit'),
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtrl,
-                decoration: InputDecoration(
-                  labelText: t.get('filters_name'),
-                  hintText: t.get('filters_name_hint'),
-                ),
+        title: Text(
+          existing == null ? t.get('filters_title') : t.get('action_edit'),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameCtrl,
+              decoration: InputDecoration(
+                labelText: t.get('filters_name'),
+                hintText: t.get('filters_name_hint'),
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: blCtrl,
-                autofocus: existing == null,
-                decoration: InputDecoration(
-                  labelText: t.get('filters_blacklist_label'),
-                  hintText: t.get('filters_pattern_hint'),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  t.get('filters_words_matching_help'),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: wlCtrl,
-                decoration: InputDecoration(
-                  labelText: t.get('filters_whitelist_label'),
-                  hintText: t.get('filters_pattern_hint'),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  t.get('filters_words_matching_help'),
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: Theme.of(context).colorScheme.onSurfaceVariant,
-                      ),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: Text(t.get('action_cancel')),
             ),
-            ElevatedButton(
-              onPressed: () async {
-                // The model sends the lists the proto actually carries; a
-                // multi-word phrase survives because splitKeywordList never
-                // breaks an entry on a space.
-                final blacklist = splitKeywordList(blCtrl.text);
-                final whitelist = splitKeywordList(wlCtrl.text);
-                if (blacklist.isEmpty && whitelist.isEmpty) return;
-                final name = nameCtrl.text.trim().isNotEmpty
-                    ? nameCtrl.text.trim()
-                    : (blacklist.isNotEmpty
-                        ? t.get('filters_kind_blacklist')
-                        : t.get('filters_kind_whitelist'));
-                final client = context.read<AppState>().buildApiClient();
-                if (existing == null) {
-                  await client.createFilter(
-                    FilterRule(
-                      id: '',
-                      name: name,
-                      blacklistKeywords: blacklist,
-                      whitelistKeywords: whitelist,
-                    ),
-                  );
-                } else {
-                  await client.updateFilter(
-                    existing.id,
-                    existing.copyWith(
-                      name: name,
-                      blacklistKeywords: blacklist,
-                      whitelistKeywords: whitelist,
-                    ),
-                  );
-                }
-                if (ctx.mounted) Navigator.pop(ctx, true);
-              },
-              child: Text(t.get('action_save')),
+            const SizedBox(height: 16),
+            TextField(
+              controller: blCtrl,
+              autofocus: existing == null,
+              decoration: InputDecoration(
+                labelText: t.get('filters_blacklist_label'),
+                hintText: t.get('filters_pattern_hint'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                t.get('filters_words_matching_help'),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: wlCtrl,
+              decoration: InputDecoration(
+                labelText: t.get('filters_whitelist_label'),
+                hintText: t.get('filters_pattern_hint'),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                t.get('filters_words_matching_help'),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
             ),
           ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(t.get('action_cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              // The model sends the lists the proto actually carries; a
+              // multi-word phrase survives because splitKeywordList never
+              // breaks an entry on a space.
+              final blacklist = splitKeywordList(blCtrl.text);
+              final whitelist = splitKeywordList(wlCtrl.text);
+              if (blacklist.isEmpty && whitelist.isEmpty) return;
+              final name = nameCtrl.text.trim().isNotEmpty
+                  ? nameCtrl.text.trim()
+                  : (blacklist.isNotEmpty
+                        ? t.get('filters_kind_blacklist')
+                        : t.get('filters_kind_whitelist'));
+              final client = context.read<AppState>().buildApiClient();
+              if (existing == null) {
+                await client.createFilter(
+                  FilterRule(
+                    id: '',
+                    name: name,
+                    blacklistKeywords: blacklist,
+                    whitelistKeywords: whitelist,
+                  ),
+                );
+              } else {
+                await client.updateFilter(
+                  existing.id,
+                  existing.copyWith(
+                    name: name,
+                    blacklistKeywords: blacklist,
+                    whitelistKeywords: whitelist,
+                  ),
+                );
+              }
+              if (ctx.mounted) Navigator.pop(ctx, true);
+            },
+            child: Text(t.get('action_save')),
+          ),
+        ],
       ),
     );
 
@@ -202,9 +201,11 @@ class _FiltersScreenState extends State<FiltersScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(t.get('filters_delete_confirm')),
-        content: Text(filter.keywordEntries.isNotEmpty
-            ? filter.keywordEntries.join(', ')
-            : filter.name),
+        content: Text(
+          filter.keywordEntries.isNotEmpty
+              ? filter.keywordEntries.join(', ')
+              : filter.name,
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -306,8 +307,8 @@ class _FiltersScreenState extends State<FiltersScreen> {
                               f.name.isNotEmpty
                                   ? f.name
                                   : (f.keywordEntries.isNotEmpty
-                                      ? f.keywordEntries.join(', ')
-                                      : t.get('filters_empty')),
+                                        ? f.keywordEntries.join(', ')
+                                        : t.get('filters_empty')),
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                               ),
