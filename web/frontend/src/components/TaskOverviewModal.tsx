@@ -56,13 +56,11 @@ export function TaskOverviewModal({
   onDelete,
   lang = 'en',
 }: Props) {
-  if (!isOpen || !rule) return null
-
   const isRtl = lang === 'fa'
   const t = makeT(lang)
   const [currentTab, setCurrentTab] = useState<TabType>('overview')
   const [activeGroup, setActiveGroup] = useState<FeatureGroupType>('all')
-  const [draft, setDraft] = useState<ForwardRule>({ ...rule })
+  const [draft, setDraft] = useState<ForwardRule>(rule ? { ...rule } : ({} as ForwardRule))
   const [saving, setSaving] = useState(false)
   const [isEditingName, setIsEditingName] = useState(false)
   const [showTopicPrompt, setShowTopicPrompt] = useState(false)
@@ -72,6 +70,10 @@ export function TaskOverviewModal({
   const [newReplaceTo, setNewReplaceTo] = useState('')
   const [newBlWord, setNewBlWord] = useState('')
   const [newWlWord, setNewWlWord] = useState('')
+  const [newBlRegex, setNewBlRegex] = useState('')
+  const [newWlRegex, setNewWlRegex] = useState('')
+  const [blRegexError, setBlRegexError] = useState('')
+  const [wlRegexError, setWlRegexError] = useState('')
   const [newCleanerPattern, setNewCleanerPattern] = useState('')
 
   const listPatterns = (val: any): string[] => {
@@ -84,6 +86,12 @@ export function TaskOverviewModal({
     if (rule) {
       setDraft({ ...rule })
       setCurrentTab('overview')
+      setNewBlWord('')
+      setNewWlWord('')
+      setNewBlRegex('')
+      setNewWlRegex('')
+      setBlRegexError('')
+      setWlRegexError('')
     }
   }, [rule])
 
@@ -144,11 +152,13 @@ export function TaskOverviewModal({
   }
 
 
-  const taskName = draft.name || `af_route_lab_${draft.id.slice(0, 4)}`
+  const taskName = draft.name || `af_route_lab_${(draft.id || '').slice(0, 4)}`
   const sourceName = draft.source_chat_name || draft.source_chat_id || 'AF Route Lab Source'
   const targetName = draft.target_chat_name || draft.target_chat_id || 'AF Route Lab Target'
   const isRunning = draft.is_active
   const debugOn = draft.debug_mode ?? false
+
+  if (!isOpen || !rule) return null
 
   return (
     <div
@@ -729,14 +739,14 @@ export function TaskOverviewModal({
                       title: t('ui_task_overview_modal_blacklist'),
                       icon: '≡ₓ',
                       iconColor: '#ef4444',
-                      status: `${t('ui_activated')} ${(draft.blacklist_keywords || []).length}`,
+                      status: `${t('ui_activated')} ${(draft.blacklist_keywords || []).length + (draft.regex_block || []).length}`,
                       onClick: () => setCurrentTab('blacklist'),
                     },
                     {
                       title: t('ui_whitelist'),
                       icon: '≡✓',
                       iconColor: '#22c55e',
-                      status: `${t('ui_activated')} ${(draft.whitelist_keywords || []).length}`,
+                      status: `${t('ui_activated')} ${(draft.whitelist_keywords || []).length + (draft.regex_require || []).length}`,
                       onClick: () => setCurrentTab('whitelist'),
                     },
                     {
@@ -1743,7 +1753,7 @@ export function TaskOverviewModal({
                   {t('ui_back_to_task_overview')}
                 </button>
                 <span style={{ fontSize: '12px', color: '#ef4444', fontWeight: 600 }}>
-                  {t('ui_blacklisted')} {(draft.blacklist_keywords || []).length}
+                  {t('ui_blacklisted')} {(draft.blacklist_keywords || []).length + (draft.regex_block || []).length}
                 </span>
               </div>
 
@@ -1865,6 +1875,138 @@ export function TaskOverviewModal({
                   )}
                 </div>
               </div>
+
+              {/* Blacklist Regex Patterns */}
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
+                  {t('ui_filter_regex_block_title')}
+                </div>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: blRegexError ? '4px' : '0px' }}>
+                  <input
+                    type="text"
+                    placeholder={t('ui_filter_regex_block_placeholder')}
+                    value={newBlRegex}
+                    onChange={(e) => {
+                      setNewBlRegex(e.target.value)
+                      if (blRegexError) setBlRegexError('')
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const p = newBlRegex.trim()
+                        if (!p) return
+                        try {
+                          new RegExp(p)
+                        } catch (err: any) {
+                          setBlRegexError(err?.message || 'Invalid regex syntax')
+                          return
+                        }
+                        const current = draft.regex_block || []
+                        if (!current.includes(p)) {
+                          setDraft({ ...draft, regex_block: [...current, p] })
+                        }
+                        setNewBlRegex('')
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#0f172a',
+                      border: `1px solid ${blRegexError ? '#ef4444' : 'var(--color-border-strong)'}`,
+                      color: '#fff',
+                      borderRadius: '8px',
+                      padding: '8px 10px',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const p = newBlRegex.trim()
+                      if (!p) return
+                      try {
+                        new RegExp(p)
+                      } catch (err: any) {
+                        setBlRegexError(err?.message || 'Invalid regex syntax')
+                        return
+                      }
+                      const current = draft.regex_block || []
+                      if (!current.includes(p)) {
+                        setDraft({ ...draft, regex_block: [...current, p] })
+                      }
+                      setNewBlRegex('')
+                    }}
+                    style={{
+                      backgroundColor: '#ef4444',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '0 14px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {t('ui_add')}
+                  </button>
+                </div>
+                {blRegexError && (
+                  <div style={{ fontSize: '11px', color: '#f87171', marginBottom: '8px' }}>
+                    {blRegexError}
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
+                  {(draft.regex_block || []).map((rx, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        backgroundColor: '#450a0a',
+                        border: '1px solid #991b1b',
+                        color: '#fca5a5',
+                        borderRadius: '12px',
+                        padding: '4px 10px',
+                        fontSize: '11px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontFamily: 'monospace',
+                      }}
+                    >
+                      <span>{rx}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const list = (draft.regex_block || []).filter((_, i) => i !== idx)
+                          setDraft({ ...draft, regex_block: list })
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#f87171',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontSize: '12px',
+                          fontWeight: 700,
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                  {(draft.regex_block || []).length === 0 && (
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                      {t('ui_filter_regex_block_empty')}
+                    </span>
+                  )}
+                </div>
+              </div>
+
               <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
                 {t('ui_words_matching_help')}
               </div>
@@ -1890,7 +2032,7 @@ export function TaskOverviewModal({
                   {t('ui_back_to_task_overview')}
                 </button>
                 <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: 600 }}>
-                  {t('ui_whitelisted')} {(draft.whitelist_keywords || []).length}
+                  {t('ui_whitelisted')} {(draft.whitelist_keywords || []).length + (draft.regex_require || []).length}
                 </span>
               </div>
 
@@ -2012,6 +2154,183 @@ export function TaskOverviewModal({
                   )}
                 </div>
               </div>
+
+              {/* Whitelist Regex Patterns */}
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
+                  {t('ui_filter_regex_require_title')}
+                </div>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: wlRegexError ? '4px' : '0px' }}>
+                  <input
+                    type="text"
+                    placeholder={t('ui_filter_regex_require_placeholder')}
+                    value={newWlRegex}
+                    onChange={(e) => {
+                      setNewWlRegex(e.target.value)
+                      if (wlRegexError) setWlRegexError('')
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        const p = newWlRegex.trim()
+                        if (!p) return
+                        try {
+                          new RegExp(p)
+                        } catch (err: any) {
+                          setWlRegexError(err?.message || 'Invalid regex syntax')
+                          return
+                        }
+                        const current = draft.regex_require || []
+                        if (!current.includes(p)) {
+                          setDraft({ ...draft, regex_require: [...current, p] })
+                        }
+                        setNewWlRegex('')
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      backgroundColor: '#0f172a',
+                      border: `1px solid ${wlRegexError ? '#ef4444' : 'var(--color-border-strong)'}`,
+                      color: '#fff',
+                      borderRadius: '8px',
+                      padding: '8px 10px',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const p = newWlRegex.trim()
+                      if (!p) return
+                      try {
+                        new RegExp(p)
+                      } catch (err: any) {
+                        setWlRegexError(err?.message || 'Invalid regex syntax')
+                        return
+                      }
+                      const current = draft.regex_require || []
+                      if (!current.includes(p)) {
+                        setDraft({ ...draft, regex_require: [...current, p] })
+                      }
+                      setNewWlRegex('')
+                    }}
+                    style={{
+                      backgroundColor: '#22c55e',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '0 14px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {t('ui_add')}
+                  </button>
+                </div>
+                {wlRegexError && (
+                  <div style={{ fontSize: '11px', color: '#f87171', marginBottom: '8px' }}>
+                    {wlRegexError}
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
+                  {(draft.regex_require || []).map((rx, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        backgroundColor: '#052e16',
+                        border: '1px solid #15803d',
+                        color: '#86efac',
+                        borderRadius: '12px',
+                        padding: '4px 10px',
+                        fontSize: '11px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontFamily: 'monospace',
+                      }}
+                    >
+                      <span>{rx}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const list = (draft.regex_require || []).filter((_, i) => i !== idx)
+                          setDraft({ ...draft, regex_require: list })
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#4ade80',
+                          cursor: 'pointer',
+                          padding: 0,
+                          fontSize: '12px',
+                          fontWeight: 700,
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                  {(draft.regex_require || []).length === 0 && (
+                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
+                      {t('ui_filter_regex_require_empty')}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Whitelist Matching Mode */}
+              <div
+                style={{
+                  backgroundColor: '#1e293b',
+                  borderRadius: '14px',
+                  padding: '14px',
+                  border: '1px solid #334155',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
+                  {t('ui_rp_mode_label')}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  {(['any', 'all', 'phrase'] as const).map((mode) => {
+                    const currentMode = draft.whitelist_mode || 'any'
+                    const isSel = currentMode === mode
+                    const label =
+                      mode === 'any'
+                        ? t('ui_filter_whitelist_mode_any')
+                        : mode === 'all'
+                          ? t('ui_filter_whitelist_mode_all')
+                          : t('ui_filter_whitelist_mode_phrase')
+                    return (
+                      <button
+                        key={mode}
+                        type="button"
+                        onClick={() => setDraft({ ...draft, whitelist_mode: mode })}
+                        style={{
+                          backgroundColor: isSel ? '#065f46' : '#0f172a',
+                          color: isSel ? '#86efac' : '#94a3b8',
+                          border: `1px solid ${isSel ? '#15803d' : '#334155'}`,
+                          borderRadius: '8px',
+                          padding: '8px',
+                          fontSize: '11px',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {label} {isSel ? '✔' : ''}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
               <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
                 {t('ui_words_matching_help')}
               </div>

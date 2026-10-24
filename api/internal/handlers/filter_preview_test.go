@@ -97,3 +97,66 @@ func TestFilterPreviewBoundsSampleLength(t *testing.T) {
 		t.Fatal("oversized sample reached the Core")
 	}
 }
+
+func TestFilterPreviewSeparationWithRegexBlockAndRequire(t *testing.T) {
+	f := &fakeFilterPreviewClient{}
+	h := filterPreviewHandler(f)
+	rec := httptest.NewRecorder()
+	req := reqReplace("POST", "/api/filters/test",
+		`{"rule_id":"abc","sample":"buy signal","whitelist_words":["signal"],"blacklist_words":["scam"],"regex_require":["^buy"],"regex_block":["promo"]}`,
+		5094837833)
+	h.TestFilterRule(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if f.got == nil {
+		t.Fatal("core never received the preview call")
+	}
+	wl := f.got.GetFilter().GetWhitelistKeywords()
+	bl := f.got.GetFilter().GetBlacklistKeywords()
+	rx := f.got.GetFilter().GetRegexPatterns()
+
+	if len(wl) != 1 || wl[0] != "signal" {
+		t.Errorf("whitelist words not mapped: %v", wl)
+	}
+	if len(bl) != 1 || bl[0] != "scam" {
+		t.Errorf("blacklist words not mapped: %v", bl)
+	}
+	if len(rx) != 2 || rx[0] != "^buy" || rx[1] != "promo" {
+		t.Errorf("regex patterns not combined properly: %v", rx)
+	}
+}
+
+func TestEnrichCustomMetadataAndFormatRuleJSONParity(t *testing.T) {
+	rule := &pb.ForwardRule{
+		Id: "r123",
+	}
+	payload := `{"metadata":{"whitelist_words":["wl1"],"blacklist_words":["bl1"],"regex_block":["^rx_bl"],"regex_require":["^rx_wl"],"whitelist_mode":"all"}}`
+	enrichCustomMetadata([]byte(payload), rule)
+
+	if rule.CustomMetadataJson == "" {
+		t.Fatal("custom metadata JSON was not populated")
+	}
+
+	formatted := formatRuleJSON(rule)
+	wl, ok := formatted["whitelist_words"].([]string)
+	if !ok || len(wl) != 1 || wl[0] != "wl1" {
+		t.Errorf("expected whitelist_words ['wl1'], got %v", formatted["whitelist_words"])
+	}
+	bl, ok := formatted["blacklist_words"].([]string)
+	if !ok || len(bl) != 1 || bl[0] != "bl1" {
+		t.Errorf("expected blacklist_words ['bl1'], got %v", formatted["blacklist_words"])
+	}
+	rxBl, ok := formatted["regex_block"].([]string)
+	if !ok || len(rxBl) != 1 || rxBl[0] != "^rx_bl" {
+		t.Errorf("expected regex_block ['^rx_bl'], got %v", formatted["regex_block"])
+	}
+	rxWl, ok := formatted["regex_require"].([]string)
+	if !ok || len(rxWl) != 1 || rxWl[0] != "^rx_wl" {
+		t.Errorf("expected regex_require ['^rx_wl'], got %v", formatted["regex_require"])
+	}
+	if formatted["whitelist_mode"] != "all" {
+		t.Errorf("expected whitelist_mode 'all', got %v", formatted["whitelist_mode"])
+	}
+}

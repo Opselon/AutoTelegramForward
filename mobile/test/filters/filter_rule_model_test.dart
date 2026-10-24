@@ -116,5 +116,43 @@ void main() {
       expect(rule.blacklistKeywords, <String>[]);
       expect(rule.keywordEntries, <String>[]);
     });
+
+    test('whitelist and blacklist separation with regex patterns', () {
+      final wlRule = FilterRule(
+        id: 'wl-1',
+        name: 'Whitelist Only',
+        whitelistKeywords: ['pass'],
+      );
+      expect(wlRule.isWhitelist, isTrue);
+      expect(wlRule.isBlacklist, isFalse);
+      expect(wlRule.kind, FilterKind.keyword);
+
+      final blRule = FilterRule(
+        id: 'bl-1',
+        name: 'Blacklist Only',
+        blacklistKeywords: ['block'],
+      );
+      expect(blRule.isBlacklist, isTrue);
+      expect(blRule.isWhitelist, isFalse);
+      expect(blRule.kind, FilterKind.keyword);
+
+      final rxRule = FilterRule(
+        id: 'rx-1',
+        name: 'Regex Only',
+        regexPatterns: [r'^\[PROMO\]'],
+      );
+      expect(rxRule.isWhitelist, isFalse);
+      expect(rxRule.isBlacklist, isFalse);
+      expect(rxRule.kind, FilterKind.regex);
+      expect(rxRule.keywordEntries, [r'^\[PROMO\]']);
+
+      final mixedRule = FilterRule(
+        id: 'mx-1',
+        name: 'Mixed Rule',
+        whitelistKeywords: ['signal'],
+        regexPatterns: [r'\bVIP\b'],
+      );
+      expect(mixedRule.kind, FilterKind.mixed);
+    });
   });
 }

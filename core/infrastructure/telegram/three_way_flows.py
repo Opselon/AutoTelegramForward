@@ -132,13 +132,13 @@ class ThreeWayFlows:
         if fr is not None:
             wl = list(cfg.get("whitelist_words") or [])
             bl = list(cfg.get("blacklist_words") or [])
-            rx = list(cfg.get("regex_block") or [])
+            rx_req = list(cfg.get("regex_require") or [])
             if wl:
                 fr.whitelist_keywords = wl
             if bl:
                 fr.blacklist_keywords = bl
-            if rx:
-                fr.regex_patterns = rx
+            if rx_req:
+                fr.regex_patterns = rx_req
 
     def _legacy_filter_row(self, rule: ForwardRule) -> Optional[Any]:
         """The task's legacy FilterRule row, when one is attached."""
@@ -154,60 +154,69 @@ class ThreeWayFlows:
 
     # ------------------------------------------------------------- renderers
 
-    def render_regex_prompt(self, rule: ForwardRule) -> Tuple[str, Any]:
+    def render_regex_prompt(self, rule: ForwardRule, direction: str = "block") -> Tuple[str, Any]:
         lang = self._lang()
         text = self._t("ui_prompt_add_regex", lang=lang)
+        back_target = f"rfl_wl:{rule.id}" if direction == "require" else f"rfl_bl:{rule.id}"
         rows = [
-            [(self._t("ui_regex_example_btn", lang=lang), f"rgx_ex:{rule.id}")],
-            [(self._t("ui_cancel_back", lang=lang), f"rfl_bl:{rule.id}")],
+            [(self._t("ui_cancel_back", lang=lang), back_target)],
         ]
         return text, self._kbd(rows)
 
-    def render_regex_direction(self, rule: ForwardRule, pattern: str) -> Tuple[str, Any]:
+    def render_regex_direction(self, rule: ForwardRule, pattern: str, direction: str = "block") -> Tuple[str, Any]:
         lang = self._lang()
         text = (
             self._t("ui_prompt_add_regex", lang=lang)
             + "\n"
             + self._t("ui_regex_blocked_or_required", lang=lang)
         )
+        back_target = f"rfl_wl:{rule.id}" if direction == "require" else f"rfl_bl:{rule.id}"
         rows = [
             [
                 (self._t("ui_regex_btn_block", lang=lang), f"rgx_blk:{rule.id}"),
                 (self._t("ui_regex_btn_require", lang=lang), f"rgx_req:{rule.id}"),
             ],
-            [(self._t("ui_cancel_back", lang=lang), f"rfl_bl:{rule.id}")],
+            [(self._t("ui_cancel_back", lang=lang), back_target)],
         ]
         return text, self._kbd(rows)
 
-    def render_longtext_prompt(self, rule: ForwardRule) -> Tuple[str, Any]:
+    def render_longtext_prompt(self, rule: ForwardRule, direction: str = "blacklist") -> Tuple[str, Any]:
         lang = self._lang()
         text = self._t("ui_prompt_add_longtext", lang=lang)
+        back_target = f"rfl_wl:{rule.id}" if direction == "whitelist" else f"rfl_bl:{rule.id}"
         rows = [
-            [(self._t("ui_cancel_back", lang=lang), f"rfl_bl:{rule.id}")],
+            [(self._t("ui_cancel_back", lang=lang), back_target)],
         ]
         return text, self._kbd(rows)
 
-    def render_longtext_mode(self, rule: ForwardRule, entries: List[str]) -> Tuple[str, Any]:
+    def render_longtext_mode(self, rule: ForwardRule, entries: List[str], direction: str = "blacklist") -> Tuple[str, Any]:
         lang = self._lang()
         text = (
             self._t("ui_prompt_add_longtext", lang=lang)
             + "\n"
             + self._t("ui_longtext_choose_mode", lang=lang)
         )
+        back_target = f"rfl_wl:{rule.id}" if direction == "whitelist" else f"rfl_bl:{rule.id}"
         rows = [
             [
                 (self._t("ui_longtext_mode_any", lang=lang), f"lt_any:{rule.id}"),
                 (self._t("ui_longtext_mode_all", lang=lang), f"lt_all:{rule.id}"),
                 (self._t("ui_longtext_mode_phrase", lang=lang), f"lt_phr:{rule.id}"),
             ],
-            [(self._t("ui_cancel_back", lang=lang), f"rfl_bl:{rule.id}")],
+            [(self._t("ui_cancel_back", lang=lang), back_target)],
         ]
         return text, self._kbd(rows)
 
-    def render_test_prompt(self, rule: ForwardRule) -> Tuple[str, Any]:
+    def render_test_prompt(self, rule: ForwardRule, origin: str = "blacklist") -> Tuple[str, Any]:
         lang = self._lang()
         cfg = self._policy_of(rule)
-        kind = "blacklist" if (cfg.get("blacklist_words") or cfg.get("regex_block")) else "whitelist"
+        is_wl = origin == "whitelist"
+        kind = "whitelist" if is_wl else "blacklist"
+        entries = (
+            cfg.get("whitelist_words") or cfg.get("regex_require") or ()
+            if is_wl
+            else cfg.get("blacklist_words") or cfg.get("regex_block") or ()
+        )
         text = (
             self._t("ui_prompt_test_sample", lang=lang)
             + "\n"
@@ -215,18 +224,17 @@ class ThreeWayFlows:
                 "ui_test_effective_config",
                 lang=lang,
                 kind=kind,
-                entries=_fmt_entries(
-                    cfg.get("blacklist_words") or cfg.get("whitelist_words") or cfg.get("regex_block") or ()
-                ),
+                entries=_fmt_entries(entries),
                 mode=_mode_label(cfg.get("whitelist_mode") or "any"),
             )
         )
+        back_target = f"rfl_wl:{rule.id}" if is_wl else f"rfl_bl:{rule.id}"
         rows = [
-            [(self._t("ui_cancel_back", lang=lang), f"rfl_bl:{rule.id}")],
+            [(self._t("ui_cancel_back", lang=lang), back_target)],
         ]
         return text, self._kbd(rows)
 
-    def render_test_result(self, rule: ForwardRule, preview: MatchPreview) -> Tuple[str, Any]:
+    def render_test_result(self, rule: ForwardRule, preview: MatchPreview, origin: str = "blacklist") -> Tuple[str, Any]:
         lang = self._lang()
         entries = preview.matched or preview.missing or preview.entries
         mode = _mode_label(preview.mode)
@@ -245,16 +253,18 @@ class ThreeWayFlows:
                 missing=_fmt_entries(preview.missing or entries),
                 mode=mode,
             )
+        back_target = f"rfl_wl:{rule.id}" if origin == "whitelist" else f"rfl_bl:{rule.id}"
+        test_cb = f"rfl_test:{rule.id}:wl" if origin == "whitelist" else f"rfl_test:{rule.id}:bl"
         rows = [
-            [(self._t("ui_filters_btn_test", lang=lang), f"rfl_test:{rule.id}")],
-            [(self._t("ui_cancel_back", lang=lang), f"rfl_bl:{rule.id}")],
+            [(self._t("ui_filters_btn_test", lang=lang), test_cb)],
+            [(self._t("ui_cancel_back", lang=lang), back_target)],
         ]
         return text, self._kbd(rows)
 
     # --------------------------------------------------------------- actions
 
-    def start_regex(self, rule: ForwardRule) -> Tuple[str, Any]:
-        return self.render_regex_prompt(rule)
+    def start_regex(self, rule: ForwardRule, direction: str = "block") -> Tuple[str, Any]:
+        return self.render_regex_prompt(rule, direction=direction)
 
     def validate_pattern(self, pattern: str) -> Optional[str]:
         """A readable invalid-pattern diagnostic, or None when the pattern is usable."""

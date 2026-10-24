@@ -82,6 +82,21 @@ export default function FiltersPanel({ d }: { d: DashboardCtx }) {
                       </div>
 
                       <div style={{ fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {(Array.isArray(f?.whitelist_keywords) ? f.whitelist_keywords : []).length > 0 && (
+                          <div>
+                            <span style={{ color: '#34d399', display: 'block', marginBottom: 2 }}>
+                              {t('ui_whitelist')}
+                            </span>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                              {f.whitelist_keywords.map((w, idx) => (
+                                <span key={idx} style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#86efac', padding: '2px 6px', borderRadius: 4 }}>
+                                  {w}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
                         <div>
                           <span style={{ color: '#f87171', display: 'block', marginBottom: 2 }}>
                             {t('ui_blacklist')}
@@ -94,6 +109,21 @@ export default function FiltersPanel({ d }: { d: DashboardCtx }) {
                             ))}
                           </div>
                         </div>
+
+                        {(Array.isArray(f?.regex_patterns) ? f.regex_patterns : []).length > 0 && (
+                          <div>
+                            <span style={{ color: '#38bdf8', display: 'block', marginBottom: 2 }}>
+                              {t('ui_rp_mode_regex')}
+                            </span>
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                              {f.regex_patterns.map((rx, idx) => (
+                                <span key={idx} style={{ background: 'rgba(56, 189, 248, 0.15)', color: '#7dd3fc', padding: '2px 6px', borderRadius: 4, fontFamily: 'monospace' }}>
+                                  {rx}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         <div>
                           <span style={{ color: '#34d399', display: 'block', marginBottom: 2 }}>

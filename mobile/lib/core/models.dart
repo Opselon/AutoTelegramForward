@@ -892,10 +892,14 @@ class FilterRule {
   final int version;
 
   /// What the list screens show: the entries a user actually typed.
-  List<String> get keywordEntries =>
-      blacklistKeywords.isNotEmpty ? blacklistKeywords : whitelistKeywords;
+  List<String> get keywordEntries {
+    if (blacklistKeywords.isNotEmpty) return blacklistKeywords;
+    if (whitelistKeywords.isNotEmpty) return whitelistKeywords;
+    return regexPatterns;
+  }
 
   bool get isBlacklist => blacklistKeywords.isNotEmpty;
+  bool get isWhitelist => whitelistKeywords.isNotEmpty;
 
   /// Which of the three user-facing options this rule is. Derived, never
   /// persisted: a rule with word entries is a Keyword/Phrase (or Long-Text)
