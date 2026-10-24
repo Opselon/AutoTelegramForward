@@ -941,6 +941,34 @@ class AppMessagesUz {
     'ar_targets_no_match': 'Bu qidiruvga mos suhbat yo\'q',
     'ar_job_attempt': '{max} dan {n}-urinish',
     'ar_prompt_unarchive': 'Tiklash',
+    'filters_mode_all': 'Hammasi mos keladi',
+    'filters_mode_all_sub':
+        'Har bir yozuv biror joyda mos kelishi kerak; tartibi muhim emas.',
+    'filters_mode_any': 'Har qaysi mos keladi',
+    'filters_mode_any_sub': 'Kamida bitta yozuv mos kelishi kerak.',
+    'filters_mode_phrase': 'Bitta ibora sifatida',
+    'filters_mode_phrase_sub':
+        'Yozuvlar bitta uzluksiz ibora bo\'lib ko\'rinishi kerak.',
+    'filters_option_keyword': 'Kalit so\'z / Ibora',
+    'filters_option_keyword_sub': 'Odatiy so\'zlar. To\'liq ibora bitta yozuv.',
+    'filters_option_longtext': 'Uzun matnni moslash',
+    'filters_option_longtext_sub': 'So\'z yoki iborani to\'liq xabarning istalgan joyidan topadi, hatto keyingi paragrafdan ham. Regex bilimi shart emas.',
+    'filters_option_regex': 'Regex',
+    'filters_option_regex_sub':
+        'Muntazam ifoda. Tajribali foydalanuvchilar uchun.',
+    'filters_regex_hint': 'Misol uchun:\n^BUY XAUUSD\$ — butun xabar mos kelishi kerak.\n\b(BUY|SELL)\b — ikkala so\'zdan biri, butun so\'z sifatida.\nXAUUSD\s+BUY — XAUUSD, so\'ng bitta yoki bir nechta bo\'shliq, so\'ng BUY.',
+    'filters_regex_invalid': 'Bu naqsh yaroqsiz va saqlanmadi: {pattern}',
+    'filters_regex_label': 'Regex naqshlari (har bir qatonga bittadan)',
+    'filters_test_error': 'Server bu filtarni sinab bo\'lmadi: {error}',
+    'filters_test_match': 'MOS KELDI — bu xabar yuboriladi.',
+    'filters_test_matched': 'Mos: {matched}',
+    'filters_test_missing': 'Yetishmayotgan: {missing}',
+    'filters_test_mode_label': 'Usul: {mode}',
+    'filters_test_no_match': 'MOS KELMADI — bu xabar yuborilmaydi.',
+    'filters_test_run': 'Sinash',
+    'filters_test_sample_hint': 'Namunaviy xabarni joylang. Hech narsa saqlanmaydi va hech narsa yuborilmaydi — bu faqat sinov.',
+    'filters_test_title': 'Bu filtarni sinash',
+    'filters_three_options_title': 'Ushbu ro\'yxat qanday moslashini tanlang',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare

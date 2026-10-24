@@ -403,6 +403,25 @@ message ListFiltersResponse {
   repeated FilterRule filters = 1;
 }
 
+// Testing a filter before it is saved: the request carries draft values, the
+// response carries the decision and the evidence. Read-only by contract —
+// nothing is persisted, nothing is forwarded.
+message TestFilterRuleRequest {
+  int64 owner_user_id = 1;   // the authenticated tenant; never taken on trust
+  string rule_id = 2;        // when set, the stored filter is the base draft
+  FilterRule filter = 3;     // draft values override the stored ones
+  string sample = 4;         // the sample message text to test against
+}
+
+message TestFilterRuleResponse {
+  bool allowed = 1;
+  string reason = 2;         // stable reason code: blacklist:<word>, regex_block:<pattern>, ...
+  repeated string matched = 3;   // entries that matched, as the user typed them
+  repeated string missing = 4;   // whitelist entries absent (ALL mode), as typed
+  repeated string entries = 5;   // the entries the preview consulted
+  string mode = 6;           // any | all | phrase — the mode actually applied
+}
+
 // -----------------------------------------------------------------------------
 // AI Rewrite Configuration
 // -----------------------------------------------------------------------------
@@ -914,6 +933,7 @@ service FilterControlService {
   rpc CreateFilter(CreateFilterRequest) returns (FilterRule);
   rpc UpdateFilter(UpdateFilterRequest) returns (FilterRule);
   rpc DeleteFilter(DeleteFilterRequest) returns (StatusResponse);
+  rpc TestFilterRule(TestFilterRuleRequest) returns (TestFilterRuleResponse);
 }
 
 service AIControlService {

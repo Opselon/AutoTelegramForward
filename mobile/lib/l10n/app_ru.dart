@@ -940,6 +940,36 @@ class AppMessagesRu {
     'ar_targets_no_match': 'Ни один чат не найден',
     'ar_job_attempt': 'Попытка {n} из {max}',
     'ar_prompt_unarchive': 'Восстановить',
+    'filters_mode_all': 'Совпадение со ВСЕМИ',
+    'filters_mode_all_sub':
+        'Каждая запись должна совпасть где-либо; порядок не важен.',
+    'filters_mode_any': 'Совпадение с ЛЮБЫМ',
+    'filters_mode_any_sub': 'Должно совпасть хотя бы одно.',
+    'filters_mode_phrase': 'Совпадение с ФРАЗОЙ целиком',
+    'filters_mode_phrase_sub': 'Записи должны идти одной неразрывной фразой.',
+    'filters_option_keyword': 'Ключевое слово / Фраза',
+    'filters_option_keyword_sub': 'Обычные слова. Целая фраза — одна запись.',
+    'filters_option_longtext': 'Поиск по длинному тексту',
+    'filters_option_longtext_sub': 'Находит слово или фразу в любом месте всего сообщения, даже в более позднем абзаце. Знание Regex не требуется.',
+    'filters_option_regex': 'Regex',
+    'filters_option_regex_sub':
+        'Регулярное выражение. Для опытных пользователей.',
+    'filters_regex_hint': 'Примеры:\n^BUY XAUUSD\$ — всё сообщение должно совпадать.\n\b(BUY|SELL)\b — любое из слов, как цельные слова.\nXAUUSD\s+BUY — XAUUSD, затем один или несколько пробелов, затем BUY.',
+    'filters_regex_invalid':
+        'Этот шаблон недействителен и не был сохранён: {pattern}',
+    'filters_regex_label': 'Шаблоны Regex (по одному на строку)',
+    'filters_test_error': 'Сервер не смог проверить этот фильтр: {error}',
+    'filters_test_match': 'СОВПАДЕНИЕ — это сообщение будет переслано.',
+    'filters_test_matched': 'Совпало: {matched}',
+    'filters_test_missing': 'Отсутствует: {missing}',
+    'filters_test_mode_label': 'Режим: {mode}',
+    'filters_test_no_match':
+        'НЕТ СОВПАДЕНИЯ — это сообщение НЕ будет переслано.',
+    'filters_test_run': 'Проверить',
+    'filters_test_sample_hint': 'Вставьте пробное сообщение. Ничего не сохраняется и не пересылается — это только проверка.',
+    'filters_test_title': 'Проверить этот фильтр',
+    'filters_three_options_title':
+        'Выберите, как этот список должен сопоставляться',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare

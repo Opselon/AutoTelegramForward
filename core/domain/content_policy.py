@@ -46,7 +46,9 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-__all__ = ["PolicyDecision", "ContentPolicy", "fold_text", "contains_word", "has_link", "split_word_list"]
+__all__ = ["PolicyDecision", "MatchPreview", "ContentPolicy", "fold_text", "contains_word",
+           "has_link", "split_word_list", "preview_match", "preview_policy",
+           "compile_user_regex", "bounded_search"]
 
 
 # --------------------------------------------------------------------------
@@ -94,8 +96,23 @@ _RE_LINK = re.compile(
 )
 
 _REDOS = re.compile(r"\((?:[^()\\]|\\.)*[+*](?:[^()\\]|\\.)*\)\s*(?:[+*]|\{\d*,?\d*\})")
+#: The ``_REDOS`` shape above catches a quantifier nested inside a group that
+#: is itself quantified — ``(a+)+``. It does **not** catch the same blow-up
+#: from *ambiguous alternation* under a quantifier: ``(a|a)*b`` is exponential
+#: too (a 30-character input exceeds four seconds) but carries no ``+``/``*``
+#: inside the parens. Covering both is what makes the guard defensible instead
+#: of shape-luck.
+_REDOS_ALT = re.compile(r"\((?:[^()\\]|\\.)*\|(?:[^()\\]|\\.)*\)\s*(?:[+*]|\{\d*,?\d*\})")
 
 _MAX_PATTERN_LEN = 1000
+#: Ceiling on the text a *user-supplied* pattern is matched against. A bound
+#: is the second half of the ReDoS guarantee: the structural guard refuses the
+#: known catastrophic shapes, but a pattern nobody has catalogued yet could
+#: still be quadratic-or-worse on a 4096-character message. Matching against
+#: the first ``_MAX_MATCH_LEN`` characters keeps the worst case linear in the
+#: input, while a message longer than the cap only loses matching in its
+#: tail — and 8 KiB is far beyond a Telegram message (4096) already.
+_MAX_MATCH_LEN = 8192
 
 
 def has_link(text: str) -> bool:
@@ -289,18 +306,39 @@ def contains_word(
     return pattern.search(haystack) is not None
 
 
+def _hostile_pattern(pattern: str) -> bool:
+    """True when ``pattern`` carries a known catastrophic-backtracking shape."""
+    return _REDOS.search(pattern) is not None or _REDOS_ALT.search(pattern) is not None
+
+
+def bounded_search(compiled: re.Pattern, text: str) -> Optional[re.Match]:
+    """Match a user-supplied pattern against ``text`` under a length ceiling.
+
+    The structural guard refuses the catalogued catastrophic shapes, but it
+    cannot prove a pattern *safe*: an uncatalogued one could still degrade
+    quadratically or worse on a long body. Capping the scanned text at
+    ``_MAX_MATCH_LEN`` keeps the worst case linear in the input. A message
+    longer than the cap can only lose a match in its tail — and the cap sits
+    far above any Telegram message, so nothing a user can actually send is
+    shortened.
+    """
+    if not text:
+        return None
+    return compiled.search(text[:_MAX_MATCH_LEN])
+
+
 @lru_cache(maxsize=2048)
 def compile_user_pattern(pattern: str, flags: int = 0) -> Optional[re.Pattern]:
     """Compile a user-supplied pattern with explicit flags, or None.
 
     Same guard as :func:`compile_user_regex` (length cap, nested-quantifier
-    refusal) but the caller chooses the flags, which a find/replace entry needs:
-    a replacement may be case-sensitive, dot-all, multiline or verbose while a
-    content filter is always case-insensitive.
+    and ambiguous-alternation refusal) but the caller chooses the flags, which
+    a find/replace entry needs: a replacement may be case-sensitive, dot-all,
+    multiline or verbose while a content filter is always case-insensitive.
     """
     if not pattern or len(pattern) > _MAX_PATTERN_LEN:
         return None
-    if _REDOS.search(pattern):
+    if _hostile_pattern(pattern):
         return None
     try:
         return re.compile(pattern, flags)
@@ -342,6 +380,174 @@ class PolicyDecision:
 
     def __bool__(self) -> bool:  # pragma: no cover - convenience only
         return self.allowed
+
+
+@dataclass(frozen=True)
+class MatchPreview:
+    """Structured, client-ready answer to "does this rule match this text?"
+
+    Returned by :func:`preview_match` — the one canonical, read-only preview
+    every surface (bot ``Test Rules``, dashboard tester, mobile tester, the
+    API's preview endpoint) uses. It reports the decision *and* the evidence,
+    so a UI can show which entries matched and which were missing instead of
+    a bare boolean.
+
+    ``matched``/``missing`` carry the entries as the user typed them (not the
+    folded comparison forms): what a rule owner reads in a test result is what
+    they wrote in the editor.
+    """
+
+    allowed: bool
+    reason: str
+    matched: Tuple[str, ...] = ()
+    missing: Tuple[str, ...] = ()
+    #: The entries the preview actually consulted, so a UI can echo back the
+    #: effective configuration (entries + mode) next to the result.
+    entries: Tuple[str, ...] = ()
+    mode: str = "any"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """The wire form the API returns; stable for client caching."""
+        return {
+            "allowed": self.allowed,
+            "reason": self.reason,
+            "matched": list(self.matched),
+            "missing": list(self.missing),
+            "entries": list(self.entries),
+            "mode": self.mode,
+        }
+
+
+def preview_match(
+    text: str,
+    *,
+    whitelist: Sequence[str] = (),
+    blacklist: Sequence[str] = (),
+    mode: str = "any",
+    regex_block: Sequence[str] = (),
+    regex_require: Sequence[str] = (),
+    normalize: bool = True,
+    case_sensitive: bool = False,
+    word_boundary: bool = True,
+) -> MatchPreview:
+    """Preview a keyword/phrase/long-text or regex rule against ``text``.
+
+    Read-only by construction: it takes the configuration as arguments and
+    never touches a repository, a task or a queue, so a "test my rule" click
+    cannot forward anything or persist a draft. The decision is produced with
+    the *same* matchers :class:`ContentPolicy.evaluate` uses
+    (:func:`_first_matching_word`, :func:`contains_word` and the guarded
+    regex compiler), so a preview agrees with production instead of
+    approximating it.
+
+    ``mode`` is the long-text matching mode — ``any`` | ``all`` | ``phrase`` —
+    exactly the modes :class:`ContentPolicy` supports; anything else falls
+    back to ``any`` rather than being reported as an error the caller must
+    translate.
+    """
+    body = text or ""
+    wl = tuple(str(w) for w in (whitelist or ()) if str(w).strip())
+    bl = tuple(str(w) for w in (blacklist or ()) if str(w).strip())
+    mode = str(mode or "any").strip().lower()
+    if mode not in ("any", "all", "phrase"):
+        mode = "any"
+    flags: Dict[str, Any] = {
+        "normalize": normalize,
+        "case_sensitive": case_sensitive,
+        "word_boundary": word_boundary,
+    }
+
+    if bl:
+        hit = _first_matching_word(body, bl, **flags)
+        if hit:
+            return MatchPreview(
+                allowed=False, reason=f"blacklist:{hit}",
+                matched=(hit,), missing=(), entries=bl, mode=mode,
+            )
+
+    if wl:
+        if mode == "all":
+            matched = tuple(w for w in wl if contains_word(body, w, **flags))
+            missing = tuple(w for w in wl if w not in matched)
+            if missing:
+                return MatchPreview(
+                    allowed=False, reason=f"whitelist_missing:{','.join(missing[:3])}",
+                    matched=matched, missing=missing, entries=wl, mode=mode,
+                )
+            return MatchPreview(
+                allowed=True, reason="whitelist_all",
+                matched=matched, missing=(), entries=wl, mode=mode,
+            )
+        elif mode == "phrase":
+            phrase = " ".join(wl)
+            if not contains_word(body, phrase, **flags):
+                return MatchPreview(
+                    allowed=False, reason="whitelist_phrase_missing",
+                    matched=(), missing=tuple(wl), entries=wl, mode=mode,
+                )
+            return MatchPreview(
+                allowed=True, reason="whitelist_phrase",
+                matched=(phrase,), missing=(), entries=wl, mode=mode,
+            )
+        else:
+            hit = _first_matching_word(body, wl, **flags)
+            if not hit:
+                return MatchPreview(
+                    allowed=False, reason="whitelist_mismatch",
+                    matched=(), missing=tuple(wl), entries=wl, mode=mode,
+                )
+            return MatchPreview(
+                allowed=True, reason=f"whitelist:{hit}",
+                matched=(hit,), missing=(), entries=wl, mode=mode,
+            )
+
+    for pattern in regex_block or ():
+        compiled = _compile_user_regex(pattern)
+        if compiled is not None and bounded_search(compiled, body) is not None:
+            return MatchPreview(
+                allowed=False, reason=f"regex_block:{pattern[:48]}",
+                matched=(pattern,), missing=(), entries=tuple(regex_block), mode=mode,
+            )
+
+    if regex_require:
+        usable = [p for p in regex_require if _compile_user_regex(p) is not None]
+        if usable:
+            hit = next(
+                (p for p in usable if bounded_search(_compile_user_regex(p), body) is not None),  # type: ignore[union-attr]
+                None,
+            )
+            if hit is None:
+                return MatchPreview(
+                    allowed=False, reason="regex_require_missing",
+                    matched=(), missing=tuple(usable), entries=tuple(regex_require), mode=mode,
+                )
+            return MatchPreview(
+                allowed=True, reason=f"regex_require:{hit[:48]}",
+                matched=(hit,), missing=(), entries=tuple(regex_require), mode=mode,
+            )
+
+    return MatchPreview(True, "no_rules" if not (wl or bl or regex_block or regex_require) else "policy_passed",
+                        entries=tuple(wl) or tuple(bl), mode=mode)
+
+
+def preview_policy(text: str, policy: "ContentPolicy") -> MatchPreview:
+    """Preview an assembled :class:`ContentPolicy` (the task-level surface).
+
+    Equivalent to :func:`preview_match` over the policy's own lists, flags and
+    mode, so a UI testing a *saved* task policy and a UI testing a *draft*
+    agree — the same function answers both.
+    """
+    return preview_match(
+        text,
+        whitelist=policy.whitelist_words,
+        blacklist=policy.blacklist_words,
+        mode=policy.whitelist_mode,
+        regex_block=policy.regex_block,
+        regex_require=policy.regex_require,
+        normalize=policy.normalize,
+        case_sensitive=policy.case_sensitive,
+        word_boundary=policy.word_boundary,
+    )
 
 
 # --------------------------------------------------------------------------
@@ -631,13 +837,14 @@ class ContentPolicy:
 
         for pattern in self.regex_block:
             compiled = _compile_user_regex(pattern)
-            if compiled is not None and compiled.search(body):
+            if compiled is not None and bounded_search(compiled, body) is not None:
                 return PolicyDecision(False, f"regex_block:{pattern[:48]}", (pattern,))
 
         if self.regex_require:
             usable = [p for p in self.regex_require if _compile_user_regex(p) is not None]
             if usable and not any(
-                _compile_user_regex(p).search(body) for p in usable  # type: ignore[union-attr]
+                bounded_search(_compile_user_regex(p), body) is not None  # type: ignore[union-attr]
+                for p in usable
             ):
                 return PolicyDecision(False, "regex_require_missing")
 

@@ -946,6 +946,36 @@ class AppMessagesEs {
     'ar_targets_no_match': 'Ningún chat coincide con la búsqueda',
     'ar_job_attempt': 'Intento {n} de {max}',
     'ar_prompt_unarchive': 'Restaurar',
+    'filters_mode_all': 'Coincidir TODAS',
+    'filters_mode_all_sub':
+        'Cada entrada debe coincidir en algún lugar; el orden no importa.',
+    'filters_mode_any': 'Coincidir CUALQUIERA',
+    'filters_mode_any_sub': 'Al menos una entrada debe coincidir.',
+    'filters_mode_phrase': 'Coincidir como FRASE',
+    'filters_mode_phrase_sub':
+        'Las entradas deben aparecer como una frase consecutiva.',
+    'filters_option_keyword': 'Palabra / Frase',
+    'filters_option_keyword_sub':
+        'Las palabras habituales. Una frase completa es una entrada.',
+    'filters_option_longtext': 'Coincidencia de texto largo',
+    'filters_option_longtext_sub': 'Encuentra una palabra o frase en cualquier parte del mensaje completo, incluso en un párrafo posterior. No requiere conocer Regex.',
+    'filters_option_regex': 'Regex',
+    'filters_option_regex_sub':
+        'Una expresión regular. Para usuarios avanzados.',
+    'filters_regex_hint': 'Ejemplos:\n^BUY XAUUSD\$ — todo el mensaje debe coincidir.\n\b(BUY|SELL)\b — cualquiera de las palabras, como palabras completas.\nXAUUSD\s+BUY — XAUUSD, luego uno o más espacios, luego BUY.',
+    'filters_regex_invalid':
+        'Este patrón no es válido y no se guardó: {pattern}',
+    'filters_regex_label': 'Patrones Regex (uno por línea)',
+    'filters_test_error': 'El servidor no pudo probar este filtro: {error}',
+    'filters_test_match': 'COINCIDE — este mensaje se reenviaría.',
+    'filters_test_matched': 'Coincidió: {matched}',
+    'filters_test_missing': 'Falta: {missing}',
+    'filters_test_mode_label': 'Modo: {mode}',
+    'filters_test_no_match': 'NO COINCIDE — este mensaje NO se reenviaría.',
+    'filters_test_run': 'Probar',
+    'filters_test_sample_hint': 'Pega un mensaje de muestra. No se guarda nada y no se reenvía nada — esto solo prueba.',
+    'filters_test_title': 'Probar este filtro',
+    'filters_three_options_title': 'Elige cómo debe coincidir esta lista',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare

@@ -87,111 +87,78 @@ class _FiltersScreenState extends State<FiltersScreen> {
     final wlCtrl = TextEditingController(
       text: existing?.whitelistKeywords.join(', ') ?? '',
     );
+    // Regex patterns are one per line: a pattern may contain a space, and a
+    // comma is legal inside one, so the keyword separators cannot be reused.
+    final rxCtrl = TextEditingController(
+      text: existing?.regexPatterns.join('\n') ?? '',
+    );
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
 
     final saved = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(
-          existing == null ? t.get('filters_title') : t.get('action_edit'),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: nameCtrl,
-              decoration: InputDecoration(
-                labelText: t.get('filters_name'),
-                hintText: t.get('filters_name_hint'),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: blCtrl,
-              autofocus: existing == null,
-              decoration: InputDecoration(
-                labelText: t.get('filters_blacklist_label'),
-                hintText: t.get('filters_pattern_hint'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                t.get('filters_words_matching_help'),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: wlCtrl,
-              decoration: InputDecoration(
-                labelText: t.get('filters_whitelist_label'),
-                hintText: t.get('filters_pattern_hint'),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                t.get('filters_words_matching_help'),
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(t.get('action_cancel')),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              // The model sends the lists the proto actually carries; a
-              // multi-word phrase survives because splitKeywordList never
-              // breaks an entry on a space.
-              final blacklist = splitKeywordList(blCtrl.text);
-              final whitelist = splitKeywordList(wlCtrl.text);
-              if (blacklist.isEmpty && whitelist.isEmpty) return;
-              final name = nameCtrl.text.trim().isNotEmpty
-                  ? nameCtrl.text.trim()
-                  : (blacklist.isNotEmpty
-                        ? t.get('filters_kind_blacklist')
-                        : t.get('filters_kind_whitelist'));
-              final client = context.read<AppState>().buildApiClient();
-              if (existing == null) {
-                await client.createFilter(
-                  FilterRule(
-                    id: '',
-                    name: name,
-                    blacklistKeywords: blacklist,
-                    whitelistKeywords: whitelist,
-                  ),
-                );
-              } else {
-                await client.updateFilter(
-                  existing.id,
-                  existing.copyWith(
-                    name: name,
-                    blacklistKeywords: blacklist,
-                    whitelistKeywords: whitelist,
-                  ),
-                );
-              }
-              if (ctx.mounted) Navigator.pop(ctx, true);
-            },
-            child: Text(t.get('action_save')),
-          ),
-        ],
+      builder: (ctx) => _FilterEditor(
+        existing: existing,
+        nameCtrl: nameCtrl,
+        blCtrl: blCtrl,
+        wlCtrl: wlCtrl,
+        rxCtrl: rxCtrl,
       ),
     );
 
     if (saved == true) {
       await _load();
+    }
+  }
+
+  /// The read-only preview: the server's canonical matcher decides whether a
+  /// sample message would pass this filter. Nothing is saved and nothing is
+  /// forwarded — the endpoint is a test, not a delivery path.
+  Future<void> _testRule(FilterRule filter) async {
+    final t = AppMessages.of(context);
+    final sample = await showDialog<String>(
+      context: context,
+      builder: (ctx) => _FilterTestDialog(rule: filter),
+    );
+    if (sample == null || !mounted) return;
+
+    final client = context.read<AppState>().buildApiClient();
+    try {
+      final result = await client.testFilter(filter.id, sample);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text(t.get('filters_test_title')),
+          content: Text(_testSummary(t, result)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(t.get('action_close')),
+            ),
+          ],
+        ),
+      );
+    } on ApiException catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t.get('filters_test_error', params: {'error': exc.error.message}),
+          ),
+        ),
+      );
+    } catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            t.get(
+              'filters_test_error',
+              params: {'error': exc.toString().split('(').first.trim()},
+            ),
+          ),
+        ),
+      );
     }
   }
 
@@ -320,13 +287,26 @@ class _FiltersScreenState extends State<FiltersScreen> {
                               ),
                             ),
                             onTap: () => _addOrEdit(f),
-                            trailing: IconButton(
-                              tooltip: t.get('action_delete'),
-                              icon: Icon(
-                                Icons.delete_outline,
-                                color: AppColors.of(context).danger,
-                              ),
-                              onPressed: () => _delete(f),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  tooltip: t.get('filters_test_run'),
+                                  icon: Icon(
+                                    Icons.science_outlined,
+                                    color: AppColors.of(context).primary,
+                                  ),
+                                  onPressed: () => _testRule(f),
+                                ),
+                                IconButton(
+                                  tooltip: t.get('action_delete'),
+                                  icon: Icon(
+                                    Icons.delete_outline,
+                                    color: AppColors.of(context).danger,
+                                  ),
+                                  onPressed: () => _delete(f),
+                                ),
+                              ],
                             ),
                           ),
                         );
@@ -353,3 +333,326 @@ String _kindLabel(AppMessages t, FilterRule f) {
   if (hasWl) return t.get('filters_kind_whitelist');
   return t.get('filters_kind_empty');
 }
+
+/// The filter editor: the three user-facing options (Keyword / Phrase, Regex,
+/// Long-Text Matching) as one picker, with a sample tester on the saved rule.
+///
+/// The picker is a UI workflow over the lists the proto carries — the model
+/// classifies a rule from its populated lists, and the editor never persists a
+/// separate `kind`. The option decides which fields are offered: Keyword and
+/// Long-Text edit the word lists, Regex edits the pattern list. The mode
+/// picker (ANY / ALL / PHRASE) is presented for the Long-Text workflow and is
+/// resolved by the server's whitelist_mode; the client does not interpret it.
+class _FilterEditor extends StatefulWidget {
+  const _FilterEditor({
+    required this.existing,
+    required this.nameCtrl,
+    required this.blCtrl,
+    required this.wlCtrl,
+    required this.rxCtrl,
+  });
+
+  final FilterRule? existing;
+  final TextEditingController nameCtrl;
+  final TextEditingController blCtrl;
+  final TextEditingController wlCtrl;
+  final TextEditingController rxCtrl;
+
+  @override
+  State<_FilterEditor> createState() => _FilterEditorState();
+}
+
+class _FilterEditorState extends State<_FilterEditor> {
+  FilterKind _option = FilterKind.keyword;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final kind = widget.existing?.kind ?? FilterKind.empty;
+    _option = kind == FilterKind.regex ? FilterKind.regex : kind;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppMessages.of(context);
+    final showWords = _option != FilterKind.regex;
+    final showRegex = _option != FilterKind.keyword;
+
+    return AlertDialog(
+      title: Text(
+        widget.existing == null ? t.get('filters_title') : t.get('action_edit'),
+      ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: widget.nameCtrl,
+              decoration: InputDecoration(
+                labelText: t.get('filters_name'),
+                hintText: t.get('filters_name_hint'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              t.get('filters_three_options_title'),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+            for (final option in FilterKind.values)
+              if (option != FilterKind.mixed)
+                RadioListTile<FilterKind>(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  value: option,
+                  groupValue: _option,
+                  title: Text(_optionTitle(t, option)),
+                  subtitle: Text(_optionSub(t, option)),
+                  onChanged: (v) {
+                    if (v != null) setState(() => _option = v);
+                  },
+                ),
+            if (showWords) ...[
+              const SizedBox(height: 8),
+              TextField(
+                controller: widget.blCtrl,
+                decoration: InputDecoration(
+                  labelText: t.get('filters_blacklist_label'),
+                  hintText: t.get('filters_pattern_hint'),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: widget.wlCtrl,
+                decoration: InputDecoration(
+                  labelText: t.get('filters_whitelist_label'),
+                  hintText: t.get('filters_pattern_hint'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  _option == FilterKind.empty
+                      ? t.get('filters_option_longtext_sub')
+                      : t.get('filters_words_matching_help'),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ],
+            if (showRegex) ...[
+              const SizedBox(height: 16),
+              TextField(
+                controller: widget.rxCtrl,
+                maxLines: 3,
+                decoration: InputDecoration(
+                  labelText: t.get('filters_regex_label'),
+                  hintText: t.get('filters_regex_hint'),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: Text(t.get('action_cancel')),
+        ),
+        ElevatedButton(
+          onPressed: _saving ? null : _save,
+          child: Text(t.get('action_save')),
+        ),
+      ],
+    );
+  }
+
+  String _optionTitle(AppMessages t, FilterKind kind) {
+    switch (kind) {
+      case FilterKind.keyword:
+        return t.get('filters_option_keyword');
+      case FilterKind.regex:
+        return t.get('filters_option_regex');
+      case FilterKind.empty:
+        return t.get('filters_option_longtext');
+      case FilterKind.mixed:
+        return _optionLabel(t, kind);
+    }
+  }
+
+  String _optionSub(AppMessages t, FilterKind kind) {
+    switch (kind) {
+      case FilterKind.keyword:
+        return t.get('filters_option_keyword_sub');
+      case FilterKind.regex:
+        return t.get('filters_option_regex_sub');
+      case FilterKind.empty:
+        return t.get('filters_option_longtext_sub');
+      case FilterKind.mixed:
+        return '';
+    }
+  }
+
+  Future<void> _save() async {
+    final t = AppMessages.of(context);
+    final blacklist = splitKeywordList(widget.blCtrl.text);
+    final whitelist = splitKeywordList(widget.wlCtrl.text);
+    // One pattern per line: the field's own separator, because a comma can
+    // legitimately appear inside a pattern.
+    final regex = widget.rxCtrl.text
+        .split('\n')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
+    if (blacklist.isEmpty && whitelist.isEmpty && regex.isEmpty) return;
+
+    setState(() => _saving = true);
+    try {
+      final name = widget.nameCtrl.text.trim().isNotEmpty
+          ? widget.nameCtrl.text.trim()
+          : (blacklist.isNotEmpty
+                ? t.get('filters_kind_blacklist')
+                : t.get('filters_kind_whitelist'));
+      final client = context.read<AppState>().buildApiClient();
+      if (widget.existing == null) {
+        await client.createFilter(
+          FilterRule(
+            id: '',
+            name: name,
+            blacklistKeywords: blacklist,
+            whitelistKeywords: whitelist,
+            regexPatterns: regex,
+          ),
+        );
+      } else {
+        await client.updateFilter(
+          widget.existing!.id,
+          widget.existing!.copyWith(
+            name: name,
+            blacklistKeywords: blacklist,
+            whitelistKeywords: whitelist,
+            regexPatterns: regex,
+          ),
+        );
+      }
+      if (mounted) Navigator.pop(context, true);
+    } catch (exc) {
+      // A failed save must not look like a success: the dialog stays open and
+      // the error reaches the user instead of vanishing.
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(exc.toString().split('(').first.trim())),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+}
+
+/// The sample-message tester for one saved filter.
+///
+/// The verdict comes from the server's canonical matcher, so it can never
+/// disagree with what the production pipeline will do with the same message.
+class _FilterTestDialog extends StatefulWidget {
+  const _FilterTestDialog({required this.rule});
+
+  final FilterRule rule;
+
+  @override
+  State<_FilterTestDialog> createState() => _FilterTestDialogState();
+}
+
+class _FilterTestDialogState extends State<_FilterTestDialog> {
+  final _ctrl = TextEditingController();
+  bool _busy = false;
+  FilterTestResult? _result;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppMessages.of(context);
+
+    return AlertDialog(
+      title: Text(t.get('filters_test_title')),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _optionLabel(t, widget.rule.kind),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _ctrl,
+              maxLines: 5,
+              autofocus: true,
+              decoration: InputDecoration(
+                hintText: t.get('filters_test_sample_hint'),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+            if (_result != null) ...[
+              const SizedBox(height: 12),
+              Text(_testSummary(t, _result!)),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: Text(t.get('action_close')),
+        ),
+        ElevatedButton(
+          onPressed: _busy ? null : _run,
+          child: Text(t.get('filters_test_run')),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _run() async {
+    final sample = _ctrl.text.trim();
+    if (sample.isEmpty || !mounted) return;
+    setState(() {
+      _busy = true;
+      _result = null;
+    });
+    try {
+      final client = context.read<AppState>().buildApiClient();
+      final result = await client.testFilter(widget.rule.id, sample);
+      if (mounted) setState(() => _result = result);
+    } on ApiException catch (exc) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              t_testError(AppMessages.of(context), exc.error.message),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+}
+
+/// A localized API-error line for the tester's failure path.
+String t_testError(AppMessages t, String error) =>
+    t.get('filters_test_error', params: {'error': error});

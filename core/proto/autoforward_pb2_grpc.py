@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from . import autoforward_pb2 as autoforward__pb2
+import autoforward_pb2 as autoforward__pb2
 
 GRPC_GENERATED_VERSION = '1.84.0'
 GRPC_VERSION = grpc.__version__
@@ -1188,6 +1188,11 @@ class FilterControlServiceStub:
                 request_serializer=autoforward__pb2.DeleteFilterRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.StatusResponse.FromString,
                 _registered_method=True)
+        self.TestFilterRule = channel.unary_unary(
+                '/autoforward.FilterControlService/TestFilterRule',
+                request_serializer=autoforward__pb2.TestFilterRuleRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.TestFilterRuleResponse.FromString,
+                _registered_method=True)
 
 
 class FilterControlServiceServicer:
@@ -1217,6 +1222,12 @@ class FilterControlServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def TestFilterRule(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_FilterControlServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -1239,6 +1250,11 @@ def add_FilterControlServiceServicer_to_server(servicer, server):
                     servicer.DeleteFilter,
                     request_deserializer=autoforward__pb2.DeleteFilterRequest.FromString,
                     response_serializer=autoforward__pb2.StatusResponse.SerializeToString,
+            ),
+            'TestFilterRule': grpc.unary_unary_rpc_method_handler(
+                    servicer.TestFilterRule,
+                    request_deserializer=autoforward__pb2.TestFilterRuleRequest.FromString,
+                    response_serializer=autoforward__pb2.TestFilterRuleResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -1349,6 +1365,33 @@ class FilterControlService:
             '/autoforward.FilterControlService/DeleteFilter',
             autoforward__pb2.DeleteFilterRequest.SerializeToString,
             autoforward__pb2.StatusResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def TestFilterRule(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.FilterControlService/TestFilterRule',
+            autoforward__pb2.TestFilterRuleRequest.SerializeToString,
+            autoforward__pb2.TestFilterRuleResponse.FromString,
             options,
             channel_credentials,
             insecure,

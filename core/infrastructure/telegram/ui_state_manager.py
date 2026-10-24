@@ -113,6 +113,9 @@ DYNAMIC_STEP_PREFIXES = (
     "add_bl_",
     "add_wl_", "set_wm_", "set_topic_", "rename_rule_", "ai_prompt_name_",
     "ai_prompt_sys_",
+    # Three-way filter text steps: the pending regex pattern, the Long-Text
+    # entry list, or the sample message for a read-only rule test.
+    "tw_regex_", "tw_longtext_", "tw_test_",
 )
 
 STEP_FALLBACK = ""

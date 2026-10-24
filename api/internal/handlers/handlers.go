@@ -512,6 +512,12 @@ func enrichCustomMetadata(rawBody []byte, rule *pb.ForwardRule) {
 const maxMetadataBytes = 64 * 1024
 const maxWatermarkLen = 200
 const maxKeywordReplyLen = 4096
+
+// maxSampleTextLen bounds the sample text a "test my rule" request may carry.
+// The Core matches user patterns against a capped body too (its own ReDoS
+// bound), so a request far beyond a Telegram message is refused rather than
+// paid for.
+const maxSampleTextLen = 8192
 const maxDelaySeconds = 3600.0
 
 // maxForwardEveryN mirrors the setting registry: 1 = every message, 1000 is the
@@ -2206,6 +2212,64 @@ func (h *Handlers) DeleteFilter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// TestFilterRule previews a filter against sample text. Read-only: the draft
+// is evaluated by the Core's canonical matcher and nothing is persisted, so
+// a user can try a rule before saving it. The decision the Core returns is
+// the same one the production pipeline makes — the API never interprets a
+// pattern itself.
+func (h *Handlers) TestFilterRule(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
+	if id.UserID <= 0 {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
+	var req struct {
+		RuleID            string   `json:"rule_id"`
+		Sample            string   `json:"sample"`
+		Name              string   `json:"name"`
+		WhitelistKeywords []string `json:"whitelist_keywords"`
+		BlacklistKeywords []string `json:"blacklist_keywords"`
+		RegexPatterns     []string `json:"regex_patterns"`
+	}
+	if !bind(w, r, &req) {
+		return
+	}
+	if len(req.Sample) > maxSampleTextLen {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "sample too long",
+		})
+		return
+	}
+	// A stored rule the caller does not own is not a base for the draft:
+	// resolve it through the ownership check the Core performs, so a foreign
+	// rule_id can only ever produce the draft's own values.
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.Filters.TestFilterRule(ctx, &pb.TestFilterRuleRequest{
+		OwnerUserId: id.UserID,
+		RuleId:      req.RuleID,
+		Sample:      req.Sample,
+		Filter: &pb.FilterRule{
+			Name:              req.Name,
+			WhitelistKeywords: req.WhitelistKeywords,
+			BlacklistKeywords: req.BlacklistKeywords,
+			RegexPatterns:     req.RegexPatterns,
+		},
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"allowed": resp.GetAllowed(),
+		"reason":  resp.GetReason(),
+		"matched": resp.GetMatched(),
+		"missing": resp.GetMissing(),
+		"entries": resp.GetEntries(),
+		"mode":    resp.GetMode(),
+	})
 }
 
 // -------------------------------------------------------------------- AI

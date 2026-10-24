@@ -1354,3 +1354,18 @@ export interface ReplaceRuleTestResult {
   matches: number
   changed: boolean
 }
+
+/**
+ * The filter preview: what a content filter decides about a sample, without
+ * storing or forwarding anything. The Core's canonical matcher produces the
+ * verdict (`preview_match`), so this object can never disagree with the
+ * production pipeline — the dashboard never interprets a pattern client-side.
+ */
+export interface FilterTestResult {
+  allowed: boolean
+  reason: string
+  matched: string[]
+  missing: string[]
+  entries: string[]
+  mode: string
+}

@@ -627,7 +627,24 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
     async def _save_owned_rule(self, rule, user_id: int, expected_version=None):
         # v12.2: writes go through update_owned so a rule whose id was
         # transplanted into another user's conversation state is refused.
-        return await self._rules.update_owned(rule, self._scope_uid(user_id), expected_version)
+        try:
+            return await self._rules.update_owned(rule, self._scope_uid(user_id), expected_version)
+        except Exception:
+            logger.warning("[BOT:FILTER_SAVE] failed to save rule %s", str(getattr(rule, "id", "?"))[:8], exc_info=True)
+            raise
+
+    # --- Three-way content filters (Keyword / Regex / Long-Text) ------------
+    # Wired lazily: the flows module needs no constructor state, but a lazy
+    # property keeps the wiring obvious and test-mockable.
+    @property
+    def three_way(self) -> "ThreeWayFlows":
+        from .three_way_flows import ThreeWayFlows
+
+        cached = getattr(self, "_three_way", None)
+        if cached is None:
+            cached = ThreeWayFlows(self)
+            self._three_way = cached
+        return cached
 
     def _lang_memo(self) -> Dict[int, str]:
         """Per-user resolved-language memo.
@@ -3755,8 +3772,17 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
 
         rows: List[List[Tuple[str, str]]] = [
             [
-                (self._t("ui_bl_btn_add", lang=lang), f"rfl_bl_add:{rule.id}"),
+                (self._t("ui_bl_btn_keyword", lang=lang), f"rfl_bl_add:{rule.id}"),
                 (self._t("ui_bl_btn_clear", lang=lang), f"rfl_bl_clr:{rule.id}"),
+            ],
+            [
+                (self._t("ui_bl_btn_regex", lang=lang), f"rfl_bl_regex:{rule.id}"),
+            ],
+            [
+                (self._t("ui_bl_btn_longtext", lang=lang), f"rfl_bl_long:{rule.id}"),
+            ],
+            [
+                (self._t("ui_filters_btn_test", lang=lang), f"rfl_test:{rule.id}"),
             ],
             [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
@@ -3787,8 +3813,17 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
 
         rows: List[List[Tuple[str, str]]] = [
             [
-                (self._t("ui_wl_btn_add", lang=lang), f"rfl_wl_add:{rule.id}"),
+                (self._t("ui_wl_btn_keyword", lang=lang), f"rfl_wl_add:{rule.id}"),
                 (self._t("ui_wl_btn_clear", lang=lang), f"rfl_wl_clr:{rule.id}"),
+            ],
+            [
+                (self._t("ui_wl_btn_regex", lang=lang), f"rfl_wl_regex:{rule.id}"),
+            ],
+            [
+                (self._t("ui_wl_btn_longtext", lang=lang), f"rfl_wl_long:{rule.id}"),
+            ],
+            [
+                (self._t("ui_filters_btn_test", lang=lang), f"rfl_test:{rule.id}"),
             ],
             [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
@@ -7863,6 +7898,95 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             text, kbd = self._render_whitelist_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
+        # --- Three-Way Filter Handlers (Keyword / Regex / Long-Text) ---
+        # The menus above offer one action per user-facing option; these six
+        # callbacks make them act. Each step keeps its pending input in the
+        # per-conversation UiState so a stale or duplicate tap cannot cross
+        # conversations, and ownership is re-checked on every callback.
+        @b.on_callback_query(filters.regex(r"^rfl_bl_regex:(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_bl_regex(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            text, kbd = self.three_way.start_regex(rule)
+            st = self._state(uid)
+            st.buffer["tw_direction"] = "block"
+            st.step = f"tw_regex_{rule.id}"
+            await self._persist(uid, st)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rfl_bl_long:(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_bl_long(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            text, kbd = self.three_way.render_longtext_prompt(rule)
+            st = self._state(uid)
+            st.buffer["tw_direction"] = "blacklist"
+            st.step = f"tw_longtext_{rule.id}"
+            await self._persist(uid, st)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rfl_wl_regex:(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_wl_regex(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            text, kbd = self.three_way.start_regex(rule)
+            st = self._state(uid)
+            st.buffer["tw_direction"] = "require"
+            st.step = f"tw_regex_{rule.id}"
+            await self._persist(uid, st)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rfl_wl_long:(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_wl_long(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            text, kbd = self.three_way.render_longtext_prompt(rule)
+            st = self._state(uid)
+            st.buffer["tw_direction"] = "whitelist"
+            st.step = f"tw_longtext_{rule.id}"
+            await self._persist(uid, st)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rfl_test:(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_test(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            text, kbd = self.three_way.render_test_prompt(rule)
+            st = self._state(uid)
+            st.step = f"tw_test_{rule.id}"
+            await self._persist(uid, st)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+            await cq.answer()
+
         # --- Watermark Handlers ---
         @b.on_callback_query(filters.regex(r"^rwm:(.+)$"))
         @self._localized_handler
@@ -10316,6 +10440,80 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         card_text, kbd = self._render_watermark_menu(rule)
         await message.reply_text(self._t("ui_step_watermark_saved", watermark=rule.watermark), reply_markup=kbd)
 
+    async def _step_tw_regex(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
+        """One regex pattern, validated before it is saved. A bad pattern keeps
+        the existing rule untouched and tells the owner why."""
+        uid = message.from_user.id if message.from_user else 0
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
+        pattern = (text or "").strip()
+        diag = self.three_way.validate_pattern(pattern)
+        if diag is not None:
+            # One readable line per failure shape; the catalog already carries
+            # these semantics under the reason-* family.
+            key = {"empty": "ui_prompt_add_regex", "too_long": "ui_reason_invalid_regex"}.get(
+                diag, "ui_reason_invalid_regex")
+            kbd = self._kbd([[(self._t("ui_cancel_back"), f"rfl_bl:{rule.id}")]])
+            return await message.reply_text(self._t(key), reply_markup=kbd)
+        direction = st.buffer.get("tw_direction") or "block"
+        ok, _key = await self.three_way.save_regex(rule, pattern, direction, uid)
+        if not ok:
+            kbd = self._kbd([[(self._t("ui_cancel_back"), f"rfl_bl:{rule.id}")]])
+            return await message.reply_text(self._t("ui_reason_invalid_regex"), reply_markup=kbd)
+        st.buffer.pop("tw_direction", None)
+        st.step = ""
+        await self._persist(uid, st)
+        card_text, kbd = self._render_blacklist_menu(rule)
+        await message.reply_text(self._t("ui_step_blacklist_saved", count=1), reply_markup=kbd)
+
+    async def _step_tw_longtext(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
+        """Long-Text entries: words or phrases anywhere in the full message.
+        The mode (ANY/ALL/PHRASE) was chosen before, so the whole typed text is
+        treated as the entry list and no phrase is split."""
+        uid = message.from_user.id if message.from_user else 0
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
+        mode = st.buffer.get("tw_mode") or "any"
+        direction = st.buffer.get("tw_direction") or "blacklist"
+        ok, n = await self.three_way.save_longtext(rule, text, mode, uid, direction)
+        if not ok:
+            kbd = self._kbd([[(self._t("ui_cancel_back"), f"rfl_bl:{rule.id}")]])
+            return await message.reply_text(self._t("ui_prompt_add_longtext"), reply_markup=kbd)
+        st.buffer.pop("tw_mode", None)
+        st.buffer.pop("tw_direction", None)
+        st.step = ""
+        await self._persist(uid, st)
+        render = self._render_blacklist_menu if direction == "blacklist" else self._render_whitelist_menu
+        card_text, kbd = render(rule)
+        msg_key = "ui_step_blacklist_saved" if direction == "blacklist" else "ui_step_whitelist_saved"
+        await message.reply_text(self._t(msg_key, count=n), reply_markup=kbd)
+
+    async def _step_tw_test(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
+        """Read-only rule test: the canonical preview decides, nothing is
+        saved and nothing is forwarded."""
+        uid = message.from_user.id if message.from_user else 0
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
+        try:
+            preview = self.three_way.test(rule, (text or ""))
+            card_text, kbd = self.three_way.render_test_result(rule, preview)
+        except Exception:
+            logger.exception("[BOT:FILTER_TEST] rule=%s", str(rule_id)[:8])
+            return await message.reply_text(self._t("ui_ai_test_unknown_error"), reply_markup=self._kbd([]))
+        finally:
+            st.step = ""
+            await self._persist(uid, st)
+        await message.reply_text(card_text, reply_markup=kbd)
+
     async def _step_ai_prompt_name(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
         uid = message.from_user.id if message.from_user else 0
         name = (text or "").strip()
@@ -10801,6 +10999,18 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         if st.step.startswith("set_wm_"):
             rule_id = st.step.split("set_wm_", 1)[1]
             return await self._step_set_wm(message, st, text, rule_id)
+        # Three-way filter text steps: the pending pattern, entry list, or
+        # sample message the user typed in response to a Regex / Long-Text /
+        # Test prompt. Direction and mode already live in UiState fields.
+        if st.step.startswith("tw_regex_"):
+            rule_id = st.step.split("tw_regex_", 1)[1]
+            return await self._step_tw_regex(message, st, text, rule_id)
+        if st.step.startswith("tw_longtext_"):
+            rule_id = st.step.split("tw_longtext_", 1)[1]
+            return await self._step_tw_longtext(message, st, text, rule_id)
+        if st.step.startswith("tw_test_"):
+            rule_id = st.step.split("tw_test_", 1)[1]
+            return await self._step_tw_test(message, st, text, rule_id)
         if st.step.startswith("ai_prompt_name_"):
             rule_id = st.step.split("ai_prompt_name_", 1)[1]
             return await self._step_ai_prompt_name(message, st, text, rule_id)

@@ -11,6 +11,7 @@ import grpc
 logger = logging.getLogger(__name__)
 
 from ...proto import pb, pb_grpc  # noqa: F401
+from ...domain.content_policy import preview_match
 from ...application.backup_service import (  # noqa: E402
     decrypt_bundle,
     deserialize_bundle,
@@ -2077,6 +2078,53 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
             )
             return _status(False, "denied")
         return _status(ok, "deleted" if ok else "not_found")
+
+    async def TestFilterRule(self, request, context):
+        """Preview a filter against sample text. Read-only: nothing is persisted.
+
+        The stored filter (``rule_id``, ownership-checked) is the base; draft
+        fields on ``filter`` override it, so a UI tests an *edited* rule
+        before saving. The decision comes from the canonical domain preview,
+        which shares its matchers with the production pipeline — a test
+        previews exactly what production would decide.
+        """
+        owner = int(request.owner_user_id or 0)
+        if not owner:
+            return pb.TestFilterRuleResponse(
+                allowed=False, reason="unauthorized")
+        draft = request.filter
+        wl = [str(w) for w in draft.whitelist_keywords]
+        bl = [str(w) for w in draft.blacklist_keywords]
+        rx = [str(p) for p in draft.regex_patterns]
+        # A legacy FilterRule carries no mode: its gate is require-any, the
+        # semantics the engine has always applied. Missing draft fields fall
+        # back to the stored rule so a plain "test my saved rule" works.
+        if request.rule_id:
+            existing = await self._filters.get_owned(request.rule_id, owner)
+            if existing is not None:
+                wl = wl or list(existing.whitelist_keywords)
+                bl = bl or list(existing.blacklist_keywords)
+                rx = rx or list(existing.regex_patterns)
+        # The legacy gate is *require-any*: any compiled pattern matching (or
+        # any keyword) passes; a total mismatch drops. That is the ANY mode
+        # of the canonical preview, so that is what the UI is told applied.
+        result = preview_match(
+            request.sample,
+            whitelist=wl,
+            blacklist=bl,
+            mode="any",
+            regex_block=(),
+            regex_require=tuple(rx),
+            word_boundary=False,
+        )
+        return pb.TestFilterRuleResponse(
+            allowed=result.allowed,
+            reason=result.reason,
+            matched=list(result.matched),
+            missing=list(result.missing),
+            entries=list(result.entries),
+            mode=result.mode,
+        )
 
 
 class AIControlServicer(pb_grpc.AIControlServiceServicer):
