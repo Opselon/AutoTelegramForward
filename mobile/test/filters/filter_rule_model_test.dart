@@ -37,15 +37,15 @@ void main() {
     });
 
     test('a space never separates an entry — a phrase stays whole', () {
-      expect(
-        splitKeywordList('Whale Update on a VIP call'),
-        ['Whale Update on a VIP call'],
-      );
+      expect(splitKeywordList('Whale Update on a VIP call'), [
+        'Whale Update on a VIP call',
+      ]);
       // The exact reported defect: the phrase typed next to a short keyword.
-      expect(
-        splitKeywordList('5x, 10x\nWhale Update on a VIP call'),
-        ['5x', '10x', 'Whale Update on a VIP call'],
-      );
+      expect(splitKeywordList('5x, 10x\nWhale Update on a VIP call'), [
+        '5x',
+        '10x',
+        'Whale Update on a VIP call',
+      ]);
     });
 
     test('entries are trimmed, empties dropped, duplicates removed', () {
@@ -61,10 +61,10 @@ void main() {
         name: 'Anti-spam',
         blacklistKeywords: ['scam', 'Whale Update on a VIP call'],
       ).toJson();
-      expect(
-        json['blacklist_keywords'],
-        ['scam', 'Whale Update on a VIP call'],
-      );
+      expect(json['blacklist_keywords'], [
+        'scam',
+        'Whale Update on a VIP call',
+      ]);
       expect(json['whitelist_keywords'], <String>[]);
       expect(json['name'], 'Anti-spam');
       // The dead keys the API silently dropped must not come back.
@@ -83,10 +83,7 @@ void main() {
       expect(rule.keywordEntries, ['5x', 'Whale Update on a VIP call']);
       expect(rule.isBlacklist, isFalse);
       // What the list screen shows: the phrase, not fragments of it.
-      expect(
-        rule.keywordEntries.join(', '),
-        '5x, Whale Update on a VIP call',
-      );
+      expect(rule.keywordEntries.join(', '), '5x, Whale Update on a VIP call');
     });
 
     test('a blacklist rule reports itself as a blacklist', () {
