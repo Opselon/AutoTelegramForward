@@ -305,6 +305,7 @@ export const pt: Catalog = {
   "ui_badge_task_title": "Esta tarefa escolheu este valor; o padrão do bot não o altera",
   "ui_blacklist": "Lista Negra",
   "ui_blacklist_keywords_comma_separated": "Palavras-chave da lista negra (separadas por vírgulas):",
+  "ui_blacklist_keywords_placeholder": "JOIN, SCAM, PROMO… ou uma frase inteira como “Whale Update on a VIP call”",
   "ui_blacklist_whitelist": "Lista negra e lista branca",
   "ui_blacklisted": "Lista negra:",
   "ui_block_audio": "Bloquear Áudio",

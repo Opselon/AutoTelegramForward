@@ -305,6 +305,7 @@ export const ru: Catalog = {
   "ui_badge_task_title": "Это значение задано задачей; значение бота его не изменит",
   "ui_blacklist": "Чёрный список",
   "ui_blacklist_keywords_comma_separated": "Ключевые слова чёрного списка (через запятую):",
+  "ui_blacklist_keywords_placeholder": "JOIN, SCAM, PROMO… или целая фраза вроде «Whale Update on a VIP call»",
   "ui_blacklist_whitelist": "Чёрный и белый списки",
   "ui_blacklisted": "В чёрном списке:",
   "ui_block_audio": "Блокировать аудио",

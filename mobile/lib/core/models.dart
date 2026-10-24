@@ -849,50 +849,101 @@ class ForwardRule {
 
 /// ---- Filters ------------------------------------------------------------
 
+/// Separators a keyword list is split on, mirroring the engine's
+/// `split_word_list`: comma, Persian/Arabic comma, newline. A pasted
+/// "spam, scam" becomes two entries; a phrase typed with spaces stays one.
+List<String> splitKeywordList(String raw) {
+  // \u060c is the Persian/Arabic comma — a Persian keyboard offers it directly.
+  final parts = raw.split(RegExp(r'[\n,\u060c]'));
+  final out = <String>[];
+  for (final part in parts) {
+    final entry = part.trim();
+    if (entry.isNotEmpty && !out.contains(entry)) out.add(entry);
+  }
+  return out;
+}
+
+/// The API's FilterRule: the proto carries keyword lists, not a pattern blob.
+///
+/// The model used to send a `pattern` string, which the API silently dropped
+/// (no such field exists server-side) — so a blacklist typed in the app never
+/// reached the engine and the filter looked saved while doing nothing. The
+/// editor edits the real lists; [splitKeywordList] turns one typed field into
+/// the entries the matcher sees, so a multi-word phrase such as
+/// "Whale Update on a VIP call" keeps its words.
 @immutable
 class FilterRule {
   const FilterRule({
     required this.id,
-    required this.pattern,
-    required this.kind,
+    required this.name,
+    this.whitelistKeywords = const [],
+    this.blacklistKeywords = const [],
+    this.regexPatterns = const [],
     this.isEnabled = true,
     this.version = 0,
   });
 
   final String id;
-  final String pattern;
-  final String kind;
+  final String name;
+  final List<String> whitelistKeywords;
+  final List<String> blacklistKeywords;
+  final List<String> regexPatterns;
   final bool isEnabled;
   final int version;
 
+  /// What the list screens show: the entries a user actually typed.
+  List<String> get keywordEntries =>
+      blacklistKeywords.isNotEmpty ? blacklistKeywords : whitelistKeywords;
+
+  bool get isBlacklist => blacklistKeywords.isNotEmpty;
+
   FilterRule copyWith({
     String? id,
-    String? pattern,
-    String? kind,
+    String? name,
+    List<String>? whitelistKeywords,
+    List<String>? blacklistKeywords,
+    List<String>? regexPatterns,
     bool? isEnabled,
     int? version,
   }) => FilterRule(
     id: id ?? this.id,
-    pattern: pattern ?? this.pattern,
-    kind: kind ?? this.kind,
+    name: name ?? this.name,
+    whitelistKeywords: whitelistKeywords ?? this.whitelistKeywords,
+    blacklistKeywords: blacklistKeywords ?? this.blacklistKeywords,
+    regexPatterns: regexPatterns ?? this.regexPatterns,
     isEnabled: isEnabled ?? this.isEnabled,
     version: version ?? this.version,
   );
 
   Map<String, dynamic> toJson() => {
-    'pattern': pattern,
-    'kind': kind,
+    'name': name,
+    'whitelist_keywords': whitelistKeywords,
+    'blacklist_keywords': blacklistKeywords,
+    'regex_patterns': regexPatterns,
     'is_enabled': isEnabled,
     'expected_version': version,
   };
 
   factory FilterRule.fromJson(Map<String, dynamic> json) => FilterRule(
     id: json['id'] as String,
-    pattern: json['pattern'] as String? ?? '',
-    kind: json['kind'] as String? ?? 'blacklist',
+    name: json['name'] as String? ?? '',
+    whitelistKeywords: _stringList(json['whitelist_keywords']),
+    blacklistKeywords: _stringList(json['blacklist_keywords']),
+    regexPatterns: _stringList(json['regex_patterns']),
     isEnabled: json['is_enabled'] as bool? ?? true,
     version: jsonInt(json['version']),
   );
+}
+
+List<String> _stringList(Object? raw) {
+  if (raw is List) {
+    return raw
+        .whereType<String>()
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList(growable: false);
+  }
+  return const [];
 }
 
 /// ---- AI configuration ---------------------------------------------------

@@ -78,13 +78,20 @@ class _FiltersScreenState extends State<FiltersScreen> {
 
   Future<void> _addOrEdit([FilterRule? existing]) async {
     final t = AppMessages.of(context);
-    final patternCtrl = TextEditingController(text: existing?.pattern ?? '');
-    String kind = existing?.kind ?? 'blacklist';
+    // One field per list, matching what the engine stores. The field holds the
+    // entries comma/newline separated, so a paste of "spam, scam" or one entry
+    // per line both work; a phrase with spaces stays a single entry.
+    final blCtrl = TextEditingController(
+      text: existing?.blacklistKeywords.join(', ') ?? '',
+    );
+    final wlCtrl = TextEditingController(
+      text: existing?.whitelistKeywords.join(', ') ?? '',
+    );
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
 
     final saved = await showDialog<bool>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
+      builder: (ctx) => AlertDialog(
           title: Text(
             existing == null ? t.get('filters_title') : t.get('action_edit'),
           ),
@@ -92,35 +99,48 @@ class _FiltersScreenState extends State<FiltersScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
-                controller: patternCtrl,
-                autofocus: true,
+                controller: nameCtrl,
                 decoration: InputDecoration(
-                  labelText: t.get('filters_pattern'),
-                  hintText: t.get('filters_pattern_hint'),
+                  labelText: t.get('filters_name'),
+                  hintText: t.get('filters_name_hint'),
                 ),
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                isExpanded: true,
-                initialValue: kind,
-                decoration: InputDecoration(labelText: t.get('filters_kind')),
-                items: [
-                  DropdownMenuItem(
-                    value: 'blacklist',
-                    child: Text(t.get('filters_kind_blacklist')),
-                  ),
-                  DropdownMenuItem(
-                    value: 'whitelist',
-                    child: Text(t.get('filters_kind_whitelist')),
-                  ),
-                  DropdownMenuItem(
-                    value: 'link',
-                    child: Text(t.get('filters_kind_link')),
-                  ),
-                ],
-                onChanged: (v) {
-                  if (v != null) setDialogState(() => kind = v);
-                },
+              TextField(
+                controller: blCtrl,
+                autofocus: existing == null,
+                decoration: InputDecoration(
+                  labelText: t.get('filters_blacklist_label'),
+                  hintText: t.get('filters_pattern_hint'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  t.get('filters_words_matching_help'),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: wlCtrl,
+                decoration: InputDecoration(
+                  labelText: t.get('filters_whitelist_label'),
+                  hintText: t.get('filters_pattern_hint'),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  t.get('filters_words_matching_help'),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
               ),
             ],
           ),
@@ -131,17 +151,35 @@ class _FiltersScreenState extends State<FiltersScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                final pattern = patternCtrl.text.trim();
-                if (pattern.isEmpty) return;
+                // The model sends the lists the proto actually carries; a
+                // multi-word phrase survives because splitKeywordList never
+                // breaks an entry on a space.
+                final blacklist = splitKeywordList(blCtrl.text);
+                final whitelist = splitKeywordList(wlCtrl.text);
+                if (blacklist.isEmpty && whitelist.isEmpty) return;
+                final name = nameCtrl.text.trim().isNotEmpty
+                    ? nameCtrl.text.trim()
+                    : (blacklist.isNotEmpty
+                        ? t.get('filters_kind_blacklist')
+                        : t.get('filters_kind_whitelist'));
                 final client = context.read<AppState>().buildApiClient();
                 if (existing == null) {
                   await client.createFilter(
-                    FilterRule(id: '', pattern: pattern, kind: kind),
+                    FilterRule(
+                      id: '',
+                      name: name,
+                      blacklistKeywords: blacklist,
+                      whitelistKeywords: whitelist,
+                    ),
                   );
                 } else {
                   await client.updateFilter(
                     existing.id,
-                    existing.copyWith(pattern: pattern, kind: kind),
+                    existing.copyWith(
+                      name: name,
+                      blacklistKeywords: blacklist,
+                      whitelistKeywords: whitelist,
+                    ),
                   );
                 }
                 if (ctx.mounted) Navigator.pop(ctx, true);
@@ -164,7 +202,9 @@ class _FiltersScreenState extends State<FiltersScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(t.get('filters_delete_confirm')),
-        content: Text(filter.pattern),
+        content: Text(filter.keywordEntries.isNotEmpty
+            ? filter.keywordEntries.join(', ')
+            : filter.name),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -263,7 +303,11 @@ class _FiltersScreenState extends State<FiltersScreen> {
                         return Card(
                           child: ListTile(
                             title: Text(
-                              f.pattern,
+                              f.name.isNotEmpty
+                                  ? f.name
+                                  : (f.keywordEntries.isNotEmpty
+                                      ? f.keywordEntries.join(', ')
+                                      : t.get('filters_empty')),
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
                               ),
@@ -271,7 +315,7 @@ class _FiltersScreenState extends State<FiltersScreen> {
                             subtitle: Text(
                               t.get(
                                 'filters_kind_summary',
-                                params: {'kind': _kindLabel(t, f.kind)},
+                                params: {'kind': _kindLabel(t, f)},
                               ),
                             ),
                             onTap: () => _addOrEdit(f),
@@ -297,12 +341,14 @@ class _FiltersScreenState extends State<FiltersScreen> {
 
 /// The filter kind as the catalog names it.
 ///
-/// `kind` arrives from the API as an identifier (`blacklist`, `whitelist`,
-/// `link`); the list used to print it verbatim next to a hardcoded English
-/// "Kind:" prefix. Known kinds resolve through the same keys the editor's
-/// dropdown uses, and an unknown one falls back to the raw identifier rather
-/// than an invented label.
-String _kindLabel(AppMessages t, String kind) {
-  const known = <String>{'blacklist', 'whitelist', 'link'};
-  return known.contains(kind) ? t.get('filters_kind_$kind') : kind;
+/// The proto carries no `kind` string: a filter is a blacklist, a whitelist,
+/// or both, according to which list holds entries. The label says which, so a
+/// user can see at a glance whether the entries block or allow.
+String _kindLabel(AppMessages t, FilterRule f) {
+  final hasBl = f.blacklistKeywords.isNotEmpty;
+  final hasWl = f.whitelistKeywords.isNotEmpty;
+  if (hasBl && hasWl) return t.get('filters_kind_both');
+  if (hasBl) return t.get('filters_kind_blacklist');
+  if (hasWl) return t.get('filters_kind_whitelist');
+  return t.get('filters_kind_empty');
 }

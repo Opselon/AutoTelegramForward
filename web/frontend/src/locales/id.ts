@@ -305,6 +305,7 @@ export const id: Catalog = {
   "ui_badge_task_title": "Nilai ini dipilih oleh tugas; bawaan bot tidak akan mengubahnya",
   "ui_blacklist": "Daftar Hitam",
   "ui_blacklist_keywords_comma_separated": "Kata kunci daftar hitam (dipisah koma):",
+  "ui_blacklist_keywords_placeholder": "JOIN, SCAM, PROMO… atau frasa utuh seperti “Whale Update on a VIP call”",
   "ui_blacklist_whitelist": "Daftar Hitam & Putih",
   "ui_blacklisted": "Daftar hitam:",
   "ui_block_audio": "Blokir Audio",

@@ -616,3 +616,64 @@ class TestSplitWordList:
 
         policy = ContentPolicy.from_dict({"whitelist_words": "5x\u060c 10x"})
         assert policy.whitelist_words == ("5x", "10x")
+
+
+# --------------------------------------------------------------------------- #
+# Blacklist settings parity on every surface: the catalog a user reads
+# --------------------------------------------------------------------------- #
+class TestBlacklistHelpInEveryLanguage:
+    """A blacklist phrase blocks across whitespace — the menus must say so.
+
+    The fix is invisible to a user who still believes a phrase cannot be an
+    entry, so the blacklist and whitelist menus and prompts carry the
+    explanation in every shipped language. Ten locales, one key set: the same
+    1-to-1 parity rule the rest of the catalog follows.
+    """
+
+    LOCALES = ("en", "fa", "ru", "zh", "pt", "uz", "id", "es", "fr", "it")
+
+    @staticmethod
+    def _catalog():
+        import json
+        from pathlib import Path
+
+        path = (
+            Path(__file__).resolve().parents[1]
+            / "infrastructure"
+            / "telegram"
+            / "locales"
+            / "translations.json"
+        )
+        return json.loads(path.read_text(encoding="utf-8"))
+
+    def test_the_blacklist_prompt_names_the_example_phrase(self):
+        cat = self._catalog()
+        for loc in self.LOCALES:
+            prompt = cat[loc]["ui_prompt_add_blacklist"]
+            assert PHRASE in prompt, f"{loc} does not name the example phrase"
+            assert "phrase" in cat["en"]["ui_prompt_add_blacklist"].lower()
+
+    def test_the_menu_descriptions_cover_words_and_phrases(self):
+        cat = self._catalog()
+        # The word for "phrase" in each locale's own script, plural or singular
+        # as the translator chose: the English probe alone would miss a Persian
+        # or Chinese translation that did its job.
+        markers = {
+            "en": "phrase", "fa": "عبار", "es": "frase", "fr": "phrase",
+            "id": "frasa", "it": "fras", "pt": "frase", "ru": "фраз",
+            "uz": "ibora", "zh": "短语",
+        }
+        for loc in self.LOCALES:
+            for key in ("ui_bl_desc", "ui_wl_desc"):
+                text = cat[loc][key]
+                assert markers[loc] in text.lower(), f"{loc}/{key}"
+
+    def test_a_phrase_is_not_split_into_fragments_anywhere(self):
+        """Splitting a stored phrase would break matching — pin the parser."""
+        from core.domain.content_policy import split_word_list
+
+        # The exact entry the Add prompt tells a user to type.
+        typed = f"5x, 10x\n{PHRASE}"
+        assert split_word_list(typed) == ("5x", "10x", PHRASE)
+        # And the Persian comma a Persian keyboard produces.
+        assert split_word_list(f"5x\u060c 10x\u060c {PHRASE}") == ("5x", "10x", PHRASE)
