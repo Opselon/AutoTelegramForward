@@ -461,7 +461,7 @@ class AppMessagesEn {
     'filters_option_longtext_sub': 'Find a word or phrase anywhere in the complete message, even in a later paragraph. No Regex knowledge needed.',
     'filters_option_regex': 'Regex',
     'filters_option_regex_sub': 'A regular expression. For advanced users.',
-    'filters_regex_hint': 'Examples:\n^BUY XAUUSD\$ — the entire message must match.\n\b(BUY|SELL)\b — either word, as whole words.\nXAUUSD\s+BUY — XAUUSD, then one or more spaces, then BUY.',
+    'filters_regex_hint': 'Examples:\n^BUY XAUUSD\$ — the entire message must match.\n\b(BUY|SELL)\b — either word, as whole words.\nXAUUSD\\s+BUY — XAUUSD, then one or more spaces, then BUY.',
     'filters_regex_invalid':
         'This pattern is not valid and was not saved: {pattern}',
     'filters_regex_label': 'Regex patterns (one per line)',

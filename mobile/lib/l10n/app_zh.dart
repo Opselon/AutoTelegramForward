@@ -909,7 +909,7 @@ class AppMessagesZh {
     'filters_option_longtext_sub': '在完整消息的任意位置查找词或短语，甚至在后面的段落中。无需正则知识。',
     'filters_option_regex': '正则表达式',
     'filters_option_regex_sub': '正则表达式。适合高级用户。',
-    'filters_regex_hint': '示例：\n^BUY XAUUSD\$ — 整条消息须匹配。\n\b(BUY|SELL)\b — 二者之一，作为完整单词。\nXAUUSD\s+BUY — XAUUSD，然后一个或多个空格，然后 BUY。',
+    'filters_regex_hint': '示例：\n^BUY XAUUSD\$ — 整条消息须匹配。\n\b(BUY|SELL)\b — 二者之一，作为完整单词。\nXAUUSD\\s+BUY — XAUUSD，然后一个或多个空格，然后 BUY。',
     'filters_regex_invalid': '此模式无效且未保存：{pattern}',
     'filters_regex_label': '正则模式（每行一个）',
     'filters_test_error': '服务器无法测试此过滤器：{error}',

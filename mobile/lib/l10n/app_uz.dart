@@ -956,7 +956,7 @@ class AppMessagesUz {
     'filters_option_regex': 'Regex',
     'filters_option_regex_sub':
         'Muntazam ifoda. Tajribali foydalanuvchilar uchun.',
-    'filters_regex_hint': 'Misol uchun:\n^BUY XAUUSD\$ — butun xabar mos kelishi kerak.\n\b(BUY|SELL)\b — ikkala so\'zdan biri, butun so\'z sifatida.\nXAUUSD\s+BUY — XAUUSD, so\'ng bitta yoki bir nechta bo\'shliq, so\'ng BUY.',
+    'filters_regex_hint': 'Misol uchun:\n^BUY XAUUSD\$ — butun xabar mos kelishi kerak.\n\b(BUY|SELL)\b — ikkala so\'zdan biri, butun so\'z sifatida.\nXAUUSD\\s+BUY — XAUUSD, so\'ng bitta yoki bir nechta bo\'shliq, so\'ng BUY.',
     'filters_regex_invalid': 'Bu naqsh yaroqsiz va saqlanmadi: {pattern}',
     'filters_regex_label': 'Regex naqshlari (har bir qatonga bittadan)',
     'filters_test_error': 'Server bu filtarni sinab bo\'lmadi: {error}',

@@ -952,7 +952,7 @@ class AppMessagesId {
     'filters_option_longtext_sub': 'Menemukan kata atau frasa di mana saja dalam keseluruhan pesan, bahkan di paragraf berikutnya. Tanpa perlu pengetahuan Regex.',
     'filters_option_regex': 'Regex',
     'filters_option_regex_sub': 'Ekspresi reguler. Untuk pengguna lanjutan.',
-    'filters_regex_hint': 'Contoh:\n^BUY XAUUSD\$ — seluruh pesan harus cocok.\n\b(BUY|SELL)\b — salah satu kata, sebagai kata utuh.\nXAUUSD\s+BUY — XAUUSD, lalu satu atau lebih spasi, lalu BUY.',
+    'filters_regex_hint': 'Contoh:\n^BUY XAUUSD\$ — seluruh pesan harus cocok.\n\b(BUY|SELL)\b — salah satu kata, sebagai kata utuh.\nXAUUSD\\s+BUY — XAUUSD, lalu satu atau lebih spasi, lalu BUY.',
     'filters_regex_invalid':
         'Pola ini tidak valid dan tidak disimpan: {pattern}',
     'filters_regex_label': 'Pola Regex (satu per baris)',

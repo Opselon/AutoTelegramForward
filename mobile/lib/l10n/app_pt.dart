@@ -969,7 +969,7 @@ class AppMessagesPt {
     'filters_option_regex': 'Regex',
     'filters_option_regex_sub':
         'Uma expressão regular. Para usuários avançados.',
-    'filters_regex_hint': 'Exemplos:\n^BUY XAUUSD\$ — a mensagem inteira deve corresponder.\n\b(BUY|SELL)\b — qualquer uma das palavras, como palavras inteiras.\nXAUUSD\s+BUY — XAUUSD, depois um ou mais espaços, depois BUY.',
+    'filters_regex_hint': 'Exemplos:\n^BUY XAUUSD\$ — a mensagem inteira deve corresponder.\n\b(BUY|SELL)\b — qualquer uma das palavras, como palavras inteiras.\nXAUUSD\\s+BUY — XAUUSD, depois um ou mais espaços, depois BUY.',
     'filters_regex_invalid':
         'Este padrão não é válido e não foi salvo: {pattern}',
     'filters_regex_label': 'Padrões Regex (um por linha)',

@@ -952,7 +952,7 @@ class AppMessagesFa {
     'filters_option_longtext_sub': 'یک کلمه یا عبارت را در هر جای متن کامل پیدا می‌کند، حتی در پاراگراف بعدی. نیازی به دانش Regex نیست.',
     'filters_option_regex': 'Regex',
     'filters_option_regex_sub': 'یک عبارت منظم. برای کاربران پیشرفته.',
-    'filters_regex_hint': 'مثال‌ها:\n^BUY XAUUSD\$ — کل پیام باید تطبیق داشته باشد.\n\b(BUY|SELL)\b — هر کدام از کلمات، به عنوان کلمات کامل.\nXAUUSD\s+BUY — XAUUSD، سپس یک یا چند فاصله، سپس BUY.',
+    'filters_regex_hint': 'مثال‌ها:\n^BUY XAUUSD\$ — کل پیام باید تطبیق داشته باشد.\n\b(BUY|SELL)\b — هر کدام از کلمات، به عنوان کلمات کامل.\nXAUUSD\\s+BUY — XAUUSD، سپس یک یا چند فاصله، سپس BUY.',
     'filters_regex_invalid': 'این الگو معتبر نیست و ذخیره نشد: {pattern}',
     'filters_regex_label': 'الگوهای Regex (هر کدام در یک خط)',
     'filters_test_error': 'سرور نتوانست این فیلتر را آزمایش کند: {error}',

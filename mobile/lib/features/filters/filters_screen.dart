@@ -439,19 +439,27 @@ class _FilterEditorState extends State<_FilterEditor> {
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
             ),
-            for (final option in FilterKind.values)
-              if (option != FilterKind.mixed)
-                RadioListTile<FilterKind>(
-                  dense: true,
-                  contentPadding: EdgeInsets.zero,
-                  value: option,
-                  groupValue: _option,
-                  title: Text(_optionTitle(t, option)),
-                  subtitle: Text(_optionSub(t, option)),
-                  onChanged: (v) {
-                    if (v != null) setState(() => _option = v);
-                  },
-                ),
+            RadioGroup<FilterKind>(
+              groupValue: _option,
+              onChanged: (v) {
+                if (v != null) setState(() => _option = v);
+              },
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final option in FilterKind.values)
+                    if (option != FilterKind.mixed)
+                      RadioListTile<FilterKind>(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        value: option,
+                        title: Text(_optionTitle(t, option)),
+                        subtitle: Text(_optionSub(t, option)),
+                      ),
+                ],
+              ),
+            ),
             if (showWords) ...[
               const SizedBox(height: 8),
               TextField(
@@ -678,7 +686,7 @@ class _FilterTestDialogState extends State<_FilterTestDialog> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              t_testError(AppMessages.of(context), exc.error.message),
+              _testErrorLine(AppMessages.of(context), exc.error.message),
             ),
           ),
         );
@@ -690,5 +698,5 @@ class _FilterTestDialogState extends State<_FilterTestDialog> {
 }
 
 /// A localized API-error line for the tester's failure path.
-String t_testError(AppMessages t, String error) =>
+String _testErrorLine(AppMessages t, String error) =>
     t.get('filters_test_error', params: {'error': error});

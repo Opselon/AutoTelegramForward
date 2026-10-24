@@ -964,7 +964,7 @@ class AppMessagesIt {
     'filters_option_regex': 'Regex',
     'filters_option_regex_sub':
         'Un\'espressione regolare. Per utenti avanzati.',
-    'filters_regex_hint': 'Esempi:\n^BUY XAUUSD\$ — l\'intero messaggio deve corrispondere.\n\b(BUY|SELL)\b — una delle parole, come parole intere.\nXAUUSD\s+BUY — XAUUSD, poi uno o più spazi, poi BUY.',
+    'filters_regex_hint': 'Esempi:\n^BUY XAUUSD\$ — l\'intero messaggio deve corrispondere.\n\b(BUY|SELL)\b — una delle parole, come parole intere.\nXAUUSD\\s+BUY — XAUUSD, poi uno o più spazi, poi BUY.',
     'filters_regex_invalid':
         'Questo modello non è valido e non è stato salvato: {pattern}',
     'filters_regex_label': 'Modelli Regex (uno per riga)',

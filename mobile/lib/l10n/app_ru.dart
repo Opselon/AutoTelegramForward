@@ -954,7 +954,7 @@ class AppMessagesRu {
     'filters_option_regex': 'Regex',
     'filters_option_regex_sub':
         'Регулярное выражение. Для опытных пользователей.',
-    'filters_regex_hint': 'Примеры:\n^BUY XAUUSD\$ — всё сообщение должно совпадать.\n\b(BUY|SELL)\b — любое из слов, как цельные слова.\nXAUUSD\s+BUY — XAUUSD, затем один или несколько пробелов, затем BUY.',
+    'filters_regex_hint': 'Примеры:\n^BUY XAUUSD\$ — всё сообщение должно совпадать.\n\b(BUY|SELL)\b — любое из слов, как цельные слова.\nXAUUSD\\s+BUY — XAUUSD, затем один или несколько пробелов, затем BUY.',
     'filters_regex_invalid':
         'Этот шаблон недействителен и не был сохранён: {pattern}',
     'filters_regex_label': 'Шаблоны Regex (по одному на строку)',

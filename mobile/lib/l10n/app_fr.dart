@@ -963,7 +963,7 @@ class AppMessagesFr {
     'filters_option_regex': 'Regex',
     'filters_option_regex_sub':
         'Une expression régulière. Pour utilisateurs avancés.',
-    'filters_regex_hint': 'Exemples :\n^BUY XAUUSD\$ — le message entier doit correspondre.\n\b(BUY|SELL)\b — l\'un des deux mots, comme mots entiers.\nXAUUSD\s+BUY — XAUUSD, puis un ou plusieurs espaces, puis BUY.',
+    'filters_regex_hint': 'Exemples :\n^BUY XAUUSD\$ — le message entier doit correspondre.\n\b(BUY|SELL)\b — l\'un des deux mots, comme mots entiers.\nXAUUSD\\s+BUY — XAUUSD, puis un ou plusieurs espaces, puis BUY.',
     'filters_regex_invalid':
         'Ce motif n\'est pas valide et n\'a pas été enregistré : {pattern}',
     'filters_regex_label': 'Motifs Regex (un par ligne)',
