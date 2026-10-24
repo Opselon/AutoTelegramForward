@@ -25,8 +25,13 @@ import time
 import uuid
 from functools import wraps
 from dataclasses import dataclass, field
-from typing import Any, ClassVar, Dict, List, Mapping, Optional, Tuple
+from typing import TYPE_CHECKING, Any, ClassVar, Dict, List, Mapping, Optional, Tuple
 from urllib.parse import quote
+
+if TYPE_CHECKING:
+    # Deferred to the import site to keep the module import-cycle-free; the
+    # annotation-only import gives type checkers (and ruff) the name.
+    from .three_way_flows import ThreeWayFlows
 
 from pyrogram import Client, filters
 from pyrogram.errors import MessageNotModified
@@ -638,7 +643,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
     # property keeps the wiring obvious and test-mockable.
     @property
     def three_way(self) -> "ThreeWayFlows":
-        from .three_way_flows import ThreeWayFlows
+        from .three_way_flows import ThreeWayFlows  # noqa: F821  # deferred import keeps the module import-cycle-free
 
         cached = getattr(self, "_three_way", None)
         if cached is None:

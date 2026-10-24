@@ -77,7 +77,6 @@ class _FiltersScreenState extends State<FiltersScreen> {
   }
 
   Future<void> _addOrEdit([FilterRule? existing]) async {
-    final t = AppMessages.of(context);
     // One field per list, matching what the engine stores. The field holds the
     // entries comma/newline separated, so a paste of "spam, scam" or one entry
     // per line both work; a phrase with spaces stays a single entry.
@@ -332,6 +331,43 @@ String _kindLabel(AppMessages t, FilterRule f) {
   if (hasBl) return t.get('filters_kind_blacklist');
   if (hasWl) return t.get('filters_kind_whitelist');
   return t.get('filters_kind_empty');
+}
+
+/// The verdict as one readable block: the decision first, then the evidence
+/// the Core returned (what matched, what was missing, in which mode).
+String _testSummary(AppMessages t, FilterTestResult r) {
+  final lines = <String>[
+    r.allowed ? t.get('filters_test_match') : t.get('filters_test_no_match'),
+  ];
+  if (r.matched.isNotEmpty) {
+    lines.add(
+      t.get('filters_test_matched', params: {'matched': r.matched.join(', ')}),
+    );
+  }
+  if (r.missing.isNotEmpty) {
+    lines.add(
+      t.get('filters_test_missing', params: {'missing': r.missing.join(', ')}),
+    );
+  }
+  if (r.mode.isNotEmpty) {
+    lines.add(t.get('filters_test_mode_label', params: {'mode': r.mode}));
+  }
+  return lines.join('\n');
+}
+
+/// The Catalog-labelled name of one of the three user-facing options.
+String _optionLabel(AppMessages t, FilterKind kind) {
+  switch (kind) {
+    case FilterKind.keyword:
+      return t.get('filters_option_keyword');
+    case FilterKind.regex:
+      return t.get('filters_option_regex');
+    case FilterKind.mixed:
+      return '${t.get('filters_option_keyword')} + '
+          '${t.get('filters_option_regex')}';
+    case FilterKind.empty:
+      return t.get('filters_option_longtext');
+  }
 }
 
 /// The filter editor: the three user-facing options (Keyword / Phrase, Regex,

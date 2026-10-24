@@ -433,6 +433,10 @@ export const endpointDetail: Record<string, EndpointDetail> = {
     summary: 'Deletes a filter; tasks that referenced it keep their own inline rules.',
     statuses: owner,
   },
+  'POST /api/filters/test': {
+    summary: 'Previews one of the caller’s filters against a sample message: the Core’s canonical matcher decides whether the text would pass. Read-only — nothing is saved and nothing is forwarded.',
+    statuses: ['200', '400', '401', '404'],
+  },
   'GET /api/sessions': {
     summary: 'Lists the caller’s Telegram sessions with their account, status and last-seen time.',
     statuses: auth,
