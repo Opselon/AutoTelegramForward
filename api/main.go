@@ -167,6 +167,9 @@ func main() {
 	dashMux.HandleFunc("POST /filters", h.CreateFilter)
 	dashMux.HandleFunc("PUT /filters/{id}", h.UpdateFilter)
 	dashMux.HandleFunc("DELETE /filters/{id}", h.DeleteFilter)
+	// Read-only filter preview: the Core's canonical matcher decides, so the
+	// dashboard's "test this rule" can never diverge from production.
+	dashMux.HandleFunc("POST /filters/test", h.TestFilterRule)
 	// Per-user task lifecycle (API-first phase 2): creation, progress,
 	// cancellation and retry. Every route scopes to the verified identity.
 	dashMux.HandleFunc("GET /tasks", h.ListTasks)

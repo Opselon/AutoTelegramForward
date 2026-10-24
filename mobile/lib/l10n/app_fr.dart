@@ -948,6 +948,37 @@ class AppMessagesFr {
         'Aucune conversation ne correspond à cette recherche',
     'ar_job_attempt': 'Tentative {n} sur {max}',
     'ar_prompt_unarchive': 'Restaurer',
+    'filters_mode_all': 'Correspondre à TOUTES',
+    'filters_mode_all_sub': 'Chaque entrée doit correspondre quelque part ; l\'ordre n\'a pas d\'importance.',
+    'filters_mode_any': 'Correspondre à N\'IMPORTE LEQUEL',
+    'filters_mode_any_sub': 'Au moins une entrée doit correspondre.',
+    'filters_mode_phrase': 'Correspondre comme PHRASE',
+    'filters_mode_phrase_sub':
+        'Les entrées doivent apparaître comme une phrase consécutive.',
+    'filters_option_keyword': 'Mot / Phrase',
+    'filters_option_keyword_sub':
+        'Les mots habituels. Une phrase entière est une entrée.',
+    'filters_option_longtext': 'Correspondance de texte long',
+    'filters_option_longtext_sub': 'Trouve un mot ou une phrase n\'importe où dans le message complet, même dans un paragraphe ultérieur. Aucune connaissance de Regex nécessaire.',
+    'filters_option_regex': 'Regex',
+    'filters_option_regex_sub':
+        'Une expression régulière. Pour utilisateurs avancés.',
+    'filters_regex_hint': 'Exemples :\n^BUY XAUUSD\$ — le message entier doit correspondre.\n\b(BUY|SELL)\b — l\'un des deux mots, comme mots entiers.\nXAUUSD\\s+BUY — XAUUSD, puis un ou plusieurs espaces, puis BUY.',
+    'filters_regex_invalid':
+        'Ce motif n\'est pas valide et n\'a pas été enregistré : {pattern}',
+    'filters_regex_label': 'Motifs Regex (un par ligne)',
+    'filters_test_error': 'Le serveur n\'a pas pu tester ce filtre : {error}',
+    'filters_test_match': 'CORRESPOND — ce message serait transféré.',
+    'filters_test_matched': 'Correspondances : {matched}',
+    'filters_test_missing': 'Manquants : {missing}',
+    'filters_test_mode_label': 'Mode : {mode}',
+    'filters_test_no_match':
+        'PAS DE CORRESPONDANCE — ce message ne serait PAS transféré.',
+    'filters_test_run': 'Tester',
+    'filters_test_sample_hint': 'Collez un message d\'exemple. Rien n\'est enregistré et rien n\'est transféré — ceci n\'est qu\'un test.',
+    'filters_test_title': 'Tester ce filtre',
+    'filters_three_options_title':
+        'Choisissez comment cette liste doit correspondre',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare

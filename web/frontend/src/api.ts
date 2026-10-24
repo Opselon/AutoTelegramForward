@@ -59,6 +59,7 @@ import type {
   ReplaceRuleInput,
   ReplaceRulePage,
   ReplaceRuleTestResult,
+  FilterTestResult,
   ReplaceTaskOption,
   ServicesHealthResponse,
   Session,
@@ -388,6 +389,28 @@ export const api = {
   deleteFilter: (id: string) =>
     fetchJson<{ success: boolean; id: string }>(`${API_BASE}/filters/${id}`, {
       method: 'DELETE',
+    }),
+  /**
+   * Preview a content filter against a sample message.
+   *
+   * Read-only by contract on the server (Core `preview_match`): nothing is
+   * persisted and nothing is forwarded. The draft fields are merged over the
+   * stored rule identified by `ruleId`, so an editor can test an unsaved
+   * change without a save round-trip.
+   */
+  testFilterRule: (
+    ruleId: string,
+    sample: string,
+    draft: {
+      name?: string
+      whitelist_keywords?: string[]
+      blacklist_keywords?: string[]
+      regex_patterns?: string[]
+    } = {},
+  ) =>
+    fetchJson<FilterTestResult>(`${API_BASE}/filters/test`, {
+      method: 'POST',
+      body: JSON.stringify({ rule_id: ruleId, sample, ...draft }),
     }),
 
   // Queue & DLQ

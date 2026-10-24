@@ -1104,6 +1104,33 @@ class ApiClient {
     retryable: false,
   );
 
+  /// Preview a filter against a sample message.
+  ///
+  /// Read-only on the server (the Core's canonical matcher decides; nothing is
+  /// persisted and the sample is never forwarded), so the client can show a
+  /// verdict for an unsaved draft without a save round-trip. The draft lists
+  /// are merged over the stored rule identified by [ruleId].
+  Future<FilterTestResult> testFilter(
+    String ruleId,
+    String sample, {
+    List<String>? whitelistKeywords,
+    List<String>? blacklistKeywords,
+    List<String>? regexPatterns,
+  }) => _request(
+    method: 'POST',
+    path: '/api/filters/test',
+    body: {
+      'rule_id': ruleId,
+      'sample': sample,
+      'whitelist_keywords': ?whitelistKeywords,
+      'blacklist_keywords': ?blacklistKeywords,
+      'regex_patterns': ?regexPatterns,
+    },
+    fromJson: (json) =>
+        FilterTestResult.fromJson((json as Map).cast<String, dynamic>()),
+    retryable: false,
+  );
+
   Future<List<AiConfig>> listAiConfigs() => _requestList(
     method: 'GET',
     path: '/api/ai-configs',

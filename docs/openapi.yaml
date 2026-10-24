@@ -1109,6 +1109,39 @@ paths:
               schema: { type: object }
         "401": { $ref: '#/components/responses/Unauthorized' }
         "404": { $ref: '#/components/responses/NotFound' }
+  /api/filters/test:
+    post:
+      tags: [filters]
+      summary: 'Preview one of the caller''s content filters against a sample message'
+      description: >
+        Read-only rule test: the Core''s canonical matcher decides whether the
+        sample would pass this filter. Nothing is saved and nothing is
+        forwarded; the sample text is not persisted.
+      operationId: postApiFiltersTest
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sample]
+              properties:
+                sample:
+                  type: string
+                  description: 'The message text to test against the filter.'
+      responses:
+        "200":
+          description: 'The verdict with the evidence the matcher produced'
+          content:
+            application/json:
+              schema: { type: object }
+        "400": { $ref: '#/components/responses/BadRequest' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+        "413": { $ref: '#/components/responses/BodyTooLarge' }
+
   /api/prompts:
     get:
       tags: [prompts]

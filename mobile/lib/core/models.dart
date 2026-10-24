@@ -897,6 +897,19 @@ class FilterRule {
 
   bool get isBlacklist => blacklistKeywords.isNotEmpty;
 
+  /// Which of the three user-facing options this rule is. Derived, never
+  /// persisted: a rule with word entries is a Keyword/Phrase (or Long-Text)
+  /// rule, one with regex entries is a Regex rule, and a populated pair is
+  /// mixed. The bot and the web dashboard classify the same way.
+  FilterKind get kind {
+    final words = blacklistKeywords.isNotEmpty || whitelistKeywords.isNotEmpty;
+    final regex = regexPatterns.isNotEmpty;
+    if (words && regex) return FilterKind.mixed;
+    if (regex) return FilterKind.regex;
+    if (words) return FilterKind.keyword;
+    return FilterKind.empty;
+  }
+
   FilterRule copyWith({
     String? id,
     String? name,
@@ -934,6 +947,53 @@ class FilterRule {
     version: jsonInt(json['version']),
   );
 }
+
+/// The server's verdict for a filter preview (`POST /api/filters/test`).
+///
+/// Read-only by contract: the Core's canonical matcher decides, nothing is
+/// persisted, and the sample is never forwarded. The mobile client never
+/// interprets a pattern itself, so an on-device verdict cannot drift from the
+/// pipeline's.
+@immutable
+class FilterTestResult {
+  const FilterTestResult({
+    required this.allowed,
+    required this.reason,
+    this.matched = const [],
+    this.missing = const [],
+    this.entries = const [],
+    this.mode = '',
+  });
+
+  final bool allowed;
+  final String reason;
+  final List<String> matched;
+  final List<String> missing;
+  final List<String> entries;
+  final String mode;
+
+  factory FilterTestResult.fromJson(Map<String, dynamic> json) =>
+      FilterTestResult(
+        allowed: json['allowed'] as bool? ?? false,
+        reason: json['reason'] as String? ?? '',
+        matched: _stringList(json['matched']),
+        missing: _stringList(json['missing']),
+        entries: _stringList(json['entries']),
+        mode: json['mode'] as String? ?? '',
+      );
+}
+
+/// The kind of content a [FilterRule] list expresses, derived from the lists
+/// the proto actually carries. There is no persisted `kind` field: a rule is a
+/// keyword rule when its word lists are populated and a regex rule when its
+/// pattern list is populated, so the classification cannot drift from what the
+/// engine reads.
+enum FilterKind { keyword, regex, mixed, empty }
+
+/// The matching mode a long-text or keyword whitelist uses. The Core accepts
+/// exactly these three; a value the server does not know falls back to `any`
+/// rather than being re-interpreted, so the picker offers only the real set.
+enum FilterMode { any, all, phrase }
 
 List<String> _stringList(Object? raw) {
   if (raw is List) {

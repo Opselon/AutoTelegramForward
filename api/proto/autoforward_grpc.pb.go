@@ -1131,10 +1131,11 @@ var DeliveryControlService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	FilterControlService_ListFilters_FullMethodName  = "/autoforward.FilterControlService/ListFilters"
-	FilterControlService_CreateFilter_FullMethodName = "/autoforward.FilterControlService/CreateFilter"
-	FilterControlService_UpdateFilter_FullMethodName = "/autoforward.FilterControlService/UpdateFilter"
-	FilterControlService_DeleteFilter_FullMethodName = "/autoforward.FilterControlService/DeleteFilter"
+	FilterControlService_ListFilters_FullMethodName    = "/autoforward.FilterControlService/ListFilters"
+	FilterControlService_CreateFilter_FullMethodName   = "/autoforward.FilterControlService/CreateFilter"
+	FilterControlService_UpdateFilter_FullMethodName   = "/autoforward.FilterControlService/UpdateFilter"
+	FilterControlService_DeleteFilter_FullMethodName   = "/autoforward.FilterControlService/DeleteFilter"
+	FilterControlService_TestFilterRule_FullMethodName = "/autoforward.FilterControlService/TestFilterRule"
 )
 
 // FilterControlServiceClient is the client API for FilterControlService service.
@@ -1145,6 +1146,7 @@ type FilterControlServiceClient interface {
 	CreateFilter(ctx context.Context, in *CreateFilterRequest, opts ...grpc.CallOption) (*FilterRule, error)
 	UpdateFilter(ctx context.Context, in *UpdateFilterRequest, opts ...grpc.CallOption) (*FilterRule, error)
 	DeleteFilter(ctx context.Context, in *DeleteFilterRequest, opts ...grpc.CallOption) (*StatusResponse, error)
+	TestFilterRule(ctx context.Context, in *TestFilterRuleRequest, opts ...grpc.CallOption) (*TestFilterRuleResponse, error)
 }
 
 type filterControlServiceClient struct {
@@ -1195,6 +1197,16 @@ func (c *filterControlServiceClient) DeleteFilter(ctx context.Context, in *Delet
 	return out, nil
 }
 
+func (c *filterControlServiceClient) TestFilterRule(ctx context.Context, in *TestFilterRuleRequest, opts ...grpc.CallOption) (*TestFilterRuleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(TestFilterRuleResponse)
+	err := c.cc.Invoke(ctx, FilterControlService_TestFilterRule_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FilterControlServiceServer is the server API for FilterControlService service.
 // All implementations must embed UnimplementedFilterControlServiceServer
 // for forward compatibility.
@@ -1203,6 +1215,7 @@ type FilterControlServiceServer interface {
 	CreateFilter(context.Context, *CreateFilterRequest) (*FilterRule, error)
 	UpdateFilter(context.Context, *UpdateFilterRequest) (*FilterRule, error)
 	DeleteFilter(context.Context, *DeleteFilterRequest) (*StatusResponse, error)
+	TestFilterRule(context.Context, *TestFilterRuleRequest) (*TestFilterRuleResponse, error)
 	mustEmbedUnimplementedFilterControlServiceServer()
 }
 
@@ -1224,6 +1237,9 @@ func (UnimplementedFilterControlServiceServer) UpdateFilter(context.Context, *Up
 }
 func (UnimplementedFilterControlServiceServer) DeleteFilter(context.Context, *DeleteFilterRequest) (*StatusResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteFilter not implemented")
+}
+func (UnimplementedFilterControlServiceServer) TestFilterRule(context.Context, *TestFilterRuleRequest) (*TestFilterRuleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method TestFilterRule not implemented")
 }
 func (UnimplementedFilterControlServiceServer) mustEmbedUnimplementedFilterControlServiceServer() {}
 func (UnimplementedFilterControlServiceServer) testEmbeddedByValue()                              {}
@@ -1318,6 +1334,24 @@ func _FilterControlService_DeleteFilter_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FilterControlService_TestFilterRule_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TestFilterRuleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FilterControlServiceServer).TestFilterRule(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: FilterControlService_TestFilterRule_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FilterControlServiceServer).TestFilterRule(ctx, req.(*TestFilterRuleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FilterControlService_ServiceDesc is the grpc.ServiceDesc for FilterControlService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1340,6 +1374,10 @@ var FilterControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteFilter",
 			Handler:    _FilterControlService_DeleteFilter_Handler,
+		},
+		{
+			MethodName: "TestFilterRule",
+			Handler:    _FilterControlService_TestFilterRule_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

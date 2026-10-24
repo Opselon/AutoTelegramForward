@@ -937,6 +937,35 @@ class AppMessagesId {
     'ar_targets_no_match': 'Tidak ada obrolan yang cocok',
     'ar_job_attempt': 'Percobaan {n} dari {max}',
     'ar_prompt_unarchive': 'Pulihkan',
+    'filters_mode_all': 'Cocok SEMUA',
+    'filters_mode_all_sub':
+        'Setiap entri harus cocok di suatu tempat; urutan tidak penting.',
+    'filters_mode_any': 'Cocok SALAH SATU',
+    'filters_mode_any_sub': 'Setidaknya satu entri harus cocok.',
+    'filters_mode_phrase': 'Cocok sebagai FRASA',
+    'filters_mode_phrase_sub':
+        'Entri harus muncul sebagai satu frasa berurutan.',
+    'filters_option_keyword': 'Kata / Frasa',
+    'filters_option_keyword_sub':
+        'Kata-kata biasa. Frasa utuh adalah satu entri.',
+    'filters_option_longtext': 'Pencocokan Teks Panjang',
+    'filters_option_longtext_sub': 'Menemukan kata atau frasa di mana saja dalam keseluruhan pesan, bahkan di paragraf berikutnya. Tanpa perlu pengetahuan Regex.',
+    'filters_option_regex': 'Regex',
+    'filters_option_regex_sub': 'Ekspresi reguler. Untuk pengguna lanjutan.',
+    'filters_regex_hint': 'Contoh:\n^BUY XAUUSD\$ — seluruh pesan harus cocok.\n\b(BUY|SELL)\b — salah satu kata, sebagai kata utuh.\nXAUUSD\\s+BUY — XAUUSD, lalu satu atau lebih spasi, lalu BUY.',
+    'filters_regex_invalid':
+        'Pola ini tidak valid dan tidak disimpan: {pattern}',
+    'filters_regex_label': 'Pola Regex (satu per baris)',
+    'filters_test_error': 'Server tidak dapat menguji filter ini: {error}',
+    'filters_test_match': 'COCOK — pesan ini akan diteruskan.',
+    'filters_test_matched': 'Cocok: {matched}',
+    'filters_test_missing': 'Hilang: {missing}',
+    'filters_test_mode_label': 'Mode: {mode}',
+    'filters_test_no_match': 'TIDAK COCOK — pesan ini TIDAK akan diteruskan.',
+    'filters_test_run': 'Uji',
+    'filters_test_sample_hint': 'Tempel pesan contoh. Tidak ada yang disimpan dan tidak ada yang diteruskan — ini hanya pengujian.',
+    'filters_test_title': 'Uji filter ini',
+    'filters_three_options_title': 'Pilih cara daftar ini mencocokkan',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare

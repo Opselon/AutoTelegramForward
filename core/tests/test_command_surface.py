@@ -34,6 +34,7 @@ DYNAMIC = (
     "rge_edit_", "rge_search_", "bot_route_token_", "set_delay_", "set_every_n_",
     "add_bl_", "add_wl_", "set_wm_", "set_topic_", "rename_rule_",
     "ai_prompt_name_", "ai_prompt_sys_",
+    "tw_regex_", "tw_longtext_", "tw_test_",
 )
 
 

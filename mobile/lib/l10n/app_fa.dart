@@ -938,6 +938,33 @@ class AppMessagesFa {
     'ar_targets_no_match': 'هیچ گفتگویی با این جستجو مطابقت ندارد',
     'ar_job_attempt': 'تلاش {n} از {max}',
     'ar_prompt_unarchive': 'بازگردانی',
+    'filters_mode_all': 'تطبیق همه',
+    'filters_mode_all_sub':
+        'هر مورد باید در جایی تطبیق داشته باشد؛ ترتیب مهم نیست.',
+    'filters_mode_any': 'تطبیق هر کدام',
+    'filters_mode_any_sub': 'حداقل یک مورد باید تطبیق داشته باشد.',
+    'filters_mode_phrase': 'تطبیق به عنوان عبارت',
+    'filters_mode_phrase_sub':
+        'موارد باید به عنوان یک عبارت پشت سر هم ظاهر شوند.',
+    'filters_option_keyword': 'کلمه / عبارت',
+    'filters_option_keyword_sub': 'کلمات معمولی. یک عبارت کامل یک مورد است.',
+    'filters_option_longtext': 'تطبیق متن بلند',
+    'filters_option_longtext_sub': 'یک کلمه یا عبارت را در هر جای متن کامل پیدا می‌کند، حتی در پاراگراف بعدی. نیازی به دانش Regex نیست.',
+    'filters_option_regex': 'Regex',
+    'filters_option_regex_sub': 'یک عبارت منظم. برای کاربران پیشرفته.',
+    'filters_regex_hint': 'مثال‌ها:\n^BUY XAUUSD\$ — کل پیام باید تطبیق داشته باشد.\n\b(BUY|SELL)\b — هر کدام از کلمات، به عنوان کلمات کامل.\nXAUUSD\\s+BUY — XAUUSD، سپس یک یا چند فاصله، سپس BUY.',
+    'filters_regex_invalid': 'این الگو معتبر نیست و ذخیره نشد: {pattern}',
+    'filters_regex_label': 'الگوهای Regex (هر کدام در یک خط)',
+    'filters_test_error': 'سرور نتوانست این فیلتر را آزمایش کند: {error}',
+    'filters_test_match': 'تطبیق داشت — این پیام ارسال می‌شد.',
+    'filters_test_matched': 'تطبیق: {matched}',
+    'filters_test_missing': 'غایب: {missing}',
+    'filters_test_mode_label': 'حالت: {mode}',
+    'filters_test_no_match': 'بدون تطبیق — این پیام ارسال نمی‌شد.',
+    'filters_test_run': 'آزمایش',
+    'filters_test_sample_hint': 'یک پیام نمونه بفرستید. هیچ چیزی ذخیره نمی‌شود و چیزی ارسال نمی‌شود — این فقط یک آزمایش است.',
+    'filters_test_title': 'آزمایش این فیلتر',
+    'filters_three_options_title': 'انتخاب کنید این فهرست چطور تطبیق داده شود',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare

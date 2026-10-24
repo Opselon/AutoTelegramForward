@@ -953,6 +953,37 @@ class AppMessagesPt {
     'ar_targets_no_match': 'Nenhuma conversa corresponde à busca',
     'ar_job_attempt': 'Tentativa {n} de {max}',
     'ar_prompt_unarchive': 'Restaurar',
+    'filters_mode_all': 'Corresponder TODAS',
+    'filters_mode_all_sub':
+        'Cada entrada deve corresponder em algum lugar; a ordem não importa.',
+    'filters_mode_any': 'Corresponder QUALQUER',
+    'filters_mode_any_sub': 'Pelo menos uma entrada deve corresponder.',
+    'filters_mode_phrase': 'Corresponder como FRASE',
+    'filters_mode_phrase_sub':
+        'As entradas devem aparecer como uma frase consecutiva.',
+    'filters_option_keyword': 'Palavra / Frase',
+    'filters_option_keyword_sub':
+        'As palavras habituais. Uma frase inteira é uma entrada.',
+    'filters_option_longtext': 'Correspondência de Texto Longo',
+    'filters_option_longtext_sub': 'Encontra uma palavra ou frase em qualquer parte da mensagem completa, mesmo num parágrafo posterior. Não exige conhecimento de Regex.',
+    'filters_option_regex': 'Regex',
+    'filters_option_regex_sub':
+        'Uma expressão regular. Para usuários avançados.',
+    'filters_regex_hint': 'Exemplos:\n^BUY XAUUSD\$ — a mensagem inteira deve corresponder.\n\b(BUY|SELL)\b — qualquer uma das palavras, como palavras inteiras.\nXAUUSD\\s+BUY — XAUUSD, depois um ou mais espaços, depois BUY.',
+    'filters_regex_invalid':
+        'Este padrão não é válido e não foi salvo: {pattern}',
+    'filters_regex_label': 'Padrões Regex (um por linha)',
+    'filters_test_error': 'O servidor não pôde testar este filtro: {error}',
+    'filters_test_match': 'CORRESPONDE — esta mensagem seria encaminhada.',
+    'filters_test_matched': 'Correspondeu: {matched}',
+    'filters_test_missing': 'Faltando: {missing}',
+    'filters_test_mode_label': 'Modo: {mode}',
+    'filters_test_no_match':
+        'SEM CORRESPONDÊNCIA — esta mensagem NÃO seria encaminhada.',
+    'filters_test_run': 'Testar',
+    'filters_test_sample_hint': 'Cole uma mensagem de exemplo. Nada é salvo e nada é encaminhado — isto é apenas um teste.',
+    'filters_test_title': 'Testar este filtro',
+    'filters_three_options_title': 'Escolha como esta lista deve corresponder',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare

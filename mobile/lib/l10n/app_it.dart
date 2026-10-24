@@ -948,6 +948,39 @@ class AppMessagesIt {
     'ar_targets_no_match': 'Nessuna chat corrisponde alla ricerca',
     'ar_job_attempt': 'Tentativo {n} di {max}',
     'ar_prompt_unarchive': 'Ripristina',
+    'filters_mode_all': 'Corrisponde a TUTTE',
+    'filters_mode_all_sub':
+        'Ogni voce deve corrispondere da qualche parte; l\'ordine non importa.',
+    'filters_mode_any': 'Corrisponde AD ALMENO UNA',
+    'filters_mode_any_sub': 'Almeno una voce deve corrispondere.',
+    'filters_mode_phrase': 'Corrisponde come FRASE',
+    'filters_mode_phrase_sub':
+        'Le voci devono apparire come una frase consecutiva.',
+    'filters_option_keyword': 'Parola / Frase',
+    'filters_option_keyword_sub':
+        'Le parole solite. Una frase intera è una voce.',
+    'filters_option_longtext': 'Corrispondenza di testo lungo',
+    'filters_option_longtext_sub': 'Trova una parola o una frase in qualsiasi punto del messaggio completo, anche in un paragrafo successivo. Non richiede conoscenza di Regex.',
+    'filters_option_regex': 'Regex',
+    'filters_option_regex_sub':
+        'Un\'espressione regolare. Per utenti avanzati.',
+    'filters_regex_hint': 'Esempi:\n^BUY XAUUSD\$ — l\'intero messaggio deve corrispondere.\n\b(BUY|SELL)\b — una delle parole, come parole intere.\nXAUUSD\\s+BUY — XAUUSD, poi uno o più spazi, poi BUY.',
+    'filters_regex_invalid':
+        'Questo modello non è valido e non è stato salvato: {pattern}',
+    'filters_regex_label': 'Modelli Regex (uno per riga)',
+    'filters_test_error':
+        'Il server non ha potuto provare questo filtro: {error}',
+    'filters_test_match': 'CORRISPONDE — questo messaggio verrebbe inoltrato.',
+    'filters_test_matched': 'Corrispondenze: {matched}',
+    'filters_test_missing': 'Mancanti: {missing}',
+    'filters_test_mode_label': 'Modalità: {mode}',
+    'filters_test_no_match':
+        'NESSUNA CORRESPONDENZA — questo messaggio NON verrebbe inoltrato.',
+    'filters_test_run': 'Prova',
+    'filters_test_sample_hint': 'Incolla un messaggio di esempio. Non viene salvato nulla e non viene inoltrato nulla — è solo una prova.',
+    'filters_test_title': 'Prova questo filtro',
+    'filters_three_options_title':
+        'Scegli come questa lista deve corrispondere',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare
