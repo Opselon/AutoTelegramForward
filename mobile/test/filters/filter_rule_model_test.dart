@@ -61,7 +61,10 @@ void main() {
         name: 'Anti-spam',
         blacklistKeywords: ['scam', 'Whale Update on a VIP call'],
       ).toJson();
-      expect(json['blacklist_keywords'], ['scam', 'Whale Update on a VIP call']);
+      expect(
+        json['blacklist_keywords'],
+        ['scam', 'Whale Update on a VIP call'],
+      );
       expect(json['whitelist_keywords'], <String>[]);
       expect(json['name'], 'Anti-spam');
       // The dead keys the API silently dropped must not come back.
