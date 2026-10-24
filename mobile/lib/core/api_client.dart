@@ -1122,9 +1122,9 @@ class ApiClient {
     body: {
       'rule_id': ruleId,
       'sample': sample,
-      ?'whitelist_keywords': whitelistKeywords,
-      ?'blacklist_keywords': blacklistKeywords,
-      ?'regex_patterns': regexPatterns,
+      'whitelist_keywords': ?whitelistKeywords,
+      'blacklist_keywords': ?blacklistKeywords,
+      'regex_patterns': ?regexPatterns,
     },
     fromJson: (json) =>
         FilterTestResult.fromJson((json as Map).cast<String, dynamic>()),
