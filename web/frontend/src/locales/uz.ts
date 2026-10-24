@@ -674,6 +674,7 @@ export const uz: Catalog = {
   "ui_no_text_replacements_configured": "Matn almashtirishlari sozlanmagan.",
   "ui_no_token_received": "Token olinmadi",
   "ui_no_whitelist_restrictions_all_permitted": "Oq ro‘yxat cheklovlari yo‘q (hammasiga ruxsat).",
+  "ui_words_matching_help": "Yozuv butunligicha solishtiriladi: “Whale Update on a VIP call” shu to'liq iboraga mos keladi, “5x” esa 5x ga. Solishtirish harf katta-kichikligini, ortiqcha bo'shliqlarni va ibora so'zlari orasidagi qator almashinuvini hisobga olmaydi. Bir nechta yozuvni vergul bilan ajrating.",
   "ui_no_words_in_blacklist": "Qora ro‘yxatda so‘z yo‘q.",
   "ui_none": "— yo‘q —",
   "ui_none_environment": "Yo‘q / Muhit",

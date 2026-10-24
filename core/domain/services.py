@@ -15,7 +15,7 @@ from urllib.parse import urlparse, urlunparse
 from ..domain.entities import EvaluationResult, FilterRule, ForwardRule, MessagePayload
 from ..domain.value_objects import DeliveryStatus, FilterAction, LinkPolicy, MediaType, RoutingDecision
 from . import branding
-from .content_policy import compile_user_regex
+from .content_policy import compile_user_regex, contains_word
 from .media_filter import media_block_reason
 from .text_replace import apply_replacements
 
@@ -80,12 +80,11 @@ class FilterEngine:
         if filter_rule.max_message_length and len(text) > filter_rule.max_message_length:
             return EvaluationResult(FilterAction.DROP, "too_long")
 
-        lowered = text.lower()
-        if any(self._kw(lowered, kw) for kw in filter_rule.blacklist_keywords):
+        if any(self._kw(text, kw) for kw in filter_rule.blacklist_keywords):
             return EvaluationResult(FilterAction.DROP, "blacklist_keyword")
 
         if filter_rule.whitelist_keywords and not any(
-            self._kw(lowered, kw) for kw in filter_rule.whitelist_keywords
+            self._kw(text, kw) for kw in filter_rule.whitelist_keywords
         ):
             return EvaluationResult(FilterAction.DROP, "whitelist_mismatch")
 
@@ -110,8 +109,21 @@ class FilterEngine:
         return EvaluationResult(FilterAction.ALLOW, "filter_passed")
 
     @staticmethod
-    def _kw(lowered_text: str, keyword: str) -> bool:
-        return keyword.lower() in lowered_text
+    def _kw(text: str, keyword: str) -> bool:
+        """True when ``keyword`` occurs in ``text`` under the policy's rules.
+
+        Delegates to the canonical :func:`content_policy.contains_word` matcher
+        so a legacy :class:`FilterRule` keyword list behaves exactly like the
+        same words on a content policy: a multi-word phrase matches across the
+        whitespace variation a real message carries (double spaces, newlines,
+        tabs) and Persian/Arabic letter-variant folding and case folding all
+        apply, instead of a raw ``in`` scan that missed the same phrase typed
+        with one extra space. Word boundaries stay off here: the legacy filter
+        matched substrings (``5x`` inside ``a5x``), and the fix must not change
+        which messages an existing task blocks. Callers pass the *original*
+        text; the matcher case-folds itself.
+        """
+        return contains_word(text, keyword, word_boundary=False)
 
     def remove_urls(self, text: str) -> str:
         if not text:

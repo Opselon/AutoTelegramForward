@@ -160,7 +160,7 @@ class AppMessagesZh {
     'filters_kind_summary': '类型: {kind}',
     'filters_kind_whitelist': '白名单',
     'filters_pattern': '匹配模式',
-    'filters_pattern_hint': '例如: badword、@channel、http…',
+    'filters_pattern_hint': '例如: badword、@channel、http… 或完整短语,如 “Whale Update on a VIP call”(忽略大小写和空格)',
     'filters_title': '过滤器',
     'incompatible_server':
         '此服务器运行的是较旧的 AutoTelegramForward 版本。请更新到 {version} 或更高版本。',

@@ -674,6 +674,7 @@ export const fa: Catalog = {
   "ui_no_text_replacements_configured": "هیچ جایگزینی متنی تنظیم نشده است.",
   "ui_no_token_received": "توکن ورود دریافت نشد",
   "ui_no_whitelist_restrictions_all_permitted": "محدودیت لیست سفید وجود ندارد (همه مجازند).",
+  "ui_words_matching_help": "هر عبارت به‌صورت یک کلید کامل تطبیق داده می‌شود: «Whale Update on a VIP call» همان عبارة کامل را می‌گیرد و «5x» خودِ 5x را. تطبیق به بزرگی/کوچکی حروف، فاصله‌های اضافی و خط جدید میان کلمات عبارت حساس نیست. چند کلید را با کاما جدا کنید.",
   "ui_no_words_in_blacklist": "واژه‌ای در لیست سیاه وجود ندارد.",
   "ui_none": "— هیچ‌کدام —",
   "ui_none_environment": "ندارد / از محیط",

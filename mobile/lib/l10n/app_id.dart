@@ -166,7 +166,7 @@ class AppMessagesId {
     'filters_kind_summary': 'Tipe: {kind}',
     'filters_kind_whitelist': 'Whitelist',
     'filters_pattern': 'Pattern',
-    'filters_pattern_hint': 'mis.: badword, @channel, http…',
+    'filters_pattern_hint': 'mis.: badword, @channel, http… atau frasa utuh seperti “Whale Update on a VIP call” (huruf besar dan spasi diabaikan)',
     'filters_title': 'Filters',
     'incompatible_server': 'Server ini menjalankan rilis AutoTelegramForward yang lebih lama. Perbarui ke {version} atau lebih baru.',
     'lang_label': 'Bahasa',

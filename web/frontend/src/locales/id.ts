@@ -674,6 +674,7 @@ export const id: Catalog = {
   "ui_no_text_replacements_configured": "Belum ada penggantian teks yang dikonfigurasi.",
   "ui_no_token_received": "Tidak ada token yang diterima",
   "ui_no_whitelist_restrictions_all_permitted": "Tanpa batasan daftar putih (semua diizinkan).",
+  "ui_words_matching_help": "Satu entri cocok sebagai satu kesatuan: “Whale Update on a VIP call” cocok dengan frasa utuh itu, “5x” cocok dengan 5x. Pencocokan mengabaikan besar-kecil huruf, spasi berlebih, dan ganti baris di antara kata dalam frasa. Pisahkan beberapa entri dengan koma.",
   "ui_no_words_in_blacklist": "Tidak ada kata di daftar hitam.",
   "ui_none": "— tidak ada —",
   "ui_none_environment": "Tidak ada / Lingkungan",

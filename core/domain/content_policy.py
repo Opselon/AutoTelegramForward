@@ -46,7 +46,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
-__all__ = ["PolicyDecision", "ContentPolicy", "fold_text", "contains_word", "has_link"]
+__all__ = ["PolicyDecision", "ContentPolicy", "fold_text", "contains_word", "has_link", "split_word_list"]
 
 
 # --------------------------------------------------------------------------
@@ -213,15 +213,31 @@ def _folded_needles(
 
     A candidate is always confirmed with the real matcher, so the shortcut can
     change how much work a decision costs, never what the decision is.
+
+    Whitespace inside a needle is collapsed to a single space and the haystack
+    is scanned in the same collapsed form: the matcher's pattern turns every
+    inter-word space into ``\\s+``, so a phrase matches across the double space
+    or newline an editor left between its words — and a pre-filter that kept
+    the *original* spacing would reject exactly those messages before the
+    matcher ever ran. Short keywords carry no internal whitespace, so the fold
+    is a no-op for them.
     """
     folded: List[str] = []
     for word in words:
         needle = (word or "").strip()
         folded.append(
-            fold_text(needle, normalize=normalize, case_sensitive=case_sensitive)
+            re.sub(r"\s+", " ", fold_text(needle, normalize=normalize, case_sensitive=case_sensitive))
             if needle else ""
         )
     return tuple(folded)
+
+
+#: The comparison form a haystack is reduced to for the cheap substring
+#: pre-filter. Mirrors :func:`_folded_needles` (same fold, same order) so the
+#: two sides of the ``needle in folded_body`` test can never disagree about
+#: whitespace the way the raw text and the raw keyword do.
+def _folded_body(text: str, *, normalize: bool = True, case_sensitive: bool = False) -> str:
+    return re.sub(r"\s+", " ", fold_text(text, normalize=normalize, case_sensitive=case_sensitive))
 
 
 def _first_matching_word(haystack: str, words: Sequence[str], **flags: Any) -> str:
@@ -237,7 +253,7 @@ def _first_matching_word(haystack: str, words: Sequence[str], **flags: Any) -> s
         normalize=flags["normalize"],
         case_sensitive=flags["case_sensitive"],
     )
-    folded_body = fold_text(
+    folded_body = _folded_body(
         haystack, normalize=flags["normalize"], case_sensitive=flags["case_sensitive"]
     )
     for word, needle in zip(words, needles):
@@ -341,20 +357,59 @@ def _as_str_list(raw: Any) -> Tuple[str, ...]:
     """Coerce a settings value into a clean, order-preserving tuple of strings."""
     if raw is None:
         return ()
+    if isinstance(raw, (list, tuple, set)):
+        return split_word_list([str(x) for x in raw])
     if isinstance(raw, str):
         # A comma/newline separated blob is accepted so a text command or a
         # one-line form field works as well as a proper list.
-        parts: Iterable[str] = re.split(r"[,\n]", raw)
+        return split_word_list(raw)
+    return ()
+
+
+#: Separators a user's keyword list is allowed to use. The ASCII comma, the
+#: Persian/Arabic comma (``\u060c``) — a Persian user's keyboard offers it
+#: directly — and any newline, so one entry per line works on every surface.
+_WORD_SEPARATORS = (",", "\u060c", "\n", "\r")
+
+
+def split_word_list(raw: Any) -> Tuple[str, ...]:
+    """Split a user-typed keyword list into ordered, non-empty entries.
+
+    One canonical home for the parsing every surface does: the Telegram bot's
+    ``/whitelist add`` and ``Add`` prompt, the filter wizard, the settings
+    registry and the stored blob all reduce ``"5x, 10x\\nWhale Update"`` to the
+    same three entries, so a phrase keeps its words instead of being cut into
+    fragments that match nothing. Duplicate entries are dropped (first wins) and
+    each entry is stripped, but nothing inside an entry is collapsed — internal
+    whitespace is the matcher's job, which treats any run of it as one space.
+    """
+    if raw is None:
+        return ()
+    if isinstance(raw, str):
+        text = raw
     elif isinstance(raw, (list, tuple, set)):
-        parts = [str(x) for x in raw]
+        # Already split (a form field or a settings write): an entry is an
+        # entry — a phrase that contains a comma stays whole, because the
+        # surfaces that build lists split on separators before storing them.
+        out: List[str] = []
+        seen: set = set()
+        for item in raw:
+            entry = str(item).strip()
+            if entry and entry not in seen:
+                seen.add(entry)
+                out.append(entry)
+        return tuple(out)
     else:
         return ()
+    text = str(text)
+    for separator in _WORD_SEPARATORS[1:]:
+        text = text.replace(separator, _WORD_SEPARATORS[0])
     seen, out = set(), []
-    for part in parts:
-        s = str(part).strip()
-        if s and s not in seen:
-            seen.add(s)
-            out.append(s)
+    for chunk in text.split(_WORD_SEPARATORS[0]):
+        entry = chunk.strip()
+        if entry and entry not in seen:
+            seen.add(entry)
+            out.append(entry)
     return tuple(out)
 
 

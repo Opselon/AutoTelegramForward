@@ -169,7 +169,7 @@ class AppMessagesRu {
     'filters_kind_summary': 'Тип: {kind}',
     'filters_kind_whitelist': 'Whitelist',
     'filters_pattern': 'Pattern',
-    'filters_pattern_hint': 'напр.: badword, @channel, http…',
+    'filters_pattern_hint': 'напр.: badword, @channel, http… или целая фраза вроде «Whale Update on a VIP call» (регистр и пробелы не учитываются)',
     'filters_title': 'Filters',
     'incompatible_server': 'Этот сервер работает на более старой версии AutoTelegramForward. Обновите её до {version} или новее.',
     'lang_label': 'Язык',

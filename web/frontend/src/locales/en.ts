@@ -674,6 +674,7 @@ export const en: Catalog = {
   "ui_no_text_replacements_configured": "No text replacements configured.",
   "ui_no_token_received": "No token received",
   "ui_no_whitelist_restrictions_all_permitted": "No whitelist restrictions (all permitted).",
+  "ui_words_matching_help": "A whole entry matches as a whole: “Whale Update on a VIP call” matches that full phrase, “5x” matches 5x. Matching ignores letter case, repeated spaces, and line breaks between the phrase's words. Separate several entries with a comma.",
   "ui_no_words_in_blacklist": "No words in blacklist.",
   "ui_none": "— none —",
   "ui_none_environment": "None / Environment",

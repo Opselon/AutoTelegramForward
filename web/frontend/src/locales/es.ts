@@ -674,6 +674,7 @@ export const es: Catalog = {
   "ui_no_text_replacements_configured": "No hay sustituciones de texto configuradas.",
   "ui_no_token_received": "No se ha recibido ningún token",
   "ui_no_whitelist_restrictions_all_permitted": "Sin restricciones de lista blanca (todo permitido).",
+  "ui_words_matching_help": "Una entrada completa coincide como un todo: «Whale Update on a VIP call» coincide con esa frase completa, «5x» coincide con 5x. La coincidencia ignora mayúsculas, espacios repetidos y saltos de línea entre las palabras de la frase. Separa varias entradas con una coma.",
   "ui_no_words_in_blacklist": "No hay palabras en la lista negra.",
   "ui_none": "— ninguno —",
   "ui_none_environment": "Ninguno / Entorno",

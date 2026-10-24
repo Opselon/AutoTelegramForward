@@ -170,7 +170,7 @@ class AppMessagesUz {
     'filters_kind_summary': 'Turi: {kind}',
     'filters_kind_whitelist': 'Whitelist',
     'filters_pattern': 'Pattern',
-    'filters_pattern_hint': 'masalan: badword, @channel, http…',
+    'filters_pattern_hint': 'masalan: badword, @channel, http… yoki “Whale Update on a VIP call” kabi to‘liq ibora (harf katta-kichikligi va bo‘sliqlar e’tiborga olinmaydi)',
     'filters_title': 'Filters',
     'incompatible_server': 'Bu server AutoTelegramForward’ning eski versiyasini ishlatmoqda. Uni {version} yoki yangiroq versiyaga yangilang.',
     'lang_label': 'Til',

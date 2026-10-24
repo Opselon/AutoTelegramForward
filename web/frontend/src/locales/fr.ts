@@ -674,6 +674,7 @@ export const fr: Catalog = {
   "ui_no_text_replacements_configured": "Aucun remplacement de texte configuré.",
   "ui_no_token_received": "Aucun jeton reçu",
   "ui_no_whitelist_restrictions_all_permitted": "Aucune restriction de liste blanche (tout est autorisé).",
+  "ui_words_matching_help": "Une entrée entière correspond dans son ensemble : « Whale Update on a VIP call » correspond à cette phrase complète, « 5x » à 5x. La correspondance ignore la casse, les espaces répétés et les sauts de ligne entre les mots de la phrase. Séparez plusieurs entrées par une virgule.",
   "ui_no_words_in_blacklist": "Aucun mot dans la liste noire.",
   "ui_none": "— aucun —",
   "ui_none_environment": "Aucun / Environnement",

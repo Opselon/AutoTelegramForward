@@ -674,6 +674,7 @@ export const pt: Catalog = {
   "ui_no_text_replacements_configured": "Não há substituições de texto configuradas.",
   "ui_no_token_received": "Não foi recebido nenhum token",
   "ui_no_whitelist_restrictions_all_permitted": "Sem restrições de lista branca (tudo permitido).",
+  "ui_words_matching_help": "Uma entrada inteira corresponde como um todo: “Whale Update on a VIP call” corresponde a essa frase completa, “5x” a 5x. A correspondência ignora maiúsculas, espaços repetidos e quebras de linha entre as palavras da frase. Separe várias entradas com vírgula.",
   "ui_no_words_in_blacklist": "Não há palavras na lista negra.",
   "ui_none": "— nenhum —",
   "ui_none_environment": "Nenhum / Ambiente",
