@@ -265,23 +265,23 @@ def test_regex_only_blacklist_in_legacy_filter_engine():
 
 
 def test_invalid_regex_fails_closed_safely():
-    """Invalid regex patterns in regex_block or regex_require are safely ignored at evaluation without crashing."""
+    """Invalid regex patterns in regex_block or regex_require fail closed safely without crashing."""
     policy_bl = ContentPolicy(regex_block=(r"[invalid(",))
     dec_bl = policy_bl.evaluate("hello world")
-    assert dec_bl.allowed is True
-    assert dec_bl.reason == "policy_passed"
+    assert dec_bl.allowed is False
+    assert dec_bl.reason.startswith("invalid_regex_block:")
 
     policy_wl = ContentPolicy(regex_require=(r"[invalid(",))
     dec_wl = policy_wl.evaluate("hello world")
-    assert dec_wl.allowed is True
-    assert dec_wl.reason == "policy_passed"
+    assert dec_wl.allowed is False
+    assert dec_wl.reason.startswith("invalid_regex_require:")
 
     # In FilterEngine:
     engine = FilterEngine()
     rule_inv = FilterRule(id="f_inv", name="inv", regex_block=[r"[invalid("])
     res_inv = engine.evaluate(MessagePayload(message_id=1, chat_id="1", text="hello"), rule_inv)
-    assert res_inv.action == FilterAction.ALLOW
-    assert res_inv.reason == "filter_passed"
+    assert res_inv.action == FilterAction.DROP
+    assert res_inv.reason.startswith("invalid_regex_block:")
 
 
 def test_metadata_precedence_and_empty_nested_dict():
@@ -339,3 +339,43 @@ async def test_delivery_boundary_blocked_message_never_enqueued():
     assert filter_stage.success is True
     assert len(mock_queue.jobs) == 1
     assert mock_queue.jobs[0]["target"] == "-100200"
+
+
+@pytest.mark.asyncio
+async def test_servicer_filter_preview_preserves_explicit_direction():
+    """Servicer TestFilterRule preserves regex_block and regex_require independently."""
+    from core.infrastructure.grpc_server.servicers import FilterControlServicer
+    import core.proto.autoforward_pb2 as pb
+
+    servicer = FilterControlServicer(MockFilterRepo())
+
+    # Case 1: Regex block without keywords
+    req1 = pb.TestFilterRuleRequest(
+        owner_user_id=123,
+        sample="[SPAM] Buy coins",
+        regex_block=[r"^\[SPAM\]"],
+    )
+    res1 = await servicer.TestFilterRule(req1, None)
+    assert res1.allowed is False
+    assert "regex_block:" in res1.reason
+
+    # Case 2: Regex require without keywords
+    req2 = pb.TestFilterRuleRequest(
+        owner_user_id=123,
+        sample="[SPAM] Buy coins",
+        regex_require=[r"^\[VERIFIED\]"],
+    )
+    res2 = await servicer.TestFilterRule(req2, None)
+    assert res2.allowed is False
+    assert res2.reason == "regex_require_missing"
+
+    # Case 3: Both directions populated simultaneously
+    req3 = pb.TestFilterRuleRequest(
+        owner_user_id=123,
+        sample="[VERIFIED] Announcement",
+        regex_block=[r"^\[SPAM\]"],
+        regex_require=[r"^\[VERIFIED\]"],
+    )
+    res3 = await servicer.TestFilterRule(req3, None)
+    assert res3.allowed is True
+    assert "regex_require:" in res3.reason

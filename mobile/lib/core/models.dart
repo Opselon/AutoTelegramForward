@@ -879,6 +879,8 @@ class FilterRule {
     this.whitelistKeywords = const [],
     this.blacklistKeywords = const [],
     this.regexPatterns = const [],
+    this.regexBlock = const [],
+    this.regexRequire = const [],
     this.isEnabled = true,
     this.version = 0,
   });
@@ -888,6 +890,8 @@ class FilterRule {
   final List<String> whitelistKeywords;
   final List<String> blacklistKeywords;
   final List<String> regexPatterns;
+  final List<String> regexBlock;
+  final List<String> regexRequire;
   final bool isEnabled;
   final int version;
 
@@ -895,11 +899,14 @@ class FilterRule {
   List<String> get keywordEntries {
     if (blacklistKeywords.isNotEmpty) return blacklistKeywords;
     if (whitelistKeywords.isNotEmpty) return whitelistKeywords;
+    if (regexBlock.isNotEmpty) return regexBlock;
+    if (regexRequire.isNotEmpty) return regexRequire;
     return regexPatterns;
   }
 
-  bool get isBlacklist => blacklistKeywords.isNotEmpty;
-  bool get isWhitelist => whitelistKeywords.isNotEmpty;
+  bool get isBlacklist => blacklistKeywords.isNotEmpty || regexBlock.isNotEmpty;
+  bool get isWhitelist =>
+      whitelistKeywords.isNotEmpty || regexRequire.isNotEmpty;
 
   /// Which of the three user-facing options this rule is. Derived, never
   /// persisted: a rule with word entries is a Keyword/Phrase (or Long-Text)
@@ -907,7 +914,10 @@ class FilterRule {
   /// mixed. The bot and the web dashboard classify the same way.
   FilterKind get kind {
     final words = blacklistKeywords.isNotEmpty || whitelistKeywords.isNotEmpty;
-    final regex = regexPatterns.isNotEmpty;
+    final regex =
+        regexPatterns.isNotEmpty ||
+        regexBlock.isNotEmpty ||
+        regexRequire.isNotEmpty;
     if (words && regex) return FilterKind.mixed;
     if (regex) return FilterKind.regex;
     if (words) return FilterKind.keyword;
@@ -920,6 +930,8 @@ class FilterRule {
     List<String>? whitelistKeywords,
     List<String>? blacklistKeywords,
     List<String>? regexPatterns,
+    List<String>? regexBlock,
+    List<String>? regexRequire,
     bool? isEnabled,
     int? version,
   }) => FilterRule(
@@ -928,6 +940,8 @@ class FilterRule {
     whitelistKeywords: whitelistKeywords ?? this.whitelistKeywords,
     blacklistKeywords: blacklistKeywords ?? this.blacklistKeywords,
     regexPatterns: regexPatterns ?? this.regexPatterns,
+    regexBlock: regexBlock ?? this.regexBlock,
+    regexRequire: regexRequire ?? this.regexRequire,
     isEnabled: isEnabled ?? this.isEnabled,
     version: version ?? this.version,
   );
@@ -937,6 +951,8 @@ class FilterRule {
     'whitelist_keywords': whitelistKeywords,
     'blacklist_keywords': blacklistKeywords,
     'regex_patterns': regexPatterns,
+    'regex_block': regexBlock,
+    'regex_require': regexRequire,
     'is_enabled': isEnabled,
     'expected_version': version,
   };
@@ -947,6 +963,8 @@ class FilterRule {
     whitelistKeywords: _stringList(json['whitelist_keywords']),
     blacklistKeywords: _stringList(json['blacklist_keywords']),
     regexPatterns: _stringList(json['regex_patterns']),
+    regexBlock: _stringList(json['regex_block']),
+    regexRequire: _stringList(json['regex_require']),
     isEnabled: json['is_enabled'] as bool? ?? true,
     version: jsonInt(json['version']),
   );

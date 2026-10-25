@@ -362,6 +362,14 @@ def coerce_value(key: str, value: Any) -> Any:
                                        f"{key} expects a list of strings", key)
                 s = item.strip()
                 if s:
+                    if key in ("regex_block", "regex_require"):
+                        from .content_policy import compile_user_regex
+                        if compile_user_regex(s) is None:
+                            raise SettingError(
+                                "invalid_choice",
+                                f"{key} contains invalid or unsafe regular expression: {s[:32]}",
+                                key,
+                            )
                     out.append(s)
             return out
         return list(value)

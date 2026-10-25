@@ -39,9 +39,11 @@ def test_regex_pattern():
     assert FilterEngine().evaluate(payload("no numbers"), fr).action.name == "DROP"
 
 
-def test_invalid_regex_is_ignored_not_crash():
+def test_invalid_regex_fails_closed_not_crash():
     fr = FilterRule(regex_patterns=["([unclosed"])
-    assert FilterEngine().evaluate(payload("text"), fr).action.name == "ALLOW"
+    res = FilterEngine().evaluate(payload("text"), fr)
+    assert res.action.name == "DROP"
+    assert "invalid_regex" in res.reason
 
 
 def test_media_type_blocking():

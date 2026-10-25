@@ -512,6 +512,8 @@ def _filter_pb(f) -> pb.FilterRule:
         whitelist_keywords=f.whitelist_keywords,
         blacklist_keywords=f.blacklist_keywords,
         regex_patterns=f.regex_patterns,
+        regex_block=getattr(f, "regex_block", []) or [],
+        regex_require=getattr(f, "regex_require", []) or [],
         allowed_media_types=f.allowed_media_types,
         blocked_media_types=f.blocked_media_types,
         drop_service_messages=f.drop_service_messages,
@@ -2038,12 +2040,23 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
 
     async def CreateFilter(self, request, context):
         from ...domain.entities import FilterRule as Entity
+        from ...domain.content_policy import compile_user_regex
         f = request.filter
+
+        # Validate regex patterns fail-fast
+        for pat in list(f.regex_block) + list(f.regex_require) + list(f.regex_patterns):
+            if pat and compile_user_regex(pat) is None:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details(f"invalid or unsafe regular expression: {pat[:32]}")
+                return pb.FilterRule()
+
         entity = Entity(
             name=f.name,
             whitelist_keywords=list(f.whitelist_keywords),
             blacklist_keywords=list(f.blacklist_keywords),
             regex_patterns=list(f.regex_patterns),
+            regex_block=list(f.regex_block),
+            regex_require=list(f.regex_require),
             allowed_media_types=list(f.allowed_media_types),
             blocked_media_types=list(f.blocked_media_types),
             drop_service_messages=f.drop_service_messages,
@@ -2056,6 +2069,7 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
 
     async def UpdateFilter(self, request, context):
         # v12.2: ownership guard at the use-case boundary.
+        from ...domain.content_policy import compile_user_regex
         caller = int(request.filter.owner_user_id or 0)
         if not caller:
             return pb.FilterRule()
@@ -2063,10 +2077,20 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
         if not existing:
             return pb.FilterRule()
         f = request.filter
+
+        # Validate regex patterns fail-fast
+        for pat in list(f.regex_block) + list(f.regex_require) + list(f.regex_patterns):
+            if pat and compile_user_regex(pat) is None:
+                context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+                context.set_details(f"invalid or unsafe regular expression: {pat[:32]}")
+                return pb.FilterRule()
+
         existing.name = f.name or existing.name
         existing.whitelist_keywords = list(f.whitelist_keywords)
         existing.blacklist_keywords = list(f.blacklist_keywords)
         existing.regex_patterns = list(f.regex_patterns)
+        existing.regex_block = list(f.regex_block)
+        existing.regex_require = list(f.regex_require)
         existing.allowed_media_types = list(f.allowed_media_types)
         existing.blocked_media_types = list(f.blocked_media_types)
         existing.drop_service_messages = f.drop_service_messages
@@ -2119,9 +2143,17 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
                 rx_blk = list(getattr(existing, "regex_block", []))
                 rx_req = list(getattr(existing, "regex_require", []))
 
-        # Separate directional regexes if explicitly present on draft entity
-        rx_blk = rx_blk or [str(p) for p in getattr(draft, "regex_block", []) or []]
-        rx_req = rx_req or [str(p) for p in getattr(draft, "regex_require", []) or []]
+        # Separate directional regexes if explicitly present on draft entity or request
+        req_blk = [str(p) for p in getattr(request, "regex_block", []) or []]
+        req_req = [str(p) for p in getattr(request, "regex_require", []) or []]
+        draft_blk = [str(p) for p in getattr(draft, "regex_block", []) or []]
+        draft_req = [str(p) for p in getattr(draft, "regex_require", []) or []]
+
+        # Explicit draft/request fields override base stored rule fields
+        if req_blk or draft_blk:
+            rx_blk = req_blk or draft_blk
+        if req_req or draft_req:
+            rx_req = req_req or draft_req
 
         # For legacy draft regex_patterns when direction lists are empty:
         if rx and not rx_blk and not rx_req:

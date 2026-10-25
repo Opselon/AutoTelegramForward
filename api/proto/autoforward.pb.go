@@ -2684,6 +2684,8 @@ type FilterRule struct {
 	MinMessageLength    int64                  `protobuf:"varint,9,opt,name=min_message_length,json=minMessageLength,proto3" json:"min_message_length,omitempty"`
 	MaxMessageLength    int64                  `protobuf:"varint,10,opt,name=max_message_length,json=maxMessageLength,proto3" json:"max_message_length,omitempty"`
 	OwnerUserId         int64                  `protobuf:"varint,11,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // owning account (0 = legacy shared filter)
+	RegexBlock          []string               `protobuf:"bytes,12,rep,name=regex_block,json=regexBlock,proto3" json:"regex_block,omitempty"`
+	RegexRequire        []string               `protobuf:"bytes,13,rep,name=regex_require,json=regexRequire,proto3" json:"regex_require,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -2793,6 +2795,20 @@ func (x *FilterRule) GetOwnerUserId() int64 {
 		return x.OwnerUserId
 	}
 	return 0
+}
+
+func (x *FilterRule) GetRegexBlock() []string {
+	if x != nil {
+		return x.RegexBlock
+	}
+	return nil
+}
+
+func (x *FilterRule) GetRegexRequire() []string {
+	if x != nil {
+		return x.RegexRequire
+	}
+	return nil
 }
 
 type CreateFilterRequest struct {
@@ -3032,6 +3048,8 @@ type TestFilterRuleRequest struct {
 	RuleId        string                 `protobuf:"bytes,2,opt,name=rule_id,json=ruleId,proto3" json:"rule_id,omitempty"`                   // when set, the stored filter is the base draft
 	Filter        *FilterRule            `protobuf:"bytes,3,opt,name=filter,proto3" json:"filter,omitempty"`                                 // draft values override the stored ones
 	Sample        string                 `protobuf:"bytes,4,opt,name=sample,proto3" json:"sample,omitempty"`                                 // the sample message text to test against
+	RegexBlock    []string               `protobuf:"bytes,5,rep,name=regex_block,json=regexBlock,proto3" json:"regex_block,omitempty"`
+	RegexRequire  []string               `protobuf:"bytes,6,rep,name=regex_require,json=regexRequire,proto3" json:"regex_require,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3092,6 +3110,20 @@ func (x *TestFilterRuleRequest) GetSample() string {
 		return x.Sample
 	}
 	return ""
+}
+
+func (x *TestFilterRuleRequest) GetRegexBlock() []string {
+	if x != nil {
+		return x.RegexBlock
+	}
+	return nil
+}
+
+func (x *TestFilterRuleRequest) GetRegexRequire() []string {
+	if x != nil {
+		return x.RegexRequire
+	}
+	return nil
 }
 
 type TestFilterRuleResponse struct {
@@ -14891,7 +14923,7 @@ const file_autoforward_proto_rawDesc = "" +
 	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\"\n" +
 	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\"C\n" +
 	"\x11ListRulesResponse\x12.\n" +
-	"\x05rules\x18\x01 \x03(\v2\x18.autoforward.ForwardRuleR\x05rules\"\xc9\x03\n" +
+	"\x05rules\x18\x01 \x03(\v2\x18.autoforward.ForwardRuleR\x05rules\"\x8f\x04\n" +
 	"\n" +
 	"FilterRule\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
@@ -14905,7 +14937,10 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x12min_message_length\x18\t \x01(\x03R\x10minMessageLength\x12,\n" +
 	"\x12max_message_length\x18\n" +
 	" \x01(\x03R\x10maxMessageLength\x12\"\n" +
-	"\rowner_user_id\x18\v \x01(\x03R\vownerUserId\"F\n" +
+	"\rowner_user_id\x18\v \x01(\x03R\vownerUserId\x12\x1f\n" +
+	"\vregex_block\x18\f \x03(\tR\n" +
+	"regexBlock\x12#\n" +
+	"\rregex_require\x18\r \x03(\tR\fregexRequire\"F\n" +
 	"\x13CreateFilterRequest\x12/\n" +
 	"\x06filter\x18\x01 \x01(\v2\x17.autoforward.FilterRuleR\x06filter\"F\n" +
 	"\x13UpdateFilterRequest\x12/\n" +
@@ -14916,12 +14951,15 @@ const file_autoforward_proto_rawDesc = "" +
 	"\x12ListFiltersRequest\x12\"\n" +
 	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\"H\n" +
 	"\x13ListFiltersResponse\x121\n" +
-	"\afilters\x18\x01 \x03(\v2\x17.autoforward.FilterRuleR\afilters\"\x9d\x01\n" +
+	"\afilters\x18\x01 \x03(\v2\x17.autoforward.FilterRuleR\afilters\"\xe3\x01\n" +
 	"\x15TestFilterRuleRequest\x12\"\n" +
 	"\rowner_user_id\x18\x01 \x01(\x03R\vownerUserId\x12\x17\n" +
 	"\arule_id\x18\x02 \x01(\tR\x06ruleId\x12/\n" +
 	"\x06filter\x18\x03 \x01(\v2\x17.autoforward.FilterRuleR\x06filter\x12\x16\n" +
-	"\x06sample\x18\x04 \x01(\tR\x06sample\"\xac\x01\n" +
+	"\x06sample\x18\x04 \x01(\tR\x06sample\x12\x1f\n" +
+	"\vregex_block\x18\x05 \x03(\tR\n" +
+	"regexBlock\x12#\n" +
+	"\rregex_require\x18\x06 \x03(\tR\fregexRequire\"\xac\x01\n" +
 	"\x16TestFilterRuleResponse\x12\x18\n" +
 	"\aallowed\x18\x01 \x01(\bR\aallowed\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\x12\x18\n" +
