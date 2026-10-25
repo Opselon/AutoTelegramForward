@@ -1055,11 +1055,36 @@ class ForwardRule:
     # the task's own rules.
     @property
     def content_policy_config(self) -> Dict[str, Any]:
-        """Raw stored policy dict (never None, never shared with the caller)."""
+        """Raw stored policy dict (never None, never shared with the caller).
+
+        Authoritative home: self.metadata["content_policy"].
+        When the nested policy dictionary is absent, synthesizes configuration
+        from flat and legacy metadata keys so rules configured via Web UI or
+        external APIs without explicit nesting enforce their rules identically.
+        """
         if not isinstance(self.metadata, dict):
             return {}
         cfg = self.metadata.get("content_policy")
-        return dict(cfg) if isinstance(cfg, dict) else {}
+        if isinstance(cfg, dict):
+            return dict(cfg)
+        syn: Dict[str, Any] = {}
+        for key in ("blacklist_words", "whitelist_words", "regex_block", "regex_require", "strip_words"):
+            val = self.metadata.get(key)
+            if isinstance(val, (list, tuple)) and val:
+                syn[key] = [str(x) for x in val]
+        if not syn.get("blacklist_words"):
+            legacy_bl = self.metadata.get("blacklist") or self.metadata.get("blacklist_keywords")
+            if isinstance(legacy_bl, (list, tuple)) and legacy_bl:
+                syn["blacklist_words"] = [str(x) for x in legacy_bl]
+        if not syn.get("whitelist_words"):
+            legacy_wl = self.metadata.get("whitelist") or self.metadata.get("whitelist_keywords")
+            if isinstance(legacy_wl, (list, tuple)) and legacy_wl:
+                syn["whitelist_words"] = [str(x) for x in legacy_wl]
+        if self.metadata.get("whitelist_mode"):
+            syn["whitelist_mode"] = str(self.metadata["whitelist_mode"])
+        if "content_policy_enabled" in self.metadata:
+            syn["enabled"] = bool(self.metadata["content_policy_enabled"])
+        return syn
 
     @content_policy_config.setter
     def content_policy_config(self, val: Dict[str, Any]) -> None:
@@ -1073,7 +1098,7 @@ class ForwardRule:
         return val
 
     def _set_policy_key(self, key: str, value: Any) -> None:
-        cfg = self.content_policy_config
+        cfg = dict(self.content_policy_config)
         cfg[key] = value
         self.content_policy_config = cfg
 
