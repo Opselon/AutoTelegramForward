@@ -2107,38 +2107,36 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
         wl = [str(w) for w in draft.whitelist_keywords]
         bl = [str(w) for w in draft.blacklist_keywords]
         rx = [str(p) for p in draft.regex_patterns]
-        rx_block = []
-        # When a pattern in regex_patterns looks like or was passed as a block pattern,
-        # or when fallback fields are used, honor direction. Legacy FilterRule has
-        # regex_patterns. If blacklist_keywords is populated and regex_patterns is set
-        # while whitelist is empty, regex_patterns is evaluated as regex_block unless
-        # whitelist explicitly exists.
-        # But even better: check if existing filter has custom metadata or if draft patterns
-        # can be evaluated cleanly.
+        rx_blk: List[str] = []
+        rx_req: List[str] = []
+
         if request.rule_id:
             existing = await self._filters.get_owned(request.rule_id, owner)
             if existing is not None:
                 wl = wl or list(existing.whitelist_keywords)
                 bl = bl or list(existing.blacklist_keywords)
-                rx = rx or list(existing.regex_patterns)
+                rx = rx or list(getattr(existing, "regex_patterns", []))
+                rx_blk = list(getattr(existing, "regex_block", []))
+                rx_req = list(getattr(existing, "regex_require", []))
 
-        # Distinguish regex_require from regex_block based on whitelist vs blacklist context:
-        # A legacy FilterRule carries regex_patterns as a require-any filter unless only
-        # blacklist keywords are configured, in which case it acts as a block list.
-        # If both whitelist and blacklist keywords or neither are set, regex_patterns acts as require.
-        regex_req = tuple(rx)
-        regex_blk = ()
-        if bl and not wl:
-            regex_blk = tuple(rx)
-            regex_req = ()
+        # Separate directional regexes if explicitly present on draft entity
+        rx_blk = rx_blk or [str(p) for p in getattr(draft, "regex_block", []) or []]
+        rx_req = rx_req or [str(p) for p in getattr(draft, "regex_require", []) or []]
+
+        # For legacy draft regex_patterns when direction lists are empty:
+        if rx and not rx_blk and not rx_req:
+            if bl and not wl:
+                rx_blk = list(rx)
+            else:
+                rx_req = list(rx)
 
         result = preview_match(
             request.sample,
             whitelist=wl,
             blacklist=bl,
             mode="any",
-            regex_block=regex_blk,
-            regex_require=regex_req,
+            regex_block=rx_blk,
+            regex_require=rx_req,
             word_boundary=False,
         )
         return pb.TestFilterRuleResponse(

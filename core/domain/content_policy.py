@@ -40,11 +40,14 @@ Why it is written this way:
 
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
 from dataclasses import dataclass, field
 from functools import lru_cache
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["PolicyDecision", "MatchPreview", "ContentPolicy", "fold_text", "contains_word",
            "has_link", "split_word_list", "preview_match", "preview_policy",
@@ -503,23 +506,29 @@ def preview_match(
 
     for pattern in regex_block or ():
         compiled = _compile_user_regex(pattern)
-        if compiled is not None and bounded_search(compiled, body) is not None:
+        if compiled is None:
+            continue
+        if bounded_search(compiled, body) is not None:
             return MatchPreview(
                 allowed=False, reason=f"regex_block:{pattern[:48]}",
                 matched=(pattern,), missing=(), entries=tuple(regex_block), mode=mode,
             )
 
     if regex_require:
-        usable = [p for p in regex_require if _compile_user_regex(p) is not None]
-        if usable:
+        valid_patterns = []
+        for p in regex_require:
+            comp = _compile_user_regex(p)
+            if comp is not None:
+                valid_patterns.append((p, comp))
+        if valid_patterns:
             hit = next(
-                (p for p in usable if bounded_search(_compile_user_regex(p), body) is not None),  # type: ignore[union-attr]
+                (p for p, comp in valid_patterns if bounded_search(comp, body) is not None),
                 None,
             )
             if hit is None:
                 return MatchPreview(
                     allowed=False, reason="regex_require_missing",
-                    matched=(), missing=tuple(usable), entries=tuple(regex_require), mode=mode,
+                    matched=(), missing=tuple(regex_require), entries=tuple(regex_require), mode=mode,
                 )
             return MatchPreview(
                 allowed=True, reason=f"regex_require:{hit[:48]}",
@@ -837,16 +846,31 @@ class ContentPolicy:
 
         for pattern in self.regex_block:
             compiled = _compile_user_regex(pattern)
-            if compiled is not None and bounded_search(compiled, body) is not None:
+            if compiled is None:
+                logger.warning(
+                    "[CONTENT_POLICY:INVALID_REGEX] Blocking pattern cannot be compiled safely: %s",
+                    pattern[:24] if pattern else "<empty>",
+                )
+                continue
+            if bounded_search(compiled, body) is not None:
                 return PolicyDecision(False, f"regex_block:{pattern[:48]}", (pattern,))
 
         if self.regex_require:
-            usable = [p for p in self.regex_require if _compile_user_regex(p) is not None]
-            if usable and not any(
-                bounded_search(_compile_user_regex(p), body) is not None  # type: ignore[union-attr]
-                for p in usable
+            valid_require_patterns = []
+            for p in self.regex_require:
+                comp = _compile_user_regex(p)
+                if comp is None:
+                    logger.warning(
+                        "[CONTENT_POLICY:INVALID_REGEX] Requirement pattern cannot be compiled safely: %s",
+                        p[:24] if p else "<empty>",
+                    )
+                    continue
+                valid_require_patterns.append(comp)
+            if valid_require_patterns and not any(
+                bounded_search(comp, body) is not None
+                for comp in valid_require_patterns
             ):
-                return PolicyDecision(False, "regex_require_missing")
+                return PolicyDecision(False, "regex_mismatch")
 
         return PolicyDecision(True, "policy_passed")
 

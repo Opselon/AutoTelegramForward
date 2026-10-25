@@ -765,6 +765,12 @@ class DurableMessagePipeline:
             rule.policy_chain(source_chat_id=payload.chat_id)
             if hasattr(rule, "policy_chain") else []
         )
+        if not policy_chain or not any(p.has_rules for p in policy_chain):
+            logger.info(
+                "[PIPELINE:CONTENT_POLICY] [%s] task=%s tenant=%s msg=%s outcome=NO_RULES active_policies=0",
+                ctx.correlation_id[:8], rule.id[:8], getattr(rule, "owner_user_id", 0) or 0,
+                payload.message_id,
+            )
         for policy in policy_chain:
             decision = policy.evaluate(payload.effective_text or "", m_type)
             if not decision.allowed:

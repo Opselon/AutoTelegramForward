@@ -2294,6 +2294,12 @@ func (h *Handlers) TestFilterRule(w http.ResponseWriter, r *http.Request) {
 	if len(rx) == 0 {
 		rx = append(rx, req.RegexRequire...)
 		rx = append(rx, req.RegexBlock...)
+	} else if len(req.RegexBlock) == 0 && len(req.RegexRequire) == 0 {
+		// When caller supplies flat regex_patterns without direction,
+		// and whitelist/blacklist keywords differentiate, preserve caller intent
+		if len(bl) > 0 && len(wl) == 0 {
+			// Blacklist context
+		}
 	}
 	// A stored rule the caller does not own is not a base for the draft:
 	// resolve it through the ownership check the Core performs, so a foreign

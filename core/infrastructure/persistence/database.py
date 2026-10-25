@@ -461,7 +461,9 @@ MIGRATIONS = {
         drop_service_messages INTEGER NOT NULL DEFAULT 1,
         min_message_length INTEGER NOT NULL DEFAULT 0,
         max_message_length INTEGER NOT NULL DEFAULT 0,
-        owner_user_id INTEGER NOT NULL DEFAULT 0
+        owner_user_id INTEGER NOT NULL DEFAULT 0,
+        regex_block TEXT NOT NULL DEFAULT '[]',
+        regex_require TEXT NOT NULL DEFAULT '[]'
     );
     """,
     12: """
@@ -918,6 +920,8 @@ SCHEMA_VERSION = max(MIGRATIONS)
 _ADDITIVE_COLUMNS = (
     ("ai_configs", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_ai_configs_owner"),
     ("filter_rules", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_filter_rules_owner"),
+    ("filter_rules", "regex_block", "TEXT NOT NULL DEFAULT '[]'", None),
+    ("filter_rules", "regex_require", "TEXT NOT NULL DEFAULT '[]'", None),
     # v12: credential vault + prompt templates are per-tenant, not global.
     # Without this any authenticated tenant can read another tenant's api_hash
     # through a backup export, and overwrite another tenant's prompt templates.

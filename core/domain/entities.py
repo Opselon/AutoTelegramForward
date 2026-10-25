@@ -1058,33 +1058,38 @@ class ForwardRule:
         """Raw stored policy dict (never None, never shared with the caller).
 
         Authoritative home: self.metadata["content_policy"].
-        When the nested policy dictionary is absent, synthesizes configuration
-        from flat and legacy metadata keys so rules configured via Web UI or
-        external APIs without explicit nesting enforce their rules identically.
+        When the nested policy dictionary is absent or empty, or contains partial
+        keys, merges configuration with flat and legacy metadata keys so rules
+        configured via Web UI or external APIs without explicit nesting enforce
+        their rules identically, without allowing an empty dictionary to hide
+        active flat rules.
         """
         if not isinstance(self.metadata, dict):
             return {}
         cfg = self.metadata.get("content_policy")
-        if isinstance(cfg, dict):
-            return dict(cfg)
-        syn: Dict[str, Any] = {}
+        res: Dict[str, Any] = dict(cfg) if isinstance(cfg, dict) else {}
+
+        # Synthesize from flat keys if not explicitly present in res
         for key in ("blacklist_words", "whitelist_words", "regex_block", "regex_require", "strip_words"):
-            val = self.metadata.get(key)
-            if isinstance(val, (list, tuple)) and val:
-                syn[key] = [str(x) for x in val]
-        if not syn.get("blacklist_words"):
+            if key not in res:
+                val = self.metadata.get(key)
+                if isinstance(val, (list, tuple)) and val:
+                    res[key] = [str(x) for x in val]
+
+        # Fallback to legacy aliases if still missing
+        if "blacklist_words" not in res:
             legacy_bl = self.metadata.get("blacklist") or self.metadata.get("blacklist_keywords")
             if isinstance(legacy_bl, (list, tuple)) and legacy_bl:
-                syn["blacklist_words"] = [str(x) for x in legacy_bl]
-        if not syn.get("whitelist_words"):
+                res["blacklist_words"] = [str(x) for x in legacy_bl]
+        if "whitelist_words" not in res:
             legacy_wl = self.metadata.get("whitelist") or self.metadata.get("whitelist_keywords")
             if isinstance(legacy_wl, (list, tuple)) and legacy_wl:
-                syn["whitelist_words"] = [str(x) for x in legacy_wl]
-        if self.metadata.get("whitelist_mode"):
-            syn["whitelist_mode"] = str(self.metadata["whitelist_mode"])
-        if "content_policy_enabled" in self.metadata:
-            syn["enabled"] = bool(self.metadata["content_policy_enabled"])
-        return syn
+                res["whitelist_words"] = [str(x) for x in legacy_wl]
+        if "whitelist_mode" not in res and self.metadata.get("whitelist_mode"):
+            res["whitelist_mode"] = str(self.metadata["whitelist_mode"])
+        if "enabled" not in res and "content_policy_enabled" in self.metadata:
+            res["enabled"] = bool(self.metadata["content_policy_enabled"])
+        return res
 
     @content_policy_config.setter
     def content_policy_config(self, val: Dict[str, Any]) -> None:
@@ -2237,6 +2242,8 @@ class FilterRule:
     whitelist_keywords: List[str] = field(default_factory=list)
     blacklist_keywords: List[str] = field(default_factory=list)
     regex_patterns: List[str] = field(default_factory=list)
+    regex_block: List[str] = field(default_factory=list)
+    regex_require: List[str] = field(default_factory=list)
     allowed_media_types: List[str] = field(default_factory=list)
     blocked_media_types: List[str] = field(default_factory=list)
     drop_service_messages: bool = True

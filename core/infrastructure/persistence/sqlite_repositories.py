@@ -920,13 +920,15 @@ class SqliteFilterRuleRepository(IFilterRuleRepository):
             json.dumps(fr.blocked_media_types), int(fr.drop_service_messages),
             fr.min_message_length, fr.max_message_length,
             int(getattr(fr, "owner_user_id", 0) or 0),
+            json.dumps(getattr(fr, "regex_block", []) or []),
+            json.dumps(getattr(fr, "regex_require", []) or []),
         )
 
     async def add(self, filter_rule: FilterRule) -> FilterRule:
         self._db.execute(
             "INSERT INTO filter_rules (id, name, whitelist_keywords, blacklist_keywords, regex_patterns,"
             " allowed_media_types, blocked_media_types, drop_service_messages, min_message_length,"
-            " max_message_length, owner_user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " max_message_length, owner_user_id, regex_block, regex_require) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             self._cols(filter_rule),
         )
         return filter_rule
@@ -935,24 +937,29 @@ class SqliteFilterRuleRepository(IFilterRuleRepository):
         self._db.execute(
             "UPDATE filter_rules SET name=?, whitelist_keywords=?, blacklist_keywords=?, regex_patterns=?,"
             " allowed_media_types=?, blocked_media_types=?, drop_service_messages=?, min_message_length=?,"
-            " max_message_length=?, owner_user_id=? WHERE id=?",
+            " max_message_length=?, owner_user_id=?, regex_block=?, regex_require=? WHERE id=?",
             (*self._cols(filter_rule)[1:], filter_rule.id),
         )
         return filter_rule
 
     @staticmethod
     def _row_to_entity(row) -> FilterRule:
+        keys = row.keys() if hasattr(row, "keys") else ()
+        rx_blk = json.loads(row["regex_block"]) if "regex_block" in keys and row["regex_block"] else []
+        rx_req = json.loads(row["regex_require"]) if "regex_require" in keys and row["regex_require"] else []
         return FilterRule(
             id=row["id"], name=row["name"],
             whitelist_keywords=json.loads(row["whitelist_keywords"]),
             blacklist_keywords=json.loads(row["blacklist_keywords"]),
             regex_patterns=json.loads(row["regex_patterns"]),
+            regex_block=rx_blk,
+            regex_require=rx_req,
             allowed_media_types=json.loads(row["allowed_media_types"]),
             blocked_media_types=json.loads(row["blocked_media_types"]),
             drop_service_messages=bool(row["drop_service_messages"]),
             min_message_length=row["min_message_length"],
             max_message_length=row["max_message_length"],
-            owner_user_id=int(row["owner_user_id"]) if "owner_user_id" in row.keys() and row["owner_user_id"] else 0,
+            owner_user_id=int(row["owner_user_id"]) if "owner_user_id" in keys and row["owner_user_id"] else 0,
         )
 
     async def get_by_id(self, filter_id: str) -> Optional[FilterRule]:
