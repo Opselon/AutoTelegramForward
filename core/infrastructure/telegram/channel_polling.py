@@ -59,6 +59,47 @@ class PollFailure(Exception):
     """A channel poll failed in a way that should be retried later, not now."""
 
 
+def _is_channel_peer_id(chat_id: object) -> bool:
+    """Whether a stored source chat id names a channel/supergroup peer.
+
+    Telegram's peer numbering decides which MTProto RPCs are legal at all:
+
+    * ``-100<channel_id>`` — channel or supergroup (a *channel* peer), the
+      only peer ``channels.GetFullChannel`` / ``updates.GetChannelDifference``
+      accept.
+    * ``-<id>`` without the ``-100`` mark — a basic group, which is a chat
+      peer, never a channel one.
+    * positive — a user or a bot.
+
+    Rules are created against all three shapes, so the poller must know which
+    it is looking at before issuing a channel-only call. The id is stored as
+    text (``forward_rules.source_chat_id`` is TEXT), so every branch parses.
+    """
+    text = str(chat_id or "").strip()
+    if not text:
+        return False
+    try:
+        value = int(text)
+    except ValueError:
+        # A @username or other non-numeric identifier: resolve_peer can answer
+        # it, and it is not known to be a channel, so treat it as not-a-channel
+        # rather than guessing. (Channel polling keys on the marked id.)
+        return False
+    if value >= 0:
+        return False  # user / bot
+    # The -100 mark names a channel/supergroup; a bare negative id is a basic
+    # group. Channel ids and basic-group ids share the same numeric space, so
+    # the mark — not magnitude — is the discriminator. Ids shorter than the
+    # mark itself ("-1005") cannot be marked channel ids (the channel id
+    # behind the mark must be at least 1, i.e. "-1001" is the minimum real
+    # form), while "-5191245716" has no mark and is a basic group.
+    digits = str(-value)
+    if not digits.startswith("100"):
+        return False
+    return len(digits) > 3  # at least one digit of channel id behind the mark
+
+
+
 class _OrderedReplayLane:
     """A per-channel FIFO that hands replayed posts to the pipeline in order.
 
@@ -337,6 +378,22 @@ class ChannelPollingService:
                 peer = await client.resolve_peer(chat_id)
             except Exception as exc:
                 raise PollFailure(f"cannot resolve peer: {exc}") from exc
+
+        if not _is_channel_peer_id(chat_id):
+            # A channel-only MTProto RPC on a non-channel peer is a permanent
+            # error: Telegram answers 400 CHANNEL_INVALID for every user, bot
+            # and basic-group id, on every sweep, forever. Source rules do get
+            # created against basic groups and bots (their messages arrive via
+            # ordinary updates), so the poller must branch here rather than
+            # hammer GetFullChannel against a peer that can never satisfy it.
+            # The message stream itself is unaffected: live updates still
+            # deliver these chats, only the polling fallback is skipped.
+            logger.debug(
+                "poll: %s (%s) is not a channel peer; skipping channel polling "
+                "(live updates still deliver this source)",
+                chat_name or chat_id, chat_id,
+            )
+            return 0
 
         # The channel pts is required by getChannelDifference.
         try:

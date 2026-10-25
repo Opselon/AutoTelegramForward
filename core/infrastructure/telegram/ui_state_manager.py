@@ -206,6 +206,42 @@ def _bounded_value(value: Any, cap: int) -> Tuple[Any, str]:
     return None, "value is not JSON-encodable"
 
 
+_TRUNCATION_SHAPES: Dict[tuple, int] = {}
+"""(buffer key, truncation note) -> encoded size of the last reported occurrence.
+
+Module-level de-duplication state for :func:`_report_buffer_truncation`: the
+durable buffer bounds are a design fact, not a recurring incident, so an
+identical truncation warns once and then quiets — while a *changed* shape
+still surfaces. Bounded by construction: one entry per distinct (key, note).
+"""
+
+
+def _report_buffer_truncation(key: str, note: str, size: int) -> None:
+    """Report one buffer truncation, warning once per distinct shape.
+
+    A chat-picker buffer bigger than the per-value cap is truncated on *every*
+    persist (once per screen press), which turned a single design fact — the
+    durable copy is bounded while the live render state is not — into a
+    recurring warning that said nothing new. The first occurrence of each
+    (key, note) shape stays a WARNING (it is real, operator-visible data
+    bounding); repeats of the identical shape drop to DEBUG, and any *change*
+    (more keys kept, a different note) warns again.
+    """
+    shape = (key[:64], note)
+    seen = _TRUNCATION_SHAPES.get(shape)
+    if seen is None or seen != size:
+        _TRUNCATION_SHAPES[shape] = size
+        logger.warning(
+            "[UI_STATE:BUFFER_TRUNCATED] key=%s kept %s (%d bytes, cap %d)",
+            key[:64], note, size, MAX_BUFFER_VALUE,
+        )
+        return
+    logger.debug(
+        "[UI_STATE:BUFFER_TRUNCATED] key=%s kept %s (%d bytes, cap %d)",
+        key[:64], note, size, MAX_BUFFER_VALUE,
+    )
+
+
 def _safe_buffer(buf: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Deep-copy a buffer within bounds, favouring truncation over failure."""
     out: Dict[str, Any] = {}
@@ -228,10 +264,7 @@ def _safe_buffer(buf: Optional[Dict[str, Any]]) -> Dict[str, Any]:
                 continue
             value = projection
             encoded = json.dumps(value, default=str)
-            logger.warning(
-                "[UI_STATE:BUFFER_TRUNCATED] key=%s kept %s (%d bytes, cap %d)",
-                key[:64], note, len(encoded), MAX_BUFFER_VALUE,
-            )
+            _report_buffer_truncation(key, note, len(encoded))
         total += len(key) + len(encoded)
         if total > MAX_BUFFER_TOTAL:
             logger.warning(
