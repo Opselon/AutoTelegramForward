@@ -76,7 +76,6 @@ class _FiltersScreenState extends State<FiltersScreen> {
     }
   }
 
-
   /// v30: per-entry management. Every action round-trips through the API and
   /// then re-reads the stored list, so the screen can never show state the
   /// server does not have.
@@ -116,8 +115,10 @@ class _FiltersScreenState extends State<FiltersScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${t.get('filters_entry_kind_word')}: '
-                '${isRegex ? t.get('filters_entry_kind_regex') : t.get('filters_entry_kind_word')}'),
+            Text(
+              '${t.get('filters_entry_kind_word')}: '
+              '${isRegex ? t.get('filters_entry_kind_regex') : t.get('filters_entry_kind_word')}',
+            ),
             const SizedBox(height: 4),
             Text('${t.get('filters_entry_kind_regex')}: $value'),
             const SizedBox(height: 4),
@@ -185,14 +186,18 @@ class _FiltersScreenState extends State<FiltersScreen> {
         list.map((e) => e == old ? next : e).toList();
     try {
       final updated = filter.copyWith(
-        blacklistKeywords:
-            isBlacklist && !isRegex ? swap(filter.blacklistKeywords) : filter.blacklistKeywords,
-        regexBlock:
-            isBlacklist && isRegex ? swap(filter.regexBlock) : filter.regexBlock,
-        whitelistKeywords:
-            !isBlacklist && !isRegex ? swap(filter.whitelistKeywords) : filter.whitelistKeywords,
-        regexRequire:
-            !isBlacklist && isRegex ? swap(filter.regexRequire) : filter.regexRequire,
+        blacklistKeywords: isBlacklist && !isRegex
+            ? swap(filter.blacklistKeywords)
+            : filter.blacklistKeywords,
+        regexBlock: isBlacklist && isRegex
+            ? swap(filter.regexBlock)
+            : filter.regexBlock,
+        whitelistKeywords: !isBlacklist && !isRegex
+            ? swap(filter.whitelistKeywords)
+            : filter.whitelistKeywords,
+        regexRequire: !isBlacklist && isRegex
+            ? swap(filter.regexRequire)
+            : filter.regexRequire,
       );
       await client.updateFilter(filter.id, updated);
       await _load();
@@ -252,8 +257,9 @@ class _FiltersScreenState extends State<FiltersScreen> {
       ...filter.regexRequire,
     };
     if (existing.contains(next)) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(t.get('filters_entry_duplicate'))));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(t.get('filters_entry_duplicate'))));
       return;
     }
 
@@ -262,17 +268,21 @@ class _FiltersScreenState extends State<FiltersScreen> {
       FilterRule updated;
       if (isBlacklist) {
         updated = filter.copyWith(
-          blacklistKeywords:
-              isRegex ? filter.blacklistKeywords : [...filter.blacklistKeywords, next],
-          regexBlock:
-              isRegex ? [...filter.regexBlock, next] : filter.regexBlock,
+          blacklistKeywords: isRegex
+              ? filter.blacklistKeywords
+              : [...filter.blacklistKeywords, next],
+          regexBlock: isRegex
+              ? [...filter.regexBlock, next]
+              : filter.regexBlock,
         );
       } else {
         updated = filter.copyWith(
-          whitelistKeywords:
-              isRegex ? filter.whitelistKeywords : [...filter.whitelistKeywords, next],
-          regexRequire:
-              isRegex ? [...filter.regexRequire, next] : filter.regexRequire,
+          whitelistKeywords: isRegex
+              ? filter.whitelistKeywords
+              : [...filter.whitelistKeywords, next],
+          regexRequire: isRegex
+              ? [...filter.regexRequire, next]
+              : filter.regexRequire,
         );
       }
       await client.updateFilter(filter.id, updated);
@@ -549,7 +559,9 @@ class _FiltersScreenState extends State<FiltersScreen> {
                                 // are never part of the round trip.
                                 Switch(
                                   value: f.isEnabled,
-                                  onChanged: _loading ? null : (_) => _toggle(f),
+                                  onChanged: _loading
+                                      ? null
+                                      : (_) => _toggle(f),
                                 ),
                                 IconButton(
                                   tooltip: t.get('filters_test_run'),
@@ -577,111 +589,194 @@ class _FiltersScreenState extends State<FiltersScreen> {
                             children: _allEntries(f).isEmpty
                                 ? const <Widget>[]
                                 : _allEntries(f).map<Widget>((entry) {
-                                    final isRegex = entry.isRegex;
-                                    final isBlacklist = entry.isBlacklist;
-                                    return ListTile(
-                                      dense: true,
-                                      title: Text(
-                                        entry.value,
-                                        style: TextStyle(
-                                          fontFamily: isRegex ? 'monospace' : null,
-                                          decoration: f.isEnabled
-                                              ? TextDecoration.none
-                                              : TextDecoration.lineThrough,
+                                        final isRegex = entry.isRegex;
+                                        final isBlacklist = entry.isBlacklist;
+                                        return ListTile(
+                                          dense: true,
+                                          title: Text(
+                                            entry.value,
+                                            style: TextStyle(
+                                              fontFamily: isRegex
+                                                  ? 'monospace'
+                                                  : null,
+                                              decoration: f.isEnabled
+                                                  ? TextDecoration.none
+                                                  : TextDecoration.lineThrough,
+                                            ),
+                                          ),
+                                          leading: Text(
+                                            isBlacklist
+                                                ? t.get(
+                                                    'filters_entry_list_blacklist',
+                                                  )
+                                                : t.get(
+                                                    'filters_entry_list_whitelist',
+                                                  ),
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                          trailing: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              IconButton(
+                                                tooltip: t.get(
+                                                  'filters_entry_edit',
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.edit_outlined,
+                                                  size: 20,
+                                                ),
+                                                onPressed: () => _editEntry(
+                                                  f,
+                                                  entry.value,
+                                                  isRegex,
+                                                  isBlacklist,
+                                                ),
+                                              ),
+                                              IconButton(
+                                                tooltip: t.get(
+                                                  'filters_details_title',
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.info_outline,
+                                                  size: 20,
+                                                ),
+                                                onPressed: () => _entryDetails(
+                                                  f,
+                                                  entry.value,
+                                                  isRegex,
+                                                  isBlacklist,
+                                                ),
+                                              ),
+                                              IconButton(
+                                                tooltip: t.get(
+                                                  'filters_entry_delete',
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.delete_outline,
+                                                  size: 20,
+                                                ),
+                                                onPressed: () => _deleteEntry(
+                                                  f,
+                                                  entry.value,
+                                                  isRegex,
+                                                  isBlacklist,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList() +
+                                      <Widget>[
+                                        const Divider(height: 1),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 4,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Text(
+                                                t.get(
+                                                  'filters_entry_list_blacklist',
+                                                ),
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              const Spacer(),
+                                              TextButton.icon(
+                                                icon: const Icon(
+                                                  Icons.add,
+                                                  size: 18,
+                                                ),
+                                                label: Text(
+                                                  t.get('filters_entry_add'),
+                                                ),
+                                                onPressed: _loading
+                                                    ? null
+                                                    : () => _addEntry(
+                                                        f,
+                                                        false,
+                                                        true,
+                                                      ),
+                                              ),
+                                              TextButton.icon(
+                                                icon: const Icon(
+                                                  Icons.add,
+                                                  size: 18,
+                                                ),
+                                                label: Text(
+                                                  t.get(
+                                                    'filters_entry_kind_regex',
+                                                  ),
+                                                ),
+                                                onPressed: _loading
+                                                    ? null
+                                                    : () => _addEntry(
+                                                        f,
+                                                        true,
+                                                        true,
+                                                      ),
+                                              ),
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                      leading: Text(
-                                        isBlacklist
-                                            ? t.get('filters_entry_list_blacklist')
-                                            : t.get('filters_entry_list_whitelist'),
-                                        style: const TextStyle(fontSize: 11),
-                                      ),
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          IconButton(
-                                            tooltip: t.get('filters_entry_edit'),
-                                            icon: const Icon(Icons.edit_outlined, size: 20),
-                                            onPressed: () => _editEntry(
-                                                f, entry.value, isRegex, isBlacklist),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 4,
                                           ),
-                                          IconButton(
-                                            tooltip: t.get('filters_details_title'),
-                                            icon: const Icon(Icons.info_outline, size: 20),
-                                            onPressed: () => _entryDetails(
-                                                f, entry.value, isRegex, isBlacklist),
+                                          child: Row(
+                                            children: [
+                                              Text(
+                                                t.get(
+                                                  'filters_entry_list_whitelist',
+                                                ),
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              const Spacer(),
+                                              TextButton.icon(
+                                                icon: const Icon(
+                                                  Icons.add,
+                                                  size: 18,
+                                                ),
+                                                label: Text(
+                                                  t.get('filters_entry_add'),
+                                                ),
+                                                onPressed: _loading
+                                                    ? null
+                                                    : () => _addEntry(
+                                                        f,
+                                                        false,
+                                                        false,
+                                                      ),
+                                              ),
+                                              TextButton.icon(
+                                                icon: const Icon(
+                                                  Icons.add,
+                                                  size: 18,
+                                                ),
+                                                label: Text(
+                                                  t.get(
+                                                    'filters_entry_kind_regex',
+                                                  ),
+                                                ),
+                                                onPressed: _loading
+                                                    ? null
+                                                    : () => _addEntry(
+                                                        f,
+                                                        true,
+                                                        false,
+                                                      ),
+                                              ),
+                                            ],
                                           ),
-                                          IconButton(
-                                            tooltip: t.get('filters_entry_delete'),
-                                            icon: const Icon(Icons.delete_outline, size: 20),
-                                            onPressed: () => _deleteEntry(
-                                                f, entry.value, isRegex, isBlacklist),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-                                  }).toList() +
-                              <Widget>[
-                                const Divider(height: 1),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 4),
-                                  child: Row(
-                                    children: [
-                                      Text(
-                                        t.get('filters_entry_list_blacklist'),
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                      const Spacer(),
-                                      TextButton.icon(
-                                        icon: const Icon(Icons.add, size: 18),
-                                        label: Text(t.get('filters_entry_add')),
-                                        onPressed: _loading
-                                            ? null
-                                            : () => _addEntry(f, false, true),
-                                      ),
-                                      TextButton.icon(
-                                        icon: const Icon(Icons.add, size: 18),
-                                        label: Text(
-                                            t.get('filters_entry_kind_regex')),
-                                        onPressed: _loading
-                                            ? null
-                                            : () => _addEntry(f, true, true),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12, vertical: 4),
-                                  child: Row(
-                                    children: [
-                                      Text(
-                                        t.get('filters_entry_list_whitelist'),
-                                        style: const TextStyle(
-                                            fontWeight: FontWeight.bold),
-                                      ),
-                                      const Spacer(),
-                                      TextButton.icon(
-                                        icon: const Icon(Icons.add, size: 18),
-                                        label: Text(t.get('filters_entry_add')),
-                                        onPressed: _loading
-                                            ? null
-                                            : () => _addEntry(f, false, false),
-                                      ),
-                                      TextButton.icon(
-                                        icon: const Icon(Icons.add, size: 18),
-                                        label: Text(
-                                            t.get('filters_entry_kind_regex')),
-                                        onPressed: _loading
-                                            ? null
-                                            : () => _addEntry(f, true, false),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
+                                        ),
+                                      ],
                           ),
                         );
                       },
@@ -693,7 +788,6 @@ class _FiltersScreenState extends State<FiltersScreen> {
     );
   }
 }
-
 
 /// Every stored entry of a filter, each tagged with the list that holds it.
 ///
