@@ -969,6 +969,21 @@ class AppMessagesUz {
     'filters_test_sample_hint': 'Namunaviy xabarni joylang. Hech narsa saqlanmaydi va hech narsa yuborilmaydi — bu faqat sinov.',
     'filters_test_title': 'Bu filtarni sinash',
     'filters_three_options_title': 'Ushbu ro\'yxat qanday moslashini tanlang',
+    // ---- system surface (appended) ----
+    'filters_entry_add': 'Yozuv qoʻshish',
+    'filters_entry_edit': 'Yozuvni tahrirlash',
+    'filters_entry_delete': 'Yozuvni oʻchirish',
+    'filters_entry_duplicate': 'Bu yozuv allaqachon mavjud.',
+    'filters_entry_kind_word': 'Kalit soʻz',
+    'filters_entry_kind_regex': 'Muntazam ifoda',
+    'filters_entry_list_blacklist': 'Qora roʻyxat',
+    'filters_entry_list_whitelist': 'Oq roʻyxat',
+    'filters_details_title': 'Yozuv tafsilotlari',
+    'filters_enable': 'Yoqish',
+    'filters_disable': 'Oʻchirish',
+    'filters_enabled_label': 'Yoqilgan',
+    'filters_disabled_label': 'Oʻchirilgan',
+    'filters_state_on_hint': 'Soʻzlarni oʻchirmasdan roʻyxatni oʻchiring; tiklash uchun qayta yoqing.',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare

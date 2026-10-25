@@ -978,6 +978,21 @@ class AppMessagesEn {
     'ar_targets_no_match': 'No chat matches that search',
     'ar_job_attempt': 'Attempt {n} of {max}',
     'ar_prompt_unarchive': 'Restore',
+    // ---- system surface (appended) ----
+    'filters_entry_add': 'Add entry',
+    'filters_entry_edit': 'Edit entry',
+    'filters_entry_delete': 'Delete entry',
+    'filters_entry_duplicate': 'This entry already exists.',
+    'filters_entry_kind_word': 'Keyword',
+    'filters_entry_kind_regex': 'Regular expression',
+    'filters_entry_list_blacklist': 'Blacklist',
+    'filters_entry_list_whitelist': 'Whitelist',
+    'filters_details_title': 'Entry details',
+    'filters_enable': 'Enable',
+    'filters_disable': 'Disable',
+    'filters_enabled_label': 'Enabled',
+    'filters_disabled_label': 'Disabled',
+    'filters_state_on_hint': 'Switch the list off without deleting its words; switch it back on to restore them.',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare

@@ -1077,6 +1077,25 @@ paths:
         "400": { $ref: '#/components/responses/BadRequest' }
         "413": { $ref: '#/components/responses/BodyTooLarge' }
   /api/filters/{id}:
+    get:
+      tags: [filters]
+      summary: "Get one of the caller's content filters"
+      description: >
+        Returns the stored filter with its whitelist, blacklist and regex
+        lists plus the enable/disable switch. A filter the caller does not
+        own is a 404.
+      operationId: getApiFiltersId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
     put:
       tags: [filters]
       summary: 'Update a content filter'
@@ -1098,6 +1117,27 @@ paths:
       tags: [filters]
       summary: 'Delete a content filter'
       operationId: deleteApiFiltersId
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      parameters: [{ $ref: '#/components/parameters/taskId' }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "404": { $ref: '#/components/responses/NotFound' }
+  /api/filters/{id}/toggle:
+    post:
+      tags: [filters]
+      summary: 'Flip the enable/disable switch of one of the caller''s content filters'
+      description: >
+        Toggles only the switch: the whitelist, blacklist and regex lists are
+        left exactly as stored, so a filter can be parked and re-enabled later
+        without re-typing anything. The server flips the value it currently
+        stores, so a stale client cannot overwrite lists another device saved.
+      operationId: postApiFiltersIdToggle
       security: [{ bearerAuth: [] }]
       x-atf-authorization: user
       parameters: [{ $ref: '#/components/parameters/taskId' }]

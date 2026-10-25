@@ -984,6 +984,21 @@ class AppMessagesPt {
     'filters_test_sample_hint': 'Cole uma mensagem de exemplo. Nada é salvo e nada é encaminhado — isto é apenas um teste.',
     'filters_test_title': 'Testar este filtro',
     'filters_three_options_title': 'Escolha como esta lista deve corresponder',
+    // ---- system surface (appended) ----
+    'filters_entry_add': 'Adicionar entrada',
+    'filters_entry_edit': 'Editar entrada',
+    'filters_entry_delete': 'Excluir entrada',
+    'filters_entry_duplicate': 'Esta entrada já existe.',
+    'filters_entry_kind_word': 'Palavra-chave',
+    'filters_entry_kind_regex': 'Expressão regular',
+    'filters_entry_list_blacklist': 'Lista negra',
+    'filters_entry_list_whitelist': 'Lista branca',
+    'filters_details_title': 'Detalhes da entrada',
+    'filters_enable': 'Ativar',
+    'filters_disable': 'Desativar',
+    'filters_enabled_label': 'Ativado',
+    'filters_disabled_label': 'Desativado',
+    'filters_state_on_hint': 'Desative a lista sem apagar as palavras; ative-a novamente para restaurá-las.',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare

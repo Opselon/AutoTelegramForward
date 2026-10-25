@@ -240,6 +240,17 @@ SETTING_SPECS: Dict[str, SettingSpec] = {
     "content_policy_enabled": _s(
         kind="bool", default=False, group="content",
         help="Master switch for this task's content rules."),
+    # v30: per-list switches. An owner can park the blacklist or the whitelist
+    # without deleting its words — the engine skips a switched-off list, so
+    # re-enabling restores exactly what was saved. Both must be real settings
+    # (not UI-only state) so the bot, the dashboard and mobile agree, and so
+    # the toggle survives a server restart or a client re-read.
+    "blacklist_off": _s(
+        kind="bool", default=False, group="content",
+        help="Switch the blacklist off without deleting its words."),
+    "whitelist_off": _s(
+        kind="bool", default=False, group="content",
+        help="Switch the whitelist off without deleting its words."),
     "blacklist_words": _s(
         kind="list", default=[], group="content", item_kind="str",
         help="Never forward a message that contains one of these words."),

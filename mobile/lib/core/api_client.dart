@@ -1081,6 +1081,18 @@ class ApiClient {
     listKey: 'filters',
   );
 
+  /// One stored filter by id.
+  ///
+  /// The server 404s a filter the caller does not own, so the client never
+  /// learns whether somebody else's filter exists — the same contract as the
+  /// web dashboard and the bot.
+  Future<FilterRule> getFilter(String id) => _request(
+    method: 'GET',
+    path: '/api/filters/$id',
+    fromJson: FilterRule.fromJson,
+    retryable: true,
+  );
+
   Future<FilterRule> createFilter(FilterRule filter) => _request(
     method: 'POST',
     path: '/api/filters',
@@ -1093,6 +1105,18 @@ class ApiClient {
     method: 'PUT',
     path: '/api/filters/$id',
     body: filter.toJson(),
+    fromJson: FilterRule.fromJson,
+    retryable: false,
+  );
+
+  /// Flip only the enable/disable switch.
+  ///
+  /// v30: the server flips the value it currently stores — not the value a
+  /// potentially stale screen holds — so the toggle can never overwrite lists
+  /// another device just saved. The words themselves never leave the server.
+  Future<FilterRule> toggleFilter(String id) => _request(
+    method: 'POST',
+    path: '/api/filters/$id/toggle',
     fromJson: FilterRule.fromJson,
     retryable: false,
   );

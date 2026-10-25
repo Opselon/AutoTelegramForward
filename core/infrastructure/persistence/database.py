@@ -904,6 +904,13 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_referrals_inviter
         ON referrals(inviter_user_id, created_at DESC);
     """,
+    30: """
+    -- v30: a filter row can be switched off without losing its lists. The
+    -- toggle is a first-class column (not a metadata blob) so the engine, the
+    -- API and every client read the same value a write stored, and a legacy
+    -- row defaults to enabled: a filter that already exists keeps working.
+    ALTER TABLE filter_rules ADD COLUMN is_enabled INTEGER NOT NULL DEFAULT 1;
+    """,
 }
 
 
@@ -922,6 +929,10 @@ _ADDITIVE_COLUMNS = (
     ("filter_rules", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_filter_rules_owner"),
     ("filter_rules", "regex_block", "TEXT NOT NULL DEFAULT '[]'", None),
     ("filter_rules", "regex_require", "TEXT NOT NULL DEFAULT '[]'", None),
+    # v30: the enable/disable toggle. A database carried over from an older
+    # schema lacks the column; a guarded ALTER adds it as enabled so an existing
+    # filter keeps working instead of silently switching off.
+    ("filter_rules", "is_enabled", "INTEGER NOT NULL DEFAULT 1", None),
     # v12: credential vault + prompt templates are per-tenant, not global.
     # Without this any authenticated tenant can read another tenant's api_hash
     # through a backup export, and overwrite another tenant's prompt templates.

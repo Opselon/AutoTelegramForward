@@ -332,9 +332,21 @@ class FilterRuleUseCases:
         self._repo = repo
 
     async def create(self, fr: FilterRule) -> FilterRule:
+        # v30: a filter written without an explicit toggle is enabled — the
+        # toggle must never default a configured filter off.
+        if not hasattr(fr, "is_enabled") or fr.is_enabled is None:
+            fr.is_enabled = True
         return await self._repo.add(fr)
 
     async def update(self, fr: FilterRule) -> FilterRule:
+        # Preserve the stored enable/disable state unless the caller changed it
+        # explicitly: an update that only rewrites the lists must not flip the
+        # toggle back on or off.
+        stored = await self._repo.get_by_id(fr.id)
+        if stored is not None:
+            present = hasattr(fr, "is_enabled") and fr.is_enabled is not None
+            if not present:
+                fr.is_enabled = bool(getattr(stored, "is_enabled", True))
         return await self._repo.update(fr)
 
     async def get(self, filter_id: str) -> Optional[FilterRule]:

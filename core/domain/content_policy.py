@@ -692,6 +692,10 @@ class ContentPolicy:
     """The content rules of one task (or one source/target override)."""
 
     enabled: Optional[bool] = None
+    # v30: per-list switches. A switched-off list is skipped by evaluate() but
+    # keeps its words, so re-enabling restores exactly what was saved.
+    blacklist_off: bool = False
+    whitelist_off: bool = False
     blacklist_words: Tuple[str, ...] = ()
     whitelist_words: Tuple[str, ...] = ()
     whitelist_mode: str = "any"          # any | all | phrase
@@ -723,6 +727,11 @@ class ContentPolicy:
             mode = "any"
         pol = cls(
             enabled=(None if raw.get("enabled") is None else _as_bool(raw.get("enabled"))),
+            # v30: read the per-list switches from the stored policy. A missing
+            # key is "on" — an absent switch must never disable a configured
+            # list behind the owner's back.
+            blacklist_off=_as_bool(raw.get("blacklist_off")),
+            whitelist_off=_as_bool(raw.get("whitelist_off")),
             whitelist_mode=mode,
             block_links=_as_bool(raw.get("block_links")),
             remove_links=_as_bool(raw.get("remove_links")),
@@ -742,6 +751,8 @@ class ContentPolicy:
         """Round-trippable form (used by the settings API and backups)."""
         return {
             "enabled": self.enabled,
+            "blacklist_off": self.blacklist_off,
+            "whitelist_off": self.whitelist_off,
             "blacklist_words": list(self.blacklist_words),
             "whitelist_words": list(self.whitelist_words),
             "whitelist_mode": self.whitelist_mode,
@@ -830,12 +841,15 @@ class ContentPolicy:
             return PolicyDecision(False, "links_blocked")
 
         flags = self._match_flags()
-        if self.blacklist_words:
+        # v30: a switched-off list is skipped, not deleted. Only the list the
+        # flag names is skipped — switching the blacklist off must not silently
+        # stop the whitelist from doing its job, and vice versa.
+        if self.blacklist_words and not self.blacklist_off:
             word = _first_matching_word(body, self.blacklist_words, **flags)
             if word:
                 return PolicyDecision(False, f"blacklist:{word}", (word,))
 
-        if self.whitelist_words:
+        if self.whitelist_words and not self.whitelist_off:
             if self.whitelist_mode == "all":
                 if not _first_matching_word(body, self.whitelist_words, **flags):
                     # Not one word of the list is in the text, so there is no
@@ -853,7 +867,12 @@ class ContentPolicy:
                 if not _first_matching_word(body, self.whitelist_words, **flags):
                     return PolicyDecision(False, "whitelist_mismatch")
 
+        # v30: the per-list switches govern the regex lists that belong to the
+        # same list (regex_block is blacklist-side, regex_require is
+        # whitelist-side), so parking a list parks its patterns too.
         for pattern in self.regex_block:
+            if self.blacklist_off:
+                break
             compiled = _compile_user_regex(pattern)
             if compiled is None:
                 logger.error(
@@ -864,7 +883,7 @@ class ContentPolicy:
             if bounded_search(compiled, body) is not None:
                 return PolicyDecision(False, f"regex_block:{pattern[:48]}", (pattern,))
 
-        if self.regex_require:
+        if self.regex_require and not self.whitelist_off:
             valid_require_patterns = []
             for p in self.regex_require:
                 comp = _compile_user_regex(p)

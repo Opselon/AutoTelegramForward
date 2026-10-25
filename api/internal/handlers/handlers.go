@@ -2171,6 +2171,39 @@ func (h *Handlers) PurgeDeadLetter(w http.ResponseWriter, r *http.Request) {
 }
 
 // --------------------------------------------------------------- filters
+
+// filterJSON renders one stored filter for the API surface.
+//
+// The proto field is `optional` (explicit presence): a filter written by a
+// client that predates the toggle has no value set, and that must read as
+// *enabled*, never as false — a configured filter cannot silently switch
+// itself off because the dashboard gained a new column.
+func filterJSON(f *pb.FilterRule) map[string]any {
+	if f == nil {
+		return nil
+	}
+	enabled := true
+	if f.IsEnabled != nil {
+		enabled = *f.IsEnabled
+	}
+	return map[string]any{
+		"id":                     f.Id,
+		"name":                   f.Name,
+		"whitelist_keywords":     f.WhitelistKeywords,
+		"blacklist_keywords":     f.BlacklistKeywords,
+		"regex_patterns":         f.RegexPatterns,
+		"regex_block":            f.RegexBlock,
+		"regex_require":          f.RegexRequire,
+		"allowed_media_types":    f.AllowedMediaTypes,
+		"blocked_media_types":    f.BlockedMediaTypes,
+		"drop_service_messages":  f.DropServiceMessages,
+		"min_message_length":     f.MinMessageLength,
+		"max_message_length":     f.MaxMessageLength,
+		"owner_user_id":          f.OwnerUserId,
+		"is_enabled":             enabled,
+	}
+}
+
 func (h *Handlers) ListFilters(w http.ResponseWriter, r *http.Request) {
 	id := identity(r)
 	ctx, cancel := withTimeout(r)
@@ -2186,10 +2219,39 @@ func (h *Handlers) ListFilters(w http.ResponseWriter, r *http.Request) {
 			filters = append(filters, filter)
 		}
 	}
+	out := make([]map[string]any, 0, len(filters))
+	for _, f := range filters {
+		out = append(out, filterJSON(f))
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"filters": filters,
-		"total":   len(filters),
+		"filters": out,
+		"total":   len(out),
 	})
+}
+
+// GetFilter returns one stored filter. A filter the caller does not own is a
+// 404, not a 403: the route must not confirm whether somebody else's filter
+// exists, and the client treats both as "not yours".
+func (h *Handlers) GetFilter(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	if !h.ownsFilter(ctx, r.PathValue("id"), id.UserID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "filter not found"})
+		return
+	}
+	resp, err := h.c.Filters.ListFilters(ctx, &pb.ListFiltersRequest{OwnerUserId: id.UserID})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	for _, f := range resp.Filters {
+		if f != nil && f.Id == r.PathValue("id") {
+			writeJSON(w, http.StatusOK, filterJSON(f))
+			return
+		}
+	}
+	writeJSON(w, http.StatusNotFound, map[string]string{"error": "filter not found"})
 }
 
 func (h *Handlers) CreateFilter(w http.ResponseWriter, r *http.Request) {
@@ -2206,7 +2268,7 @@ func (h *Handlers) CreateFilter(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, resp)
+	writeJSON(w, http.StatusCreated, filterJSON(resp))
 }
 
 func (h *Handlers) UpdateFilter(w http.ResponseWriter, r *http.Request) {
@@ -2228,7 +2290,49 @@ func (h *Handlers) UpdateFilter(w http.ResponseWriter, r *http.Request) {
 		grpcError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, resp)
+	writeJSON(w, http.StatusOK, filterJSON(resp))
+}
+
+// ToggleFilter flips only the enable/disable switch. The lists are untouched,
+// so a filter can be parked without re-typing its words and re-enabled later
+// with everything exactly as it was.
+func (h *Handlers) ToggleFilter(w http.ResponseWriter, r *http.Request) {
+	id := identity(r)
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	filterID := r.PathValue("id")
+	if !h.ownsFilter(ctx, filterID, id.UserID) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "filter not found"})
+		return
+	}
+	// Fetch the current stored value through the read path the Core serves, and
+	// flip that, instead of trusting a client-sent bool: a stale tab could
+	// otherwise overwrite lists another device just saved.
+	resp, err := h.c.Filters.ListFilters(ctx, &pb.ListFiltersRequest{OwnerUserId: id.UserID})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	var current *pb.FilterRule
+	for _, f := range resp.Filters {
+		if f != nil && f.Id == filterID {
+			current = f
+			break
+		}
+	}
+	if current == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "filter not found"})
+		return
+	}
+	next := !filterJSON(current)["is_enabled"].(bool)
+	current.IsEnabled = &next
+	current.OwnerUserId = id.UserID
+	updated, err := h.c.Filters.UpdateFilter(ctx, &pb.UpdateFilterRequest{Filter: current})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, filterJSON(updated))
 }
 
 func (h *Handlers) DeleteFilter(w http.ResponseWriter, r *http.Request) {

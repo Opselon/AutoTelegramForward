@@ -165,7 +165,9 @@ func main() {
 	dashMux.HandleFunc("POST /ai-configs/check-key", h.CheckProviderKey)
 	dashMux.HandleFunc("GET /filters", h.ListFilters)
 	dashMux.HandleFunc("POST /filters", h.CreateFilter)
+	dashMux.HandleFunc("GET /filters/{id}", h.GetFilter)
 	dashMux.HandleFunc("PUT /filters/{id}", h.UpdateFilter)
+	dashMux.HandleFunc("POST /filters/{id}/toggle", h.ToggleFilter)
 	dashMux.HandleFunc("DELETE /filters/{id}", h.DeleteFilter)
 	// Read-only filter preview: the Core's canonical matcher decides, so the
 	// dashboard's "test this rule" can never diverge from production.

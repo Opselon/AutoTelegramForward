@@ -965,6 +965,21 @@ class AppMessagesFa {
     'filters_test_sample_hint': 'یک پیام نمونه بفرستید. هیچ چیزی ذخیره نمی‌شود و چیزی ارسال نمی‌شود — این فقط یک آزمایش است.',
     'filters_test_title': 'آزمایش این فیلتر',
     'filters_three_options_title': 'انتخاب کنید این فهرست چطور تطبیق داده شود',
+    // ---- system surface (appended) ----
+    'filters_entry_add': 'افزودن ورودی',
+    'filters_entry_edit': 'ویرایش ورودی',
+    'filters_entry_delete': 'حذف ورودی',
+    'filters_entry_duplicate': 'این ورودی از قبل وجود دارد.',
+    'filters_entry_kind_word': 'کلیدواژه',
+    'filters_entry_kind_regex': 'عبارت منظم',
+    'filters_entry_list_blacklist': 'فهرست سیاه',
+    'filters_entry_list_whitelist': 'فهرست سفید',
+    'filters_details_title': 'جزئیات ورودی',
+    'filters_enable': 'فعال‌سازی',
+    'filters_disable': 'غیرفعال‌سازی',
+    'filters_enabled_label': 'فعال',
+    'filters_disabled_label': 'غیرفعال',
+    'filters_state_on_hint': 'فهرست را بدون حذف کلمات غیرفعال کنید؛ برای بازگرداندن آن دوباره فعال کنید.',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare

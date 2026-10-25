@@ -970,6 +970,21 @@ class AppMessagesRu {
     'filters_test_title': 'Проверить этот фильтр',
     'filters_three_options_title':
         'Выберите, как этот список должен сопоставляться',
+    // ---- system surface (appended) ----
+    'filters_entry_add': 'Добавить запись',
+    'filters_entry_edit': 'Изменить запись',
+    'filters_entry_delete': 'Удалить запись',
+    'filters_entry_duplicate': 'Эта запись уже существует.',
+    'filters_entry_kind_word': 'Ключевое слово',
+    'filters_entry_kind_regex': 'Регулярное выражение',
+    'filters_entry_list_blacklist': 'Чёрный список',
+    'filters_entry_list_whitelist': 'Белый список',
+    'filters_details_title': 'Подробнее о записи',
+    'filters_enable': 'Включить',
+    'filters_disable': 'Отключить',
+    'filters_enabled_label': 'Включён',
+    'filters_disabled_label': 'Выключен',
+    'filters_state_on_hint': 'Отключите список, не удаляя слова; включите снова, чтобы восстановить.',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare
