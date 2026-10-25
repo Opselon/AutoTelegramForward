@@ -237,12 +237,21 @@ class BackupService:
         }
 
     def _filter_dict(self, f: FilterRule) -> Dict[str, Any]:
+        # Every persisted column of a filter belongs in the snapshot: a field
+        # left out here is lost on restore. ``regex_block``/``regex_require``
+        # (v12) and ``is_enabled`` (v30) were silently dropped, so restoring a
+        # backup re-enabled every parked filter and wiped both regex lists.
         return {
             "id": f.id,
             "name": f.name,
             "whitelist_keywords": f.whitelist_keywords,
             "blacklist_keywords": f.blacklist_keywords,
             "regex_patterns": f.regex_patterns,
+            "regex_block": getattr(f, "regex_block", []) or [],
+            "regex_require": getattr(f, "regex_require", []) or [],
+            # An older snapshot has no key: the restore path must treat that
+            # as enabled, matching how a pre-v30 database row is healed.
+            "is_enabled": bool(getattr(f, "is_enabled", True)),
             "allowed_media_types": f.allowed_media_types,
             "blocked_media_types": f.blocked_media_types,
             "drop_service_messages": f.drop_service_messages,
@@ -418,6 +427,12 @@ class BackupService:
                     whitelist_keywords=raw.get("whitelist_keywords") or [],
                     blacklist_keywords=raw.get("blacklist_keywords") or [],
                     regex_patterns=raw.get("regex_patterns") or [],
+                    # v12/v30: absent on snapshots written before those
+                    # columns existed — default to the same values a fresh
+                    # entity gets, never to None (the column is NOT NULL).
+                    regex_block=raw.get("regex_block") or [],
+                    regex_require=raw.get("regex_require") or [],
+                    is_enabled=bool(raw.get("is_enabled", True)),
                     allowed_media_types=raw.get("allowed_media_types") or [],
                     blocked_media_types=raw.get("blocked_media_types") or [],
                     drop_service_messages=bool(raw.get("drop_service_messages", True)),

@@ -491,6 +491,14 @@ async def _resolve_pg_pool(container: dict) -> None:
     """
     pool = container.get("pg_pool_holder")
     if pool is None or not asyncio.iscoroutine(pool):
+        # Sync bootstrap: pool is already resolved; still need to ensure the
+        # audit store's tables exist (idempotent on every boot).
+        audit_repo = container.get("audit_repo")
+        if audit_repo is not None and hasattr(audit_repo, "initialize"):
+            try:
+                await audit_repo.initialize()
+            except Exception as exc:
+                logger.warning("Audit store schema initialization failed: %s", exc)
         return
     resolved = await pool
     # Rebind every repo that was constructed against the coroutine.
@@ -502,6 +510,19 @@ async def _resolve_pg_pool(container: dict) -> None:
     audit_repo = container.get("audit_repo")
     if audit_repo is not None and asyncio.iscoroutine(getattr(audit_repo, "_db", None)):
         audit_repo._db = resolved
+    # The audit store's tables are created here, on the resolved pool, rather
+    # than in build_container(): before this rebind the repository still holds
+    # the un-awaited pool coroutine, so an initialize() there would either
+    # no-op or fail, and the first audit write would then raise
+    # UndefinedTableError — swallowed by the worker's "audit must not kill a
+    # task" handler, silently losing every audit record on a PostgreSQL
+    # deployment. initialize() is idempotent (CREATE TABLE IF NOT EXISTS), so
+    # running it on the already-resolved pool is a no-op on later boots.
+    if audit_repo is not None and hasattr(audit_repo, "initialize"):
+        try:
+            await audit_repo.initialize()
+        except Exception as exc:
+            logger.warning("Audit store schema initialization failed: %s", exc)
     container["pg_pool_holder"] = resolved
     logger.info("PostgreSQL pool resolved and bound to repositories")
 

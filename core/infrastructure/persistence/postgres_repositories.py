@@ -108,14 +108,44 @@ def _split_sql_script(script: str) -> List[str]:
     `web_login_codes` were never created on PostgreSQL deployments while the
     error was swallowed by the caller. Strings are tracked so a semicolon
     inside a quoted default is not treated as a statement boundary either.
+
+    PostgreSQL dollar quotes (``$$ ... $$`` / ``$tag$ ... $tag$``) are tracked
+    like strings: a ``DO $$ ... ; ... $$`` block carries semicolons *and*
+    single quotes inside its body, and a string-only scanner ends the quote at
+    the first ``'`` it meets there, then splits the procedural body into
+    fragments that fail (or worse, half-apply) — the same silent-failure
+    class as the comment defect. The opening tag is captured and matched
+    exactly, so ``$a$ ... $a$`` cannot be ended by a stray ``$$``.
     """
     statements: List[str] = []
     buf: List[str] = []
     i, n = 0, len(script)
     in_string = False
+    dollar_tag: Optional[str] = None
     while i < n:
         ch = script[i]
         nxt = script[i + 1] if i + 1 < n else ""
+        if dollar_tag is not None:
+            # Inside a dollar-quoted body: every byte is literal text.
+            # PostgreSQL's lexer treats the whole body as an uninterpreted
+            # token, so a single quote here is NOT a string boundary and a
+            # semicolon here is NOT a statement boundary. The body ends only
+            # at the exact closing tag.
+            if script.startswith(dollar_tag, i):
+                buf.append(dollar_tag)
+                i += len(dollar_tag)
+                dollar_tag = None
+                continue
+            buf.append(ch)
+            i += 1
+            continue
+        if ch == "$":
+            tag = _dollar_quote_tag(script, i)
+            if tag is not None:
+                dollar_tag = tag
+                buf.append(tag)
+                i += len(tag)
+                continue
         if in_string:
             buf.append(ch)
             if ch == "'":
@@ -156,6 +186,24 @@ def _split_sql_script(script: str) -> List[str]:
     if tail:
         statements.append(tail)
     return statements
+
+
+def _dollar_quote_tag(script: str, pos: int) -> Optional[str]:
+    """The dollar tag opening at ``pos`` (``$$`` or ``$tag$``), else None.
+
+    A tag is ``$``, an optional identifier of letters/digits/underscores, and
+    a closing ``$``. ``$$`` itself is the empty tag. A lone ``$`` in an
+    operator context (e.g. ``a $ b``) or a numeric literal has no second
+    ``$`` before the next boundary and is therefore not a quote.
+    """
+    if script[pos] != "$":
+        return None
+    i = pos + 1
+    while i < len(script) and (script[i].isalnum() or script[i] == "_"):
+        i += 1
+    if i < len(script) and script[i] == "$":
+        return script[pos:i + 1]
+    return None
 
 
 def _affected(result: Any) -> int:
@@ -1653,7 +1701,16 @@ async def initialize_postgres_schema(db: Any) -> None:
             intermediate_chat_id TEXT NOT NULL DEFAULT '',
             intermediate_message_id BIGINT,
             delivery_stage TEXT NOT NULL DEFAULT 'DIRECT',
-            CONSTRAINT delivery_jobs_unique UNIQUE (rule_id, source_chat_id, source_message_id, target_chat_id)
+            -- The deliverable kind ("forward" | "keyword_reply") is part of the
+            -- dedup key: one source message carries a forward *and* a keyword
+            -- reply to the same target, and with the kind left out of the key
+            -- the reply collided with the forward's row and was dropped by
+            -- ON CONFLICT DO NOTHING. Fresh databases get the column and the
+            -- widened key here; an existing table is healed by the guarded
+            -- additive ALTER below, which also swaps the constraint once.
+            job_kind TEXT NOT NULL DEFAULT 'forward',
+            CONSTRAINT delivery_jobs_unique
+                UNIQUE (rule_id, source_chat_id, source_message_id, target_chat_id, job_kind)
         );
         CREATE INDEX IF NOT EXISTS idx_delivery_jobs_claim
             ON delivery_jobs (status, next_retry_at, lease_until, created_at);
@@ -1763,6 +1820,31 @@ async def initialize_postgres_schema(db: Any) -> None:
         ALTER TABLE dead_letter_queue ADD COLUMN IF NOT EXISTS last_error TEXT NOT NULL DEFAULT '';
         ALTER TABLE dead_letter_queue ADD COLUMN IF NOT EXISTS attempts INTEGER NOT NULL DEFAULT 0;
         UPDATE dead_letter_queue SET last_error = error_message WHERE last_error = '' AND error_message <> '';
+        -- v20 mirror: widen the queue's dedup key to include the deliverable
+        -- kind. On SQLite this needs a table rebuild; on PostgreSQL the column
+        -- is additive and the UNIQUE constraint can be swapped in place. A
+        -- database created before v20 otherwise enqueues a keyword_reply
+        -- against a key that does not contain it, so the reply collides with
+        -- the forward's row and ON CONFLICT DO NOTHING drops it — the exact
+        -- defect the SQLite rebuild fixed, left un-mirrored here.
+        ALTER TABLE delivery_jobs ADD COLUMN IF NOT EXISTS job_kind TEXT NOT NULL DEFAULT 'forward';
+        -- The constraint swap is guarded by name *and* definition, so an
+        -- already-widened database runs it as a no-op instead of dropping and
+        -- recreating the index on every boot (an exclusive constraint rebuild
+        -- on a live queue).
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1 FROM pg_constraint
+                WHERE conname = 'delivery_jobs_unique'
+                  AND pg_get_constraintdef(oid)
+                      LIKE '%target_chat_id, job_kind%'
+            ) THEN
+                ALTER TABLE delivery_jobs DROP CONSTRAINT IF EXISTS delivery_jobs_unique;
+                ALTER TABLE delivery_jobs ADD CONSTRAINT delivery_jobs_unique
+                    UNIQUE (rule_id, source_chat_id, source_message_id, target_chat_id, job_kind);
+            END IF;
+        END $$;
         CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
         -- v22: single-use dashboard login codes (mirror of the SQLite table).
         -- code_hash is SHA-256 of the code; used_at makes it single-use.

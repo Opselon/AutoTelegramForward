@@ -134,8 +134,16 @@ class AuditOutboxRepository:
 
     # ---- schema ----------------------------------------------------------- #
     async def initialize(self) -> None:
-        from .postgres_repositories import _execute_db
-        for stmt in AUDIT_DDL.strip().split(";"):
+        """Create the audit tables on the PostgreSQL boundary.
+
+        Uses the shared, comment- and dollar-quote-aware splitter so a future
+        statement in AUDIT_DDL that carries a ``;`` inside a comment (the exact
+        defect that left ``dead_letter_queue`` and ``web_login_codes`` uncreated
+        on PostgreSQL deployments) splits correctly rather than being shipped
+        to the server as fragments.
+        """
+        from .postgres_repositories import _execute_db, _split_sql_script
+        for stmt in _split_sql_script(AUDIT_DDL):
             q = stmt.strip()
             if q:
                 await _execute_db(self._db, q)
