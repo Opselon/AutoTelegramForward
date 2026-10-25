@@ -909,7 +909,29 @@ MIGRATIONS = {
     -- toggle is a first-class column (not a metadata blob) so the engine, the
     -- API and every client read the same value a write stored, and a legacy
     -- row defaults to enabled: a filter that already exists keeps working.
-    ALTER TABLE filter_rules ADD COLUMN is_enabled INTEGER NOT NULL DEFAULT 1;
+    --
+    -- A database that predates the filter_rules table entirely (an install
+    -- that never created a saved filter) reaches this migration with no
+    -- table at all, so the table is created with the full current shape
+    -- first. The column itself is deliberately NOT in the CREATE: a table
+    -- carried over from an older schema already exists, so the guarded ALTER
+    -- in _apply_additive_columns adds the column — the same code path that
+    -- heals a database restored from any older backup.
+    CREATE TABLE IF NOT EXISTS filter_rules (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL DEFAULT '',
+        whitelist_keywords TEXT NOT NULL DEFAULT '[]',
+        blacklist_keywords TEXT NOT NULL DEFAULT '[]',
+        regex_patterns TEXT NOT NULL DEFAULT '[]',
+        allowed_media_types TEXT NOT NULL DEFAULT '[]',
+        blocked_media_types TEXT NOT NULL DEFAULT '[]',
+        drop_service_messages INTEGER NOT NULL DEFAULT 1,
+        min_message_length INTEGER NOT NULL DEFAULT 0,
+        max_message_length INTEGER NOT NULL DEFAULT 0,
+        owner_user_id INTEGER NOT NULL DEFAULT 0,
+        regex_block TEXT NOT NULL DEFAULT '[]',
+        regex_require TEXT NOT NULL DEFAULT '[]'
+    );
     """,
 }
 
