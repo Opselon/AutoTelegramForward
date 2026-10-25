@@ -53,6 +53,12 @@ class FilterEngine:
         if filter_rule is None:
             return EvaluationResult(FilterAction.ALLOW, "no_filter")
 
+        # v30: an owner can switch a configured filter off. A disabled filter
+        # is skipped (allow) — never evaluated and never deleted — so toggling
+        # it back on restores the exact lists the owner saved.
+        if not bool(getattr(filter_rule, "is_enabled", True)):
+            return EvaluationResult(FilterAction.ALLOW, "filter_disabled")
+
         media = payload.media_type.value if isinstance(payload.media_type, MediaType) else str(payload.media_type).lower()
 
         if filter_rule.blocked_media_types:

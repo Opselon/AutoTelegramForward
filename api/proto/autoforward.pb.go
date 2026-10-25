@@ -2686,8 +2686,15 @@ type FilterRule struct {
 	OwnerUserId         int64                  `protobuf:"varint,11,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"` // owning account (0 = legacy shared filter)
 	RegexBlock          []string               `protobuf:"bytes,12,rep,name=regex_block,json=regexBlock,proto3" json:"regex_block,omitempty"`
 	RegexRequire        []string               `protobuf:"bytes,13,rep,name=regex_require,json=regexRequire,proto3" json:"regex_require,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// v30: an owner can keep a filter configured but switched off. The engine
+	// skips a disabled filter instead of evaluating it, so the saved lists
+	// survive the toggle and re-enabling needs no re-typing.
+	// “optional“ gives the field explicit presence: an UpdateFilter from a
+	// client that predates v30 leaves the stored value untouched instead of
+	// rewriting it to false and silently disabling the filter.
+	IsEnabled     *bool `protobuf:"varint,14,opt,name=is_enabled,json=isEnabled,proto3,oneof" json:"is_enabled,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *FilterRule) Reset() {
@@ -2809,6 +2816,13 @@ func (x *FilterRule) GetRegexRequire() []string {
 		return x.RegexRequire
 	}
 	return nil
+}
+
+func (x *FilterRule) GetIsEnabled() bool {
+	if x != nil && x.IsEnabled != nil {
+		return *x.IsEnabled
+	}
+	return false
 }
 
 type CreateFilterRequest struct {
@@ -14923,7 +14937,7 @@ const file_autoforward_proto_rawDesc = "" +
 	"\arule_id\x18\x01 \x01(\tR\x06ruleId\x12\"\n" +
 	"\rowner_user_id\x18\x02 \x01(\x03R\vownerUserId\"C\n" +
 	"\x11ListRulesResponse\x12.\n" +
-	"\x05rules\x18\x01 \x03(\v2\x18.autoforward.ForwardRuleR\x05rules\"\x8f\x04\n" +
+	"\x05rules\x18\x01 \x03(\v2\x18.autoforward.ForwardRuleR\x05rules\"\xc2\x04\n" +
 	"\n" +
 	"FilterRule\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
@@ -14940,7 +14954,10 @@ const file_autoforward_proto_rawDesc = "" +
 	"\rowner_user_id\x18\v \x01(\x03R\vownerUserId\x12\x1f\n" +
 	"\vregex_block\x18\f \x03(\tR\n" +
 	"regexBlock\x12#\n" +
-	"\rregex_require\x18\r \x03(\tR\fregexRequire\"F\n" +
+	"\rregex_require\x18\r \x03(\tR\fregexRequire\x12\"\n" +
+	"\n" +
+	"is_enabled\x18\x0e \x01(\bH\x00R\tisEnabled\x88\x01\x01B\r\n" +
+	"\v_is_enabled\"F\n" +
 	"\x13CreateFilterRequest\x12/\n" +
 	"\x06filter\x18\x01 \x01(\v2\x17.autoforward.FilterRuleR\x06filter\"F\n" +
 	"\x13UpdateFilterRequest\x12/\n" +
@@ -16659,6 +16676,7 @@ func file_autoforward_proto_init() {
 	if File_autoforward_proto != nil {
 		return
 	}
+	file_autoforward_proto_msgTypes[31].OneofWrappers = []any{}
 	file_autoforward_proto_msgTypes[62].OneofWrappers = []any{}
 	file_autoforward_proto_msgTypes[182].OneofWrappers = []any{}
 	type x struct{}

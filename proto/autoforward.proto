@@ -382,6 +382,13 @@ message FilterRule {
   int64 owner_user_id = 11;  // owning account (0 = legacy shared filter)
   repeated string regex_block = 12;
   repeated string regex_require = 13;
+  // v30: an owner can keep a filter configured but switched off. The engine
+  // skips a disabled filter instead of evaluating it, so the saved lists
+  // survive the toggle and re-enabling needs no re-typing.
+  // ``optional`` gives the field explicit presence: an UpdateFilter from a
+  // client that predates v30 leaves the stored value untouched instead of
+  // rewriting it to false and silently disabling the filter.
+  optional bool is_enabled = 14;
 }
 
 message CreateFilterRequest {

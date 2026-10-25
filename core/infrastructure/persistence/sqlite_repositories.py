@@ -922,13 +922,15 @@ class SqliteFilterRuleRepository(IFilterRuleRepository):
             int(getattr(fr, "owner_user_id", 0) or 0),
             json.dumps(getattr(fr, "regex_block", []) or []),
             json.dumps(getattr(fr, "regex_require", []) or []),
+            int(getattr(fr, "is_enabled", True)),
         )
 
     async def add(self, filter_rule: FilterRule) -> FilterRule:
         self._db.execute(
             "INSERT INTO filter_rules (id, name, whitelist_keywords, blacklist_keywords, regex_patterns,"
             " allowed_media_types, blocked_media_types, drop_service_messages, min_message_length,"
-            " max_message_length, owner_user_id, regex_block, regex_require) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " max_message_length, owner_user_id, regex_block, regex_require, is_enabled)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             self._cols(filter_rule),
         )
         return filter_rule
@@ -937,7 +939,8 @@ class SqliteFilterRuleRepository(IFilterRuleRepository):
         self._db.execute(
             "UPDATE filter_rules SET name=?, whitelist_keywords=?, blacklist_keywords=?, regex_patterns=?,"
             " allowed_media_types=?, blocked_media_types=?, drop_service_messages=?, min_message_length=?,"
-            " max_message_length=?, owner_user_id=?, regex_block=?, regex_require=? WHERE id=?",
+            " max_message_length=?, owner_user_id=?, regex_block=?, regex_require=?, is_enabled=?"
+            " WHERE id=?",
             (*self._cols(filter_rule)[1:], filter_rule.id),
         )
         return filter_rule
@@ -947,6 +950,9 @@ class SqliteFilterRuleRepository(IFilterRuleRepository):
         keys = row.keys() if hasattr(row, "keys") else ()
         rx_blk = json.loads(row["regex_block"]) if "regex_block" in keys and row["regex_block"] else []
         rx_req = json.loads(row["regex_require"]) if "regex_require" in keys and row["regex_require"] else []
+        # A row written before v30 has no is_enabled column: the filter was
+        # active then, so it stays active. Never default a stored filter to off.
+        is_enabled = bool(row["is_enabled"]) if "is_enabled" in keys and row["is_enabled"] is not None else True
         return FilterRule(
             id=row["id"], name=row["name"],
             whitelist_keywords=json.loads(row["whitelist_keywords"]),
@@ -960,6 +966,7 @@ class SqliteFilterRuleRepository(IFilterRuleRepository):
             min_message_length=row["min_message_length"],
             max_message_length=row["max_message_length"],
             owner_user_id=int(row["owner_user_id"]) if "owner_user_id" in keys and row["owner_user_id"] else 0,
+            is_enabled=is_enabled,
         )
 
     async def get_by_id(self, filter_id: str) -> Optional[FilterRule]:

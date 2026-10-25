@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import {
   X,
   Play,
@@ -23,6 +23,71 @@ import { makeT, type UiLang } from '../locales/engine'
 import { ADDONS, OVERVIEW_ADDONS } from '../addons'
 import { TaskControlPanel } from './TaskControlPanel'
 import { TaskLogsPanel } from './TaskLogsPanel'
+import { api } from '../api'
+
+/*
+ * v30 — Whitelist / Blacklist management.
+ *
+ * The two tabs edit the task's *content policy*, the same store the bot and
+ * mobile edit (settings surface keys blacklist_words / whitelist_words /
+ * regex_block / regex_require / whitelist_mode, plus the per-list
+ * blacklist_off / whitelist_off switches). Two things were broken and are
+ * fixed here:
+ *
+ *  1. The tabs rendered whatever the parent last fetched, so a task another
+ *     device had just edited showed stale words. The lists are re-read from
+ *     /api/rules/{id}/settings every time the modal opens (and on an explicit
+ *     refresh) — the cached rule object is never the source of truth.
+ *  2. Only "add" and "remove" existed. Every entry now carries the
+ *     management actions the other platforms have — edit, enable/disable,
+ *     delete and details — and every one of them persists through the
+ *     settings API, so a refresh cannot resurrect a deleted entry.
+ */
+
+// The settings keys the backend registers for the content policy. Reading and
+// writing through these keys is what keeps the dashboard, the bot and mobile
+// pinned to the same store.
+const BL_KEY = 'blacklist_words'
+const WL_KEY = 'whitelist_words'
+const BL_REGEX_KEY = 'regex_block'
+const WL_REGEX_KEY = 'regex_require'
+
+type EntryKind = 'word' | 'regex'
+
+interface WordEntry {
+  value: string
+  kind: EntryKind
+}
+
+/** Compact borderless action button used on a list entry's action row. */
+function IconButton({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      style={{
+        background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 2,
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      }}
+    >
+      {children}
+    </button>
+  )
+}
+
+const smallBtnStyle = (color: string): React.CSSProperties => ({
+  backgroundColor: 'transparent', border: `1px solid ${color}`, color,
+  borderRadius: '6px', padding: '3px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer',
+})
+
+/** Split the stored lists into per-entry models the UI can render. */
+function toEntries(words: string[] | undefined, regexes: string[] | undefined): WordEntry[] {
+  const out: WordEntry[] = []
+  for (const w of words || []) out.push({ value: w, kind: 'word' })
+  for (const r of regexes || []) out.push({ value: r, kind: 'regex' })
+  return out
+}
 
 interface Props {
   rule: ForwardRule | null
@@ -76,11 +141,96 @@ export function TaskOverviewModal({
   const [wlRegexError, setWlRegexError] = useState('')
   const [newCleanerPattern, setNewCleanerPattern] = useState('')
 
+  // v30: the content-policy lists, loaded from the task's stored settings —
+  // never from the parent's cached copy. A modal opened on a task another
+  // device just edited must show that edit, not whatever the dashboard last
+  // fetched.
+  const [blEntries, setBlEntries] = useState<WordEntry[]>([])
+  const [wlEntries, setWlEntries] = useState<WordEntry[]>([])
+  const [contentLoading, setContentLoading] = useState(false)
+  const [contentError, setContentError] = useState('')
+  // The per-list master switches. Both are *stored* settings the engine itself
+  // honors (blacklist_off / whitelist_off), so the state survives a reload
+  // and every client agrees — this is not UI-only paint.
+  const [blEnabled, setBlEnabled] = useState(true)
+  const [wlEnabled, setWlEnabled] = useState(true)
+  // Per-entry inline edit + details.
+  const [editing, setEditing] = useState<{ list: 'bl' | 'wl'; index: number } | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const [detailsFor, setDetailsFor] = useState<{ list: 'bl' | 'wl'; index: number } | null>(null)
+
+
   const listPatterns = (val: any): string[] => {
     if (!val) return []
     if (Array.isArray(val)) return val
     return []
   }
+
+
+  /**
+   * Re-read the task's stored content policy from the settings surface.
+   *
+   * The settings endpoint is the *only* read path used here: the bot, the
+   * mobile client and this dashboard all write through it, so reading it back
+   * is what guarantees the list shown is the list the server enforces. The
+   * `content_policy` blob riding on the rule object is deliberately ignored —
+   * it is the parent's possibly-stale copy.
+   */
+  const reloadContentPolicy = useCallback(async (ruleId: string) => {
+    setContentLoading(true)
+    setContentError('')
+    try {
+      const res: any = await api.getRuleSettings(ruleId)
+      const s: Record<string, any> = res?.settings || {}
+      setBlEntries(toEntries(s[BL_KEY], s[BL_REGEX_KEY]))
+      setWlEntries(toEntries(s[WL_KEY], s[WL_REGEX_KEY]))
+      // A list the store says nothing about is enabled: an absent switch must
+      // never read as off, or the dashboard would disable a task's filtering
+      // the first time it is opened.
+      setBlEnabled(s.blacklist_off !== true)
+      setWlEnabled(s.whitelist_off !== true)
+    } catch (e: any) {
+      setContentError(e?.message || t('ui_failed_to_load'))
+    } finally {
+      setContentLoading(false)
+    }
+  }, [t])
+
+  /**
+   * Persist the edited lists through the settings surface. Both lists and
+   * both switches go in one request, so a save cannot leave the blacklist
+   * updated and the whitelist half-written.
+   */
+  const saveContentPolicy = useCallback(
+    async (bl: WordEntry[], wl: WordEntry[], blOn: boolean, wlOn: boolean) => {
+      if (!rule?.id) return false
+      setContentLoading(true)
+      setContentError('')
+      try {
+        await api.updateRuleSettings(rule.id, {
+          blacklist_words: bl.filter((e) => e.kind === 'word').map((e) => e.value),
+          regex_block: bl.filter((e) => e.kind === 'regex').map((e) => e.value),
+          whitelist_words: wl.filter((e) => e.kind === 'word').map((e) => e.value),
+          regex_require: wl.filter((e) => e.kind === 'regex').map((e) => e.value),
+          // The engine honors these two flags directly: switching a list off
+          // parks it (the words are kept), switching it back on restores it.
+          blacklist_off: !blOn,
+          whitelist_off: !wlOn,
+        })
+        setBlEntries(bl)
+        setWlEntries(wl)
+        setBlEnabled(blOn)
+        setWlEnabled(wlOn)
+        return true
+      } catch (e: any) {
+        setContentError(e?.message || t('ui_failed_to_save'))
+        return false
+      } finally {
+        setContentLoading(false)
+      }
+    },
+    [rule?.id, t],
+  )
 
   useEffect(() => {
     if (rule) {
@@ -92,8 +242,342 @@ export function TaskOverviewModal({
       setNewWlRegex('')
       setBlRegexError('')
       setWlRegexError('')
+      setEditing(null)
+      setDetailsFor(null)
+      // The modal was opened (or switched to another task): re-read the
+      // server's copy of the lists instead of trusting the cached rule.
+      reloadContentPolicy(rule.id)
     }
-  }, [rule])
+  }, [rule, reloadContentPolicy])
+
+
+  /*
+   * v30: the shared renderer for one managed list (blacklist or whitelist).
+   * Every entry carries Add, Edit, Enable/Disable, Delete and View Details,
+   * and each action persists through saveContentPolicy — the server is the
+   * only authority, so a refresh can never resurrect a deleted entry or lose
+   * a toggle.
+   */
+  const renderManagedList = (
+    which: 'bl' | 'wl',
+    title: string,
+    addLabel: string,
+    addPlaceholder: string,
+  ) => {
+    const entries = which === 'bl' ? blEntries : wlEntries
+    const enabled = which === 'bl' ? blEnabled : wlEnabled
+    const newWord = which === 'bl' ? newBlWord : newWlWord
+    const setNewWord = which === 'bl' ? setNewBlWord : setNewWlWord
+    const newRegex = which === 'bl' ? newBlRegex : newWlRegex
+    const setNewRegex = which === 'bl' ? setNewBlRegex : setNewWlRegex
+    const setRegexError = which === 'bl' ? setBlRegexError : setWlRegexError
+    const accent = which === 'bl' ? '#ef4444' : '#10b981'
+    const chipBg = which === 'bl' ? '#450a0a' : '#052e1d'
+    const chipBorder = which === 'bl' ? '#991b1b' : '#065f46'
+    const chipFg = which === 'bl' ? '#fca5a5' : '#6ee7b7'
+    const emptyKey = which === 'bl' ? 'ui_no_words_in_blacklist' : 'ui_no_whitelist_restrictions_all_permitted'
+
+    // Add: whitespace/comma separated, trimmed, duplicates rejected rather
+    // than silently creating a second copy of an existing entry.
+    const addEntries = (kind: EntryKind) => {
+      const raw = (kind === 'word' ? newWord : newRegex).trim()
+      if (!raw) return
+      const parts = kind === 'word'
+        ? raw.split(/[\n,]/).map((s) => s.trim()).filter(Boolean)
+        : [raw]
+      const existing = new Set(entries.map((e) => e.value))
+      const dupes = parts.filter((p) => existing.has(p))
+      if (dupes.length) {
+        setContentError(t('ui_filter_entry_duplicate'))
+        return
+      }
+      setContentError('')
+      const next = [...entries, ...parts.map((v) => ({ value: v, kind }))]
+      saveContentPolicy(
+        which === 'bl' ? next : blEntries,
+        which === 'wl' ? next : wlEntries,
+        blEnabled, wlEnabled,
+      )
+      if (kind === 'word') setNewWord('')
+      else setNewRegex('')
+    }
+
+    const setEntry = (idx: number, value: string) => {
+      const next = entries.map((e, j) => (j === idx ? { value, kind: e.kind } : e))
+      saveContentPolicy(
+        which === 'bl' ? next : blEntries,
+        which === 'wl' ? next : wlEntries,
+        blEnabled, wlEnabled,
+      )
+    }
+
+    const removeEntry = (idx: number) => {
+      const next = entries.filter((_, j) => j !== idx)
+      setEditing(null)
+      setDetailsFor(null)
+      saveContentPolicy(
+        which === 'bl' ? next : blEntries,
+        which === 'wl' ? next : wlEntries,
+        blEnabled, wlEnabled,
+      )
+    }
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button
+            type="button"
+            onClick={() => setCurrentTab('overview')}
+            style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '12px', cursor: 'pointer', padding: 0 }}
+          >
+            {t('ui_back_to_task_overview')}
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <button
+              type="button"
+              onClick={() => rule?.id && reloadContentPolicy(rule.id)}
+              disabled={contentLoading}
+              style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '11px', cursor: 'pointer', padding: 0 }}
+            >
+              {t('ui_refresh')}
+            </button>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: enabled ? accent : '#64748b' }}>
+              {title} {entries.length}
+            </span>
+          </div>
+        </div>
+
+        {/* The per-list master switch. One round trip, server-stored: the
+            engine itself skips a switched-off list, so this is not paint. */}
+        <div
+          style={{
+            backgroundColor: '#1e293b', borderRadius: '14px', padding: '12px 14px',
+            border: `1px solid ${enabled ? chipBorder : '#334155'}`,
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}
+        >
+          <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+            {enabled ? t('ui_filter_list_enabled') : t('ui_filter_list_disabled')}
+            <span style={{ display: 'block', fontSize: '10px', color: 'var(--color-text-muted)' }}>
+              {t('ui_filter_list_toggle_hint')}
+            </span>
+          </div>
+          <button
+            type="button"
+            disabled={contentLoading}
+            onClick={() =>
+              saveContentPolicy(
+                blEntries, wlEntries,
+                which === 'bl' ? !blEnabled : blEnabled,
+                which === 'wl' ? !wlEnabled : wlEnabled,
+              )
+            }
+            style={{
+              backgroundColor: enabled ? accent : '#334155', color: '#fff', border: 'none',
+              borderRadius: '999px', padding: '6px 14px', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
+            }}
+          >
+            {enabled ? t('ui_filter_list_disable') : t('ui_filter_list_enable')}
+          </button>
+        </div>
+
+        {contentError && (
+          <div style={{ fontSize: '11px', color: '#f87171', backgroundColor: '#450a0a', border: '1px solid #991b1b', borderRadius: '8px', padding: '8px 10px' }}>
+            {contentError}
+          </div>
+        )}
+        {contentLoading && (
+          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t('ui_filter_list_loading')}</div>
+        )}
+
+        <div style={{ backgroundColor: '#1e293b', borderRadius: '14px', padding: '14px', border: '1px solid #334155' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>{addLabel}</div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              type="text"
+              placeholder={addPlaceholder}
+              value={newWord}
+              onChange={(e) => setNewWord(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEntries('word') } }}
+              style={{
+                flex: 1, backgroundColor: '#0f172a', border: '1px solid var(--color-border-strong)',
+                color: '#fff', borderRadius: '8px', padding: '8px 10px', fontSize: '12px',
+              }}
+            />
+            <button
+              type="button"
+              disabled={contentLoading}
+              onClick={() => addEntries('word')}
+              style={{
+                backgroundColor: accent, color: '#fff', border: 'none', borderRadius: '8px',
+                padding: '0 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              {t('ui_add')}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ backgroundColor: '#1e293b', borderRadius: '14px', padding: '14px', border: '1px solid #334155' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
+            {t('ui_filter_entries_title')}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {entries.map((entry, idx) => {
+              const isEditing = editing?.list === which && editing.index === idx
+              const isDetails = detailsFor?.list === which && detailsFor.index === idx
+              return (
+                <div
+                  key={`${which}-${idx}`}
+                  style={{
+                    backgroundColor: '#0f172a', border: `1px solid ${chipBorder}`, borderRadius: '10px',
+                    padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '6px',
+                    opacity: enabled ? 1 : 0.6,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                    {isEditing ? (
+                      <>
+                        <input
+                          type="text"
+                          value={editValue}
+                          autoFocus
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              const v = editValue.trim()
+                              if (!v) return
+                              if (entries.some((e2, j) => j !== idx && e2.value === v)) {
+                                setContentError(t('ui_filter_entry_duplicate'))
+                                return
+                              }
+                              setContentError('')
+                              setEditing(null)
+                              setEntry(idx, v)
+                            } else if (e.key === 'Escape') {
+                              setEditing(null)
+                            }
+                          }}
+                          style={{
+                            flex: 1, minWidth: 140, backgroundColor: '#000', border: `1px solid ${accent}`,
+                            color: '#fff', borderRadius: '6px', padding: '5px 8px', fontSize: '12px',
+                            fontFamily: entry.kind === 'regex' ? 'monospace' : 'inherit',
+                          }}
+                        />
+                        <button type="button" onClick={() => setEditing(null)} style={smallBtnStyle('#64748b')}>
+                          {t('ui_cancel')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const v = editValue.trim()
+                            if (!v) return
+                            if (entries.some((e2, j) => j !== idx && e2.value === v)) {
+                              setContentError(t('ui_filter_entry_duplicate'))
+                              return
+                            }
+                            setContentError('')
+                            setEditing(null)
+                            setEntry(idx, v)
+                          }}
+                          style={smallBtnStyle('#10b981')}
+                        >
+                          {t('ui_save')}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span
+                          style={{
+                            backgroundColor: chipBg, border: `1px solid ${chipBorder}`, color: chipFg,
+                            borderRadius: '12px', padding: '3px 10px', fontSize: '11px',
+                            fontFamily: entry.kind === 'regex' ? 'monospace' : 'inherit',
+                            textDecoration: enabled ? 'none' : 'line-through',
+                          }}
+                        >
+                          {entry.value}
+                        </span>
+                        {entry.kind === 'regex' && (
+                          <span style={{ fontSize: '9px', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
+                            regex
+                          </span>
+                        )}
+                        <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
+                          <IconButton title={t('ui_edit')} onClick={() => { setEditing({ list: which, index: idx }); setEditValue(entry.value) }}>
+                            <Edit2 size={12} />
+                          </IconButton>
+                          <IconButton
+                            title={t('ui_filter_entry_details')}
+                            onClick={() => setDetailsFor(isDetails ? null : { list: which, index: idx })}
+                          >
+                            <Info size={12} />
+                          </IconButton>
+                          <IconButton title={t('ui_delete')} onClick={() => removeEntry(idx)}>
+                            <Trash2 size={12} />
+                          </IconButton>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  {isDetails && (
+                    <div style={{ fontSize: '11px', color: '#cbd5e1', backgroundColor: '#000', borderRadius: '6px', padding: '8px', lineHeight: 1.5 }}>
+                      <div><strong>{t('ui_filter_detail_kind')}:</strong> {entry.kind === 'regex' ? t('ui_filter_detail_kind_regex') : t('ui_filter_detail_kind_word')}</div>
+                      <div><strong>{t('ui_filter_detail_value')}:</strong> <code>{entry.value}</code></div>
+                      <div><strong>{t('ui_filter_detail_list')}:</strong> {title}</div>
+                      <div><strong>{t('ui_filter_detail_state')}:</strong> {enabled ? t('ui_filter_list_enabled') : t('ui_filter_list_disabled')}</div>
+                      <div><strong>{t('ui_filter_detail_task')}:</strong> {rule?.name || rule?.id}</div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+            {entries.length === 0 && (
+              <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t(emptyKey)}</span>
+            )}
+          </div>
+        </div>
+
+        {/* Regex entries for the same list: adding one is validated client-side
+            only to warn; the server is the authority on what it stores. */}
+        <div style={{ backgroundColor: '#1e293b', borderRadius: '14px', padding: '14px', border: '1px solid #334155' }}>
+          <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
+            {which === 'bl' ? t('ui_filter_regex_block_title') : t('ui_filter_regex_require_title')}
+          </div>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <input
+              type="text"
+              placeholder={which === 'bl' ? t('ui_filter_regex_block_placeholder') : t('ui_filter_regex_require_placeholder')}
+              value={newRegex}
+              onChange={(e) => { setNewRegex(e.target.value); setRegexError('') }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEntries('regex') } }}
+              style={{
+                flex: 1, backgroundColor: '#0f172a',
+                border: `1px solid ${(which === 'bl' ? blRegexError : wlRegexError) ? '#ef4444' : 'var(--color-border-strong)'}`,
+                color: '#fff', borderRadius: '8px', padding: '8px 10px', fontSize: '12px', fontFamily: 'monospace',
+              }}
+            />
+            <button
+              type="button"
+              disabled={contentLoading}
+              onClick={() => addEntries('regex')}
+              style={{
+                backgroundColor: accent, color: '#fff', border: 'none', borderRadius: '8px',
+                padding: '0 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
+              }}
+            >
+              {t('ui_add')}
+            </button>
+          </div>
+          {(which === 'bl' ? blRegexError : wlRegexError) && (
+            <div style={{ fontSize: '11px', color: '#f87171', marginTop: '6px' }}>
+              {which === 'bl' ? blRegexError : wlRegexError}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   const handleToggle = (field: keyof ForwardRule) => {
     setDraft((prev) => ({
@@ -1734,607 +2218,20 @@ export function TaskOverviewModal({
             </div>
           )}
 
-          {/* 3. BLACKLIST VIEW (≡ₓ) */}
-          {currentTab === 'blacklist' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <button
-                  type="button"
-                  onClick={() => setCurrentTab('overview')}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#38bdf8',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
-                >
-                  {t('ui_back_to_task_overview')}
-                </button>
-                <span style={{ fontSize: '12px', color: '#ef4444', fontWeight: 600 }}>
-                  {t('ui_blacklisted')} {(draft.blacklist_keywords || []).length + (draft.regex_block || []).length}
-                </span>
-              </div>
-
-              <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
-              >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
-                  {t('ui_add_blacklisted_keyword_or_domain')}
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="text"
-                    placeholder={t('ui_enter_banned_word_or_phrase')}
-                    value={newBlWord}
-                    onChange={(e) => setNewBlWord(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newBlWord.trim()) {
-                        e.preventDefault()
-                        const list = draft.blacklist_keywords || []
-                        const adds = newBlWord.split(/[\n,]/).map((s: string) => s.trim()).filter((s: string) => s && !list.includes(s))
-                        if (adds.length) {
-                          setDraft({ ...draft, blacklist_keywords: [...list, ...adds] })
-                          setNewBlWord('')
-                        }
-                      }
-                    }}
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#0f172a',
-                      border: '1px solid var(--color-border-strong)',
-                      color: '#fff',
-                      borderRadius: '8px',
-                      padding: '8px 10px',
-                      fontSize: '12px',
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!newBlWord.trim()) return
-                      const list = draft.blacklist_keywords || []
-                      const adds = newBlWord.split(/[\n,]/).map((s: string) => s.trim()).filter((s: string) => s && !list.includes(s))
-                      if (adds.length) {
-                        setDraft({ ...draft, blacklist_keywords: [...list, ...adds] })
-                        setNewBlWord('')
-                      }
-                    }}
-                    style={{
-                      backgroundColor: '#ef4444',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '0 14px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {t('ui_add')}
-                  </button>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
-              >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
-                  {t('ui_blocked_words')}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {(draft.blacklist_keywords || []).map((w, idx) => (
-                    <span
-                      key={idx}
-                      style={{
-                        backgroundColor: '#450a0a',
-                        border: '1px solid #991b1b',
-                        color: '#fca5a5',
-                        borderRadius: '12px',
-                        padding: '4px 10px',
-                        fontSize: '11px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <span>{w}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const list = (draft.blacklist_keywords || []).filter((_, i) => i !== idx)
-                          setDraft({ ...draft, blacklist_keywords: list })
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#f87171',
-                          cursor: 'pointer',
-                          padding: 0,
-                          fontSize: '12px',
-                          fontWeight: 700,
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  ))}
-                  {(draft.blacklist_keywords || []).length === 0 && (
-                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t('ui_no_words_in_blacklist')}</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Blacklist Regex Patterns */}
-              <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
-              >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
-                  {t('ui_filter_regex_block_title')}
-                </div>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: blRegexError ? '4px' : '0px' }}>
-                  <input
-                    type="text"
-                    placeholder={t('ui_filter_regex_block_placeholder')}
-                    value={newBlRegex}
-                    onChange={(e) => {
-                      setNewBlRegex(e.target.value)
-                      if (blRegexError) setBlRegexError('')
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        const p = newBlRegex.trim()
-                        if (!p) return
-                        try {
-                          new RegExp(p)
-                        } catch (err: any) {
-                          setBlRegexError(err?.message || 'Invalid regex syntax')
-                          return
-                        }
-                        const current = draft.regex_block || []
-                        if (!current.includes(p)) {
-                          setDraft({ ...draft, regex_block: [...current, p] })
-                        }
-                        setNewBlRegex('')
-                      }
-                    }}
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#0f172a',
-                      border: `1px solid ${blRegexError ? '#ef4444' : 'var(--color-border-strong)'}`,
-                      color: '#fff',
-                      borderRadius: '8px',
-                      padding: '8px 10px',
-                      fontSize: '12px',
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const p = newBlRegex.trim()
-                      if (!p) return
-                      try {
-                        new RegExp(p)
-                      } catch (err: any) {
-                        setBlRegexError(err?.message || 'Invalid regex syntax')
-                        return
-                      }
-                      const current = draft.regex_block || []
-                      if (!current.includes(p)) {
-                        setDraft({ ...draft, regex_block: [...current, p] })
-                      }
-                      setNewBlRegex('')
-                    }}
-                    style={{
-                      backgroundColor: '#ef4444',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '0 14px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {t('ui_add')}
-                  </button>
-                </div>
-                {blRegexError && (
-                  <div style={{ fontSize: '11px', color: '#f87171', marginBottom: '8px' }}>
-                    {blRegexError}
-                  </div>
-                )}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
-                  {(draft.regex_block || []).map((rx, idx) => (
-                    <span
-                      key={idx}
-                      style={{
-                        backgroundColor: '#450a0a',
-                        border: '1px solid #991b1b',
-                        color: '#fca5a5',
-                        borderRadius: '12px',
-                        padding: '4px 10px',
-                        fontSize: '11px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        fontFamily: 'monospace',
-                      }}
-                    >
-                      <span>{rx}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const list = (draft.regex_block || []).filter((_, i) => i !== idx)
-                          setDraft({ ...draft, regex_block: list })
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#f87171',
-                          cursor: 'pointer',
-                          padding: 0,
-                          fontSize: '12px',
-                          fontWeight: 700,
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  ))}
-                  {(draft.regex_block || []).length === 0 && (
-                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                      {t('ui_filter_regex_block_empty')}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-                {t('ui_words_matching_help')}
-              </div>
-            </div>
+          {/* 3. BLACKLIST VIEW (≡ₓ) — v30: server-backed management UI */}
+          {currentTab === 'blacklist' && renderManagedList(
+            'bl',
+            t('ui_blacklisted'),
+            t('ui_add_blacklisted_keyword_or_domain'),
+            t('ui_enter_banned_word_or_phrase'),
           )}
 
-          {/* 4. WHITELIST VIEW (≡✓) */}
-          {currentTab === 'whitelist' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <button
-                  type="button"
-                  onClick={() => setCurrentTab('overview')}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#38bdf8',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
-                >
-                  {t('ui_back_to_task_overview')}
-                </button>
-                <span style={{ fontSize: '12px', color: '#22c55e', fontWeight: 600 }}>
-                  {t('ui_whitelisted')} {(draft.whitelist_keywords || []).length + (draft.regex_require || []).length}
-                </span>
-              </div>
-
-              <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
-              >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
-                  {t('ui_add_required_keyword_or_domain')}
-                </div>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input
-                    type="text"
-                    placeholder={t('ui_enter_required_word_or_phrase')}
-                    value={newWlWord}
-                    onChange={(e) => setNewWlWord(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newWlWord.trim()) {
-                        e.preventDefault()
-                        const list = draft.whitelist_keywords || []
-                        const adds = newWlWord.split(/[\n,]/).map((s: string) => s.trim()).filter((s: string) => s && !list.includes(s))
-                        if (adds.length) {
-                          setDraft({ ...draft, whitelist_keywords: [...list, ...adds] })
-                          setNewWlWord('')
-                        }
-                      }
-                    }}
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#0f172a',
-                      border: '1px solid var(--color-border-strong)',
-                      color: '#fff',
-                      borderRadius: '8px',
-                      padding: '8px 10px',
-                      fontSize: '12px',
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!newWlWord.trim()) return
-                      const list = draft.whitelist_keywords || []
-                      const adds = newWlWord.split(/[\n,]/).map((s: string) => s.trim()).filter((s: string) => s && !list.includes(s))
-                      if (adds.length) {
-                        setDraft({ ...draft, whitelist_keywords: [...list, ...adds] })
-                        setNewWlWord('')
-                      }
-                    }}
-                    style={{
-                      backgroundColor: '#22c55e',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '0 14px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {t('ui_add')}
-                  </button>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
-              >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
-                  {t('ui_required_whitelist_words')}
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {(draft.whitelist_keywords || []).map((w, idx) => (
-                    <span
-                      key={idx}
-                      style={{
-                        backgroundColor: '#052e16',
-                        border: '1px solid #15803d',
-                        color: '#86efac',
-                        borderRadius: '12px',
-                        padding: '4px 10px',
-                        fontSize: '11px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <span>{w}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const list = (draft.whitelist_keywords || []).filter((_, i) => i !== idx)
-                          setDraft({ ...draft, whitelist_keywords: list })
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#4ade80',
-                          cursor: 'pointer',
-                          padding: 0,
-                          fontSize: '12px',
-                          fontWeight: 700,
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  ))}
-                  {(draft.whitelist_keywords || []).length === 0 && (
-                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t('ui_no_whitelist_restrictions_all_permitted')}</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Whitelist Regex Patterns */}
-              <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
-              >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
-                  {t('ui_filter_regex_require_title')}
-                </div>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: wlRegexError ? '4px' : '0px' }}>
-                  <input
-                    type="text"
-                    placeholder={t('ui_filter_regex_require_placeholder')}
-                    value={newWlRegex}
-                    onChange={(e) => {
-                      setNewWlRegex(e.target.value)
-                      if (wlRegexError) setWlRegexError('')
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        const p = newWlRegex.trim()
-                        if (!p) return
-                        try {
-                          new RegExp(p)
-                        } catch (err: any) {
-                          setWlRegexError(err?.message || 'Invalid regex syntax')
-                          return
-                        }
-                        const current = draft.regex_require || []
-                        if (!current.includes(p)) {
-                          setDraft({ ...draft, regex_require: [...current, p] })
-                        }
-                        setNewWlRegex('')
-                      }
-                    }}
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#0f172a',
-                      border: `1px solid ${wlRegexError ? '#ef4444' : 'var(--color-border-strong)'}`,
-                      color: '#fff',
-                      borderRadius: '8px',
-                      padding: '8px 10px',
-                      fontSize: '12px',
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const p = newWlRegex.trim()
-                      if (!p) return
-                      try {
-                        new RegExp(p)
-                      } catch (err: any) {
-                        setWlRegexError(err?.message || 'Invalid regex syntax')
-                        return
-                      }
-                      const current = draft.regex_require || []
-                      if (!current.includes(p)) {
-                        setDraft({ ...draft, regex_require: [...current, p] })
-                      }
-                      setNewWlRegex('')
-                    }}
-                    style={{
-                      backgroundColor: '#22c55e',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '0 14px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {t('ui_add')}
-                  </button>
-                </div>
-                {wlRegexError && (
-                  <div style={{ fontSize: '11px', color: '#f87171', marginBottom: '8px' }}>
-                    {wlRegexError}
-                  </div>
-                )}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '10px' }}>
-                  {(draft.regex_require || []).map((rx, idx) => (
-                    <span
-                      key={idx}
-                      style={{
-                        backgroundColor: '#052e16',
-                        border: '1px solid #15803d',
-                        color: '#86efac',
-                        borderRadius: '12px',
-                        padding: '4px 10px',
-                        fontSize: '11px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        fontFamily: 'monospace',
-                      }}
-                    >
-                      <span>{rx}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const list = (draft.regex_require || []).filter((_, i) => i !== idx)
-                          setDraft({ ...draft, regex_require: list })
-                        }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#4ade80',
-                          cursor: 'pointer',
-                          padding: 0,
-                          fontSize: '12px',
-                          fontWeight: 700,
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  ))}
-                  {(draft.regex_require || []).length === 0 && (
-                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>
-                      {t('ui_filter_regex_require_empty')}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Whitelist Matching Mode */}
-              <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
-              >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
-                  {t('ui_rp_mode_label')}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
-                  {(['any', 'all', 'phrase'] as const).map((mode) => {
-                    const currentMode = draft.whitelist_mode || 'any'
-                    const isSel = currentMode === mode
-                    const label =
-                      mode === 'any'
-                        ? t('ui_filter_whitelist_mode_any')
-                        : mode === 'all'
-                          ? t('ui_filter_whitelist_mode_all')
-                          : t('ui_filter_whitelist_mode_phrase')
-                    return (
-                      <button
-                        key={mode}
-                        type="button"
-                        onClick={() => setDraft({ ...draft, whitelist_mode: mode })}
-                        style={{
-                          backgroundColor: isSel ? '#065f46' : '#0f172a',
-                          color: isSel ? '#86efac' : '#94a3b8',
-                          border: `1px solid ${isSel ? '#15803d' : '#334155'}`,
-                          borderRadius: '8px',
-                          padding: '8px',
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                        }}
-                      >
-                        {label} {isSel ? '✔' : ''}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
-                {t('ui_words_matching_help')}
-              </div>
-            </div>
+          {/* 4. WHITELIST VIEW (≡✓) — v30: server-backed management UI */}
+          {currentTab === 'whitelist' && renderManagedList(
+            'wl',
+            t('ui_whitelisted'),
+            t('ui_required_whitelist_words'),
+            t('ui_enter_whitelisted_word_or_phrase'),
           )}
 
           {/* 5. FILTERS VIEW (⊶) */}

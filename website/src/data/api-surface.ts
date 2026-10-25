@@ -425,9 +425,18 @@ export const endpointDetail: Record<string, EndpointDetail> = {
     summary: 'Creates a reusable filter that tasks can reference instead of repeating keyword lists.',
     statuses: ['201', '400', '401'],
   },
+  'GET /api/filters/{id}': {
+    summary: 'Reads one saved filter. A filter the caller does not own is a 404, so the route never confirms somebody else’s filter exists.',
+    statuses: owner,
+  },
   'PUT /api/filters/{id}': {
     summary: 'Replaces a filter definition.',
     statuses: write,
+  },
+  'POST /api/filters/{id}/toggle': {
+    summary:
+      'Flips only the filter’s enable/disable switch: the server turns the value it currently stores, so the lists never travel with the request and a stale client cannot overwrite a write another device made. A disabled filter is skipped (allowed), never deleted — re-enabling restores its exact lists.',
+    statuses: ['200', '401', '404'],
   },
   'DELETE /api/filters/{id}': {
     summary: 'Deletes a filter; tasks that referenced it keep their own inline rules.',

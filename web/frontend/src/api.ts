@@ -376,6 +376,10 @@ export const api = {
     if (Array.isArray(res?.filters)) return res.filters
     return []
   },
+  // v30: one stored filter by id. The server 404s a filter the caller does not
+  // own, so the client never learns whether somebody else's filter exists.
+  getFilter: (id: string) =>
+    fetchJson<FilterRule>(`${API_BASE}/filters/${encodeURIComponent(id)}`),
   saveFilter: (req: SaveFilterRuleRequest) =>
     fetchJson<FilterRule>(
       (req as any).id
@@ -386,6 +390,13 @@ export const api = {
         body: JSON.stringify(req),
       },
     ),
+  // v30: flip only the enable/disable switch server-side. The server flips the
+  // value it currently stores, so a stale tab cannot overwrite lists another
+  // device just saved.
+  toggleFilter: (id: string) =>
+    fetchJson<FilterRule>(`${API_BASE}/filters/${encodeURIComponent(id)}/toggle`, {
+      method: 'POST',
+    }),
   deleteFilter: (id: string) =>
     fetchJson<{ success: boolean; id: string }>(`${API_BASE}/filters/${id}`, {
       method: 'DELETE',

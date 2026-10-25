@@ -966,6 +966,21 @@ class AppMessagesId {
     'filters_test_sample_hint': 'Tempel pesan contoh. Tidak ada yang disimpan dan tidak ada yang diteruskan — ini hanya pengujian.',
     'filters_test_title': 'Uji filter ini',
     'filters_three_options_title': 'Pilih cara daftar ini mencocokkan',
+    // ---- system surface (appended) ----
+    'filters_entry_add': 'Tambah entri',
+    'filters_entry_edit': 'Edit entri',
+    'filters_entry_delete': 'Hapus entri',
+    'filters_entry_duplicate': 'Entri ini sudah ada.',
+    'filters_entry_kind_word': 'Kata kunci',
+    'filters_entry_kind_regex': 'Ekspresi reguler',
+    'filters_entry_list_blacklist': 'Daftar hitam',
+    'filters_entry_list_whitelist': 'Daftar putih',
+    'filters_details_title': 'Detail entri',
+    'filters_enable': 'Aktifkan',
+    'filters_disable': 'Nonaktifkan',
+    'filters_enabled_label': 'Aktif',
+    'filters_disabled_label': 'Nonaktif',
+    'filters_state_on_hint': 'Matikan daftar tanpa menghapus kata; aktifkan kembali untuk memulihkannya.',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare

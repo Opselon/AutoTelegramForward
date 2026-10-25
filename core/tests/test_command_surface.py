@@ -35,6 +35,7 @@ DYNAMIC = (
     "add_bl_", "add_wl_", "set_wm_", "set_topic_", "rename_rule_",
     "ai_prompt_name_", "ai_prompt_sys_",
     "tw_regex_", "tw_longtext_", "tw_test_",
+    "edit_bl_", "edit_wl_",
 )
 
 

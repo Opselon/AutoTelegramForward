@@ -904,6 +904,35 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_referrals_inviter
         ON referrals(inviter_user_id, created_at DESC);
     """,
+    30: """
+    -- v30: a filter row can be switched off without losing its lists. The
+    -- toggle is a first-class column (not a metadata blob) so the engine, the
+    -- API and every client read the same value a write stored, and a legacy
+    -- row defaults to enabled: a filter that already exists keeps working.
+    --
+    -- A database that predates the filter_rules table entirely (an install
+    -- that never created a saved filter) reaches this migration with no
+    -- table at all, so the table is created with the full current shape
+    -- first. The column itself is deliberately NOT in the CREATE: a table
+    -- carried over from an older schema already exists, so the guarded ALTER
+    -- in _apply_additive_columns adds the column — the same code path that
+    -- heals a database restored from any older backup.
+    CREATE TABLE IF NOT EXISTS filter_rules (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL DEFAULT '',
+        whitelist_keywords TEXT NOT NULL DEFAULT '[]',
+        blacklist_keywords TEXT NOT NULL DEFAULT '[]',
+        regex_patterns TEXT NOT NULL DEFAULT '[]',
+        allowed_media_types TEXT NOT NULL DEFAULT '[]',
+        blocked_media_types TEXT NOT NULL DEFAULT '[]',
+        drop_service_messages INTEGER NOT NULL DEFAULT 1,
+        min_message_length INTEGER NOT NULL DEFAULT 0,
+        max_message_length INTEGER NOT NULL DEFAULT 0,
+        owner_user_id INTEGER NOT NULL DEFAULT 0,
+        regex_block TEXT NOT NULL DEFAULT '[]',
+        regex_require TEXT NOT NULL DEFAULT '[]'
+    );
+    """,
 }
 
 
@@ -922,6 +951,10 @@ _ADDITIVE_COLUMNS = (
     ("filter_rules", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_filter_rules_owner"),
     ("filter_rules", "regex_block", "TEXT NOT NULL DEFAULT '[]'", None),
     ("filter_rules", "regex_require", "TEXT NOT NULL DEFAULT '[]'", None),
+    # v30: the enable/disable toggle. A database carried over from an older
+    # schema lacks the column; a guarded ALTER adds it as enabled so an existing
+    # filter keeps working instead of silently switching off.
+    ("filter_rules", "is_enabled", "INTEGER NOT NULL DEFAULT 1", None),
     # v12: credential vault + prompt templates are per-tenant, not global.
     # Without this any authenticated tenant can read another tenant's api_hash
     # through a backup export, and overwrite another tenant's prompt templates.

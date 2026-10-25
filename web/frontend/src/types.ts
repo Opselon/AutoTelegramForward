@@ -403,6 +403,10 @@ export interface FilterRule {
   drop_service_messages: boolean
   min_message_length: number
   max_message_length: number
+  // v30: the stored enable/disable switch. Absent on a server that predates
+  // the toggle — read as enabled, never as false.
+  is_enabled?: boolean
+  owner_user_id?: number
 }
 
 export interface SaveFilterRuleRequest {
@@ -418,6 +422,7 @@ export interface SaveFilterRuleRequest {
   drop_service_messages?: boolean
   min_message_length?: number
   max_message_length?: number
+  is_enabled?: boolean
 }
 
 export interface DeliveryJob {

@@ -1119,6 +1119,26 @@ class ForwardRule:
     def content_policy_enabled(self, val: bool) -> None:
         self._set_policy_key("enabled", bool(val))
 
+    # --- v30: per-list enable/disable ------------------------------------- #
+    # Park a list without deleting its words. Both live in the content policy
+    # (the same blob every client writes), so the engine, the bot, the
+    # dashboard and mobile read the same flag a write stored.
+    @property
+    def blacklist_off(self) -> bool:
+        return bool(self._policy_key("blacklist_off", False))
+
+    @blacklist_off.setter
+    def blacklist_off(self, val: bool) -> None:
+        self._set_policy_key("blacklist_off", bool(val))
+
+    @property
+    def whitelist_off(self) -> bool:
+        return bool(self._policy_key("whitelist_off", False))
+
+    @whitelist_off.setter
+    def whitelist_off(self, val: bool) -> None:
+        self._set_policy_key("whitelist_off", bool(val))
+
     @property
     def blacklist_words(self) -> List[str]:
         return [str(x) for x in (self._policy_key("blacklist_words", []) or [])]
@@ -2244,6 +2264,10 @@ class FilterRule:
     regex_patterns: List[str] = field(default_factory=list)
     regex_block: List[str] = field(default_factory=list)
     regex_require: List[str] = field(default_factory=list)
+    # v30: an owner can keep a filter configured but disabled. The engine skips
+    # a disabled filter rather than evaluating it, so the saved lists survive
+    # the toggle and re-enabling needs no re-typing.
+    is_enabled: bool = True
     allowed_media_types: List[str] = field(default_factory=list)
     blocked_media_types: List[str] = field(default_factory=list)
     drop_service_messages: bool = True

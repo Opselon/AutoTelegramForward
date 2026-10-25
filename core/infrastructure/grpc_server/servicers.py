@@ -520,6 +520,9 @@ def _filter_pb(f) -> pb.FilterRule:
         min_message_length=f.min_message_length,
         max_message_length=f.max_message_length,
         owner_user_id=int(getattr(f, "owner_user_id", 0) or 0),
+        # v30: the enable/disable toggle rides the same message as the lists,
+        # so a client cannot see a filter as active while the engine skips it.
+        is_enabled=bool(getattr(f, "is_enabled", True)),
     )
 
 
@@ -2097,6 +2100,14 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
         existing.min_message_length = f.min_message_length
         existing.max_message_length = f.max_message_length
         existing.owner_user_id = int(f.owner_user_id or existing.owner_user_id or 0)
+        # v30: honor presence, not the zero value. A client built before the
+        # toggle existed does not send the field; such an update must not flip
+        # a configured filter off, and must not silently re-enable a filter
+        # the owner deliberately disabled.
+        if f.HasField("is_enabled"):
+            existing.is_enabled = bool(f.is_enabled)
+        else:
+            existing.is_enabled = bool(getattr(existing, "is_enabled", True))
         updated = await self._filters.update(existing)
         return _filter_pb(updated)
 

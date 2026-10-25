@@ -3759,6 +3759,10 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
         bl = list(rule.blacklist or [])
         rx = list(rule.regex_block or [])
+        # v30: the per-list switch is the engine's own flag, read straight off
+        # the task. A switched-off list keeps its words and is shown struck
+        # through, so the owner sees the list is parked, not empty.
+        bl_off = bool(getattr(rule, "blacklist_off", False))
 
         items_str = "\n".join([f"• `{w}`" for w in bl[:20]]) if bl else self._t("ui_bl_empty", lang=lang)
         if len(bl) > 20:
@@ -3778,6 +3782,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             + self._t("ui_bl_count", lang=lang, count=total_count)
             + "────────────────────\n"
             + self._t("ui_bl_desc", lang=lang)
+            + (self._t("ui_bl_state_off", lang=lang) if bl_off else self._t("ui_bl_state_on", lang=lang))
             + f"{items_str}\n\n"
             + self._t("ui_words_help_title", lang=lang)
             + "\n\n"
@@ -3789,17 +3794,34 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
                 (self._t("ui_bl_btn_keyword", lang=lang), f"rfl_bl_add:{rule.id}"),
                 (self._t("ui_bl_btn_clear", lang=lang), f"rfl_bl_clr:{rule.id}"),
             ],
-            [
-                (self._t("ui_bl_btn_regex", lang=lang), f"rfl_bl_regex:{rule.id}"),
-            ],
-            [
-                (self._t("ui_bl_btn_longtext", lang=lang), f"rfl_bl_long:{rule.id}"),
-            ],
-            [
-                (self._t("ui_filters_btn_test", lang=lang), f"rfl_test:{rule.id}:bl"),
-            ],
-            [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
+        # v30: one button per stored entry — Edit, Delete, and the per-list
+        # enable/disable switch — so the bot offers the same management
+        # actions the dashboard and mobile do, on the same stored list.
+        for w in bl[:12]:
+            rows.append([
+                (self._t("ui_bl_btn_edit_entry", lang=lang, entry=w[:24]), f"rfl_bl_edit:{rule.id}:{w}"),
+                (self._t("ui_bl_btn_delete_entry", lang=lang), f"rfl_bl_del:{rule.id}:{w}"),
+            ])
+        for p in rx[:6]:
+            rows.append([
+                (self._t("ui_bl_btn_edit_regex", lang=lang, entry=p[:20]), f"rfl_bl_edit:{rule.id}:{p}"),
+                (self._t("ui_bl_btn_delete_entry", lang=lang), f"rfl_bl_del:{rule.id}:{p}"),
+            ])
+        rows.append([
+            (
+                self._t("ui_bl_btn_disable" if not bl_off else "ui_bl_btn_enable", lang=lang),
+                f"rfl_bl_tgl:{rule.id}",
+            ),
+        ])
+        rows.append([
+            (self._t("ui_bl_btn_regex", lang=lang), f"rfl_bl_regex:{rule.id}"),
+            (self._t("ui_bl_btn_longtext", lang=lang), f"rfl_bl_long:{rule.id}"),
+        ])
+        rows.append([
+            (self._t("ui_filters_btn_test", lang=lang), f"rfl_test:{rule.id}:bl"),
+        ])
+        rows.append([(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")])
         return text, self._kbd(rows)
 
     def _render_whitelist_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
@@ -3809,6 +3831,8 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         dst_label = getattr(rule, "target_label", None) or (rule.target_chat_name or rule.target_chat_id)
         wl = list(rule.whitelist or [])
         rx = list(rule.regex_require or [])
+        # v30: same per-list switch, whitelist side.
+        wl_off = bool(getattr(rule, "whitelist_off", False))
 
         items_str = "\n".join([f"• `{w}`" for w in wl[:20]]) if wl else self._t("ui_wl_empty", lang=lang)
         if len(wl) > 20:
@@ -3828,6 +3852,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             + self._t("ui_wl_count", lang=lang, count=total_count)
             + "────────────────────\n"
             + self._t("ui_wl_desc", lang=lang)
+            + (self._t("ui_wl_state_off", lang=lang) if wl_off else self._t("ui_wl_state_on", lang=lang))
             + f"{items_str}\n\n"
             + self._t("ui_words_help_title", lang=lang)
             + "\n\n"
@@ -3839,17 +3864,32 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
                 (self._t("ui_wl_btn_keyword", lang=lang), f"rfl_wl_add:{rule.id}"),
                 (self._t("ui_wl_btn_clear", lang=lang), f"rfl_wl_clr:{rule.id}"),
             ],
-            [
-                (self._t("ui_wl_btn_regex", lang=lang), f"rfl_wl_regex:{rule.id}"),
-            ],
-            [
-                (self._t("ui_wl_btn_longtext", lang=lang), f"rfl_wl_long:{rule.id}"),
-            ],
-            [
-                (self._t("ui_filters_btn_test", lang=lang), f"rfl_test:{rule.id}:wl"),
-            ],
-            [(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")],
         ]
+        # v30: per-entry Edit / Delete on the whitelist, mirroring blacklist.
+        for w in wl[:12]:
+            rows.append([
+                (self._t("ui_wl_btn_edit_entry", lang=lang, entry=w[:24]), f"rfl_wl_edit:{rule.id}:{w}"),
+                (self._t("ui_wl_btn_delete_entry", lang=lang), f"rfl_wl_del:{rule.id}:{w}"),
+            ])
+        for p in rx[:6]:
+            rows.append([
+                (self._t("ui_wl_btn_edit_regex", lang=lang, entry=p[:20]), f"rfl_wl_edit:{rule.id}:{p}"),
+                (self._t("ui_wl_btn_delete_entry", lang=lang), f"rfl_wl_del:{rule.id}:{p}"),
+            ])
+        rows.append([
+            (
+                self._t("ui_wl_btn_disable" if not wl_off else "ui_wl_btn_enable", lang=lang),
+                f"rfl_wl_tgl:{rule.id}",
+            ),
+        ])
+        rows.append([
+            (self._t("ui_wl_btn_regex", lang=lang), f"rfl_wl_regex:{rule.id}"),
+            (self._t("ui_wl_btn_longtext", lang=lang), f"rfl_wl_long:{rule.id}"),
+        ])
+        rows.append([
+            (self._t("ui_filters_btn_test", lang=lang), f"rfl_test:{rule.id}:wl"),
+        ])
+        rows.append([(self._btn('ui_rule_back_rule', lang=lang), f"rd:{rule.id}")])
         return text, self._kbd(rows)
 
     def _render_watermark_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
@@ -7812,7 +7852,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             st = self._state(uid)
-            if st.step.startswith("tw_") or st.step.startswith("add_bl_") or st.step.startswith("add_wl_"):
+            if st.step.startswith(("tw_", "add_bl_", "add_wl_", "edit_bl_", "edit_wl_")):
                 st.step = ""
             st.buffer.pop("tw_direction", None)
             st.buffer.pop("tw_mode", None)
@@ -7892,7 +7932,7 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
             st = self._state(uid)
-            if st.step.startswith("tw_") or st.step.startswith("add_bl_") or st.step.startswith("add_wl_"):
+            if st.step.startswith(("tw_", "add_bl_", "add_wl_", "edit_bl_", "edit_wl_")):
                 st.step = ""
             st.buffer.pop("tw_direction", None)
             st.buffer.pop("tw_mode", None)
@@ -7936,6 +7976,133 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             await cq.answer(self._t("ui_whitelist_cleared_alert"))
             text, kbd = self._render_whitelist_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
+
+        # --- v30: per-entry management (Edit / Delete / Enable-Disable) ---- #
+        # The menus above list every stored entry; these callbacks make the
+        # per-entry buttons act. All of them re-check ownership, all of them
+        # load the rule fresh from the store (never the menu's cached copy),
+        # and a delete or toggle persists immediately — the same stored list
+        # the dashboard and mobile read.
+        @b.on_callback_query(filters.regex(r"^rfl_bl_tgl:(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_blacklist_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            # Flip the engine's own flag. The words are untouched, so the
+            # list is parked, not cleared.
+            rule.blacklist_off = not bool(getattr(rule, "blacklist_off", False))
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(self._t("ui_bl_toggled_alert", state=self._t("ui_bl_state_off" if rule.blacklist_off else "ui_bl_state_on")))
+            text, kbd = self._render_blacklist_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rfl_wl_tgl:(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_whitelist_toggle(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            rule.whitelist_off = not bool(getattr(rule, "whitelist_off", False))
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(self._t("ui_wl_toggled_alert", state=self._t("ui_wl_state_off" if rule.whitelist_off else "ui_wl_state_on")))
+            text, kbd = self._render_whitelist_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rfl_bl_del:(.+):(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_blacklist_delete_entry(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            parts = raw.split(":", 2)
+            if len(parts) < 3:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            rule_id, entry = parts[1], parts[2]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            bl = [w for w in (rule.blacklist or []) if w != entry]
+            rx = [p for p in (rule.regex_block or []) if p != entry]
+            # Only persist when something actually moved: a double tap on a
+            # one-entry list must not write an identical row, and a stale
+            # callback for an entry deleted on another device is a no-op.
+            if len(bl) != len(rule.blacklist or []) or len(rx) != len(rule.regex_block or []):
+                rule.blacklist = bl
+                rule.regex_block = rx
+                await self._save_owned_rule(rule, uid)
+            await cq.answer(self._t("ui_bl_entry_deleted_alert", entry=entry[:40]))
+            text, kbd = self._render_blacklist_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rfl_wl_del:(.+):(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_whitelist_delete_entry(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            parts = raw.split(":", 2)
+            if len(parts) < 3:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            rule_id, entry = parts[1], parts[2]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            wl = [w for w in (rule.whitelist or []) if w != entry]
+            rx = [p for p in (rule.regex_require or []) if p != entry]
+            if len(wl) != len(rule.whitelist or []) or len(rx) != len(rule.regex_require or []):
+                rule.whitelist = wl
+                rule.regex_require = rx
+                await self._save_owned_rule(rule, uid)
+            await cq.answer(self._t("ui_wl_entry_deleted_alert", entry=entry[:40]))
+            text, kbd = self._render_whitelist_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rfl_bl_edit:(.+):(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_blacklist_edit_entry(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            parts = raw.split(":", 2)
+            if len(parts) < 3:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            rule_id, entry = parts[1], parts[2]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            st.step = f"edit_bl_{rule.id}"
+            st.buffer["edit_entry"] = entry
+            await self._persist(uid, st)
+            prompt = self._t("ui_prompt_edit_entry", entry=entry[:80])
+            kbd = self._kbd([[(self._t("ui_cancel_back"), f"rfl_bl:{rule.id}")]])
+            await self._safe_edit(cq, prompt, reply_markup=kbd)
+            await cq.answer()
+
+        @b.on_callback_query(filters.regex(r"^rfl_wl_edit:(.+):(.+)$"))
+        @self._localized_handler
+        async def _cb_rule_whitelist_edit_entry(_, cq: CallbackQuery):
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            parts = raw.split(":", 2)
+            if len(parts) < 3:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            rule_id, entry = parts[1], parts[2]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            st = self._state(uid)
+            st.step = f"edit_wl_{rule.id}"
+            st.buffer["edit_entry"] = entry
+            await self._persist(uid, st)
+            prompt = self._t("ui_prompt_edit_entry", entry=entry[:80])
+            kbd = self._kbd([[(self._t("ui_cancel_back"), f"rfl_wl:{rule.id}")]])
+            await self._safe_edit(cq, prompt, reply_markup=kbd)
+            await cq.answer()
 
         # --- Three-Way Filter Handlers (Keyword / Regex / Long-Text) ---
         # The menus above offer one action per user-facing option; these six
@@ -10469,6 +10636,60 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         card_text, kbd = self._render_whitelist_menu(rule)
         await message.reply_text(self._t("ui_step_whitelist_saved", count=len(new_words)), reply_markup=kbd)
 
+    # -- v30: per-entry edit steps ---------------------------------------- #
+    # Replacing one entry reuses the same ownership and persistence path as
+    # adding one: the rule is re-loaded, the old value is swapped for the new
+    # wherever it lives (word list or regex list), and the change is saved
+    # before the menu is re-rendered — so the menu the owner sees next is the
+    # list the server now stores.
+    async def _step_edit_bl(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
+        uid = message.from_user.id if message.from_user else 0
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
+        old = st.buffer.pop("edit_entry", "")
+        new_words = [w for w in split_word_list(text) if w]
+        if not new_words:
+            st.step = ""
+            await self._persist(uid, st)
+            card_text, kbd = self._render_blacklist_menu(rule)
+            return await message.reply_text(self._t("ui_step_blacklist_empty"), reply_markup=kbd)
+        bl = [new_words[0] if w == old else w for w in (rule.blacklist or [])]
+        rx = [new_words[0] if p == old else p for p in (rule.regex_block or [])]
+        rule.blacklist = bl
+        rule.regex_block = rx
+        await self._save_owned_rule(rule, uid)
+        st.step = ""
+        await self._persist(uid, st)
+        card_text, kbd = self._render_blacklist_menu(rule)
+        await message.reply_text(self._t("ui_step_blacklist_saved", count=1), reply_markup=kbd)
+
+    async def _step_edit_wl(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
+        uid = message.from_user.id if message.from_user else 0
+        rule = await self._owned_rule(rule_id, uid)
+        if not rule:
+            st.step = ""
+            await self._persist(uid, st)
+            return await message.reply_text(self._t("ui_rule_not_found"), reply_markup=self._main_menu())
+        old = st.buffer.pop("edit_entry", "")
+        new_words = [w for w in split_word_list(text) if w]
+        if not new_words:
+            st.step = ""
+            await self._persist(uid, st)
+            card_text, kbd = self._render_whitelist_menu(rule)
+            return await message.reply_text(self._t("ui_step_whitelist_empty"), reply_markup=kbd)
+        wl = [new_words[0] if w == old else w for w in (rule.whitelist or [])]
+        rx = [new_words[0] if p == old else p for p in (rule.regex_require or [])]
+        rule.whitelist = wl
+        rule.regex_require = rx
+        await self._save_owned_rule(rule, uid)
+        st.step = ""
+        await self._persist(uid, st)
+        card_text, kbd = self._render_whitelist_menu(rule)
+        await message.reply_text(self._t("ui_step_whitelist_saved", count=1), reply_markup=kbd)
+
     async def _step_set_wm(self, message: Message, st: "UiState", text: str, rule_id: str) -> None:
         uid = message.from_user.id if message.from_user else 0
         rule = await self._owned_rule(rule_id, uid)
@@ -11047,6 +11268,14 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         if st.step.startswith("add_wl_"):
             rule_id = st.step.split("add_wl_", 1)[1]
             return await self._step_add_wl(message, st, text, rule_id)
+        # v30: per-entry replacement steps started from the blacklist /
+        # whitelist menus' per-entry Edit buttons.
+        if st.step.startswith("edit_bl_"):
+            rule_id = st.step.split("edit_bl_", 1)[1]
+            return await self._step_edit_bl(message, st, text, rule_id)
+        if st.step.startswith("edit_wl_"):
+            rule_id = st.step.split("edit_wl_", 1)[1]
+            return await self._step_edit_wl(message, st, text, rule_id)
         if st.step.startswith("set_wm_"):
             rule_id = st.step.split("set_wm_", 1)[1]
             return await self._step_set_wm(message, st, text, rule_id)

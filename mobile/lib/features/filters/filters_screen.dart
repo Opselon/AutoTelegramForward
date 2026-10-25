@@ -76,6 +76,271 @@ class _FiltersScreenState extends State<FiltersScreen> {
     }
   }
 
+  /// v30: per-entry management. Every action round-trips through the API and
+  /// then re-reads the stored list, so the screen can never show state the
+  /// server does not have.
+  Future<void> _toggle(FilterRule filter) async {
+    final client = context.read<AppState>().buildApiClient();
+    try {
+      await client.toggleFilter(filter.id);
+      await _load();
+    } on ApiException catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(exc.error.message)));
+    } catch (exc) {
+      if (!mounted) return;
+      final t = AppMessages.of(context);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(t.get('state_error'))));
+    }
+  }
+
+  /// Details for one stored entry: kind, value, owning list, list state.
+  Future<void> _entryDetails(
+    FilterRule filter,
+    String value,
+    bool isRegex,
+    bool isBlacklist,
+  ) async {
+    final t = AppMessages.of(context);
+    final listLabel = isBlacklist
+        ? t.get('filters_entry_list_blacklist')
+        : t.get('filters_entry_list_whitelist');
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t.get('filters_details_title')),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${t.get('filters_entry_kind_word')}: '
+              '${isRegex ? t.get('filters_entry_kind_regex') : t.get('filters_entry_kind_word')}',
+            ),
+            const SizedBox(height: 4),
+            Text('${t.get('filters_entry_kind_regex')}: $value'),
+            const SizedBox(height: 4),
+            Text('${t.get('filters_entry_list_blacklist')}: $listLabel'),
+            const SizedBox(height: 4),
+            Text(
+              filter.isEnabled
+                  ? t.get('filters_enabled_label')
+                  : t.get('filters_disabled_label'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(t.get('action_cancel')),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Edit one entry in place. The value is swapped wherever it lives (word
+  /// list or regex list, blacklist side or whitelist side), the change is
+  /// saved through the API, and the list is re-read.
+  Future<void> _editEntry(
+    FilterRule filter,
+    String old,
+    bool isRegex,
+    bool isBlacklist,
+  ) async {
+    final t = AppMessages.of(context);
+    final ctrl = TextEditingController(text: old);
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t.get('filters_entry_edit')),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: isRegex
+                ? t.get('filters_entry_kind_regex')
+                : t.get('filters_entry_kind_word'),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(t.get('action_cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(t.get('action_save')),
+          ),
+        ],
+      ),
+    );
+    if (saved != true || !mounted) return;
+    final next = ctrl.text.trim();
+    if (next.isEmpty || next == old) return;
+
+    final client = context.read<AppState>().buildApiClient();
+    List<String> swap(List<String> list) =>
+        list.map((e) => e == old ? next : e).toList();
+    try {
+      final updated = filter.copyWith(
+        blacklistKeywords: isBlacklist && !isRegex
+            ? swap(filter.blacklistKeywords)
+            : filter.blacklistKeywords,
+        regexBlock: isBlacklist && isRegex
+            ? swap(filter.regexBlock)
+            : filter.regexBlock,
+        whitelistKeywords: !isBlacklist && !isRegex
+            ? swap(filter.whitelistKeywords)
+            : filter.whitelistKeywords,
+        regexRequire: !isBlacklist && isRegex
+            ? swap(filter.regexRequire)
+            : filter.regexRequire,
+      );
+      await client.updateFilter(filter.id, updated);
+      await _load();
+    } on ApiException catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(exc.error.message)));
+    } catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(t.get('state_error'))));
+    }
+  }
+
+  /// Add one entry to a list. Duplicates are rejected with a catalog message
+  /// instead of silently creating a second copy.
+  Future<void> _addEntry(
+    FilterRule filter,
+    bool isRegex,
+    bool isBlacklist,
+  ) async {
+    final t = AppMessages.of(context);
+    final ctrl = TextEditingController();
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t.get('filters_entry_add')),
+        content: TextField(
+          controller: ctrl,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: isRegex
+                ? t.get('filters_entry_kind_regex')
+                : t.get('filters_entry_kind_word'),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(t.get('action_cancel')),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(t.get('action_save')),
+          ),
+        ],
+      ),
+    );
+    if (saved != true || !mounted) return;
+    final next = ctrl.text.trim();
+    if (next.isEmpty) return;
+
+    final existing = <String>{
+      ...filter.blacklistKeywords,
+      ...filter.whitelistKeywords,
+      ...filter.regexBlock,
+      ...filter.regexRequire,
+    };
+    if (existing.contains(next)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(t.get('filters_entry_duplicate'))));
+      return;
+    }
+
+    final client = context.read<AppState>().buildApiClient();
+    try {
+      FilterRule updated;
+      if (isBlacklist) {
+        updated = filter.copyWith(
+          blacklistKeywords: isRegex
+              ? filter.blacklistKeywords
+              : [...filter.blacklistKeywords, next],
+          regexBlock: isRegex
+              ? [...filter.regexBlock, next]
+              : filter.regexBlock,
+        );
+      } else {
+        updated = filter.copyWith(
+          whitelistKeywords: isRegex
+              ? filter.whitelistKeywords
+              : [...filter.whitelistKeywords, next],
+          regexRequire: isRegex
+              ? [...filter.regexRequire, next]
+              : filter.regexRequire,
+        );
+      }
+      await client.updateFilter(filter.id, updated);
+      await _load();
+    } on ApiException catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(exc.error.message)));
+    } catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(t.get('state_error'))));
+    }
+  }
+
+  /// Delete one entry from whichever list holds it.
+  Future<void> _deleteEntry(
+    FilterRule filter,
+    String value,
+    bool isRegex,
+    bool isBlacklist,
+  ) async {
+    final client = context.read<AppState>().buildApiClient();
+    final t = AppMessages.of(context);
+    try {
+      FilterRule updated;
+      if (isBlacklist) {
+        updated = filter.copyWith(
+          blacklistKeywords: isRegex
+              ? filter.blacklistKeywords
+              : filter.blacklistKeywords.where((e) => e != value).toList(),
+          regexBlock: isRegex
+              ? filter.regexBlock.where((e) => e != value).toList()
+              : filter.regexBlock,
+        );
+      } else {
+        updated = filter.copyWith(
+          whitelistKeywords: isRegex
+              ? filter.whitelistKeywords
+              : filter.whitelistKeywords.where((e) => e != value).toList(),
+          regexRequire: isRegex
+              ? filter.regexRequire.where((e) => e != value).toList()
+              : filter.regexRequire,
+        );
+      }
+      await client.updateFilter(filter.id, updated);
+      await _load();
+    } on ApiException catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(exc.error.message)));
+    } catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(t.get('state_error'))));
+    }
+  }
+
   Future<void> _addOrEdit([FilterRule? existing]) async {
     // One field per list, matching what the engine stores. The field holds the
     // entries comma/newline separated, so a paste of "spam, scam" or one entry
@@ -268,15 +533,16 @@ class _FiltersScreenState extends State<FiltersScreen> {
                       itemBuilder: (context, index) {
                         final f = _filters[index];
                         return Card(
-                          child: ListTile(
+                          child: ExpansionTile(
                             title: Text(
                               f.name.isNotEmpty
                                   ? f.name
                                   : (f.keywordEntries.isNotEmpty
                                         ? f.keywordEntries.join(', ')
                                         : t.get('filters_empty')),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.bold,
+                                color: f.isEnabled ? null : Colors.grey,
                               ),
                             ),
                             subtitle: Text(
@@ -285,10 +551,18 @@ class _FiltersScreenState extends State<FiltersScreen> {
                                 params: {'kind': _kindLabel(t, f)},
                               ),
                             ),
-                            onTap: () => _addOrEdit(f),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                // v30: the enable/disable switch. The server
+                                // flips its own stored value, so the words
+                                // are never part of the round trip.
+                                Switch(
+                                  value: f.isEnabled,
+                                  onChanged: _loading
+                                      ? null
+                                      : (_) => _toggle(f),
+                                ),
                                 IconButton(
                                   tooltip: t.get('filters_test_run'),
                                   icon: Icon(
@@ -307,6 +581,202 @@ class _FiltersScreenState extends State<FiltersScreen> {
                                 ),
                               ],
                             ),
+                            // v30: the stored entries themselves, each with
+                            // Edit / Details / Delete. Lists are strictly
+                            // separate: a blacklist entry can never be moved
+                            // into the whitelist from here.
+                            initiallyExpanded: true,
+                            children: _allEntries(f).isEmpty
+                                ? const <Widget>[]
+                                : _allEntries(f).map<Widget>((entry) {
+                                        final isRegex = entry.isRegex;
+                                        final isBlacklist = entry.isBlacklist;
+                                        return ListTile(
+                                          dense: true,
+                                          title: Text(
+                                            entry.value,
+                                            style: TextStyle(
+                                              fontFamily: isRegex
+                                                  ? 'monospace'
+                                                  : null,
+                                              decoration: f.isEnabled
+                                                  ? TextDecoration.none
+                                                  : TextDecoration.lineThrough,
+                                            ),
+                                          ),
+                                          leading: Text(
+                                            isBlacklist
+                                                ? t.get(
+                                                    'filters_entry_list_blacklist',
+                                                  )
+                                                : t.get(
+                                                    'filters_entry_list_whitelist',
+                                                  ),
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                            ),
+                                          ),
+                                          trailing: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              IconButton(
+                                                tooltip: t.get(
+                                                  'filters_entry_edit',
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.edit_outlined,
+                                                  size: 20,
+                                                ),
+                                                onPressed: () => _editEntry(
+                                                  f,
+                                                  entry.value,
+                                                  isRegex,
+                                                  isBlacklist,
+                                                ),
+                                              ),
+                                              IconButton(
+                                                tooltip: t.get(
+                                                  'filters_details_title',
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.info_outline,
+                                                  size: 20,
+                                                ),
+                                                onPressed: () => _entryDetails(
+                                                  f,
+                                                  entry.value,
+                                                  isRegex,
+                                                  isBlacklist,
+                                                ),
+                                              ),
+                                              IconButton(
+                                                tooltip: t.get(
+                                                  'filters_entry_delete',
+                                                ),
+                                                icon: const Icon(
+                                                  Icons.delete_outline,
+                                                  size: 20,
+                                                ),
+                                                onPressed: () => _deleteEntry(
+                                                  f,
+                                                  entry.value,
+                                                  isRegex,
+                                                  isBlacklist,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }).toList() +
+                                      <Widget>[
+                                        const Divider(height: 1),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 4,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Text(
+                                                t.get(
+                                                  'filters_entry_list_blacklist',
+                                                ),
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              const Spacer(),
+                                              TextButton.icon(
+                                                icon: const Icon(
+                                                  Icons.add,
+                                                  size: 18,
+                                                ),
+                                                label: Text(
+                                                  t.get('filters_entry_add'),
+                                                ),
+                                                onPressed: _loading
+                                                    ? null
+                                                    : () => _addEntry(
+                                                        f,
+                                                        false,
+                                                        true,
+                                                      ),
+                                              ),
+                                              TextButton.icon(
+                                                icon: const Icon(
+                                                  Icons.add,
+                                                  size: 18,
+                                                ),
+                                                label: Text(
+                                                  t.get(
+                                                    'filters_entry_kind_regex',
+                                                  ),
+                                                ),
+                                                onPressed: _loading
+                                                    ? null
+                                                    : () => _addEntry(
+                                                        f,
+                                                        true,
+                                                        true,
+                                                      ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 4,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              Text(
+                                                t.get(
+                                                  'filters_entry_list_whitelist',
+                                                ),
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              const Spacer(),
+                                              TextButton.icon(
+                                                icon: const Icon(
+                                                  Icons.add,
+                                                  size: 18,
+                                                ),
+                                                label: Text(
+                                                  t.get('filters_entry_add'),
+                                                ),
+                                                onPressed: _loading
+                                                    ? null
+                                                    : () => _addEntry(
+                                                        f,
+                                                        false,
+                                                        false,
+                                                      ),
+                                              ),
+                                              TextButton.icon(
+                                                icon: const Icon(
+                                                  Icons.add,
+                                                  size: 18,
+                                                ),
+                                                label: Text(
+                                                  t.get(
+                                                    'filters_entry_kind_regex',
+                                                  ),
+                                                ),
+                                                onPressed: _loading
+                                                    ? null
+                                                    : () => _addEntry(
+                                                        f,
+                                                        true,
+                                                        false,
+                                                      ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
                           ),
                         );
                       },
@@ -317,6 +787,36 @@ class _FiltersScreenState extends State<FiltersScreen> {
       ),
     );
   }
+}
+
+/// Every stored entry of a filter, each tagged with the list that holds it.
+///
+/// `FilterRule.keywordEntries` returns only the first non-empty list, which
+/// would hide the whitelist when a blacklist also has entries. The management
+/// UI must show *all* entries of *both* lists, so build the union here and
+/// keep the (list, kind) tag with each value.
+class _EntryTag {
+  const _EntryTag(this.value, this.isRegex, this.isBlacklist);
+  final String value;
+  final bool isRegex;
+  final bool isBlacklist;
+}
+
+List<_EntryTag> _allEntries(FilterRule f) {
+  final out = <_EntryTag>[];
+  for (final v in f.blacklistKeywords) {
+    out.add(_EntryTag(v, false, true));
+  }
+  for (final v in f.regexBlock) {
+    out.add(_EntryTag(v, true, true));
+  }
+  for (final v in f.whitelistKeywords) {
+    out.add(_EntryTag(v, false, false));
+  }
+  for (final v in f.regexRequire) {
+    out.add(_EntryTag(v, true, false));
+  }
+  return out;
 }
 
 /// The filter kind as the catalog names it.

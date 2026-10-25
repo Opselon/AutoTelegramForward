@@ -922,6 +922,21 @@ class AppMessagesZh {
     'filters_test_sample_hint': '粘贴一条示例消息。不会保存任何内容，也不会转发任何内容 — 这只是测试。',
     'filters_test_title': '测试此过滤器',
     'filters_three_options_title': '选择此列表的匹配方式',
+    // ---- system surface (appended) ----
+    'filters_entry_add': '添加条目',
+    'filters_entry_edit': '编辑条目',
+    'filters_entry_delete': '删除条目',
+    'filters_entry_duplicate': '此条目已存在。',
+    'filters_entry_kind_word': '关键词',
+    'filters_entry_kind_regex': '正则表达式',
+    'filters_entry_list_blacklist': '黑名单',
+    'filters_entry_list_whitelist': '白名单',
+    'filters_details_title': '条目详情',
+    'filters_enable': '启用',
+    'filters_disable': '停用',
+    'filters_enabled_label': '已启用',
+    'filters_disabled_label': '已停用',
+    'filters_state_on_hint': '停用列表而不删除其词语；重新启用即可恢复。',
   };
 
   /// Every key this catalog defines. Exposed so the parity test can compare

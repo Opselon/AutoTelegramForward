@@ -116,6 +116,10 @@ DYNAMIC_STEP_PREFIXES = (
     # Three-way filter text steps: the pending regex pattern, the Long-Text
     # entry list, or the sample message for a read-only rule test.
     "tw_regex_", "tw_longtext_", "tw_test_",
+    # v30: per-entry edit of one stored blacklist/whitelist entry. Same shape
+    # as add_bl_/add_wl_ (the rule id is the scope), and the same ownership
+    # re-check happens in the handler before anything is written.
+    "edit_bl_", "edit_wl_",
 )
 
 STEP_FALLBACK = ""
