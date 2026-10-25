@@ -3383,6 +3383,41 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             return keys[idx]
         return None
 
+    @staticmethod
+    def _resolve_filter_entry(rule, scope: str, idx: int, version_token: str) -> Optional[str]:
+        """The blacklist/whitelist entry a per-row click refers to, or ``None``.
+
+        The filter menus list stored keywords and regexes one row per entry.
+        The entry itself cannot go into the callback data — a regex like
+        ``\\bWhale\\s+Update\\b`` is long enough that Telegram rejects the whole
+        ``edit_message_text`` with ``BUTTON_DATA_INVALID`` and the panel is
+        left on a dead screen, which is exactly the frozen Add Regex flow
+        users hit. So the row is addressed by its position in the render, and
+        the click carries ``rule.version`` (bumped by every write) as the
+        staleness guard: a list that changed while the menu was open refuses
+        the click instead of acting on whatever slid into that slot.
+
+        ``scope`` is ``"bl"`` for the blacklist or ``"wl"`` for the whitelist;
+        the two lists are always kept separate and a row index is only ever
+        resolved against its own category.
+        """
+        try:
+            idx = int(idx)
+            wanted = int(str(version_token))
+        except (TypeError, ValueError):
+            return None
+        if wanted != int(getattr(rule, "version", 1) or 1):
+            return None
+        if scope == "bl":
+            entries = list(getattr(rule, "blacklist", None) or []) + \
+                list(getattr(rule, "regex_block", None) or [])
+        else:
+            entries = list(getattr(rule, "whitelist", None) or []) + \
+                list(getattr(rule, "regex_require", None) or [])
+        if 0 <= idx < len(entries):
+            return entries[idx]
+        return None
+
     def _render_replace_menu(self, rule: ForwardRule) -> Tuple[str, InlineKeyboardMarkup]:
         lang = self._lang_for(rule)
         """Render text replacement configuration menu.
@@ -3772,6 +3807,11 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             rx_lines = "\n".join([f"• regex: `{p}`" for p in rx[:10]])
             if len(rx) > 10:
                 rx_lines += f"\n... +{len(rx) - 10}"
+            # A regex-only list is not empty: the rules above say "no keywords"
+            # while the regexes are actively filtering. Say so instead of
+            # contradicting the active regex block two lines down.
+            if not bl:
+                items_str = self._t("ui_bl_only_regex", lang=lang)
             items_str = f"{items_str}\n\nRegex (block):\n{rx_lines}"
 
         total_count = len(bl) + len(rx)
@@ -3798,15 +3838,26 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         # v30: one button per stored entry — Edit, Delete, and the per-list
         # enable/disable switch — so the bot offers the same management
         # actions the dashboard and mobile do, on the same stored list.
+        # The entry itself is *never* embedded in the callback data: a pattern
+        # is user-supplied and routinely longer than the 64 bytes Telegram
+        # allows, which rejects the whole message (BUTTON_DATA_INVALID) and
+        # leaves the panel on a dead screen. Entries are addressed by the
+        # position they hold in this render, guarded by ``rule.version`` —
+        # bumped by every write — so a click aimed at a list that changed
+        # while the menu was open is refused instead of acting on whatever
+        # slid into that slot.
+        version = int(getattr(rule, "version", 1) or 1)
         for w in bl[:12]:
+            idx = bl.index(w)
             rows.append([
-                (self._t("ui_bl_btn_edit_entry", lang=lang, entry=w[:24]), f"rfl_bl_edit:{rule.id}:{w}"),
-                (self._t("ui_bl_btn_delete_entry", lang=lang), f"rfl_bl_del:{rule.id}:{w}"),
+                (self._t("ui_bl_btn_edit_entry", lang=lang, entry=w[:24]), f"rfl_bl_edit:{rule.id}:{idx}:{version}"),
+                (self._t("ui_bl_btn_delete_entry", lang=lang), f"rfl_bl_del:{rule.id}:{idx}:{version}"),
             ])
         for p in rx[:6]:
+            idx = len(bl) + rx.index(p)
             rows.append([
-                (self._t("ui_bl_btn_edit_regex", lang=lang, entry=p[:20]), f"rfl_bl_edit:{rule.id}:{p}"),
-                (self._t("ui_bl_btn_delete_entry", lang=lang), f"rfl_bl_del:{rule.id}:{p}"),
+                (self._t("ui_bl_btn_edit_regex", lang=lang, entry=p[:20]), f"rfl_bl_edit:{rule.id}:{idx}:{version}"),
+                (self._t("ui_bl_btn_delete_entry", lang=lang), f"rfl_bl_del:{rule.id}:{idx}:{version}"),
             ])
         rows.append([
             (
@@ -3842,6 +3893,11 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             rx_lines = "\n".join([f"• regex: `{p}`" for p in rx[:10]])
             if len(rx) > 10:
                 rx_lines += f"\n... +{len(rx) - 10}"
+            # A regex-only whitelist is not "all messages allowed": the regexes
+            # below are the active constraint, so the empty-keywords line must
+            # not claim the list is open. Say what is actually enforced.
+            if not wl:
+                items_str = self._t("ui_wl_only_regex", lang=lang)
             items_str = f"{items_str}\n\nRegex (require):\n{rx_lines}"
 
         total_count = len(wl) + len(rx)
@@ -3866,15 +3922,21 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             ],
         ]
         # v30: per-entry Edit / Delete on the whitelist, mirroring blacklist.
+        # As on the blacklist, the entry is addressed by render position plus
+        # ``rule.version`` — never by its raw value, which Telegram's 64-byte
+        # callback-data ceiling would reject along with the whole message.
+        version = int(getattr(rule, "version", 1) or 1)
         for w in wl[:12]:
+            idx = wl.index(w)
             rows.append([
-                (self._t("ui_wl_btn_edit_entry", lang=lang, entry=w[:24]), f"rfl_wl_edit:{rule.id}:{w}"),
-                (self._t("ui_wl_btn_delete_entry", lang=lang), f"rfl_wl_del:{rule.id}:{w}"),
+                (self._t("ui_wl_btn_edit_entry", lang=lang, entry=w[:24]), f"rfl_wl_edit:{rule.id}:{idx}:{version}"),
+                (self._t("ui_wl_btn_delete_entry", lang=lang), f"rfl_wl_del:{rule.id}:{idx}:{version}"),
             ])
         for p in rx[:6]:
+            idx = len(wl) + rx.index(p)
             rows.append([
-                (self._t("ui_wl_btn_edit_regex", lang=lang, entry=p[:20]), f"rfl_wl_edit:{rule.id}:{p}"),
-                (self._t("ui_wl_btn_delete_entry", lang=lang), f"rfl_wl_del:{rule.id}:{p}"),
+                (self._t("ui_wl_btn_edit_regex", lang=lang, entry=p[:20]), f"rfl_wl_edit:{rule.id}:{idx}:{version}"),
+                (self._t("ui_wl_btn_delete_entry", lang=lang), f"rfl_wl_del:{rule.id}:{idx}:{version}"),
             ])
         rows.append([
             (
@@ -8015,18 +8077,29 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             text, kbd = self._render_whitelist_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
-        @b.on_callback_query(filters.regex(r"^rfl_bl_del:(.+):(.+)$"))
+        @b.on_callback_query(filters.regex(r"^rfl_bl_del:(.+):(\d+):(\d+)$"))
         @self._localized_handler
         async def _cb_rule_blacklist_delete_entry(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
-            parts = raw.split(":", 2)
-            if len(parts) < 3:
+            parts = raw.split(":")
+            if len(parts) < 4:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
-            rule_id, entry = parts[1], parts[2]
+            rule_id, idx, version_token = parts[1], parts[2], parts[3]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            # The row is addressed by render position plus the rule version the
+            # menu was rendered from. A stale click (list changed on another
+            # device, or an id transplanted into this conversation) resolves to
+            # nothing and simply re-renders — it must never delete whatever
+            # slid into that slot.
+            entry = self._resolve_filter_entry(rule, "bl", idx, version_token)
+            if entry is None:
+                await cq.answer(self._t("ui_stale_entry", lang=self._lang_for(rule)), show_alert=True)
+                text, kbd = self._render_blacklist_menu(rule)
+                await self._safe_edit(cq, text, reply_markup=kbd)
+                return
             bl = [w for w in (rule.blacklist or []) if w != entry]
             rx = [p for p in (rule.regex_block or []) if p != entry]
             # Only persist when something actually moved: a double tap on a
@@ -8040,18 +8113,27 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             text, kbd = self._render_blacklist_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
-        @b.on_callback_query(filters.regex(r"^rfl_wl_del:(.+):(.+)$"))
+        @b.on_callback_query(filters.regex(r"^rfl_wl_del:(.+):(\d+):(\d+)$"))
         @self._localized_handler
         async def _cb_rule_whitelist_delete_entry(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
-            parts = raw.split(":", 2)
-            if len(parts) < 3:
+            parts = raw.split(":")
+            if len(parts) < 4:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
-            rule_id, entry = parts[1], parts[2]
+            rule_id, idx, version_token = parts[1], parts[2], parts[3]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            # Addressed by render position plus the version the menu was
+            # rendered from — see _resolve_filter_entry. A stale click re-
+            # renders instead of deleting the wrong entry.
+            entry = self._resolve_filter_entry(rule, "wl", idx, version_token)
+            if entry is None:
+                await cq.answer(self._t("ui_stale_entry", lang=self._lang_for(rule)), show_alert=True)
+                text, kbd = self._render_whitelist_menu(rule)
+                await self._safe_edit(cq, text, reply_markup=kbd)
+                return
             wl = [w for w in (rule.whitelist or []) if w != entry]
             rx = [p for p in (rule.regex_require or []) if p != entry]
             if len(wl) != len(rule.whitelist or []) or len(rx) != len(rule.regex_require or []):
@@ -8062,18 +8144,24 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             text, kbd = self._render_whitelist_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
-        @b.on_callback_query(filters.regex(r"^rfl_bl_edit:(.+):(.+)$"))
+        @b.on_callback_query(filters.regex(r"^rfl_bl_edit:(.+):(\d+):(\d+)$"))
         @self._localized_handler
         async def _cb_rule_blacklist_edit_entry(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
-            parts = raw.split(":", 2)
-            if len(parts) < 3:
+            parts = raw.split(":")
+            if len(parts) < 4:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
-            rule_id, entry = parts[1], parts[2]
+            rule_id, idx, version_token = parts[1], parts[2], parts[3]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            entry = self._resolve_filter_entry(rule, "bl", idx, version_token)
+            if entry is None:
+                await cq.answer(self._t("ui_stale_entry", lang=self._lang_for(rule)), show_alert=True)
+                text, kbd = self._render_blacklist_menu(rule)
+                await self._safe_edit(cq, text, reply_markup=kbd)
+                return
             st = self._state(uid)
             st.step = f"edit_bl_{rule.id}"
             st.buffer["edit_entry"] = entry
@@ -8083,18 +8171,24 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             await self._safe_edit(cq, prompt, reply_markup=kbd)
             await cq.answer()
 
-        @b.on_callback_query(filters.regex(r"^rfl_wl_edit:(.+):(.+)$"))
+        @b.on_callback_query(filters.regex(r"^rfl_wl_edit:(.+):(\d+):(\d+)$"))
         @self._localized_handler
         async def _cb_rule_whitelist_edit_entry(_, cq: CallbackQuery):
             uid = cq.from_user.id if cq.from_user else 0
             raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
-            parts = raw.split(":", 2)
-            if len(parts) < 3:
+            parts = raw.split(":")
+            if len(parts) < 4:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
-            rule_id, entry = parts[1], parts[2]
+            rule_id, idx, version_token = parts[1], parts[2], parts[3]
             rule = await self._owned_rule(rule_id, uid)
             if not rule:
                 return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            entry = self._resolve_filter_entry(rule, "wl", idx, version_token)
+            if entry is None:
+                await cq.answer(self._t("ui_stale_entry", lang=self._lang_for(rule)), show_alert=True)
+                text, kbd = self._render_whitelist_menu(rule)
+                await self._safe_edit(cq, text, reply_markup=kbd)
+                return
             st = self._state(uid)
             st.step = f"edit_wl_{rule.id}"
             st.buffer["edit_entry"] = entry
