@@ -90,20 +90,21 @@ class FilterEngine:
 
         if filter_rule.regex_patterns:
             any_valid = False
+            # Check if this legacy FilterRule behaves as blacklist or whitelist:
+            # If blacklist_keywords is present and whitelist_keywords is empty, regex_patterns
+            # represents blocking patterns. Otherwise it represents requirements.
+            is_blocking_regex = bool(filter_rule.blacklist_keywords and not filter_rule.whitelist_keywords)
             for pattern in filter_rule.regex_patterns:
-                # The same guarded compiler the content policy uses: a pattern
-                # that is malformed, oversized or carries a nested quantifier is
-                # refused instead of executed (one crafted message could
-                # otherwise occupy a worker for minutes), and a refused pattern
-                # never turns into a drop.
                 compiled = compile_user_regex(pattern)
                 if compiled is None:
                     continue
                 any_valid = True
                 if compiled.search(text):
+                    if is_blocking_regex:
+                        return EvaluationResult(FilterAction.DROP, f"regex_block:{pattern[:48]}")
                     break
             else:
-                if any_valid:
+                if any_valid and not is_blocking_regex:
                     return EvaluationResult(FilterAction.DROP, "regex_mismatch")
 
         return EvaluationResult(FilterAction.ALLOW, "filter_passed")

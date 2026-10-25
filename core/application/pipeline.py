@@ -771,6 +771,12 @@ class DurableMessagePipeline:
                 ctx.record_stage(PipelineStage.FILTER, False, reason=decision.reason)
                 self.metrics.filtered_total += 1
                 logger.info(
+                    "[PIPELINE:CONTENT_POLICY] [%s] task=%s tenant=%s msg=%s source=%s outcome=DROP reason=%s rules=%d",
+                    ctx.correlation_id[:8], rule.id[:8], getattr(rule, "owner_user_id", 0) or 0,
+                    payload.message_id, policy.source or "task", decision.reason,
+                    len(policy.blacklist_words) + len(policy.whitelist_words) + len(policy.regex_block) + len(policy.regex_require),
+                )
+                logger.info(
                     "[PIPELINE:POLICY] [%s] Rule %s dropped msg %s at %s: %s",
                     ctx.correlation_id[:8], rule.id[:8], payload.message_id,
                     policy.source or "task", decision.reason,
@@ -782,6 +788,11 @@ class DurableMessagePipeline:
                 return
         active_policies = [p for p in policy_chain if p.has_rules]
         if active_policies:
+            logger.info(
+                "[PIPELINE:CONTENT_POLICY] [%s] task=%s tenant=%s msg=%s outcome=PASS active_policies=%d",
+                ctx.correlation_id[:8], rule.id[:8], getattr(rule, "owner_user_id", 0) or 0,
+                payload.message_id, len(active_policies),
+            )
             logger.info(
                 "[PIPELINE:POLICY] [%s] Rule %s msg %s passed %d content polic(ies): %s",
                 ctx.correlation_id[:8], rule.id[:8], payload.message_id,

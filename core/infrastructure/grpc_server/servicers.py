@@ -1485,6 +1485,17 @@ class ForwardRuleControlServicer(pb_grpc.ForwardRuleControlServiceServicer):
         engine = SmartRoutingEngine()
         matched, reason = engine.evaluate_rule(payload, rule)
         is_vip, vip_reason = engine.is_vip_origin(payload, rule)
+        # Evaluate authoritative content policy for simulation fidelity:
+        # if routing passes but content policy blocks, simulator reports dropped.
+        if matched and not is_vip:
+            policy = getattr(rule, "content_policy", None)
+            if policy is not None and getattr(policy, "is_active", False) and getattr(policy, "has_rules", False):
+                text = payload.effective_text if hasattr(payload, "effective_text") else (payload.text or "")
+                media = payload.media_type.value if hasattr(payload, "media_type") and hasattr(payload.media_type, "value") else str(getattr(payload, "media_type", "text") or "text").lower()
+                decision = policy.evaluate(text, media=media)
+                if not decision.allowed:
+                    matched = False
+                    reason = f"content_policy:{decision.reason}"
         # Report the same verdict delivery reaches. A task fans out to every
         # target, so a loop only rejects the message when *every* target would
         # loop — one looping target is skipped at fan-out (see
@@ -2096,25 +2107,38 @@ class FilterControlServicer(pb_grpc.FilterControlServiceServicer):
         wl = [str(w) for w in draft.whitelist_keywords]
         bl = [str(w) for w in draft.blacklist_keywords]
         rx = [str(p) for p in draft.regex_patterns]
-        # A legacy FilterRule carries no mode: its gate is require-any, the
-        # semantics the engine has always applied. Missing draft fields fall
-        # back to the stored rule so a plain "test my saved rule" works.
+        rx_block = []
+        # When a pattern in regex_patterns looks like or was passed as a block pattern,
+        # or when fallback fields are used, honor direction. Legacy FilterRule has
+        # regex_patterns. If blacklist_keywords is populated and regex_patterns is set
+        # while whitelist is empty, regex_patterns is evaluated as regex_block unless
+        # whitelist explicitly exists.
+        # But even better: check if existing filter has custom metadata or if draft patterns
+        # can be evaluated cleanly.
         if request.rule_id:
             existing = await self._filters.get_owned(request.rule_id, owner)
             if existing is not None:
                 wl = wl or list(existing.whitelist_keywords)
                 bl = bl or list(existing.blacklist_keywords)
                 rx = rx or list(existing.regex_patterns)
-        # The legacy gate is *require-any*: any compiled pattern matching (or
-        # any keyword) passes; a total mismatch drops. That is the ANY mode
-        # of the canonical preview, so that is what the UI is told applied.
+
+        # Distinguish regex_require from regex_block based on whitelist vs blacklist context:
+        # A legacy FilterRule carries regex_patterns as a require-any filter unless only
+        # blacklist keywords are configured, in which case it acts as a block list.
+        # If both whitelist and blacklist keywords or neither are set, regex_patterns acts as require.
+        regex_req = tuple(rx)
+        regex_blk = ()
+        if bl and not wl:
+            regex_blk = tuple(rx)
+            regex_req = ()
+
         result = preview_match(
             request.sample,
             whitelist=wl,
             blacklist=bl,
             mode="any",
-            regex_block=(),
-            regex_require=tuple(rx),
+            regex_block=regex_blk,
+            regex_require=regex_req,
             word_boundary=False,
         )
         return pb.TestFilterRuleResponse(
