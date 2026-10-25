@@ -32,6 +32,48 @@ def _new_id() -> str:
     return str(uuid.uuid4())
 
 
+# The double-escape corruption seen in production: a pattern the user typed as
+# ``\bWhale\s+Update\b`` reached the database as the *literal* text
+# ``\\bWhale\\s+Update\\b`` (two real backslashes), so the engine compiled a
+# pattern that matches a literal backslash-b and the rule never fired. The
+# write side now stores the pattern verbatim; this heals rows already saved.
+#
+# A healed pattern must mean exactly what the user typed, so the doubled form
+# is only unfolded when *every* backslash in the stored text is doubled and
+# the unfolded result is still a valid regex — never a bare ``\`` that a user
+# genuinely meant as a literal.
+_SINGLE_BACKSLASH = re.compile(r"(?<!\\)\\(?!\\)")
+
+
+def _heal_regex(pattern: Any) -> str:
+    """Return the pattern as the user typed it.
+
+    Stored regexes are read verbatim (``str(x)``) everywhere else; only the
+    double-escaped form produced by the old write path is unfolded, and only
+    when the unfolded result is a valid regex the engine accepts. Anything
+    else — a pattern already correct, or an exotic literal the user truly
+    wanted — is passed through untouched.
+    """
+    text = str(pattern)
+    if "\\" not in text:
+        return text
+    # A lone (non-doubled) backslash means the text is already an ordinary
+    # regex — or a literal the user typed on purpose. Leave it alone.
+    if _SINGLE_BACKSLASH.search(text):
+        return text
+    try:
+        healed = text.replace("\\\\", "\\")
+    except Exception:
+        return text
+    if healed == text:
+        return text
+    try:
+        re.compile(healed)
+    except re.error:
+        return text
+    return healed
+
+
 def _chat_key(chat_id: Any) -> str:
     """Normalise a chat id so every spelling of it compares equal.
 
@@ -1063,6 +1105,15 @@ class ForwardRule:
         configured via Web UI or external APIs without explicit nesting enforce
         their rules identically, without allowing an empty dictionary to hide
         active flat rules.
+
+        Regex patterns are read through :func:`_heal_regex`: an older write
+        path stored the user's pattern with its backslashes doubled (``\\b``
+        reached the database as a literal two-backslash sequence), which
+        compiles into a pattern matching the literal text instead of the word
+        boundary the user typed. Healing on read means every consumer — the
+        filter engine, the bot menus, the settings API, backups — sees the
+        pattern the user actually typed, and a re-write of a healed policy
+        stores the corrected form permanently.
         """
         if not isinstance(self.metadata, dict):
             return {}
@@ -1089,6 +1140,10 @@ class ForwardRule:
             res["whitelist_mode"] = str(self.metadata["whitelist_mode"])
         if "enabled" not in res and "content_policy_enabled" in self.metadata:
             res["enabled"] = bool(self.metadata["content_policy_enabled"])
+        for key in ("regex_block", "regex_require"):
+            val = res.get(key)
+            if isinstance(val, (list, tuple)):
+                res[key] = [_heal_regex(x) for x in val]
         return res
 
     @content_policy_config.setter
@@ -1157,7 +1212,7 @@ class ForwardRule:
 
     @property
     def regex_block(self) -> List[str]:
-        return [str(x) for x in (self._policy_key("regex_block", []) or [])]
+        return [_heal_regex(x) for x in (self._policy_key("regex_block", []) or [])]
 
     @regex_block.setter
     def regex_block(self, val: Any) -> None:
@@ -1165,7 +1220,7 @@ class ForwardRule:
 
     @property
     def regex_require(self) -> List[str]:
-        return [str(x) for x in (self._policy_key("regex_require", []) or [])]
+        return [_heal_regex(x) for x in (self._policy_key("regex_require", []) or [])]
 
     @regex_require.setter
     def regex_require(self, val: Any) -> None:
