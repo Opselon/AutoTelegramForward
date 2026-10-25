@@ -115,7 +115,10 @@ func TestFilterPreviewSeparationWithRegexBlockAndRequire(t *testing.T) {
 	}
 	wl := f.got.GetFilter().GetWhitelistKeywords()
 	bl := f.got.GetFilter().GetBlacklistKeywords()
-	rx := f.got.GetFilter().GetRegexPatterns()
+	rxBl := f.got.GetRegexBlock()
+	rxReq := f.got.GetRegexRequire()
+	filterRxBl := f.got.GetFilter().GetRegexBlock()
+	filterRxReq := f.got.GetFilter().GetRegexRequire()
 
 	if len(wl) != 1 || wl[0] != "signal" {
 		t.Errorf("whitelist words not mapped: %v", wl)
@@ -123,8 +126,11 @@ func TestFilterPreviewSeparationWithRegexBlockAndRequire(t *testing.T) {
 	if len(bl) != 1 || bl[0] != "scam" {
 		t.Errorf("blacklist words not mapped: %v", bl)
 	}
-	if len(rx) != 2 || rx[0] != "^buy" || rx[1] != "promo" {
-		t.Errorf("regex patterns not combined properly: %v", rx)
+	if len(rxReq) != 1 || rxReq[0] != "^buy" || len(filterRxReq) != 1 || filterRxReq[0] != "^buy" {
+		t.Errorf("regex require not preserved: req=%v, filter=%v", rxReq, filterRxReq)
+	}
+	if len(rxBl) != 1 || rxBl[0] != "promo" || len(filterRxBl) != 1 || filterRxBl[0] != "promo" {
+		t.Errorf("regex block not preserved: req=%v, filter=%v", rxBl, filterRxBl)
 	}
 }
 

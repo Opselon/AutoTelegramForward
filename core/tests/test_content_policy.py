@@ -199,16 +199,19 @@ def test_regex_block_and_require():
     assert req.evaluate("سلام").allowed is False
 
 
-def test_nested_quantifier_patterns_are_refused_not_trusted():
-    """(a+)+ is the shape that burns a worker on a crafted message."""
+def test_nested_quantifier_patterns_are_refused_and_fail_closed():
+    """(a+)+ is the shape that burns a worker on a crafted message; fail closed safely."""
     pol = policy(regex_block=[r"(a+)+$"])
-    assert pol.evaluate("a" * 40 + "b").allowed is True  # pattern not consulted
-    assert pol.evaluate("a" * 40 + "b").reason == "policy_passed"
+    res = pol.evaluate("a" * 40 + "b")
+    assert res.allowed is False
+    assert res.reason.startswith("invalid_regex_block:")
 
 
-def test_broken_regex_never_drops_a_message():
+def test_broken_regex_fails_closed_safely():
     pol = policy(regex_block=["([unclosed"])
-    assert pol.evaluate("anything").allowed is True
+    res = pol.evaluate("anything")
+    assert res.allowed is False
+    assert res.reason.startswith("invalid_regex_block:")
 
 
 # --------------------------------------------------------------------------

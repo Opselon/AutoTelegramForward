@@ -507,7 +507,11 @@ def preview_match(
     for pattern in regex_block or ():
         compiled = _compile_user_regex(pattern)
         if compiled is None:
-            continue
+            # Active blacklist regex is invalid/uncompilable -> fail closed
+            return MatchPreview(
+                allowed=False, reason=f"invalid_regex_block:{pattern[:32]}",
+                matched=(), missing=(), entries=tuple(regex_block), mode=mode,
+            )
         if bounded_search(compiled, body) is not None:
             return MatchPreview(
                 allowed=False, reason=f"regex_block:{pattern[:48]}",
@@ -518,8 +522,13 @@ def preview_match(
         valid_patterns = []
         for p in regex_require:
             comp = _compile_user_regex(p)
-            if comp is not None:
-                valid_patterns.append((p, comp))
+            if comp is None:
+                # Active whitelist regex is invalid/uncompilable -> fail closed
+                return MatchPreview(
+                    allowed=False, reason=f"invalid_regex_require:{p[:32]}",
+                    matched=(), missing=(), entries=tuple(regex_require), mode=mode,
+                )
+            valid_patterns.append((p, comp))
         if valid_patterns:
             hit = next(
                 (p for p, comp in valid_patterns if bounded_search(comp, body) is not None),
@@ -847,11 +856,11 @@ class ContentPolicy:
         for pattern in self.regex_block:
             compiled = _compile_user_regex(pattern)
             if compiled is None:
-                logger.warning(
-                    "[CONTENT_POLICY:INVALID_REGEX] Blocking pattern cannot be compiled safely: %s",
+                logger.error(
+                    "[CONTENT_POLICY:INVALID_REGEX] Blocking pattern cannot be compiled safely, failing closed: %s",
                     pattern[:24] if pattern else "<empty>",
                 )
-                continue
+                return PolicyDecision(False, f"invalid_regex_block:{pattern[:32]}")
             if bounded_search(compiled, body) is not None:
                 return PolicyDecision(False, f"regex_block:{pattern[:48]}", (pattern,))
 
@@ -860,11 +869,11 @@ class ContentPolicy:
             for p in self.regex_require:
                 comp = _compile_user_regex(p)
                 if comp is None:
-                    logger.warning(
-                        "[CONTENT_POLICY:INVALID_REGEX] Requirement pattern cannot be compiled safely: %s",
+                    logger.error(
+                        "[CONTENT_POLICY:INVALID_REGEX] Requirement pattern cannot be compiled safely, failing closed: %s",
                         p[:24] if p else "<empty>",
                     )
-                    continue
+                    return PolicyDecision(False, f"invalid_regex_require:{p[:32]}")
                 valid_require_patterns.append(comp)
             if valid_require_patterns and not any(
                 bounded_search(comp, body) is not None

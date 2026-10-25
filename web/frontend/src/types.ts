@@ -396,6 +396,8 @@ export interface FilterRule {
   whitelist_keywords: string[]
   blacklist_keywords: string[]
   regex_patterns: string[]
+  regex_block?: string[]
+  regex_require?: string[]
   allowed_media_types: string[]
   blocked_media_types: string[]
   drop_service_messages: boolean
@@ -409,6 +411,8 @@ export interface SaveFilterRuleRequest {
   whitelist_keywords?: string[]
   blacklist_keywords?: string[]
   regex_patterns?: string[]
+  regex_block?: string[]
+  regex_require?: string[]
   allowed_media_types?: string[]
   blocked_media_types?: string[]
   drop_service_messages?: boolean

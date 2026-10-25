@@ -380,6 +380,8 @@ message FilterRule {
   int64 min_message_length = 9;
   int64 max_message_length = 10;
   int64 owner_user_id = 11;  // owning account (0 = legacy shared filter)
+  repeated string regex_block = 12;
+  repeated string regex_require = 13;
 }
 
 message CreateFilterRequest {
@@ -411,6 +413,8 @@ message TestFilterRuleRequest {
   string rule_id = 2;        // when set, the stored filter is the base draft
   FilterRule filter = 3;     // draft values override the stored ones
   string sample = 4;         // the sample message text to test against
+  repeated string regex_block = 5;
+  repeated string regex_require = 6;
 }
 
 message TestFilterRuleResponse {

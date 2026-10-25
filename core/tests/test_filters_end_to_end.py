@@ -324,12 +324,12 @@ class TestTheAttachedFilterRuleReachesTheEngine:
 
         run(body, tmp_path)
 
-    def test_a_malformed_regex_is_ignored_and_never_drops(self, tmp_path):
+    def test_a_malformed_regex_is_refused_and_fails_closed(self, tmp_path):
         async def body(db):
             queue = FakeQueue()
             await self._with_rule(db, FilterRule(id="f6", regex_patterns=["([unclosed"], owner_user_id=OWNER))
             jobs = await delivered(db, queue, text_message("anything"))
-            assert [job[1] for job in jobs] == [1]
+            assert [job[1] for job in jobs] == []
 
         run(body, tmp_path)
 
@@ -337,7 +337,7 @@ class TestTheAttachedFilterRuleReachesTheEngine:
         """`(a+)+$` against a long body is minutes of backtracking if executed.
 
         The guard lives in `compile_user_regex` (shared with the content policy),
-        so the pattern is refused and the message is delivered; the elapsed time
+        so the pattern is refused and fails closed; the elapsed time
         assertion is what proves it was never run.
         """
         async def body(db):
@@ -346,7 +346,7 @@ class TestTheAttachedFilterRuleReachesTheEngine:
             started = time.monotonic()
             jobs = await delivered(db, queue, text_message("a" * 4000 + "b"))
             elapsed = time.monotonic() - started
-            assert [job[1] for job in jobs] == [1]
+            assert [job[1] for job in jobs] == []
             assert elapsed < 5.0, f"pattern was executed: {elapsed:.2f}s"
 
         run(body, tmp_path)
@@ -356,7 +356,7 @@ class TestTheAttachedFilterRuleReachesTheEngine:
             queue = FakeQueue()
             await self._with_rule(db, FilterRule(id="f8", regex_patterns=["a" * 5000], owner_user_id=OWNER))
             jobs = await delivered(db, queue, text_message("anything"))
-            assert [job[1] for job in jobs] == [1]
+            assert [job[1] for job in jobs] == []
 
         run(body, tmp_path)
 

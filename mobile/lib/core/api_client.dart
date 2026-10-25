@@ -1116,6 +1116,8 @@ class ApiClient {
     List<String>? whitelistKeywords,
     List<String>? blacklistKeywords,
     List<String>? regexPatterns,
+    List<String>? regexBlock,
+    List<String>? regexRequire,
   }) => _request(
     method: 'POST',
     path: '/api/filters/test',
@@ -1125,6 +1127,8 @@ class ApiClient {
       'whitelist_keywords': ?whitelistKeywords,
       'blacklist_keywords': ?blacklistKeywords,
       'regex_patterns': ?regexPatterns,
+      'regex_block': ?regexBlock,
+      'regex_require': ?regexRequire,
     },
     fromJson: (json) =>
         FilterTestResult.fromJson((json as Map).cast<String, dynamic>()),

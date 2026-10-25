@@ -2290,31 +2290,29 @@ func (h *Handlers) TestFilterRule(w http.ResponseWriter, r *http.Request) {
 	if len(bl) == 0 {
 		bl = req.BlacklistWords
 	}
+	// Directional regex mapping: keep regex_block and regex_require distinct.
+	rxBlock := req.RegexBlock
+	rxRequire := req.RegexRequire
 	rx := req.RegexPatterns
-	if len(rx) == 0 {
-		rx = append(rx, req.RegexRequire...)
-		rx = append(rx, req.RegexBlock...)
-	} else if len(req.RegexBlock) == 0 && len(req.RegexRequire) == 0 {
-		// When caller supplies flat regex_patterns without direction,
-		// and whitelist/blacklist keywords differentiate, preserve caller intent
-		if len(bl) > 0 && len(wl) == 0 {
-			// Blacklist context
-		}
-	}
+
 	// A stored rule the caller does not own is not a base for the draft:
 	// resolve it through the ownership check the Core performs, so a foreign
 	// rule_id can only ever produce the draft's own values.
 	ctx, cancel := withTimeout(r)
 	defer cancel()
 	resp, err := h.c.Filters.TestFilterRule(ctx, &pb.TestFilterRuleRequest{
-		OwnerUserId: id.UserID,
-		RuleId:      req.RuleID,
-		Sample:      req.Sample,
+		OwnerUserId:  id.UserID,
+		RuleId:       req.RuleID,
+		Sample:       req.Sample,
+		RegexBlock:   rxBlock,
+		RegexRequire: rxRequire,
 		Filter: &pb.FilterRule{
 			Name:              req.Name,
 			WhitelistKeywords: wl,
 			BlacklistKeywords: bl,
 			RegexPatterns:     rx,
+			RegexBlock:        rxBlock,
+			RegexRequire:      rxRequire,
 		},
 	})
 	if err != nil {

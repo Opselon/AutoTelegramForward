@@ -406,6 +406,8 @@ export const api = {
       whitelist_keywords?: string[]
       blacklist_keywords?: string[]
       regex_patterns?: string[]
+      regex_block?: string[]
+      regex_require?: string[]
     } = {},
   ) =>
     fetchJson<FilterTestResult>(`${API_BASE}/filters/test`, {

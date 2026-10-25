@@ -199,12 +199,10 @@ class TestRegexOption:
         assert not ok.allowed and ok.reason == "regex_require_missing"
         assert r"XAUUSD\s+BUY" in ok.missing[0]
 
-    def test_an_invalid_pattern_neither_drops_nor_passes_a_message(self):
-        """A refused pattern is not consulted — never a bypass, never a crash."""
-        ok = preview_match("anything", regex_block=["(unbalanced"])
-        # Rules were configured (so this is not "no_rules"); the unusable
-        # pattern is ignored, the message passes, and nothing is dropped.
-        assert ok.allowed and ok.reason == "policy_passed"
+    def test_an_invalid_pattern_fails_closed_safely(self):
+        """A refused pattern fails closed — never an open bypass, never a crash."""
+        res = preview_match("anything", regex_block=["(unbalanced"])
+        assert not res.allowed and "invalid_regex_block" in res.reason
 
     def test_the_word_boundary_example_behaves_as_documented(self):
         ok = preview_match("icy BUY signal", regex_require=[r"\b(BUY|SELL)\b"])

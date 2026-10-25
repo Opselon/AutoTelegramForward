@@ -108,7 +108,11 @@ class FilterEngine:
         for pattern in rx_block:
             compiled = compile_user_regex(pattern)
             if compiled is None:
-                continue
+                logger.error(
+                    "[FILTER_ENGINE:INVALID_REGEX] Blocking pattern cannot be compiled safely, failing closed: %s",
+                    pattern[:24] if pattern else "<empty>",
+                )
+                return EvaluationResult(FilterAction.DROP, f"invalid_regex_block:{pattern[:32]}")
             if compiled.search(text):
                 return EvaluationResult(FilterAction.DROP, f"regex_block:{pattern[:48]}")
 
@@ -117,8 +121,13 @@ class FilterEngine:
             compiled_req = []
             for pattern in rx_require:
                 compiled = compile_user_regex(pattern)
-                if compiled is not None:
-                    compiled_req.append(compiled)
+                if compiled is None:
+                    logger.error(
+                        "[FILTER_ENGINE:INVALID_REGEX] Requirement pattern cannot be compiled safely, failing closed: %s",
+                        pattern[:24] if pattern else "<empty>",
+                    )
+                    return EvaluationResult(FilterAction.DROP, f"invalid_regex_require:{pattern[:32]}")
+                compiled_req.append(compiled)
             if compiled_req and not any(c.search(text) for c in compiled_req):
                 return EvaluationResult(FilterAction.DROP, "regex_mismatch")
 
