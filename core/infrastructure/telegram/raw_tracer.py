@@ -225,19 +225,19 @@ class RawTelegramApiTracer:
                     return res
                 except Exception as exc:
                     elapsed = (time.monotonic() - t0) * 1000
-                    logger.warning(
+                    # The tracer is an opt-in diagnostic
+                    # (ATF_RAW_API_TRACE=1): its job is to record what happened
+                    # on the wire, not to decide severity. A FAILED line at
+                    # WARNING (and mirrored into the structured logger store)
+                    # turned the diagnostic tool into the log storm it was
+                    # meant to debug: enabling the tracer to investigate one
+                    # failing RPC wrote one WARN per call to the persistent
+                    # store. The owning call path decides severity; the trace
+                    # stays at the tracer's own INFO level.
+                    logger.info(
                         "[RAW MTPROTO << %s] %s FAILED (%.1fms): %s: %s",
                         self.session_id, q_name, elapsed, type(exc).__name__, redact(str(exc)),
                     )
-                    if self._log_client is not None:
-                        try:
-                            self._log_client.warn(
-                                "core", "raw_api",
-                                f"MTProto {q_name} failed: {type(exc).__name__}",
-                                detail={"query": q_name, "error": redact(str(exc)), "ms": round(elapsed, 1)},
-                            )
-                        except Exception:
-                            pass
                     raise
 
             self.client.invoke = _traced_invoke
