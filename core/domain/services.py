@@ -88,24 +88,39 @@ class FilterEngine:
         ):
             return EvaluationResult(FilterAction.DROP, "whitelist_mismatch")
 
-        if filter_rule.regex_patterns:
-            any_valid = False
-            # Check if this legacy FilterRule behaves as blacklist or whitelist:
-            # If blacklist_keywords is present and whitelist_keywords is empty, regex_patterns
-            # represents blocking patterns. Otherwise it represents requirements.
-            is_blocking_regex = bool(filter_rule.blacklist_keywords and not filter_rule.whitelist_keywords)
-            for pattern in filter_rule.regex_patterns:
-                compiled = compile_user_regex(pattern)
-                if compiled is None:
-                    continue
-                any_valid = True
-                if compiled.search(text):
-                    if is_blocking_regex:
-                        return EvaluationResult(FilterAction.DROP, f"regex_block:{pattern[:48]}")
-                    break
+        # Explicit directional regex lists take precedence:
+        rx_block = list(getattr(filter_rule, "regex_block", []) or [])
+        rx_require = list(getattr(filter_rule, "regex_require", []) or [])
+
+        # Legacy regex_patterns compatibility:
+        legacy_patterns = list(getattr(filter_rule, "regex_patterns", []) or [])
+        if legacy_patterns and not rx_block and not rx_require:
+            # Deterministic compatibility: If a legacy filter has blacklist keywords
+            # and no whitelist keywords, treat legacy regex as blocking.
+            # If it has whitelist keywords and no blacklist keywords, treat as requirement.
+            # If neither or both are set, regex_patterns acts as require-any.
+            if filter_rule.blacklist_keywords and not filter_rule.whitelist_keywords:
+                rx_block = legacy_patterns
             else:
-                if any_valid and not is_blocking_regex:
-                    return EvaluationResult(FilterAction.DROP, "regex_mismatch")
+                rx_require = legacy_patterns
+
+        # Evaluate blocking regex rules:
+        for pattern in rx_block:
+            compiled = compile_user_regex(pattern)
+            if compiled is None:
+                continue
+            if compiled.search(text):
+                return EvaluationResult(FilterAction.DROP, f"regex_block:{pattern[:48]}")
+
+        # Evaluate requirement regex rules:
+        if rx_require:
+            compiled_req = []
+            for pattern in rx_require:
+                compiled = compile_user_regex(pattern)
+                if compiled is not None:
+                    compiled_req.append(compiled)
+            if compiled_req and not any(c.search(text) for c in compiled_req):
+                return EvaluationResult(FilterAction.DROP, "regex_mismatch")
 
         return EvaluationResult(FilterAction.ALLOW, "filter_passed")
 
