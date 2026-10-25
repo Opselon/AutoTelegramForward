@@ -38,9 +38,8 @@ CREATE TABLE IF NOT EXISTS delivery_jobs (
     -- same target, and with the kind left out of the key the reply collided
     -- with the forward's row and was dropped by ON CONFLICT DO NOTHING.
     job_kind TEXT NOT NULL DEFAULT 'forward',
-    CONSTRAINT delivery_jobs_unique UNIQUE (
-        rule_id, source_chat_id, source_message_id, target_chat_id, job_kind
-    )
+    CONSTRAINT delivery_jobs_unique
+        UNIQUE (rule_id, source_chat_id, source_message_id, target_chat_id, job_kind)
 );
 
 -- Existing installs created before the deliverable kind was part of the key:

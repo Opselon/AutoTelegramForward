@@ -32,7 +32,9 @@ import pytest
 from core.infrastructure.persistence import postgres_repositories as pg
 from core.infrastructure.persistence.database import MIGRATIONS
 
-DDL_KEYWORDS = ("CREATE", "ALTER", "UPDATE", "INSERT", "DELETE", "DROP", "GRANT", "COMMENT")
+# DO starts a PostgreSQL anonymous procedural block — the guarded constraint
+# swap in the bootstrap is one. It is real SQL, not a fragment.
+DDL_KEYWORDS = ("CREATE", "ALTER", "UPDATE", "INSERT", "DELETE", "DROP", "GRANT", "COMMENT", "DO")
 
 
 def _ddl_script() -> str:

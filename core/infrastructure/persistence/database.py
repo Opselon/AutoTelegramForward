@@ -912,11 +912,14 @@ MIGRATIONS = {
     --
     -- A database that predates the filter_rules table entirely (an install
     -- that never created a saved filter) reaches this migration with no
-    -- table at all, so the table is created with the full current shape
-    -- first. The column itself is deliberately NOT in the CREATE: a table
-    -- carried over from an older schema already exists, so the guarded ALTER
-    -- in _apply_additive_columns adds the column — the same code path that
-    -- heals a database restored from any older backup.
+    -- table at all, so the table is created with the full current shape,
+    -- is_enabled included. A table carried over from an older schema already
+    -- exists (CREATE TABLE IF NOT EXISTS is then a no-op), so the guarded
+    -- ALTER in _apply_additive_columns adds the column — the same code path
+    -- that heals a database restored from any older backup. Both paths land
+    -- on the same shape; declaring the column here as well keeps a fresh
+    -- database from depending on the additive loop for a column the
+    -- repository writes on its very first INSERT.
     CREATE TABLE IF NOT EXISTS filter_rules (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL DEFAULT '',
@@ -930,7 +933,8 @@ MIGRATIONS = {
         max_message_length INTEGER NOT NULL DEFAULT 0,
         owner_user_id INTEGER NOT NULL DEFAULT 0,
         regex_block TEXT NOT NULL DEFAULT '[]',
-        regex_require TEXT NOT NULL DEFAULT '[]'
+        regex_require TEXT NOT NULL DEFAULT '[]',
+        is_enabled INTEGER NOT NULL DEFAULT 1
     );
     """,
 }
@@ -1176,7 +1180,24 @@ class SqliteDatabase:
                     self._conn.execute(
                         f"ALTER TABLE {table} ADD COLUMN {column} {decl}"
                     )
-                except Exception:
+                except sqlite3.OperationalError as exc:
+                    # A duplicate-column ALTER is the one expected race (two
+                    # startups, or a column the CREATE already added); every
+                    # other OperationalError means the schema cannot reach the
+                    # shape the repositories write to, and continuing silently
+                    # turns the next INSERT into a missing-column crash at a
+                    # call site that cannot explain it.
+                    if "duplicate column name" not in str(exc):
+                        logger.error(
+                            "[DB:MIGRATION] additive column failed: %s.%s: %s",
+                            table, column, exc,
+                        )
+                    continue
+                except Exception as exc:
+                    logger.error(
+                        "[DB:MIGRATION] additive column failed: %s.%s: %s",
+                        table, column, exc,
+                    )
                     continue
             if not index:
                 continue
