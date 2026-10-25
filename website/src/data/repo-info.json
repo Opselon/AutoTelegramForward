@@ -4,12 +4,12 @@
   "starsUrl": "https://img.shields.io/github/stars/Opselon/AutoTelegramForward?style=social",
   "docsUrl": "https://opselon.github.io/AutoTelegramForward/",
   "license": "MIT",
-  "version": "2.3.0",
-  "releaseTag": "v2.3.0",
+  "version": "2.4.0",
+  "releaseTag": "v2.4.0",
   "releaseDate": "2026-10-16",
-  "gitCommit": "235e7fb",
-  "gitDate": "2026-10-22T14:53:37+03:30",
-  "syncTimestamp": "2026-10-22T13:05:16.105Z",
+  "gitCommit": "80a6662",
+  "gitDate": "2026-10-25T10:20:42Z",
+  "syncTimestamp": "2026-10-25T10:26:16.189Z",
   "author": "Opselon",
   "maintainer": {
     "name": "𝐂ap$iz𝗲Ʀ",
@@ -28,20 +28,20 @@
     "uz",
     "zh"
   ],
-  "i18nKeyCount": 1844,
+  "i18nKeyCount": 1978,
   "stats": {
-    "pythonTests": 181,
-    "goTests": 49,
-    "grpcRpcCount": 109,
+    "pythonTests": 195,
+    "goTests": 51,
+    "grpcRpcCount": 110,
     "cliGroups": 30,
     "featureCatalogEntries": 19,
     "services": 4,
     "locales": 10,
-    "i18nKeys": 1844,
+    "i18nKeys": 1978,
     "implementedFeatures": 15,
     "partialFeatures": 2,
     "plannedFeatures": 2,
-    "apiRoutes": 145
+    "apiRoutes": 148
   },
   "featureCatalog": [
     "Create forwarding rule",
@@ -2251,6 +2251,13 @@
     },
     {
       "group": "Authenticated control plane",
+      "method": "GET",
+      "path": "/api/filters/{id}",
+      "handler": "h.GetFilter",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
       "method": "PUT",
       "path": "/api/filters/{id}",
       "handler": "h.UpdateFilter",
@@ -2261,6 +2268,20 @@
       "method": "DELETE",
       "path": "/api/filters/{id}",
       "handler": "h.DeleteFilter",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/filters/{id}/toggle",
+      "handler": "h.ToggleFilter",
+      "auth": "bearer"
+    },
+    {
+      "group": "Authenticated control plane",
+      "method": "POST",
+      "path": "/api/filters/test",
+      "handler": "h.TestFilterRule",
       "auth": "bearer"
     },
     {
