@@ -178,3 +178,38 @@ When these secrets are absent (forks, community PRs), the `signed-ios`
 release job logs a documented SKIP and produces nothing — it never fakes a
 successful build. The unsigned `ios-simulator` job still validates the iOS
 target on every release.
+
+## 7. Automated Continuous Deployment via GitHub Actions (CD)
+
+AutoTelegramForward supports automated remote deployment via GitHub Actions (`.github/workflows/cd.yml`). When triggered (automatically after `Publish` builds GHCR images or manually from the **Actions** tab), GitHub connects securely via SSH, updates configurations, pulls pre-built images, cleanly tears down previous containers, boots the fresh stack, and verifies the readiness gate (`/readyz`).
+
+### GitHub Secrets Configuration
+
+To enable automated CD to your server, add the following secrets in your repository settings (**Settings ➔ Secrets and variables ➔ Actions**):
+
+| Secret Name | Description |
+|---|---|
+| `SERVER_HOST` | Target server IP address or hostname (e.g. `80.47.236.99`) |
+| `SERVER_PORT` | SSH port (default: `22`) |
+| `SERVER_USER` | SSH user (e.g. `root`) |
+| `SERVER_SSH_KEY` | Private SSH key (e.g. OpenSSH Ed25519) |
+| `SERVER_PASSWORD` | SSH password (optional, if not using SSH key) |
+| `ATF_BOT_TOKEN` | Telegram Bot token from @BotFather |
+| `ATF_API_ID` | Telegram API ID from my.telegram.org |
+| `ATF_API_HASH` | Telegram API Hash from my.telegram.org |
+| `ATF_MASTER_KEY` | Master encryption key (`openssl rand -hex 32`) |
+| `ATF_API_KEY` | REST API key |
+| `ATF_WEB_URL` | Public web dashboard URL (e.g. `https://your-domain.com`) |
+| `ADMIN_USER_ID` | Primary admin Telegram user ID |
+| `ADMIN_IDS` | Comma-separated admin IDs |
+| `ATF_JWT_SECRET` | Secret key for JWT session signing |
+| `ATF_REDIS_ADDR` | Redis address (default: `redis:6379`) |
+| `ATF_REDIS_PASSWORD`| Redis password |
+| `ATF_CORE_RPC_TOKEN`| Token for internal gRPC RPC communication |
+
+### Migrating to a New Server in the Future
+When moving to a new server:
+1. Update `SERVER_HOST` (and `SERVER_SSH_KEY` or `SERVER_PASSWORD`) in your GitHub Secrets.
+2. Go to the **Actions** tab in GitHub, select the **cd** workflow, and click **Run workflow**.
+3. GitHub Actions will SSH into the new server, pull latest GHCR images, cleanly recreate the containers, and verify readiness automatically.
+

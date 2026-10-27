@@ -1,0 +1,77 @@
+name: cd
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Image tag to deploy (e.g. master or sha-xxxxxxx)"
+        required: false
+        default: "master"
+  workflow_run:
+    workflows: ["Publish"]
+    types:
+      - completed
+    branches:
+      - master
+
+concurrency:
+  group: cd-remote-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: deploy to remote server
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    steps:
+      - name: check secrets configuration
+        id: check_secrets
+        run: |
+          if [ -z "${{ secrets.SERVER_HOST }}" ]; then
+            echo "::notice ::SERVER_HOST is not configured in GitHub Secrets. Skipping automated remote CD."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: deploy via SSH
+        if: steps.check_secrets.outputs.deploy == 'true'
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          INPUT_TAG: ${{ github.event.inputs.image_tag }}
+          ATF_BOT_TOKEN: ${{ secrets.ATF_BOT_TOKEN }}
+          ATF_API_ID: ${{ secrets.ATF_API_ID }}
+          ATF_API_HASH: ${{ secrets.ATF_API_HASH }}
+          ATF_MASTER_KEY: ${{ secrets.ATF_MASTER_KEY }}
+          ATF_API_KEY: ${{ secrets.ATF_API_KEY }}
+          ATF_WEB_URL: ${{ secrets.ATF_WEB_URL }}
+          ADMIN_USER_ID: ${{ secrets.ADMIN_USER_ID }}
+          ADMIN_IDS: ${{ secrets.ADMIN_IDS }}
+          ATF_JWT_SECRET: ${{ secrets.ATF_JWT_SECRET }}
+          ATF_REDIS_ADDR: ${{ secrets.ATF_REDIS_ADDR }}
+          ATF_REDIS_PASSWORD: ${{ secrets.ATF_REDIS_PASSWORD }}
+          ATF_CORE_RPC_TOKEN: ${{ secrets.ATF_CORE_RPC_TOKEN }}
+          ATF_RAW_API_TRACE: ${{ secrets.ATF_RAW_API_TRACE }}
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          port: ${{ secrets.SERVER_PORT || 22 }}
+          username: ${{ secrets.SERVER_USER || 'root' }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          envs: INPUT_TAG,ATF_BOT_TOKEN,ATF_API_ID,ATF_API_HASH,ATF_MASTER_KEY,ATF_API_KEY,ATF_WEB_URL,ADMIN_USER_ID,ADMIN_IDS,ATF_JWT_SECRET,ATF_REDIS_ADDR,ATF_REDIS_PASSWORD,ATF_CORE_RPC_TOKEN,ATF_RAW_API_TRACE
+          script_stop: true
+          script: |
+            set -e
+            export ATF_IMAGE_TAG="${INPUT_TAG:-master}"
+            APP_DIR="${APP_DIR:-/root/AutoTelegramForward}"
+            if [ -f "$APP_DIR/scripts/remote_deploy.sh" ]; then
+              chmod +x "$APP_DIR/scripts/remote_deploy.sh"
+              "$APP_DIR/scripts/remote_deploy.sh"
+            else
+              mkdir -p "$APP_DIR"
+              curl -fsSL https://raw.githubusercontent.com/Opselon/AutoTelegramForward/master/scripts/remote_deploy.sh -o /tmp/remote_deploy.sh
+              chmod +x /tmp/remote_deploy.sh
+              /tmp/remote_deploy.sh
+            fi
