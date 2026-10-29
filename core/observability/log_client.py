@@ -227,6 +227,7 @@ class LogClient:
         correlation_id: str = "",
         event_type: str = "",
         reason_code: str = "",
+        event_code: str = "",
     ) -> None:
         if not self._enabled or self._closing:
             self._disabled_total += 1
@@ -248,7 +249,7 @@ class LogClient:
             # into its detail blob already, so this single rule makes the whole
             # codebase attributable (per-task history is then an indexed lookup)
             # without touching hundreds of call sites.
-            if isinstance(detail, dict):
+            if isinstance(detail, dict) and detail:
                 if not rule_id:
                     rule_id = str(detail.get("rule_id") or detail.get("rule") or "")
                 if not correlation_id:
@@ -257,6 +258,20 @@ class LogClient:
                     user_id = int(
                         detail.get("user_id") or detail.get("owner_user_id") or 0
                     )
+                if not event_code:
+                    event_code = str(detail.get("event_code") or "")
+            # Stable machine-readable event codes (the ledger's P1-5): every
+            # failure class carries one deterministic code, so "show me every
+            # DELIVERY_BLOCKED" is a search — not a grep over free text. The
+            # code rides in the detail JSON *and* prefixes the message, so the
+            # Log Center's text search finds it either way it is stored.
+            if event_code:
+                if isinstance(detail, dict) and not detail.get("event_code"):
+                    detail = {**detail, "event_code": event_code}
+                elif not isinstance(detail, dict):
+                    detail = {"event_code": event_code}
+                if not str(message).startswith("[EVT:"):
+                    message = f"[EVT:{event_code}] {message}"
             # v18 attribution travels with the record, so the log explorer can
             # answer "show me this task's history" and "show me everything this
             # user did" without grepping free text.
@@ -442,6 +457,7 @@ class CentralLogHandler(logging.Handler):
                 rule_id=str(getattr(record, "rule_id", "") or ""),
                 user_id=int(getattr(record, "user_id", 0) or 0),
                 correlation_id=str(getattr(record, "correlation_id", "") or ""),
+                event_code=str(getattr(record, "event_code", "") or ""),
             )
         except Exception:
             self.handleError(record)

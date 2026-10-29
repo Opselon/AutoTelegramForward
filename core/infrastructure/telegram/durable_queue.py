@@ -26,11 +26,22 @@ from ...application.repositories import IDeliveryQueueRepository, IMessageMapRep
 from ...domain.entities import DeliveryJob, DeliveryStatus, ForwardMode, MessageMapping, MessagePayload
 from ...domain.services import AdvancedSettingsEngine
 from ...domain.value_objects import ContentMode
-from .errors import is_restricted_source_error, tg_detail, tg_error, wait_seconds
+from .errors import is_restricted_source_error, is_timeout_error, tg_detail, tg_error, wait_seconds
 from .failure_policy import classify_failure, error_code, rate_limit_seconds
 from .bot_transport import BotRouteAdapter, BotTransportCache, BotTransportUnsupported
+from .media_reference import extract_media_reference, send_media_reference
 
 logger = logging.getLogger("atf.durable_queue")
+
+
+class DeliveryBlockedError(RuntimeError):
+    """Every permitted delivery method failed and *nothing* was sent.
+
+    Raised instead of returning ``0`` so the caller records an honest FAILED
+    (or dead-letters) rather than reporting a success that never happened.
+    Not a task defect: the task stays active, the message waits in the
+    dead-letter queue with the full reason attached.
+    """
 
 
 def _rss_mb() -> float:
@@ -134,6 +145,9 @@ class DurableQueueManager:
             "unknown": 0,
             "floodwait_hits": 0,
             "backpressure_drops": 0,
+            # Deliveries that needed the copy/re-upload bypass because native
+            # forwarding was refused (protected source, bot route, ...).
+            "fallback_copies": 0,
         }
         self.recovered_after_restart_count: int = 0
         self.target_stats: Dict[str, Dict[str, int]] = {}
@@ -242,6 +256,16 @@ class DurableQueueManager:
                 self._max_queue_size,
                 target_chat_id,
             )
+            if self._log_client is not None:
+                try:
+                    self._log_client.error(
+                        "queue", "forward",
+                        f"Durable queue full ({pending_count} pending >= {self._max_queue_size} max); "
+                        f"delivery for target {target_chat_id} refused",
+                        {"target": str(target_chat_id), "pending": pending_count, "event_code": "QUEUE_BACKPRESSURE"},
+                    )
+                except Exception:
+                    pass
             return False
 
         # 2. Prepare serializable payload data
@@ -276,6 +300,10 @@ class DurableQueueManager:
             "inline_buttons": getattr(rule, "inline_buttons_raw", None),
             "forward_mode": forward_mode_val,
             "content_mode": mode_val,
+            # The worker must honor the same fallback opt-out the live path
+            # does: with this off, a refused forward fails the job instead of
+            # being rescued by a copy/re-upload the owner did not ask for.
+            "fallback_enabled": bool(getattr(rule, "fallback_enabled", True)),
             "delay_seconds": float(getattr(rule, "delay_seconds", 0.0) or 0.0),
             # --- Phase 2: advanced task-overview settings reach the worker ---
             "advanced_delay_seconds": AdvancedSettingsEngine.get_dispatch_delay(rule),
@@ -636,6 +664,21 @@ class DurableQueueManager:
             worker_id, job.rule_id[:8], code, scope, chat_id,
             getattr(rule_obj, "owner_user_id", "?"),
         )
+        if self._log_client is not None:
+            try:
+                self._log_client.error(
+                    "queue", "forward",
+                    f"Task {job.rule_id[:8]} auto-paused: {code} on {scope} {chat_id} ({err_msg})",
+                    {
+                        "rule_id": job.rule_id,
+                        "chat_id": chat_id,
+                        "scope": scope,
+                        "error": err_msg,
+                        "event_code": "TASK_AUTO_PAUSED",
+                    },
+                )
+            except Exception:
+                pass
         await self._notify_owner(
             worker_id, job,
             {
@@ -986,12 +1029,42 @@ class DurableQueueManager:
             key, sev, recoverable = tg_error(exc)
             err_msg = tg_detail(exc)
 
+            # 0. Everything was tried and *nothing* was sent. Reporting this as
+            # SENT (the old behavior: the bypass returned 0) manufactured a
+            # success the owner would never see through. The job is FAILED with
+            # the full reason, the task stays active, and the message waits in
+            # the dead-letter queue for a replay once the cause is fixed.
+            if isinstance(exc, DeliveryBlockedError):
+                self.stats["failed"] += 1
+                _bump_target("failed")
+                logger.error(
+                    "[PIPELINE:DELIVERY_BLOCKED] [%s] No permitted delivery method succeeded for %s "
+                    "(rule=%s, src=%s:%s): %s. Marking job FAILED (task stays active; message is replayable).",
+                    worker_id, target, job.rule_id[:8], job.source_chat_id,
+                    job.source_message_id, err_msg or exc,
+                    extra={"event_code": "DELIVERY_BLOCKED"},
+                )
+                if self._log_client is not None:
+                    try:
+                        self._log_client.error(
+                            "queue", "forward",
+                            f"delivery blocked rule={job.rule_id[:8]} → {target}: {err_msg or exc}",
+                            {
+                                "rule_id": job.rule_id,
+                                "source_chat_id": job.source_chat_id,
+                                "source_message_id": job.source_message_id,
+                                "target": target,
+                                "event_code": "DELIVERY_BLOCKED",
+                            },
+                        )
+                    except Exception:
+                        pass
+                await self._queue.mark_failed(job.id, err_msg or str(exc))
+                await self._note_mapping(job, DeliveryStatus.FAILED)
+                return None
+
             # 1. Ambiguous timeout / connection drop: evaluated FIRST to prevent blind duplicates
-            is_timeout = (
-                isinstance(exc, (asyncio.TimeoutError, TimeoutError))
-                or "timeout" in err_msg.lower()
-                or "timeout" in str(type(exc).__name__).lower()
-            )
+            is_timeout = is_timeout_error(exc)
             if is_timeout:
                 self.stats["unknown"] += 1
                 _bump_target("unknown")
@@ -1009,7 +1082,7 @@ class DurableQueueManager:
                         self._log_client.error(
                             "queue", "forward",
                             f"Telegram timeout delivering rule={job.rule_id[:8]} to target={target}: {err_msg}",
-                            {"rule_id": job.rule_id, "target": target, "src": f"{job.source_chat_id}:{job.source_message_id}"},
+                            {"rule_id": job.rule_id, "target": target, "src": f"{job.source_chat_id}:{job.source_message_id}", "event_code": "DELIVERY_TIMEOUT"},
                         )
                     except Exception:
                         pass
@@ -1056,7 +1129,7 @@ class DurableQueueManager:
                         self._log_client.warn(
                             "queue", "forward",
                             f"Rate limit / FloodWait delivering rule={job.rule_id[:8]} to {target}: {err_msg} (waiting {round(wait_sec, 1)}s)",
-                            {"rule_id": job.rule_id, "target": target, "wait_seconds": round(wait_sec, 1)},
+                            {"rule_id": job.rule_id, "target": target, "wait_seconds": round(wait_sec, 1), "event_code": "RATE_LIMITED"},
                         )
                     except Exception:
                         pass
@@ -1101,6 +1174,7 @@ class DurableQueueManager:
                                 "target": target,
                                 "error": err_msg,
                                 "exception": exc_name,
+                                "event_code": "DELIVERY_FAILED",
                             },
                         )
                     except Exception:
@@ -1117,6 +1191,7 @@ class DurableQueueManager:
                 logger.error(
                     "[PIPELINE:ACCOUNT_BLOCKED] [%s] Session %s cannot send (code=%s): %s. Deferring job %s.",
                     worker_id, str(session_id or "?")[:8], decision.code or "?", err_msg, job.id,
+                    extra={"event_code": "ACCOUNT_BLOCKED"},
                 )
                 await self._notify_owner(
                     worker_id, job,
@@ -1159,6 +1234,7 @@ class DurableQueueManager:
                                 "attempt": attempts,
                                 "backoff_seconds": round(backoff, 1),
                                 "error": err_msg,
+                                "event_code": "DELIVERY_RETRY",
                             },
                         )
                     except Exception:
@@ -1176,6 +1252,20 @@ class DurableQueueManager:
         caption: Optional[str],
         media_type: str = "",
     ) -> int:
+        """Rebuild and send one protected message.
+
+        Bypass layers, in order of fidelity (mirrors the live dispatcher):
+          1. server-side copy (already failed before reaching here),
+          2. media-reference send via the file-id — same quality, no disk I/O,
+             and it works even when downloading is blocked,
+          3. download + re-upload the original media file,
+          4. the text body/caption as the last resort so the words are never
+             silently dropped.
+
+        If *nothing* can be delivered there is no text to fall back on and
+        ``MEDIA_ONLY`` forbids text anyway — the caller then gets
+        :class:`DeliveryBlockedError`, never a fake ``0`` success.
+        """
         temp_path = None
         try:
             src_msg = None
@@ -1188,7 +1278,21 @@ class DurableQueueManager:
                         src_chat, src_msg_id, tg_detail(e) or type(e).__name__,
                     )
 
-            # Try downloading media file
+            # Layer 2: media-reference (file-id) send. The worker path lost
+            # this layer for months and degraded protected media to a download
+            # that could fail; the dispatcher kept it, so the two paths
+            # disagreed about what a protected channel could deliver.
+            if src_msg is not None:
+                ref = extract_media_reference(src_msg)
+                if ref is not None:
+                    try:
+                        sent = await send_media_reference(client, target, ref, caption)
+                        if sent is not None:
+                            return getattr(sent, "id", 0)
+                    except Exception as ref_err:
+                        logger.debug("media-reference send failed (%s) — falling back to download", ref_err)
+
+            # Layer 3: download the original file and re-upload it.
             if src_msg is not None and hasattr(client, "download_media"):
                 try:
                     temp_path = await client.download_media(src_msg)
@@ -1216,11 +1320,18 @@ class DurableQueueManager:
                     res = await client.send_document(chat_id=target, document=temp_path, caption=caption)
                 return getattr(res, "id", 0)
 
-            # Fallback: send text if media re-upload failed
+            # Layer 4: send the text body so the words survive even when the
+            # media cannot be re-uploaded.
             if caption:
                 res = await client.send_message(chat_id=target, text=caption)
                 return getattr(res, "id", 0)
-            return 0
+
+            # Nothing was delivered. Returning 0 here is how a protected
+            # message used to vanish while the task reported a success.
+            raise DeliveryBlockedError(
+                f"protected media from {src_chat}:{src_msg_id} could not be copied, "
+                "referenced, re-uploaded, or sent as text (no text available)"
+            )
         finally:
             if temp_path and os.path.exists(temp_path):
                 try:
@@ -1287,7 +1398,13 @@ class DurableQueueManager:
             if caption:
                 res = await client.send_message(chat_id=target, text=caption)
                 return getattr(res, "id", 0)
-            return 0
+
+            # Every item failed to download and there is no text to carry:
+            # an honest failure, not a phantom success.
+            raise DeliveryBlockedError(
+                f"protected album from {src_chat} {album_ids} could not be re-uploaded "
+                "and carries no text to fall back on"
+            )
         finally:
             for p in temp_files:
                 try:
@@ -1360,6 +1477,51 @@ class DurableQueueManager:
         )
         return BotRouteAdapter(transport, buttons=buttons, thread_id=thread_id)
 
+    def _note_fallback(self, job_id: str, what: str) -> None:
+        """Count and log a delivery that needed the copy/re-upload bypass."""
+        self.stats["fallback_copies"] += 1
+        logger.info(
+            "[PIPELINE:DELIVERY_MODE] job %s delivered via %s (native forward unavailable)",
+            job_id, what,
+        )
+        if self._log_client is not None:
+            try:
+                self._log_client.info(
+                    "queue", "forward",
+                    f"job {job_id} delivered via {what} (native forward unavailable)",
+                    {"job_id": job_id, "delivery_method": what, "event_code": "FALLBACK_COPY_USED"},
+                )
+            except Exception:
+                pass
+
+    async def _on_restricted(self, client: Any, err: BaseException, fallback_enabled: bool, context: str) -> bool:
+        """Decide what a source-restriction error means for this delivery.
+
+        Returns ``True`` when the caller must descend the copy/re-upload
+        bypass. Raises otherwise:
+
+        * fallback disabled → the original error. The owner asked for the
+          requested mode only; silently copying would betray the setting.
+        * bot route (a client that can neither fetch nor download the source
+          message) → ``BotTransportUnsupported`` so ``_process_job`` retries
+          the job through the account transport, whose bypass chain can
+          actually re-upload protected media. The old behavior degraded the
+          message to bare text — or returned 0 and reported a success that
+          never happened.
+        """
+        if not fallback_enabled:
+            raise err
+        if not (hasattr(client, "get_messages") or hasattr(client, "download_media")):
+            raise BotTransportUnsupported(
+                f"source forbids copies/forwards ({type(err).__name__}) and the bot route "
+                "cannot re-upload media — retrying through the account transport"
+            )
+        logger.warning(
+            "[PIPELINE:PROTECTED] %s blocked by source content protection (%s) — descending bypass chain",
+            context, tg_detail(err) or type(err).__name__,
+        )
+        return True
+
     async def _dispatch_to_telegram(self, client: Any, job: DeliveryJob) -> int:
         """Call pyrogram client methods and return the sent message ID."""
         data = job.payload_data
@@ -1373,6 +1535,12 @@ class DurableQueueManager:
         has_media = data.get("has_media", False)
         album_ids = data.get("album_message_ids") or [src_msg_id]
         is_album = bool(data.get("media_group_id")) and len(album_ids) > 1
+        # The rule's fallback opt-out, snapshotted at enqueue time (see
+        # enqueue_delivery). Missing key → older job → default on.
+        fallback_enabled = bool(data.get("fallback_enabled", True))
+        # A bot-route adapter has no forward_messages/get_messages/download_media;
+        # native forwarding and the media bypass belong to the account transport.
+        can_native_forward = hasattr(client, "forward_messages")
 
         # Phase 2: a keyword-reply job is a pure-text follow-up. Force text-only
         # dispatch regardless of the source message's media so the reply never
@@ -1426,7 +1594,7 @@ class DurableQueueManager:
             c_chat = branding["chat_id"]
             c_chat = int(c_chat) if str(c_chat).lstrip("-").isdigit() else c_chat
             c_ids = [int(i) for i in (branding.get("message_ids") or [branding["message_id"]])]
-            if bool(branding.get("force_forward", True)):
+            if bool(branding.get("force_forward", True)) and can_native_forward:
                 try:
                     res = await client.forward_messages(
                         chat_id=target, from_chat_id=c_chat,
@@ -1437,12 +1605,20 @@ class DurableQueueManager:
                     return getattr(res, "id", 0)
                 except Exception as hop_err:
                     if is_restricted_source_error(hop_err):
-                        logger.warning(
-                            "[PIPELINE:PROTECTED] forward from C=%s restricted (%s) — copying C's post instead",
-                            c_chat, tg_detail(hop_err) or type(hop_err).__name__,
-                        )
+                        if await self._on_restricted(client, hop_err, fallback_enabled, "forward from C"):
+                            self._note_fallback(job.id, "copy of C")
                     else:
                         raise
+            elif bool(branding.get("force_forward", True)):
+                # Bot route: no forward_messages to call. A clean copy of C's
+                # own post still names C as the author, which is the whole
+                # point of the hop — deliver that instead of crashing through
+                # an AttributeError retry loop.
+                logger.info(
+                    "[PIPELINE:DELIVERY_MODE] job %s: bot route has no native forward — "
+                    "delivering the hop as a clean copy of C",
+                    job.id,
+                )
             # Clean copy of C's own post (either requested, or the forward was
             # restricted): content still comes from C, never from the source. No
             # caption is passed, so Telegram keeps C's caption *and* its entities
@@ -1462,11 +1638,10 @@ class DurableQueueManager:
                     last_id = getattr(res, "id", last_id) or last_id
                 return last_id
             except Exception as copy_err:
-                if is_restricted_source_error(copy_err):
-                    logger.warning(
-                        "[PIPELINE:PROTECTED] copy from C=%s restricted (%s) — re-uploading",
-                        c_chat, tg_detail(copy_err) or type(copy_err).__name__,
-                    )
+                if is_restricted_source_error(copy_err) and await self._on_restricted(
+                    client, copy_err, fallback_enabled, "copy from C",
+                ):
+                    self._note_fallback(job.id, "re-upload of C")
                     return await self._reupload_media(
                         client, c_chat, c_ids[0], target,
                         None if content_mode == "MEDIA_ONLY" else caption,
@@ -1476,24 +1651,32 @@ class DurableQueueManager:
 
         # 1. DIRECT_FORWARD
         if forward_mode == ForwardMode.DIRECT_FORWARD.value:
-            try:
-                res = await client.forward_messages(
-                    chat_id=target,
-                    from_chat_id=src_chat,
-                    message_ids=album_ids,
-                    **thread_kwargs,
+            if not can_native_forward:
+                # The bot route cannot express a native forward at all. Fall
+                # through to the copy path rather than raising AttributeError
+                # (which the classifier read as an unknown transient error and
+                # retried until the job dead-lettered).
+                logger.info(
+                    "[PIPELINE:DELIVERY_MODE] job %s: bot route has no native forward — delivering as a copy",
+                    job.id,
                 )
-                if isinstance(res, list) and res:
-                    return res[0].id
-                return getattr(res, "id", 0)
-            except Exception as fwd_err:
-                if is_restricted_source_error(fwd_err):
-                    logger.warning(
-                        "[PIPELINE:PROTECTED] direct forward restricted (%s) — copy/re-upload bypass",
-                        tg_detail(fwd_err) or type(fwd_err).__name__,
+            else:
+                try:
+                    res = await client.forward_messages(
+                        chat_id=target,
+                        from_chat_id=src_chat,
+                        message_ids=album_ids,
+                        **thread_kwargs,
                     )
-                else:
-                    raise
+                    if isinstance(res, list) and res:
+                        return res[0].id
+                    return getattr(res, "id", 0)
+                except Exception as fwd_err:
+                    if is_restricted_source_error(fwd_err):
+                        if await self._on_restricted(client, fwd_err, fallback_enabled, "direct forward"):
+                            self._note_fallback(job.id, "copy/re-upload bypass")
+                    else:
+                        raise
 
         # 2. ALBUM HANDLING (COPY / REUPLOAD)
         if is_album:
@@ -1513,18 +1696,45 @@ class DurableQueueManager:
                     )
                     return getattr(res, "id", 0)
                 except Exception as one_err:
+                    if is_restricted_source_error(one_err) and await self._on_restricted(
+                        client, one_err, fallback_enabled, "first-album-item copy",
+                    ):
+                        self._note_fallback(job.id, "first-item re-upload")
+                        return await self._reupload_media(
+                            client, src_chat, int(album_ids[0]), target, caption,
+                            data.get("media_type", ""),
+                        )
                     logger.info("first-album-item copy failed (%s), falling back to the group", one_err)
             elif album_mode == "split":
                 last_id = 0
                 for item_id in album_ids:
-                    res = await client.copy_message(
-                        chat_id=target,
-                        from_chat_id=src_chat,
-                        message_id=int(item_id),
-                        caption=caption,
-                        **thread_kwargs,
-                    )
-                    last_id = getattr(res, "id", last_id) or last_id
+                    try:
+                        res = await client.copy_message(
+                            chat_id=target,
+                            from_chat_id=src_chat,
+                            message_id=int(item_id),
+                            caption=caption,
+                            **thread_kwargs,
+                        )
+                    except Exception as item_err:
+                        # A protected source refuses every per-item copy; each
+                        # item must go through the bypass on its own or the
+                        # whole album dies with one refusal (the old behavior
+                        # retried the job five times, then dead-lettered it).
+                        if is_restricted_source_error(item_err) and await self._on_restricted(
+                            client, item_err, fallback_enabled, "split-album copy",
+                        ):
+                            self._note_fallback(job.id, "split-item re-upload")
+                            res = await self._reupload_media(
+                                client, src_chat, int(item_id), target, caption,
+                                data.get("media_type", ""),
+                            )
+                        else:
+                            raise
+                    # copy_message returns a Message; the bypass returns the
+                    # sent id directly. Both carry the id the mapping needs.
+                    sent_id = res if isinstance(res, int) else getattr(res, "id", 0)
+                    last_id = sent_id or last_id
                 return last_id
             try:
                 if hasattr(client, "copy_media_group"):
@@ -1539,7 +1749,12 @@ class DurableQueueManager:
                         return res[0].id
                     return getattr(res, "id", 0)
             except Exception as grp_err:
-                logger.info("copy_media_group failed (%s), falling back to re-upload bypass", grp_err)
+                if is_restricted_source_error(grp_err) and await self._on_restricted(
+                    client, grp_err, fallback_enabled, "album group copy",
+                ):
+                    self._note_fallback(job.id, "album re-upload")
+                else:
+                    logger.info("copy_media_group failed (%s), falling back to re-upload bypass", grp_err)
 
             return await self._reupload_album(client, src_chat, album_ids, target, caption)
 
@@ -1557,11 +1772,10 @@ class DurableQueueManager:
                     )
                     return getattr(res, "id", 0)
                 except Exception as c_err:
-                    if is_restricted_source_error(c_err):
-                        logger.warning(
-                            "[PIPELINE:PROTECTED] MEDIA_ONLY copy blocked src=%s (%s) — re-uploading",
-                            src_chat, tg_detail(c_err) or type(c_err).__name__,
-                        )
+                    if is_restricted_source_error(c_err) and await self._on_restricted(
+                        client, c_err, fallback_enabled, "MEDIA_ONLY copy",
+                    ):
+                        self._note_fallback(job.id, "media re-upload")
                         return await self._reupload_media(client, src_chat, src_msg_id, target, None, data.get("media_type", ""))
                     raise
             return 0
@@ -1578,11 +1792,10 @@ class DurableQueueManager:
                 )
                 return getattr(res, "id", 0)
             except Exception as c_err:
-                if is_restricted_source_error(c_err):
-                    logger.warning(
-                        "[PIPELINE:PROTECTED] copy_message blocked src=%s -> tgt=%s (%s) — re-upload bypass",
-                        src_chat, target, tg_detail(c_err) or type(c_err).__name__,
-                    )
+                if is_restricted_source_error(c_err) and await self._on_restricted(
+                    client, c_err, fallback_enabled, "copy_message",
+                ):
+                    self._note_fallback(job.id, "media re-upload")
                     return await self._reupload_media(client, src_chat, src_msg_id, target, caption, data.get("media_type", ""))
                 raise
 

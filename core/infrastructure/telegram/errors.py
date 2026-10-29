@@ -27,6 +27,7 @@ Pyrogram's error model (verified against pyrogram 2.0.106):
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -575,6 +576,27 @@ def is_restricted_source_error(exc: BaseException) -> bool:
         return True
     text = str(exc).lower()
     return "forwardsrestricted" in text or "forwards_restricted" in text or "forwards restricted" in text
+
+
+def is_timeout_error(exc: BaseException) -> bool:
+    """True when the outcome of the call is *unknown* (it may have arrived).
+
+    A timeout after a send is an ambiguous result, never a clean failure: the
+    caller must not blindly retry or fall back to another send method, or a
+    delivered message can arrive twice. One predicate, shared by the live
+    dispatcher and the queue worker, so the two paths cannot disagree about
+    what counts as ambiguous.
+    """
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
+        return True
+    name = type(exc).__name__.lower()
+    if "timeout" in name:
+        return True
+    try:
+        text = str(exc).lower()
+    except Exception:  # pragma: no cover — a hostile __str__ stays a failure
+        return False
+    return "timed out" in text or ("timeout" in text and "flood" not in text)
 
 
 def tg_error(exc: BaseException, operation: str = "") -> tuple:
