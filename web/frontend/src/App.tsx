@@ -1,6 +1,5 @@
 import React, { lazy, Suspense, useCallback, useMemo, useState, useEffect } from 'react'
 import {
-  Send,
   Radio,
   PlayCircle,
   Users,
@@ -28,9 +27,9 @@ import { LanguagePicker } from './components/LanguagePicker'
 import type { ForwardRule, Session, AIConfig, AIProviderInfo, SaveAIConfigRequest, PromptTemplate, FilterRule, DeliveryJob, DeadLetterJob, DeliveryStats, RuleLiveStat, RecentError, GatewaySystemInfo, SimulateResponse, StatsResponse, LogItem, LogStats, ServicesHealthResponse, PVResponderConfig, DiagnosticsResponse, MeInfo } from './types'
 import { getToken, applySession } from './session'
 import { PanelBoundary } from './components/PanelBoundary'
-import { Navigation, NavTrigger, type NavItem } from './components/Navigation'
+import { Navigation, NavTrigger, type NavItem, type TabId } from './components/Navigation'
 import { ProviderKeyCheck, UserBar } from './components/ShellWidgets'
-import { Skeleton, Toast } from './components/ui/Primitives'
+import { Toast } from './components/ui/Primitives'
 
 // Every non-landing tab is a chunk. The shell ships with the landing panel
 // and fetches the rest the first time they are opened.
@@ -61,7 +60,34 @@ const AuditEventsPanel = lazy(() =>
 const ClientSettings = lazy(() =>
   import('./components/ClientSettings').then((m) => ({ default: m.ClientSettings })),
 )
-const SystemPanel = lazy(() => import('./components/SystemPanel').then((m) => ({ default: m.SystemPanel })))
+const HomePanel = lazy(() => import('./panels/HomePanel').then((m) => ({ default: m.HomePanel })))
+
+// ---------------------------------------------------------------------------
+// Hash routing: the active tab lives in the URL (`#/rules`, `#/filters`, …).
+//
+// The tab used to be plain `useState`, so a refresh dropped the operator back
+// on the landing tab and the mobile back button left the site instead of
+// walking back through the tabs they had opened. Now:
+//
+// - the first render reads `location.hash` (a deep link opens the right tab);
+// - switching tabs `pushState`s `#/<tab>`, so every tab is a history entry and
+//   the browser Back button moves between tabs;
+// - Back/Forward fire `hashchange`, and the listener below syncs the state —
+//   it must write the state, not push again, or history would fork;
+// - an unknown (or empty) hash resolves to the landing tab, and `#/admin` for
+//   a non-admin is corrected once identity settles (the effect below).
+// ---------------------------------------------------------------------------
+
+const TAB_IDS: readonly TabId[] = [
+  'system', 'rules', 'simulator', 'ai', 'pv', 'autoreply', 'replace', 'filters',
+  'sessions', 'jobs', 'queue', 'devops', 'audit', 'admin', 'settings',
+]
+
+/** `#/rules` → `rules`; anything else — including no hash at all — → `system`. */
+function tabFromHash(hash: string): TabId {
+  const raw = hash.replace(/^#\/?/, '')
+  return (TAB_IDS as readonly string[]).includes(raw) ? (raw as TabId) : 'system'
+}
 
 // ---------------------------------------------------------------------------
 // Branding hop (A → C → B)
@@ -103,7 +129,35 @@ function useDashboard(me?: MeInfo) {
   useEffect(() => {
     rememberLang(lang)
   }, [lang])
-  const [activeTab, setActiveTab] = useState<'system' | 'rules' | 'simulator' | 'ai' | 'pv' | 'autoreply' | 'replace' | 'filters' | 'sessions' | 'jobs' | 'queue' | 'devops' | 'audit' | 'admin' | 'settings'>('system')
+  // The tab is the URL: seeded from the hash so a refresh or a shared deep
+  // link lands on the tab it names, and kept in sync with it below.
+  const [activeTab, setActiveTabState] = useState<TabId>(() => tabFromHash(window.location.hash))
+
+  /**
+   * Tab switch with the URL kept in lockstep. `pushState` (not `replaceState`)
+   * makes each tab a history entry, so Back walks tabs instead of leaving the
+   * site; the `hashchange` listener below owns Back/Forward so this never
+   * pushes twice for one navigation.
+   */
+  const changeTab = useCallback((tab: TabId) => {
+    setActiveTabState(tab)
+    if (tabFromHash(window.location.hash) !== tab) {
+      window.history.pushState(null, '', `#/${tab}`)
+    }
+    // A tab switch that lands mid-page reads as broken — always start at the top.
+    window.scrollTo({ top: 0 })
+  }, [])
+
+  // Back/Forward: the URL is the truth, the state follows it.
+  useEffect(() => {
+    const onHashChange = () => {
+      setActiveTabState(tabFromHash(window.location.hash))
+      window.scrollTo({ top: 0 })
+    }
+    window.addEventListener('hashchange', onHashChange)
+    return () => window.removeEventListener('hashchange', onHashChange)
+  }, [])
+
   // Identity starts from the session-core's verified answer when mounted with one.
   const [currentUser, setCurrentUser] = useState<{ user_id: number; username: string; is_admin: boolean } | null>(
     me ? { user_id: me.user_id, username: me.username, is_admin: me.is_admin } : null,
@@ -163,6 +217,13 @@ function useDashboard(me?: MeInfo) {
   useEffect(() => {
     if (currentUser && !currentUser.is_admin) setLogScope('mine')
   }, [currentUser])
+
+  // The admin tab exists only for admins: a `#/admin` deep link opened by a
+  // non-admin (stale bookmark, shared URL) would render an empty tab, so it is
+  // corrected to the landing tab once identity settles.
+  useEffect(() => {
+    if (activeTab === 'admin' && currentUser && !currentUser.is_admin) changeTab('system')
+  }, [activeTab, currentUser, changeTab])
   const [logAutoRefresh, setLogAutoRefresh] = useState<boolean>(true)
   const [logStats, setLogStats] = useState<LogStats | null>(null)
   // v18 history controls: which task, which way, and how far back.
@@ -895,7 +956,7 @@ function useDashboard(me?: MeInfo) {
     lang,
     setLang,
     activeTab,
-    setActiveTab,
+    setActiveTab: changeTab,
     currentUser,
     setCurrentUser,
     setRules,
@@ -1076,7 +1137,6 @@ export function App({ me }: { me?: MeInfo } = {}) {
     aiConfigs,
     aiProviders,
     promptTemplates,
-    dlqJobs,
     jobsPending,
     setJobsPending,
     errorBanner,
@@ -1316,48 +1376,8 @@ export function App({ me }: { me?: MeInfo } = {}) {
         </div>
       </header>
 
-      {/* Overview Stat Badges — one card per KPI, skeleton until the payload
-          lands, tabular numbers so the digits do not jitter as they update. */}
-      <div className="overview-grid">
-        {([
-          {
-            icon: <Layers size={20} aria-hidden="true" />,
-            label: t('ui_active_rules'),
-            value: stats ? `${(stats.active_rules ?? 0).toLocaleString()} / ${(stats.total_rules ?? 0).toLocaleString()}` : null,
-            tone: 'primary',
-          },
-          {
-            icon: <Send size={20} aria-hidden="true" />,
-            label: t('ui_forwarded_24h'),
-            value: stats ? (stats.total_forwarded_24h ?? 0).toLocaleString() : null,
-            tone: 'warning',
-          },
-          {
-            icon: <Users size={20} aria-hidden="true" />,
-            label: t('ui_connected_sessions'),
-            value: stats ? `${(stats.active_sessions ?? 0).toLocaleString()} / ${(stats.total_sessions ?? 0).toLocaleString()}` : null,
-            tone: 'success',
-          },
-          {
-            icon: <Activity size={20} aria-hidden="true" />,
-            label: t('ui_dead_letter_queue'),
-            value: dlqJobs.length.toLocaleString(),
-            tone: dlqJobs.length > 0 ? 'danger' : 'neutral',
-          },
-        ] as const).map((card) => (
-          <div key={card.label} className="glass-panel overview-card">
-            <span className={`overview-card__icon overview-card__icon--${card.tone}`}>{card.icon}</span>
-            <div className="overview-card__text">
-              <div className="overview-card__label">{card.label}</div>
-              {card.value === null ? (
-                <Skeleton height={20} width="60%" />
-              ) : (
-                <div className="overview-card__value">{card.value}</div>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Overview stat cards now live on the Home tab (HomePanel) — other tabs
+          get the whole width for their own content. */}
 
       {/* Body: docked rail (>= 1024px) or drawer (< 1024px), then the panels. */}
       <div className="app-body">
@@ -1370,8 +1390,13 @@ export function App({ me }: { me?: MeInfo } = {}) {
           lang={lang}
         />
         <main id="main-content" className="app-main" tabIndex={-1}>
-      {/* TAB 0: SYSTEM — readiness, topology, contract */}
-      {activeTab === 'system' && <SystemPanel lang={lang} />}
+      {/* TAB 0: HOME — greeting, quick actions, KPIs, readiness, activity.
+          The raw readiness dump (SystemPanel) stays reachable from it. */}
+      {activeTab === 'system' && (
+        <PanelBoundary lang={lang}>
+          <HomePanel d={d} />
+        </PanelBoundary>
+      )}
 
       {/* TAB 1: RULES & ROUTES */}
       {

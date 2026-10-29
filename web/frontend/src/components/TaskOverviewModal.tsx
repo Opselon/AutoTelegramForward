@@ -17,6 +17,16 @@ import {
   Edit2,
   Hash,
   ScrollText,
+  LayoutDashboard,
+  Settings2,
+  Ban,
+  Check,
+  Circle,
+  Eraser,
+  Filter,
+  ListChecks,
+  Replace,
+  Star,
 } from 'lucide-react'
 import type { ForwardRule } from '../types'
 import { makeT, type UiLang } from '../locales/engine'
@@ -66,20 +76,13 @@ function IconButton({ title, onClick, children }: { title: string; onClick: () =
       type="button"
       title={title}
       onClick={onClick}
-      style={{
-        background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 2,
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      }}
+      className="tom-iconbtn"
     >
       {children}
     </button>
   )
 }
 
-const smallBtnStyle = (color: string): React.CSSProperties => ({
-  backgroundColor: 'transparent', border: `1px solid ${color}`, color,
-  borderRadius: '6px', padding: '3px 8px', fontSize: '10px', fontWeight: 600, cursor: 'pointer',
-})
 
 /** Split the stored lists into per-entry models the UI can render. */
 function toEntries(words: string[] | undefined, regexes: string[] | undefined): WordEntry[] {
@@ -271,10 +274,6 @@ export function TaskOverviewModal({
     const newRegex = which === 'bl' ? newBlRegex : newWlRegex
     const setNewRegex = which === 'bl' ? setNewBlRegex : setNewWlRegex
     const setRegexError = which === 'bl' ? setBlRegexError : setWlRegexError
-    const accent = which === 'bl' ? '#ef4444' : '#10b981'
-    const chipBg = which === 'bl' ? '#450a0a' : '#052e1d'
-    const chipBorder = which === 'bl' ? '#991b1b' : '#065f46'
-    const chipFg = which === 'bl' ? '#fca5a5' : '#6ee7b7'
     const emptyKey = which === 'bl' ? 'ui_no_words_in_blacklist' : 'ui_no_whitelist_restrictions_all_permitted'
 
     // Add: whitespace/comma separated, trimmed, duplicates rejected rather
@@ -323,25 +322,25 @@ export function TaskOverviewModal({
     }
 
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="tom-view">
+        <div className="tom-row">
           <button
             type="button"
             onClick={() => setCurrentTab('overview')}
-            style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '12px', cursor: 'pointer', padding: 0 }}
+            className="tom-back"
           >
             {t('ui_back_to_task_overview')}
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="tom-inline tom-inline--roomy">
             <button
               type="button"
               onClick={() => rule?.id && reloadContentPolicy(rule.id)}
               disabled={contentLoading}
-              style={{ background: 'none', border: 'none', color: '#38bdf8', fontSize: '11px', cursor: 'pointer', padding: 0 }}
+              className="tom-back tom-back--sm"
             >
               {t('ui_refresh')}
             </button>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: enabled ? accent : 'var(--color-text-muted)' }}>
+            <span className={'tom-count tom-count--' + which + (enabled ? '' : ' is-off')}>
               {title} {entries.length}
             </span>
           </div>
@@ -350,15 +349,11 @@ export function TaskOverviewModal({
         {/* The per-list master switch. One round trip, server-stored: the
             engine itself skips a switched-off list, so this is not paint. */}
         <div
-          style={{
-            backgroundColor: '#1e293b', borderRadius: '14px', padding: '12px 14px',
-            border: `1px solid ${enabled ? chipBorder : '#334155'}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          }}
+          className={'tom-card tom-master' + (enabled ? ' is-on' : '')}
         >
-          <div style={{ fontSize: '12px', color: '#cbd5e1' }}>
+          <div className="tom-label tom-label--sm">
             {enabled ? t('ui_filter_list_enabled') : t('ui_filter_list_disabled')}
-            <span style={{ display: 'block', fontSize: '10px', color: 'var(--color-text-muted)' }}>
+            <span className="tom-sub tom-sub--block">
               {t('ui_filter_list_toggle_hint')}
             </span>
           </div>
@@ -372,70 +367,57 @@ export function TaskOverviewModal({
                 which === 'wl' ? !wlEnabled : wlEnabled,
               )
             }
-            style={{
-              backgroundColor: enabled ? accent : '#334155', color: '#fff', border: 'none',
-              borderRadius: '999px', padding: '6px 14px', fontSize: '11px', fontWeight: 700, cursor: 'pointer',
-            }}
+            className={'tom-pill tom-pill--master tom-pill--' + which + (enabled ? ' is-on' : '')}
           >
             {enabled ? t('ui_filter_list_disable') : t('ui_filter_list_enable')}
           </button>
         </div>
 
         {contentError && (
-          <div style={{ fontSize: '11px', color: '#f87171', backgroundColor: '#450a0a', border: '1px solid #991b1b', borderRadius: '8px', padding: '8px 10px' }}>
+          <div className="tom-errbox">
             {contentError}
           </div>
         )}
         {contentLoading && (
-          <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t('ui_filter_list_loading')}</div>
+          <div className="tom-sub">{t('ui_filter_list_loading')}</div>
         )}
 
-        <div style={{ backgroundColor: '#1e293b', borderRadius: '14px', padding: '14px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>{addLabel}</div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+        <div className="tom-card">
+          <div className="tom-title">{addLabel}</div>
+          <div className="tom-inline tom-inline--roomy">
             <input
               type="text"
               placeholder={addPlaceholder}
               value={newWord}
               onChange={(e) => setNewWord(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEntries('word') } }}
-              style={{
-                flex: 1, backgroundColor: '#0f172a', border: '1px solid var(--color-border-strong)',
-                color: '#fff', borderRadius: '8px', padding: '8px 10px', fontSize: '12px',
-              }}
+              className="tom-input tom-input--grow"
             />
             <button
               type="button"
               disabled={contentLoading}
               onClick={() => addEntries('word')}
-              style={{
-                backgroundColor: accent, color: '#fff', border: 'none', borderRadius: '8px',
-                padding: '0 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-              }}
+              className={'btn tom-addbtn tom-addbtn--' + which}
             >
               {t('ui_add')}
             </button>
           </div>
         </div>
 
-        <div style={{ backgroundColor: '#1e293b', borderRadius: '14px', padding: '14px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
+        <div className="tom-card">
+          <div className="tom-title tom-title--b">
             {t('ui_filter_entries_title')}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div className="tom-col tom-col--tight">
             {entries.map((entry, idx) => {
               const isEditing = editing?.list === which && editing.index === idx
               const isDetails = detailsFor?.list === which && detailsFor.index === idx
               return (
                 <div
                   key={`${which}-${idx}`}
-                  style={{
-                    backgroundColor: '#0f172a', border: `1px solid ${chipBorder}`, borderRadius: '10px',
-                    padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: '6px',
-                    opacity: enabled ? 1 : 0.6,
-                  }}
+                  className={'tom-entry' + (enabled ? '' : ' is-off')}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <div className="tom-wrap">
                     {isEditing ? (
                       <>
                         <input
@@ -459,13 +441,9 @@ export function TaskOverviewModal({
                               setEditing(null)
                             }
                           }}
-                          style={{
-                            flex: 1, minWidth: 140, backgroundColor: '#000', border: `1px solid ${accent}`,
-                            color: '#fff', borderRadius: '6px', padding: '5px 8px', fontSize: '12px',
-                            fontFamily: entry.kind === 'regex' ? 'monospace' : 'inherit',
-                          }}
+                          className={'tom-input tom-input--edit tom-input--' + which + (entry.kind === 'regex' ? ' tom-input--mono' : '')}
                         />
-                        <button type="button" onClick={() => setEditing(null)} style={smallBtnStyle('var(--color-text-muted)')}>
+                        <button type="button" onClick={() => setEditing(null)} className="tom-chipbtn tom-chipbtn--muted">
                           {t('ui_cancel')}
                         </button>
                         <button
@@ -481,7 +459,7 @@ export function TaskOverviewModal({
                             setEditing(null)
                             setEntry(idx, v)
                           }}
-                          style={smallBtnStyle('#10b981')}
+                          className="tom-chipbtn tom-chipbtn--ok"
                         >
                           {t('ui_save')}
                         </button>
@@ -489,21 +467,16 @@ export function TaskOverviewModal({
                     ) : (
                       <>
                         <span
-                          style={{
-                            backgroundColor: chipBg, border: `1px solid ${chipBorder}`, color: chipFg,
-                            borderRadius: '12px', padding: '3px 10px', fontSize: '11px',
-                            fontFamily: entry.kind === 'regex' ? 'monospace' : 'inherit',
-                            textDecoration: enabled ? 'none' : 'line-through',
-                          }}
+                          className={'tom-entry__value tom-entry__value--' + which + (entry.kind === 'regex' ? ' tom-mono' : '') + (enabled ? '' : ' is-off')}
                         >
                           {entry.value}
                         </span>
                         {entry.kind === 'regex' && (
-                          <span style={{ fontSize: '9px', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>
+                          <span className="tom-kindtag">
                             regex
                           </span>
                         )}
-                        <div style={{ display: 'flex', gap: '4px', marginLeft: 'auto' }}>
+                        <div className="tom-inline tom-inline--end">
                           <IconButton title={t('ui_edit')} onClick={() => { setEditing({ list: which, index: idx }); setEditValue(entry.value) }}>
                             <Edit2 size={12} />
                           </IconButton>
@@ -521,7 +494,7 @@ export function TaskOverviewModal({
                     )}
                   </div>
                   {isDetails && (
-                    <div style={{ fontSize: '11px', color: '#cbd5e1', backgroundColor: '#000', borderRadius: '6px', padding: '8px', lineHeight: 1.5 }}>
+                    <div className="tom-details">
                       <div><strong>{t('ui_filter_detail_kind')}:</strong> {entry.kind === 'regex' ? t('ui_filter_detail_kind_regex') : t('ui_filter_detail_kind_word')}</div>
                       <div><strong>{t('ui_filter_detail_value')}:</strong> <code>{entry.value}</code></div>
                       <div><strong>{t('ui_filter_detail_list')}:</strong> {title}</div>
@@ -533,44 +506,37 @@ export function TaskOverviewModal({
               )
             })}
             {entries.length === 0 && (
-              <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t(emptyKey)}</span>
+              <span className="tom-sub">{t(emptyKey)}</span>
             )}
           </div>
         </div>
 
         {/* Regex entries for the same list: adding one is validated client-side
             only to warn; the server is the authority on what it stores. */}
-        <div style={{ backgroundColor: '#1e293b', borderRadius: '14px', padding: '14px', border: '1px solid #334155' }}>
-          <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
+        <div className="tom-card">
+          <div className="tom-title">
             {which === 'bl' ? t('ui_filter_regex_block_title') : t('ui_filter_regex_require_title')}
           </div>
-          <div style={{ display: 'flex', gap: '8px' }}>
+          <div className="tom-inline tom-inline--roomy">
             <input
               type="text"
               placeholder={which === 'bl' ? t('ui_filter_regex_block_placeholder') : t('ui_filter_regex_require_placeholder')}
               value={newRegex}
               onChange={(e) => { setNewRegex(e.target.value); setRegexError('') }}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addEntries('regex') } }}
-              style={{
-                flex: 1, backgroundColor: '#0f172a',
-                border: `1px solid ${(which === 'bl' ? blRegexError : wlRegexError) ? '#ef4444' : 'var(--color-border-strong)'}`,
-                color: '#fff', borderRadius: '8px', padding: '8px 10px', fontSize: '12px', fontFamily: 'monospace',
-              }}
+              className={(which === 'bl' ? blRegexError : wlRegexError) ? 'tom-input tom-input--grow tom-input--invalid' : 'tom-input tom-input--grow tom-input--mono'}
             />
             <button
               type="button"
               disabled={contentLoading}
               onClick={() => addEntries('regex')}
-              style={{
-                backgroundColor: accent, color: '#fff', border: 'none', borderRadius: '8px',
-                padding: '0 14px', fontSize: '12px', fontWeight: 600, cursor: 'pointer',
-              }}
+              className={'btn tom-addbtn tom-addbtn--' + which}
             >
               {t('ui_add')}
             </button>
           </div>
           {(which === 'bl' ? blRegexError : wlRegexError) && (
-            <div style={{ fontSize: '11px', color: '#f87171', marginTop: '6px' }}>
+            <div className="tom-errtext">
               {which === 'bl' ? blRegexError : wlRegexError}
             </div>
           )}
@@ -646,59 +612,21 @@ export function TaskOverviewModal({
 
   return (
     <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        backgroundColor: 'rgba(0,0,0,0.75)',
-        backdropFilter: 'blur(6px)',
-        zIndex: 9999,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '16px',
-        direction: isRtl ? 'rtl' : 'ltr',
-      }}
+      className="tom-scrim" dir={isRtl ? 'rtl' : 'ltr'}
     >
       <div
-        style={{
-          width: '100%',
-          maxWidth: '480px',
-          maxHeight: '92vh',
-          backgroundColor: '#111827',
-          color: '#f9fafb',
-          borderRadius: '20px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          border: '1px solid #1f2937',
-        }}
+        className="tom-shell"
       >
         {/* Top Header matching reference screens */}
         <div
-          style={{
-            padding: '14px 18px',
-            borderBottom: '1px solid #1f2937',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            backgroundColor: '#131b2e',
-          }}
+          className="tom-header"
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div className="tom-inline tom-inline--roomy">
             {currentTab !== 'overview' && (
               <button
                 type="button"
                 onClick={() => setCurrentTab('overview')}
-                style={{
-                  background: '#1f2937',
-                  border: 'none',
-                  color: '#9ca3af',
-                  borderRadius: '8px',
-                  padding: '6px 10px',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                }}
+                className="btn tom-headerbtn"
               >
                 {t('ui_back')}
               </button>
@@ -710,25 +638,17 @@ export function TaskOverviewModal({
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                 onBlur={() => setIsEditingName(false)}
                 autoFocus
-                style={{
-                  background: '#1f2937',
-                  border: '1px solid #3b82f6',
-                  color: '#fff',
-                  borderRadius: '6px',
-                  padding: '4px 8px',
-                  fontSize: '15px',
-                  fontWeight: 600,
-                }}
+                className="tom-input tom-rename-input"
               />
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '16px', fontWeight: 700, color: '#f3f4f6' }}>
+              <div className="tom-inline">
+                <span className="tom-headtitle">
                   {taskName}
                 </span>
                 <button
                   type="button"
                   onClick={() => setIsEditingName(true)}
-                  style={{ background: 'transparent', border: 'none', color: '#9ca3af', cursor: 'pointer', padding: 2 }}
+                  className="btn btn--icon tom-rename"
                 >
                   <Edit2 size={14} />
                 </button>
@@ -736,19 +656,13 @@ export function TaskOverviewModal({
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div className="tom-inline tom-inline--roomy">
             {onDelete && (
               <button
                 type="button"
                 onClick={() => onDelete(draft.id)}
                 title={t('ui_delete_task')}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#ef4444',
-                  cursor: 'pointer',
-                  padding: '6px',
-                }}
+                className="btn btn--icon tom-headerbtn tom-headerbtn--danger"
               >
                 <Trash2 size={18} />
               </button>
@@ -756,14 +670,7 @@ export function TaskOverviewModal({
             <button
               type="button"
               onClick={onClose}
-              style={{
-                background: '#1f2937',
-                border: 'none',
-                color: '#9ca3af',
-                borderRadius: '8px',
-                padding: '6px',
-                cursor: 'pointer',
-              }}
+              className="btn btn--icon tom-headerbtn"
             >
               <X size={18} />
             </button>
@@ -771,46 +678,54 @@ export function TaskOverviewModal({
         </div>
 
         {/* Scrollable Modal Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+        <div className="tom-body">
+          {/* Tab strip: every view one click away. Sticky at the top of the
+              scrollable body; twelve tabs overflow a phone width, so the row
+              scrolls horizontally and snaps. */}
+          <div className="tom-tabbar" role="tablist" aria-label={t('ui_task_overview')}>
+            {([
+              { id: 'overview' as const, label: t('ui_task_overview'), icon: <LayoutDashboard size={13} aria-hidden="true" /> },
+              { id: 'control' as const, label: t('ui_full_control_sources'), icon: <SlidersHorizontal size={13} aria-hidden="true" /> },
+              { id: 'logs' as const, label: t('ui_task_logs'), icon: <ScrollText size={13} aria-hidden="true" /> },
+              { id: 'advanced' as const, label: t('ui_advanced_settings'), icon: <Settings2 size={13} aria-hidden="true" /> },
+              { id: 'all_addons' as const, label: t('ui_paid_addon'), icon: <Sparkles size={13} aria-hidden="true" /> },
+              { id: 'replace' as const, label: t('ui_replace'), icon: <Replace size={13} aria-hidden="true" /> },
+              { id: 'blacklist' as const, label: t('ui_task_overview_modal_blacklist'), icon: <Ban size={13} aria-hidden="true" /> },
+              { id: 'whitelist' as const, label: t('ui_whitelist'), icon: <ListChecks size={13} aria-hidden="true" /> },
+              { id: 'cleaner' as const, label: t('ui_cleaner'), icon: <Eraser size={13} aria-hidden="true" /> },
+              { id: 'filters' as const, label: t('ui_filters'), icon: <Filter size={13} aria-hidden="true" /> },
+              { id: 'delay' as const, label: t('ui_set_delay'), icon: <Clock size={13} aria-hidden="true" /> },
+              { id: 'every_n' as const, label: t('ui_set_every_n'), icon: <Hash size={13} aria-hidden="true" /> },
+            ] as const).map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={currentTab === tab.id}
+                className={'tom-tabbar__btn' + (currentTab === tab.id ? ' is-active' : '')}
+                onClick={() => setCurrentTab(tab.id)}
+              >
+                {tab.icon}
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
           {currentTab === 'overview' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div className="tom-view tom-view--roomy">
               {/* Task Overview Card (Screens 1 & 5) */}
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '16px',
-                  padding: '16px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
                 <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: '14px',
-                  }}
+                  className="tom-row tom-mb-4"
                 >
-                  <span style={{ fontSize: '13px', color: '#94a3b8', fontWeight: 600 }}>{t('ui_task_overview')}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>{t('ui_forwarding_status')}</span>
+                  <span className="tom-overline tom-overline--loose">{t('ui_task_overview')}</span>
+                  <div className="tom-inline tom-inline--roomy">
+                    <span className="tom-muted">{t('ui_forwarding_status')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('is_active')}
-                      style={{
-                        padding: '4px 12px',
-                        borderRadius: '20px',
-                        border: 'none',
-                        fontWeight: 700,
-                        fontSize: '11px',
-                        cursor: 'pointer',
-                        backgroundColor: isRunning ? '#10b981' : 'var(--color-text-muted)',
-                        color: '#ffffff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        transition: 'all 0.2s',
-                      }}
+                      className={'tom-pill tom-pill--status' + (isRunning ? ' is-on' : '')}
                     >
                       {isRunning ? <Play size={10} fill="#fff" /> : <Pause size={10} fill="#fff" />}
                       {isRunning ? t('ui_running') : t('ui_paused')}
@@ -820,60 +735,37 @@ export function TaskOverviewModal({
 
                 {/* Route Visualizer */}
                 <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    backgroundColor: '#0f172a',
-                    padding: '12px 14px',
-                    borderRadius: '12px',
-                    marginBottom: '14px',
-                  }}
+                  className="tom-route"
                 >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '2px' }}>{t('ui_source')}</div>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#e2e8f0' }}>{sourceName}</div>
-                    <div style={{ fontSize: '11px', color: '#38bdf8' }}>{t('ui_telegram')}</div>
+                  <div className="tom-flex1">
+                    <div className="tom-sub tom-mb-1">{t('ui_source')}</div>
+                    <div className="tom-sectitle tom-sectitle--soft">{sourceName}</div>
+                    <div className="tom-tgtag">{t('ui_telegram')}</div>
                   </div>
-                  <ArrowRight size={18} color="var(--color-text-muted)" style={{ margin: '0 10px' }} />
-                  <div style={{ flex: 1, textAlign: 'right' }}>
-                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginBottom: '2px' }}>{t('ui_target')}</div>
-                    <div style={{ fontSize: '14px', fontWeight: 600, color: '#e2e8f0' }}>{targetName}</div>
-                    <div style={{ fontSize: '11px', color: '#38bdf8' }}>{t('ui_telegram')}</div>
+                  <ArrowRight size={18} color="var(--color-text-muted)" className="tom-route__arrow" />
+                  <div className="tom-flex1 tom-end">
+                    <div className="tom-sub tom-mb-1">{t('ui_target')}</div>
+                    <div className="tom-sectitle tom-sectitle--soft">{targetName}</div>
+                    <div className="tom-tgtag">{t('ui_telegram')}</div>
                   </div>
                 </div>
 
                 {/* Show Forward Header row (v2.0 app update matching screenshot) */}
                 <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px',
-                    padding: '8px 0',
-                    borderTop: '1px solid #334155',
-                  }}
+                  className="tom-subrow"
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '12px', color: '#cbd5e1' }}>{t('ui_show_forward_header')}</span>
+                  <div className="tom-row">
+                    <span className="tom-label tom-label--sm">{t('ui_show_forward_header')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('show_forward_header')}
-                      style={{
-                        background: draft.show_forward_header ? '#22c55e' : '#334155',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '2px 10px',
-                        color: '#fff',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                      }}
+                      className={'tom-pill tom-pill--tight' + (draft.show_forward_header ? ' is-on' : '')}
                     >
                       {draft.show_forward_header ? t('ui_yes') : t('ui_no')}
                     </button>
                   </div>
                   {draft.show_forward_header && (
-                    <div style={{ fontSize: '10px', color: '#ef4444', fontStyle: 'italic' }}>
+                    <div className="tom-warnnote">
                       {t('ui_reply_edit_replace_translate_will_not_work_when_show_header')}
                     </div>
                   )}
@@ -881,31 +773,16 @@ export function TaskOverviewModal({
 
                 {/* Debug Mode row */}
                 <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    paddingTop: '8px',
-                    borderTop: '1px solid #334155',
-                  }}
+                  className="tom-row tom-row--rule"
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Bug size={14} color="#94a3b8" />
-                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>{t('ui_debug_mode')}</span>
+                  <div className="tom-inline">
+                    <Bug size={14} className="tom-ico tom-ico--muted" />
+                    <span className="tom-muted">{t('ui_debug_mode')}</span>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleToggle('debug_mode')}
-                    style={{
-                      background: debugOn ? '#22c55e' : '#334155',
-                      border: 'none',
-                      borderRadius: '12px',
-                      padding: '2px 10px',
-                      color: '#fff',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
+                    className={'tom-pill tom-pill--tight' + (debugOn ? ' is-on' : '')}
                   >
                     {debugOn ? t('ui_on') : t('ui_off')}
                   </button>
@@ -914,33 +791,18 @@ export function TaskOverviewModal({
 
               {/* Sender Type Card */}
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '12px 16px',
-                  border: '1px solid #334155',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
+                className="tom-card"
               >
                 <div>
-                  <div style={{ fontSize: '11px', color: '#94a3b8' }}>{t('ui_sender_type')}</div>
-                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>
+                  <div className="tom-sub">{t('ui_sender_type')}</div>
+                  <div className="tom-rowtitle">
                     {draft.sender_type || t('ui_personal_telegram_account')}
                   </div>
                 </div>
                 <select
                   value={draft.sender_type || 'Personal Telegram Account'}
                   onChange={(e) => setDraft({ ...draft, sender_type: e.target.value })}
-                  style={{
-                    backgroundColor: '#0f172a',
-                    color: '#e2e8f0',
-                    border: '1px solid var(--color-border-strong)',
-                    borderRadius: '8px',
-                    padding: '6px 10px',
-                    fontSize: '12px',
-                  }}
+                  className="tom-select"
                 >
                   <option value="Personal Telegram Account">{t('ui_personal_telegram_account')}</option>
                   <option value="Bot Account">{t('ui_bot_account')}</option>
@@ -950,10 +812,10 @@ export function TaskOverviewModal({
 
               {/* Edit Task Section: 4 Distinct Action Buttons (Screen 1 & 5) */}
               <div>
-                <div style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600, marginBottom: '8px' }}>
+                <div className="tom-overline">
                   {t('ui_edit_task')}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '8px' }}>
+                <div className="tom-grid2 tom-mb-2">
                   {/* Green Button: Edit Source */}
                   <button
                     type="button"
@@ -961,21 +823,7 @@ export function TaskOverviewModal({
                       const newSrc = prompt(t('ui_enter_source_chat_id_or_title'), draft.source_chat_id)
                       if (newSrc) setDraft({ ...draft, source_chat_id: newSrc, source_chat_name: newSrc })
                     }}
-                    style={{
-                      backgroundColor: '#16a34a',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '12px',
-                      padding: '12px',
-                      fontWeight: 600,
-                      fontSize: '13px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      boxShadow: '0 4px 6px -1px rgba(22, 163, 74, 0.3)',
-                    }}
+                    className="btn btn--primary tom-action"
                   >
                     {t('ui_edit_source')}
                   </button>
@@ -987,21 +835,7 @@ export function TaskOverviewModal({
                       const newDst = prompt(t('ui_enter_target_chat_id_or_title'), draft.target_chat_id)
                       if (newDst) setDraft({ ...draft, target_chat_id: newDst, target_chat_name: newDst })
                     }}
-                    style={{
-                      backgroundColor: '#dc2626',
-                      color: '#ffffff',
-                      border: 'none',
-                      borderRadius: '12px',
-                      padding: '12px',
-                      fontWeight: 600,
-                      fontSize: '13px',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                      boxShadow: '0 4px 6px -1px rgba(220, 38, 38, 0.3)',
-                    }}
+                    className="btn btn--danger tom-action"
                   >
                     {t('ui_edit_target')}
                   </button>
@@ -1011,23 +845,7 @@ export function TaskOverviewModal({
                 <button
                   type="button"
                   onClick={() => setShowTopicPrompt(!showTopicPrompt)}
-                  style={{
-                    width: '100%',
-                    backgroundColor: '#2563eb',
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: '12px',
-                    padding: '12px',
-                    fontWeight: 600,
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    marginBottom: '8px',
-                    boxShadow: '0 4px 6px -1px rgba(37, 99, 235, 0.3)',
-                  }}
+                  className="btn btn--primary tom-action tom-action--gap"
                 >
                   <Hash size={14} />
                   {t('ui_set_up_forwarding_topic')} {draft.topic_id ? `(#${draft.topic_id})` : ''}
@@ -1035,42 +853,19 @@ export function TaskOverviewModal({
 
                 {showTopicPrompt && (
                   <div
-                    style={{
-                      backgroundColor: '#0f172a',
-                      padding: '10px',
-                      borderRadius: '10px',
-                      marginBottom: '8px',
-                      display: 'flex',
-                      gap: '8px',
-                    }}
+                    className="tom-inline tom-inline--roomy tom-topic"
                   >
                     <input
                       type="number"
                       placeholder={t('ui_topic_thread_id_0_to_remove')}
                       value={draft.topic_id || ''}
                       onChange={(e) => setDraft({ ...draft, topic_id: e.target.value })}
-                      style={{
-                        flex: 1,
-                        background: '#1e293b',
-                        border: '1px solid var(--color-border-strong)',
-                        color: '#fff',
-                        borderRadius: '6px',
-                        padding: '6px 10px',
-                        fontSize: '13px',
-                      }}
+                      className="tom-input tom-input--topic"
                     />
                     <button
                       type="button"
                       onClick={() => setShowTopicPrompt(false)}
-                      style={{
-                        background: '#3b82f6',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '6px',
-                        padding: '0 12px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                      }}
+                      className="btn btn--primary tom-topic__done"
                     >
                       {t('ui_done')}
                     </button>
@@ -1081,21 +876,7 @@ export function TaskOverviewModal({
                 <button
                   type="button"
                   onClick={() => setCurrentTab('advanced')}
-                  style={{
-                    width: '100%',
-                    backgroundColor: '#1f2937',
-                    color: '#f9fafb',
-                    border: '1px solid #374151',
-                    borderRadius: '12px',
-                    padding: '12px',
-                    fontWeight: 600,
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                  }}
+                  className="btn tom-action"
                 >
                   <SlidersHorizontal size={14} />
                   {t('ui_advanced_settings')}
@@ -1106,21 +887,7 @@ export function TaskOverviewModal({
                 <button
                   type="button"
                   onClick={() => setCurrentTab('control')}
-                  style={{
-                    width: '100%',
-                    backgroundColor: '#1f2937',
-                    color: '#f9fafb',
-                    border: '1px solid #374151',
-                    borderRadius: '12px',
-                    padding: '12px',
-                    fontWeight: 600,
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                  }}
+                  className="btn tom-action"
                 >
                   <SlidersHorizontal size={14} />
                   {t('ui_full_control_sources')}
@@ -1130,22 +897,7 @@ export function TaskOverviewModal({
                 <button
                   type="button"
                   onClick={() => setCurrentTab('logs')}
-                  style={{
-                    width: '100%',
-                    backgroundColor: '#1f2937',
-                    color: '#f9fafb',
-                    border: '1px solid #374151',
-                    borderRadius: '12px',
-                    padding: '12px',
-                    fontWeight: 600,
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px',
-                    marginTop: '8px',
-                  }}
+                  className="btn tom-action tom-action--gap"
                 >
                   <ScrollText size={14} />
                   {t('ui_task_logs')}
@@ -1154,29 +906,19 @@ export function TaskOverviewModal({
 
               {/* v2.0 App Update — Features Section matching mobile screenshot */}
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '16px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
                 <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: '12px',
-                  }}
+                  className="tom-row tom-mb-3"
                 >
-                  <span style={{ fontSize: '14px', fontWeight: 700, color: '#f1f5f9' }}>{t('ui_features')}</span>
-                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                  <span className="tom-sectitle">{t('ui_features')}</span>
+                  <span className="tom-linklike">
                     {t('ui_explain')} &gt;
                   </span>
                 </div>
 
                 {/* 5 Toggle Pills matching screenshot (top half of Features) */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+                <div className="tom-wrap tom-mb-4">
                   {[
                     { key: 'sync_edits' as const, label: t('ui_edit'), active: Boolean(draft.sync_edits ?? true) },
                     { key: 'sync_deletes' as const, label: t('ui_delete'), active: Boolean(draft.sync_deletes ?? true) },
@@ -1188,76 +930,63 @@ export function TaskOverviewModal({
                       key={item.key}
                       type="button"
                       onClick={() => handleToggle(item.key)}
-                      style={{
-                        backgroundColor: item.active ? '#dcfce7' : '#334155',
-                        color: item.active ? '#166534' : '#94a3b8',
-                        border: 'none',
-                        borderRadius: '20px',
-                        padding: '6px 14px',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                        transition: 'all 0.15s ease',
-                      }}
+                      className={'tom-feat' + (item.active ? ' is-on' : '')}
                     >
-                      <span>{item.active ? '✔' : '○'}</span>
+                      <span className="tom-feat__mark">{item.active ? <Check size={12} aria-hidden="true" /> : <Circle size={12} aria-hidden="true" />}</span>
                       <span>{item.label}</span>
                     </button>
                   ))}
                 </div>
 
                 {/* 6 Modular Option Cards (2x3 grid) matching screenshot */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div className="tom-grid2">
                   {[
                     {
                       title: t('ui_replace'),
-                      icon: '< >',
-                      iconColor: '#a855f7',
+                      icon: <Replace size={14} aria-hidden="true" />,
+                      tone: 'violet',
                       status: `${t('ui_activated')} ${Object.keys((draft as any).replacements || {}).length}`,
                       onClick: () => setCurrentTab('replace'),
                     },
                     {
                       title: t('ui_task_overview_modal_blacklist'),
-                      icon: '≡ₓ',
-                      iconColor: '#ef4444',
+                      icon: <Ban size={14} aria-hidden="true" />,
+                      tone: 'danger',
                       status: `${t('ui_activated')} ${(draft.blacklist_keywords || []).length + (draft.regex_block || []).length}`,
                       onClick: () => setCurrentTab('blacklist'),
                     },
                     {
                       title: t('ui_whitelist'),
-                      icon: '≡✓',
-                      iconColor: '#22c55e',
+                      icon: <ListChecks size={14} aria-hidden="true" />,
+                      tone: 'success',
                       status: `${t('ui_activated')} ${(draft.whitelist_keywords || []).length + (draft.regex_require || []).length}`,
                       onClick: () => setCurrentTab('whitelist'),
                     },
                     {
                       title: t('ui_cleaner'),
-                      icon: '∷',
-                      iconColor: '#f97316',
+                      icon: <Eraser size={14} aria-hidden="true" />,
+                      tone: 'orange',
                       status: `${t('ui_activated')} ${draft.cleaner_enabled ? '1' : '0'}`,
                       onClick: () => setCurrentTab('cleaner'),
                     },
                     {
                       title: t('ui_filters'),
-                      icon: '⊶',
-                      iconColor: '#3b82f6',
+                      icon: <Filter size={14} aria-hidden="true" />,
+                      tone: 'info',
                       status: `${t('ui_activated')} ${((draft.duplicate_filters ? 1 : 0) + [draft.block_text, draft.block_links, draft.block_voice, draft.block_stickers, draft.block_video, draft.block_audio].filter(Boolean).length)}`,
                       onClick: () => setCurrentTab('filters'),
                     },
                     {
                       title: t('ui_set_delay'),
-                      icon: '⏱',
-                      iconColor: '#eab308',
+                      icon: <Clock size={14} aria-hidden="true" />,
+                      tone: 'warning',
                       status: `${t('ui_delay_current')} ${draft.forward_delay_seconds || draft.delay_seconds || 0}s`,
                       onClick: () => setCurrentTab('delay'),
                     },
                     {
                       title: t('ui_set_every_n'),
-                      icon: '🔢',
-                      iconColor: '#a78bfa',
+                      icon: <Hash size={14} aria-hidden="true" />,
+                      tone: 'violet',
                       status:
                         everyN > 1
                           ? `${t('ui_every_n_current')} ${everyN}`
@@ -1268,22 +997,15 @@ export function TaskOverviewModal({
                     <div
                       key={card.title}
                       onClick={card.onClick}
-                      style={{
-                        backgroundColor: '#0f172a',
-                        border: '1px solid #334155',
-                        borderRadius: '10px',
-                        padding: '10px 12px',
-                        cursor: 'pointer',
-                        transition: 'border-color 0.15s',
-                      }}
+                      className="tom-opt"
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ color: card.iconColor, fontWeight: 700, fontSize: '13px' }}>{card.icon}</span>
-                          <span style={{ fontSize: '12px', fontWeight: 600, color: '#f1f5f9' }}>{card.title} &gt;</span>
+                      <div className="tom-row tom-mb-1">
+                        <div className="tom-inline">
+                          <span className={'tom-opt__icon tom-opt__icon--' + card.tone}>{card.icon}</span>
+                          <span className="tom-rowtitle tom-rowtitle--sm">{card.title} &gt;</span>
                         </div>
                       </div>
-                      <div style={{ fontSize: '10px', color: '#94a3b8' }}>{card.status}</div>
+                      <div className="tom-micro">{card.status}</div>
                     </div>
                   ))}
                 </div>
@@ -1291,11 +1013,11 @@ export function TaskOverviewModal({
 
               {/* Feature Groups Filter Chips */}
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ fontSize: '12px', color: '#94a3b8', fontWeight: 600 }}>{t('ui_feature_groups')}</span>
-                  <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t('ui_choose_customize_tools')}</span>
+                <div className="tom-row tom-mb-2">
+                  <span className="tom-overline">{t('ui_feature_groups')}</span>
+                  <span className="tom-sub">{t('ui_choose_customize_tools')}</span>
                 </div>
-                <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+                <div className="tom-scrollrow">
                   {[
                     { id: 'all', label: t('ui_all') },
                     { id: 'crypto', label: t('ui_crypto') },
@@ -1306,17 +1028,7 @@ export function TaskOverviewModal({
                       key={grp.id}
                       type="button"
                       onClick={() => setActiveGroup(grp.id as FeatureGroupType)}
-                      style={{
-                        padding: '6px 14px',
-                        borderRadius: '20px',
-                        border: 'none',
-                        fontSize: '12px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        whiteSpace: 'nowrap',
-                        backgroundColor: activeGroup === grp.id ? '#3b82f6' : '#1e293b',
-                        color: activeGroup === grp.id ? '#ffffff' : '#94a3b8',
-                      }}
+                      className={'tom-chipbtn' + (activeGroup === grp.id ? ' is-on' : '')}
                     >
                       {grp.label}
                     </button>
@@ -1326,87 +1038,49 @@ export function TaskOverviewModal({
 
               {/* PAID ADDON Banner & 2x3 Grid (Screen 4) */}
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '16px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
                 <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: '12px',
-                  }}
+                  className="tom-row tom-mb-3"
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Sparkles size={14} color="#f59e0b" />
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#f59e0b' }}>{t('ui_paid_addon')}</span>
-                    <span title={t('ui_unlock_premium_features_with_credits')} style={{ display: 'inline-flex' }}>
+                  <div className="tom-inline">
+                    <Sparkles size={14} className="tom-ico tom-ico--warn" />
+                    <span className="tom-sectitle tom-sectitle--warn">{t('ui_paid_addon')}</span>
+                    <span title={t('ui_unlock_premium_features_with_credits')} className="tom-inlineflex">
                       <Info size={13} color="var(--color-text-muted)" />
                     </span>
                   </div>
                   <button
                     type="button"
                     onClick={() => setCurrentTab('all_addons')}
-                    style={{
-                      background: 'transparent',
-                      border: 'none',
-                      color: '#3b82f6',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '2px',
-                    }}
+                    className="tom-linklike"
                   >
                     {t('ui_view_all_18')} <ChevronRight size={14} />
                   </button>
                 </div>
 
                 {/* 2x3 Grid of Addons matching reference Image 4 */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div className="tom-grid2">
                   {OVERVIEW_ADDONS.map((item) => {
                     const isEnabled = draft.paid_addons?.[item.key] ?? false
                     return (
                       <div
                         key={item.key}
                         onClick={() => handleAddonToggle(item.key)}
-                        style={{
-                          backgroundColor: '#0f172a',
-                          borderRadius: '12px',
-                          padding: '10px 12px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'space-between',
-                          minHeight: '74px',
-                          cursor: 'pointer',
-                          border: isEnabled ? '1px solid #3b82f6' : '1px solid #1e293b',
-                          transition: 'all 0.15s',
-                        }}
+                        className={'tom-opt tom-opt--addon' + (isEnabled ? ' is-on' : '')}
                       >
-                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: '11px', color: '#38bdf8', fontWeight: 600 }}>
-                            {item.locked && <Lock size={10} style={{ display: 'inline', marginRight: 3 }} />}
-                            ★ {t('ui_addon')}
+                        <div className="tom-opt__head">
+                          <span className="tom-opt__eyebrow">
+                            {item.locked && <Lock size={10} className="tom-lock" aria-hidden="true" />}
+                            <Star size={11} aria-hidden="true" /> {t('ui_addon')}
                           </span>
                           <span
-                            style={{
-                              fontSize: '10px',
-                              padding: '2px 6px',
-                              borderRadius: '8px',
-                              backgroundColor: isEnabled ? '#10b981' : '#334155',
-                              color: '#fff',
-                              fontWeight: 700,
-                            }}
+                            className={'tom-statuschip' + (isEnabled ? ' is-on' : '')}
                           >
                             {isEnabled ? t('ui_task_overview_modal_on') : t('ui_task_overview_modal_off')}
                           </span>
                         </div>
-                        <div style={{ fontSize: '12px', fontWeight: 600, color: '#e2e8f0', marginTop: '6px' }}>
+                        <div className="tom-opt__label">
                           {t(item.labelKey)}
                         </div>
                       </div>
@@ -1419,63 +1093,40 @@ export function TaskOverviewModal({
 
           {/* Advanced Settings View (Screens 2 & 3) */}
           {currentTab === 'advanced' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+            <div className="tom-view">
               {/* FILTERS (Screen 2) */}
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Shield size={14} color="#38bdf8" /> {t('ui_task_overview_modal_filters')}
+                <div className="tom-title tom-title--flag">
+                  <Shield size={14} className="tom-ico tom-ico--info" /> {t('ui_task_overview_modal_filters')}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_duplicate_filters')}</span>
+                <div className="tom-col">
+                  <div className="tom-row">
+                    <span className="tom-label">{t('ui_duplicate_filters')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('duplicate_filters')}
-                      style={{
-                        background: draft.duplicate_filters ? '#22c55e' : 'var(--color-text-muted)',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '3px 10px',
-                        color: '#fff',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
+                      className={'tom-pill' + (draft.duplicate_filters ? ' is-on' : '')}
                     >
                       {draft.duplicate_filters ? t('ui_on') : t('ui_off')}
                     </button>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_crypto_mode')}</span>
+                  <div className="tom-row">
+                    <span className="tom-label">{t('ui_crypto_mode')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('crypto_mode')}
-                      style={{
-                        background: draft.crypto_mode ? '#22c55e' : 'var(--color-text-muted)',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '3px 10px',
-                        color: '#fff',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
+                      className={'tom-pill' + (draft.crypto_mode ? ' is-on' : '')}
                     >
                       {draft.crypto_mode ? t('ui_on') : t('ui_off')}
                     </button>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_blacklist_whitelist')}</span>
-                    <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+                  <div className="tom-row">
+                    <span className="tom-label">{t('ui_blacklist_whitelist')}</span>
+                    <span className="tom-muted">
                       {t('ui_activated')} {(draft.domain_blocklist?.length || 0) + (draft.domain_allowlist?.length || 0)}
                     </span>
                   </div>
@@ -1484,52 +1135,29 @@ export function TaskOverviewModal({
 
               {/* SCHEDULES (Screen 2) */}
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Clock size={14} color="#f59e0b" /> {t('ui_schedules')}
+                <div className="tom-title tom-title--flag">
+                  <Clock size={14} className="tom-ico tom-ico--warn" /> {t('ui_schedules')}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_auto_posting')}</span>
+                <div className="tom-col">
+                  <div className="tom-row">
+                    <span className="tom-label">{t('ui_auto_posting')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('auto_posting')}
-                      style={{
-                        background: draft.auto_posting ? '#22c55e' : 'var(--color-text-muted)',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '3px 10px',
-                        color: '#fff',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
+                      className={'tom-pill' + (draft.auto_posting ? ' is-on' : '')}
                     >
                       {draft.auto_posting ? t('ui_on') : t('ui_off')}
                     </button>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_power_control')}</span>
+                  <div className="tom-row">
+                    <span className="tom-label">{t('ui_power_control')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('power_control')}
-                      style={{
-                        background: draft.power_control ? '#22c55e' : 'var(--color-text-muted)',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '3px 10px',
-                        color: '#fff',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
+                      className={'tom-pill' + (draft.power_control ? ' is-on' : '')}
                     >
                       {draft.power_control ? t('ui_on') : t('ui_off')}
                     </button>
@@ -1539,53 +1167,32 @@ export function TaskOverviewModal({
 
               {/* TIME FORWARD (Screen 2) */}
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Clock size={14} color="#a855f7" /> {t('ui_time_forward')}
+                <div className="tom-title tom-title--flag">
+                  <Clock size={14} className="tom-ico tom-ico--violet" /> {t('ui_time_forward')}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                <div className="tom-grid2 tom-grid2--roomy">
                   <div>
-                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                    <label className="tom-hint">
                       {t('ui_delay_seconds')}
                     </label>
                     <input
                       type="number"
                       value={draft.delay_seconds || 0}
                       onChange={(e) => setDraft({ ...draft, delay_seconds: parseFloat(e.target.value) || 0 })}
-                      style={{
-                        width: '100%',
-                        backgroundColor: '#0f172a',
-                        border: '1px solid var(--color-border-strong)',
-                        color: '#fff',
-                        borderRadius: '8px',
-                        padding: '6px 10px',
-                        fontSize: '12px',
-                      }}
+                      className="tom-input"
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                    <label className="tom-hint">
                       {t('ui_edit_time_limit_s')}
                     </label>
                     <input
                       type="number"
                       value={draft.edit_time_limit_seconds || 0}
                       onChange={(e) => setDraft({ ...draft, edit_time_limit_seconds: parseInt(e.target.value) || 0 })}
-                      style={{
-                        width: '100%',
-                        backgroundColor: '#0f172a',
-                        border: '1px solid var(--color-border-strong)',
-                        color: '#fff',
-                        borderRadius: '8px',
-                        padding: '6px 10px',
-                        fontSize: '12px',
-                      }}
+                      className="tom-input"
                     />
                   </div>
                 </div>
@@ -1593,51 +1200,28 @@ export function TaskOverviewModal({
 
               {/* PROCESSING MESSAGES (Screen 2) */}
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
+                <div className="tom-title tom-title--b">
                   {t('ui_processing_messages')}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_process_raw_text')}</span>
+                <div className="tom-col">
+                  <div className="tom-row">
+                    <span className="tom-label">{t('ui_process_raw_text')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('process_raw_text')}
-                      style={{
-                        background: draft.process_raw_text ? '#22c55e' : 'var(--color-text-muted)',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '3px 10px',
-                        color: '#fff',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
+                      className={'tom-pill' + (draft.process_raw_text ? ' is-on' : '')}
                     >
                       {draft.process_raw_text ? t('ui_on') : t('ui_off')}
                     </button>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_button_to_text')}</span>
+                  <div className="tom-row">
+                    <span className="tom-label">{t('ui_button_to_text')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('button_to_text')}
-                      style={{
-                        background: draft.button_to_text ? '#22c55e' : 'var(--color-text-muted)',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '3px 10px',
-                        color: '#fff',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
+                      className={'tom-pill' + (draft.button_to_text ? ' is-on' : '')}
                     >
                       {draft.button_to_text ? t('ui_on') : t('ui_off')}
                     </button>
@@ -1647,19 +1231,14 @@ export function TaskOverviewModal({
 
               {/* MODIFY CONTENT (Screen 3) */}
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
+                <div className="tom-title tom-title--b">
                   {t('ui_modify_content')}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div className="tom-col tom-col--roomy">
                   <div>
-                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                    <label className="tom-hint">
                       {t('ui_task_overview_modal_header')}
                     </label>
                     <input
@@ -1667,19 +1246,11 @@ export function TaskOverviewModal({
                       placeholder={t('ui_header_empty')}
                       value={draft.custom_header || ''}
                       onChange={(e) => setDraft({ ...draft, custom_header: e.target.value })}
-                      style={{
-                        width: '100%',
-                        backgroundColor: '#0f172a',
-                        border: '1px solid var(--color-border-strong)',
-                        color: '#fff',
-                        borderRadius: '8px',
-                        padding: '6px 10px',
-                        fontSize: '12px',
-                      }}
+                      className="tom-input"
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                    <label className="tom-hint">
                       {t('ui_footer')}
                     </label>
                     <input
@@ -1687,19 +1258,11 @@ export function TaskOverviewModal({
                       placeholder={t('ui_footer_empty')}
                       value={draft.custom_footer || ''}
                       onChange={(e) => setDraft({ ...draft, custom_footer: e.target.value })}
-                      style={{
-                        width: '100%',
-                        backgroundColor: '#0f172a',
-                        border: '1px solid var(--color-border-strong)',
-                        color: '#fff',
-                        borderRadius: '8px',
-                        padding: '6px 10px',
-                        fontSize: '12px',
-                      }}
+                      className="tom-input"
                     />
                   </div>
                   <div>
-                    <label style={{ fontSize: '11px', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>
+                    <label className="tom-hint">
                       {t('ui_watermark')}
                     </label>
                     <input
@@ -1707,15 +1270,7 @@ export function TaskOverviewModal({
                       placeholder={t('ui_empty')}
                       value={draft.watermark_text || ''}
                       onChange={(e) => setDraft({ ...draft, watermark_text: e.target.value })}
-                      style={{
-                        width: '100%',
-                        backgroundColor: '#0f172a',
-                        border: '1px solid var(--color-border-strong)',
-                        color: '#fff',
-                        borderRadius: '8px',
-                        padding: '6px 10px',
-                        fontSize: '12px',
-                      }}
+                      className="tom-input"
                     />
                   </div>
                 </div>
@@ -1723,74 +1278,40 @@ export function TaskOverviewModal({
 
               {/* AI FEATURES (Screen 3) */}
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
                 <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    marginBottom: '10px',
-                  }}
+                  className="tom-row tom-mb-3"
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <Wand2 size={14} color="#818cf8" />
-                    <span style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6' }}>{t('ui_ai_features')}</span>
+                  <div className="tom-inline">
+                    <Wand2 size={14} className="tom-ico tom-ico--violet" />
+                    <span className="tom-title tom-title--flat">{t('ui_ai_features')}</span>
                   </div>
                   <span
-                    style={{
-                      fontSize: '11px',
-                      color: '#a5b4fc',
-                      backgroundColor: '#312e81',
-                      padding: '2px 8px',
-                      borderRadius: '10px',
-                    }}
+                    className="badge badge--info tom-creativity"
                   >
                     {t('ui_creativity')} {draft.ai_creativity ?? 0.7} - {t('ui_max_tokens')} {draft.ai_max_tokens ?? 600}
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_ocr_image_ai')}</span>
+                <div className="tom-col">
+                  <div className="tom-row">
+                    <span className="tom-label">{t('ui_ocr_image_ai')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('ocr_image_ai')}
-                      style={{
-                        background: draft.ocr_image_ai ? '#22c55e' : 'var(--color-text-muted)',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '3px 10px',
-                        color: '#fff',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
+                      className={'tom-pill' + (draft.ocr_image_ai ? ' is-on' : '')}
                     >
                       {draft.ocr_image_ai ? t('ui_on') : t('ui_off')}
                     </button>
                   </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', color: '#cbd5e1' }}>{t('ui_smart_ai_rewrite')}</span>
+                  <div className="tom-row">
+                    <span className="tom-label">{t('ui_smart_ai_rewrite')}</span>
                     <button
                       type="button"
                       onClick={() => handleToggle('smart_ai_rewrite')}
-                      style={{
-                        background: draft.smart_ai_rewrite ? '#22c55e' : 'var(--color-text-muted)',
-                        border: 'none',
-                        borderRadius: '12px',
-                        padding: '3px 10px',
-                        color: '#fff',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
+                      className={'tom-pill' + (draft.smart_ai_rewrite ? ' is-on' : '')}
                     >
                       {draft.smart_ai_rewrite ? t('ui_on') : t('ui_off')}
                     </button>
@@ -1803,43 +1324,27 @@ export function TaskOverviewModal({
           {/* ALL 18 ADDONS CATALOG MODAL VIEW */}
           {currentTab === 'all_addons' && (
             <div>
-              <div style={{ fontSize: '13px', color: '#94a3b8', marginBottom: '12px' }}>
+              <div className="tom-desc">
                 {t('ui_modular_extensions_catalogue_toggle_features_for_this_task')}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div className="tom-col">
                 {ADDONS.map((item) => {
                   const isEnabled = draft.paid_addons?.[item.key] ?? false
                   return (
                     <div
                       key={item.key}
                       onClick={() => handleAddonToggle(item.key)}
-                      style={{
-                        backgroundColor: '#1e293b',
-                        padding: '12px',
-                        borderRadius: '12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        cursor: 'pointer',
-                        border: isEnabled ? '1px solid #3b82f6' : '1px solid #334155',
-                      }}
+                      className={'tom-opt tom-opt--row' + (isEnabled ? ' is-on' : '')}
                     >
                       <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          {item.locked && <Lock size={12} color="#f59e0b" />}
-                          <span style={{ fontSize: '13px', fontWeight: 600, color: '#f1f5f9' }}>{t(item.labelKey)}</span>
+                        <div className="tom-inline">
+                          {item.locked && <Lock size={12} className="tom-ico tom-ico--warn" />}
+                          <span className="tom-rowtitle">{t(item.labelKey)}</span>
                         </div>
-                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>{t(item.descKey)}</div>
+                        <div className="tom-sub tom-mt-1">{t(item.descKey)}</div>
                       </div>
                       <span
-                        style={{
-                          fontSize: '11px',
-                          padding: '3px 8px',
-                          borderRadius: '12px',
-                          backgroundColor: isEnabled ? '#10b981' : '#334155',
-                          color: '#fff',
-                          fontWeight: 700,
-                        }}
+                        className={'tom-statuschip' + (isEnabled ? ' is-on' : '')}
                       >
                         {isEnabled ? t('ui_active') : t('ui_task_overview_modal_off')}
                       </span>
@@ -1852,59 +1357,35 @@ export function TaskOverviewModal({
 
           {/* 1. CLEANER ENGINE VIEW (v2.0) */}
           {currentTab === 'cleaner' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="tom-view">
+              <div className="tom-row">
                 <button
                   type="button"
                   onClick={() => setCurrentTab('overview')}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#38bdf8',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    padding: 0,
-                  }}
+                  className="tom-back tom-back--icon"
                 >
                   {t('ui_back_to_task_overview')}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleToggle('cleaner_enabled')}
-                  style={{
-                    backgroundColor: draft.cleaner_enabled ? '#16a34a' : 'var(--color-text-muted)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: '16px',
-                    padding: '4px 12px',
-                    fontSize: '11px',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                  }}
+                  className={'tom-pill tom-pill--master' + (draft.cleaner_enabled ? ' is-on' : '')}
                 >
                   {draft.cleaner_enabled ? t('ui_cleaner_active') : t('ui_cleaner_inactive')}
                 </button>
               </div>
 
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '4px' }}>
+                <div className="tom-title tom-title--sm">
                   {t('ui_automatic_stripping_rules')}
                 </div>
-                <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '12px' }}>
+                <div className="tom-sub tom-mb-3">
                   {t('ui_cleaned_content_is_stripped_before_forwarding_so_sensitive_eleme')}
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div className="tom-grid2">
                   {[
                     { key: 'remove_urls', label: t('ui_strip_urls') },
                     { key: 'remove_mentions', label: t('ui_strip_mentions') },
@@ -1928,23 +1409,10 @@ export function TaskOverviewModal({
                             cleaner_config: updatedCfg,
                           })
                         }}
-                        style={{
-                          backgroundColor: isActive ? '#065f46' : '#0f172a',
-                          color: isActive ? '#6ee7b7' : '#94a3b8',
-                          border: `1px solid ${isActive ? '#059669' : '#334155'}`,
-                          borderRadius: '8px',
-                          padding: '8px 10px',
-                          fontSize: '12px',
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          textAlign: 'left',
-                        }}
+                        className={'tom-cleanopt' + (isActive ? ' is-on' : '')}
                       >
                         <span>{opt.label}</span>
-                        <span>{isActive ? '✔' : '○'}</span>
+                        <span className="tom-cleanopt__mark">{isActive ? <Check size={12} aria-hidden="true" /> : <Circle size={12} aria-hidden="true" />}</span>
                       </button>
                     )
                   })}
@@ -1953,17 +1421,12 @@ export function TaskOverviewModal({
 
               {/* Custom Patterns to Strip */}
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
+                <div className="tom-title">
                   {t('ui_custom_patterns_to_strip')}
                 </div>
-                <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+                <div className="tom-inline tom-inline--roomy tom-mb-3">
                   <input
                     type="text"
                     placeholder={t('ui_enter_word_phrase_or_ad_text')}
@@ -1984,15 +1447,7 @@ export function TaskOverviewModal({
                         }
                       }
                     }}
-                    style={{
-                      flex: 1,
-                      backgroundColor: '#0f172a',
-                      border: '1px solid var(--color-border-strong)',
-                      color: '#fff',
-                      borderRadius: '8px',
-                      padding: '8px 10px',
-                      fontSize: '12px',
-                    }}
+                    className="tom-input tom-input--grow"
                   />
                   <button
                     type="button"
@@ -2009,36 +1464,17 @@ export function TaskOverviewModal({
                         setNewCleanerPattern('')
                       }
                     }}
-                    style={{
-                      backgroundColor: '#f97316',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '0 14px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
+                    className="btn tom-addbtn tom-addbtn--cleaner"
                   >
                     {t('ui_add')}
                   </button>
                 </div>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                <div className="tom-wrap">
                   {listPatterns((draft.cleaner_config as any)?.patterns).map((p, idx) => (
                     <span
                       key={idx}
-                      style={{
-                        backgroundColor: '#0f172a',
-                        border: '1px solid var(--color-border-strong)',
-                        color: '#f8fafc',
-                        borderRadius: '12px',
-                        padding: '4px 10px',
-                        fontSize: '11px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '6px',
-                      }}
+                      className="tom-chip"
                     >
                       <span>{p}</span>
                       <button
@@ -2051,22 +1487,12 @@ export function TaskOverviewModal({
                             cleaner_config: { ...cfg, patterns: pats },
                           })
                         }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#ef4444',
-                          cursor: 'pointer',
-                          padding: 0,
-                          fontSize: '12px',
-                          fontWeight: 700,
-                        }}
-                      >
-                        ✕
-                      </button>
+                        className="tom-chip__x"
+                      ><X size={12} aria-hidden="true" /></button>
                     </span>
                   ))}
                   {listPatterns((draft.cleaner_config as any)?.patterns).length === 0 && (
-                    <span style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t('ui_no_custom_strip_patterns_added_yet')}</span>
+                    <span className="tom-sub">{t('ui_no_custom_strip_patterns_added_yet')}</span>
                   )}
                 </div>
               </div>
@@ -2075,66 +1501,40 @@ export function TaskOverviewModal({
 
           {/* 2. TEXT REPLACEMENTS VIEW (< >) */}
           {currentTab === 'replace' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="tom-view">
+              <div className="tom-row">
                 <button
                   type="button"
                   onClick={() => setCurrentTab('overview')}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#38bdf8',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
+                  className="tom-back"
                 >
                   {t('ui_back_to_task_overview')}
                 </button>
-                <span style={{ fontSize: '12px', color: '#a855f7', fontWeight: 600 }}>
+                <span className="tom-count tom-count--violet">
                   {t('ui_task_overview_modal_active_rules')} {Object.keys((draft as any).replacements || {}).length}
                 </span>
               </div>
 
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
+                <div className="tom-title">
                   {t('ui_add_text_replacement')}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 80px', gap: '8px' }}>
+                <div className="tom-grid2 tom-grid2--add">
                   <input
                     type="text"
                     placeholder={t('ui_find_text')}
                     value={newReplaceFrom}
                     onChange={(e) => setNewReplaceFrom(e.target.value)}
-                    style={{
-                      backgroundColor: '#0f172a',
-                      border: '1px solid var(--color-border-strong)',
-                      color: '#fff',
-                      borderRadius: '8px',
-                      padding: '8px 10px',
-                      fontSize: '12px',
-                    }}
+                    className="tom-input"
                   />
                   <input
                     type="text"
                     placeholder={t('ui_replace_with')}
                     value={newReplaceTo}
                     onChange={(e) => setNewReplaceTo(e.target.value)}
-                    style={{
-                      backgroundColor: '#0f172a',
-                      border: '1px solid var(--color-border-strong)',
-                      color: '#fff',
-                      borderRadius: '8px',
-                      padding: '8px 10px',
-                      fontSize: '12px',
-                    }}
+                    className="tom-input"
                   />
                   <button
                     type="button"
@@ -2145,15 +1545,7 @@ export function TaskOverviewModal({
                       setNewReplaceFrom('')
                       setNewReplaceTo('')
                     }}
-                    style={{
-                      backgroundColor: '#a855f7',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: '8px',
-                      fontSize: '12px',
-                      fontWeight: 600,
-                      cursor: 'pointer',
-                    }}
+                    className="btn tom-addbtn tom-addbtn--replace"
                   >
                     {t('ui_add')}
                   </button>
@@ -2162,34 +1554,21 @@ export function TaskOverviewModal({
 
               {/* Replacements List */}
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '10px' }}>
+                <div className="tom-title tom-title--b">
                   {t('ui_active_replacements')}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div className="tom-col">
                   {Object.entries((draft as any).replacements || {}).map(([from, to], idx) => (
                     <div
                       key={idx}
-                      style={{
-                        backgroundColor: '#0f172a',
-                        borderRadius: '8px',
-                        padding: '8px 12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        border: '1px solid #334155',
-                      }}
+                      className="tom-opt tom-opt--flat"
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
-                        <code style={{ color: '#f87171' }}>{from}</code>
-                        <span style={{ color: 'var(--color-text-muted)' }}>➔</span>
-                        <code style={{ color: '#4ade80' }}>{to as string}</code>
+                      <div className="tom-inline tom-inline--roomy tom-reprow">
+                        <code className="tom-rep-from">{from}</code>
+                        <ArrowRight size={12} className="tom-rep-arrow" aria-hidden="true" />
+                        <code className="tom-rep-to">{to as string}</code>
                       </div>
                       <button
                         type="button"
@@ -2198,20 +1577,14 @@ export function TaskOverviewModal({
                           delete reps[from]
                           setDraft({ ...draft, replacements: reps })
                         }}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: '#ef4444',
-                          cursor: 'pointer',
-                          padding: '2px',
-                        }}
+                        className="tom-iconbtn tom-iconbtn--danger"
                       >
                         <Trash2 size={13} />
                       </button>
                     </div>
                   ))}
                   {Object.keys((draft as any).replacements || {}).length === 0 && (
-                    <div style={{ fontSize: '11px', color: 'var(--color-text-muted)' }}>{t('ui_no_text_replacements_configured')}</div>
+                    <div className="tom-sub">{t('ui_no_text_replacements_configured')}</div>
                   )}
                 </div>
               </div>
@@ -2236,37 +1609,25 @@ export function TaskOverviewModal({
 
           {/* 5. FILTERS VIEW (⊶) */}
           {currentTab === 'filters' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="tom-view">
+              <div className="tom-row">
                 <button
                   type="button"
                   onClick={() => setCurrentTab('overview')}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#38bdf8',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
+                  className="tom-back"
                 >
                   {t('ui_back_to_task_overview')}
                 </button>
-                <span style={{ fontSize: '12px', color: '#3b82f6', fontWeight: 600 }}>{t('ui_media_type_filters')}</span>
+                <span className="tom-count tom-count--info">{t('ui_media_type_filters')}</span>
               </div>
 
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '8px' }}>
+                <div className="tom-title">
                   {t('ui_filter_message_types')}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div className="tom-col">
                   {[
                     { key: 'duplicate_filters' as const, label: t('ui_duplicate_filters_sha_256_fingerprint'), active: Boolean(draft.duplicate_filters) },
                     { key: 'block_text' as const, label: t('ui_block_text_messages'), active: Boolean(draft.block_text) },
@@ -2278,30 +1639,13 @@ export function TaskOverviewModal({
                   ].map((f) => (
                     <div
                       key={f.key}
-                      style={{
-                        backgroundColor: '#0f172a',
-                        borderRadius: '8px',
-                        padding: '10px 12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        border: '1px solid #334155',
-                      }}
+                      className="tom-opt tom-opt--flat"
                     >
-                      <span style={{ fontSize: '12px', color: '#e2e8f0', fontWeight: 500 }}>{f.label}</span>
+                      <span className="tom-rowtext">{f.label}</span>
                       <button
                         type="button"
                         onClick={() => handleToggle(f.key)}
-                        style={{
-                          backgroundColor: f.active ? '#ef4444' : '#334155',
-                          color: '#fff',
-                          border: 'none',
-                          borderRadius: '12px',
-                          padding: '3px 10px',
-                          fontSize: '11px',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                        }}
+                        className={'tom-pill tom-pill--block' + (f.active ? ' is-on' : '')}
                       >
                         {f.active ? t('ui_blocked') : t('ui_allowed')}
                       </button>
@@ -2314,44 +1658,32 @@ export function TaskOverviewModal({
 
           {/* 6. SET DELAY VIEW (⏱) */}
           {currentTab === 'delay' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="tom-view">
+              <div className="tom-row">
                 <button
                   type="button"
                   onClick={() => setCurrentTab('overview')}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#38bdf8',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
+                  className="tom-back"
                 >
                   {t('ui_back_to_task_overview')}
                 </button>
-                <span style={{ fontSize: '12px', color: '#eab308', fontWeight: 600 }}>
+                <span className="tom-count tom-count--warn">
                   {t('ui_current_delay')} {draft.forward_delay_seconds || draft.delay_seconds || 0}s
                 </span>
               </div>
 
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '6px' }}>
+                <div className="tom-title tom-title--sm">
                   {t('ui_configure_forward_delay')}
                 </div>
-                <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '14px' }}>
+                <div className="tom-sub tom-mb-4">
                   {t('ui_adds_an_asynchronous_pause_before_forwarding_each_message_to_pre')}
                 </div>
 
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginBottom: '6px' }}>
+                <div className="tom-mb-4">
+                  <label className="tom-overline tom-overline--block">
                     {t('ui_delay_in_seconds')} <strong>{draft.forward_delay_seconds || draft.delay_seconds || 0}s</strong>
                   </label>
                   <input
@@ -2363,23 +1695,23 @@ export function TaskOverviewModal({
                       const v = parseFloat(e.target.value) || 0
                       setDraft({ ...draft, forward_delay_seconds: v, delay_seconds: v })
                     }}
-                    style={{ width: '100%', cursor: 'pointer' }}
+                    className="tom-range"
                   />
                 </div>
 
-                <div style={{ fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '8px' }}>
+                <div className="tom-overline tom-overline--strong">
                   {t('ui_quick_presets')}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                <div className="tom-grid4">
                   {[
                     { label: t('ui_0s_instant'), sec: 0 },
-                    { label: '⏱ 3s', sec: 3 },
-                    { label: '⏱ 5s', sec: 5 },
-                    { label: '⏱ 10s', sec: 10 },
-                    { label: '⏱ 15s', sec: 15 },
-                    { label: '⏱ 30s', sec: 30 },
-                    { label: '⏱ 60s', sec: 60 },
-                    { label: '⏱ 120s', sec: 120 },
+                    { label: '3s', sec: 3 },
+                    { label: '5s', sec: 5 },
+                    { label: '10s', sec: 10 },
+                    { label: '15s', sec: 15 },
+                    { label: '30s', sec: 30 },
+                    { label: '60s', sec: 60 },
+                    { label: '120s', sec: 120 },
                   ].map((preset) => (
                     <button
                       key={preset.sec}
@@ -2391,25 +1723,9 @@ export function TaskOverviewModal({
                           delay_seconds: preset.sec,
                         })
                       }
-                      style={{
-                        backgroundColor:
-                          (draft.forward_delay_seconds || draft.delay_seconds || 0) === preset.sec
-                            ? '#eab308'
-                            : '#0f172a',
-                        color:
-                          (draft.forward_delay_seconds || draft.delay_seconds || 0) === preset.sec
-                            ? '#000000'
-                            : '#f1f5f9',
-                        border: '1px solid #334155',
-                        borderRadius: '8px',
-                        padding: '8px 4px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                      }}
+                      className={'tom-preset' + ((draft.forward_delay_seconds || draft.delay_seconds || 0) === preset.sec ? ' is-on tom-preset--delay' : '')}
                     >
-                      {preset.label}
+                      <Clock size={11} aria-hidden="true" /> {preset.label}
                     </button>
                   ))}
                 </div>
@@ -2419,44 +1735,32 @@ export function TaskOverviewModal({
 
           {/* 7. FORWARD EVERY N VIEW (🔢) */}
           {currentTab === 'every_n' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="tom-view">
+              <div className="tom-row">
                 <button
                   type="button"
                   onClick={() => setCurrentTab('overview')}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#38bdf8',
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    padding: 0,
-                  }}
+                  className="tom-back"
                 >
                   {t('ui_back_to_task_overview')}
                 </button>
-                <span style={{ fontSize: '12px', color: '#a78bfa', fontWeight: 600 }}>
+                <span className="tom-count tom-count--violet">
                   {t('ui_every_n_current')} {everyN}
                 </span>
               </div>
 
               <div
-                style={{
-                  backgroundColor: '#1e293b',
-                  borderRadius: '14px',
-                  padding: '14px',
-                  border: '1px solid #334155',
-                }}
+                className="tom-card"
               >
-                <div style={{ fontSize: '13px', fontWeight: 700, color: '#f3f4f6', marginBottom: '6px' }}>
+                <div className="tom-title tom-title--sm">
                   {t('ui_configure_every_n')}
                 </div>
-                <div style={{ fontSize: '11px', color: '#94a3b8', marginBottom: '14px' }}>
+                <div className="tom-sub tom-mb-4">
                   {t('ui_every_n_help')}
                 </div>
 
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{ fontSize: '12px', color: '#cbd5e1', display: 'block', marginBottom: '6px' }}>
+                <div className="tom-mb-4">
+                  <label className="tom-overline tom-overline--block">
                     {t('ui_every_n_range')}
                   </label>
                   <input
@@ -2467,55 +1771,36 @@ export function TaskOverviewModal({
                     inputMode="numeric"
                     value={everyN}
                     onChange={(e) => setEveryN(parseInt(e.target.value, 10))}
-                    style={{
-                      width: '100%',
-                      backgroundColor: '#0f172a',
-                      border: '1px solid #334155',
-                      borderRadius: '10px',
-                      padding: '10px 12px',
-                      color: '#f1f5f9',
-                      fontSize: '14px',
-                      fontWeight: 700,
-                    }}
+                    className="tom-input tom-input--big"
                   />
                 </div>
 
-                <div style={{ fontSize: '12px', fontWeight: 600, color: '#cbd5e1', marginBottom: '8px' }}>
+                <div className="tom-overline tom-overline--strong">
                   {t('ui_quick_presets')}
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
+                <div className="tom-grid4">
                   {[
                     { label: t('ui_every_n_every_message'), n: 1 },
-                    { label: '🔢 2', n: 2 },
-                    { label: '🔢 3', n: 3 },
-                    { label: '🔢 5', n: 5 },
-                    { label: '🔢 10', n: 10 },
-                    { label: '🔢 25', n: 25 },
-                    { label: '🔢 50', n: 50 },
-                    { label: '🔢 100', n: 100 },
+                    { label: '2', n: 2 },
+                    { label: '3', n: 3 },
+                    { label: '5', n: 5 },
+                    { label: '10', n: 10 },
+                    { label: '25', n: 25 },
+                    { label: '50', n: 50 },
+                    { label: '100', n: 100 },
                   ].map((preset) => (
                     <button
                       key={preset.n}
                       type="button"
                       onClick={() => setEveryN(preset.n)}
-                      style={{
-                        backgroundColor: everyN === preset.n ? '#a78bfa' : '#0f172a',
-                        color: everyN === preset.n ? '#000000' : '#f1f5f9',
-                        border: '1px solid #334155',
-                        borderRadius: '8px',
-                        padding: '8px 4px',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                      }}
+                      className={'tom-preset' + (everyN === preset.n ? ' is-on tom-preset--n' : '')}
                     >
-                      {preset.label}
+                      <Hash size={11} aria-hidden="true" /> {preset.label}
                     </button>
                   ))}
                 </div>
 
-                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '12px' }}>
+                <div className="tom-sub tom-mt-3">
                   {t('ui_every_n_example')}
                 </div>
               </div>
@@ -2525,29 +1810,12 @@ export function TaskOverviewModal({
 
         {/* Bottom Action Footer */}
         <div
-          style={{
-            padding: '14px 18px',
-            borderTop: '1px solid #1f2937',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'flex-end',
-            gap: '10px',
-            backgroundColor: '#131b2e',
-          }}
+          className="tom-footer"
         >
           <button
             type="button"
             onClick={onClose}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '10px',
-              backgroundColor: '#1f2937',
-              color: '#9ca3af',
-              border: 'none',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
+            className="btn tom-footerbtn"
           >
             {t('ui_cancel')}
           </button>
@@ -2565,19 +1833,7 @@ export function TaskOverviewModal({
             type="button"
             onClick={handleSaveAndClose}
             disabled={saving}
-            style={{
-              padding: '8px 20px',
-              borderRadius: '10px',
-              backgroundColor: '#3b82f6',
-              color: '#ffffff',
-              border: 'none',
-              fontSize: '13px',
-              fontWeight: 600,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
+            className="btn btn--primary tom-footerbtn"
           >
             {saving ? t('ui_saving') : t('ui_save_changes')}
           </button>

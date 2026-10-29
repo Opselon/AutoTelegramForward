@@ -15,11 +15,7 @@
  */
 import { memo, useCallback, useState } from 'react'
 import {
-  ArrowDown,
-  ArrowRightLeft,
   Bot,
-  ChevronLeft,
-  ChevronRight,
   Clock,
   Copy,
   Edit3,
@@ -34,16 +30,15 @@ import {
 } from 'lucide-react'
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { EmptyState } from '../components/ui/Primitives'
+import { FlowDiagram } from '../components/FlowDiagram'
+import { EmptyState, Button } from '../components/ui/Primitives'
 import { normalizeEndpoint } from '../endpoint'
-import { extraSourceCount } from '../components/ShellWidgets'
 import type { DashboardCtx } from '../App'
 import type { ForwardRule, RuleLiveStat } from '../types'
 
 interface RuleCardProps {
   rule: ForwardRule
   liveStat?: RuleLiveStat
-  isRtl: boolean
   t: (key: string, params?: Record<string, string | number>) => string
   onToggle: (id: string) => void
   onPause: (id: string) => void
@@ -62,7 +57,6 @@ interface RuleCardProps {
 const RuleCard = memo(function RuleCard({
   rule,
   liveStat,
-  isRtl,
   t,
   onToggle,
   onPause,
@@ -225,124 +219,10 @@ const RuleCard = memo(function RuleCard({
         </div>
       </div>
 
-      {/* Channel Flow Diagram — Mobile (Vertical Stack) */}
-      <div className="channel-flow-mobile" style={{ background: 'rgba(15, 23, 42, 0.6)', borderRadius: 10, padding: '12px 14px', marginBottom: 14, border: '1px solid rgba(255, 255, 255, 0.05)', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--type-xs)' }}>
-              {t('ui_source_a')}
-              {extraSourceCount(rule) > 0 && (
-                <span className="badge" style={{ fontSize: 'var(--type-xs)', marginInlineStart: 6, background: 'rgba(59, 130, 246, 0.18)', color: '#93c5fd' }}>
-                  +{extraSourceCount(rule)}
-                </span>
-              )}
-            </div>
-            <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: '0.82rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {rule.source_chat_name || rule.source_chat_id}
-            </div>
-          </div>
-          <span className="font-mono-ltr channel-id-mono" style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', flexShrink: 0, marginInlineStart: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '46%' }}>
-            {rule.source_chat_id}
-          </span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '2px 0' }}>
-          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
-          <span className="badge badge-direct" style={{ fontSize: 'var(--type-xs)', padding: '2px 8px' }}>
-            <ArrowDown size={11} /> {rule.use_intermediate ? (t('ui_hop_c')) : (t('ui_direct'))}
-          </span>
-          <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.08)' }} />
-        </div>
-
-        {rule.use_intermediate && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minWidth: 0, background: 'rgba(245, 158, 11, 0.08)', padding: '6px 10px', borderRadius: 6 }}>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ color: 'var(--color-warning)', fontSize: 'var(--type-xs)' }}>{t('ui_hop_c')}</div>
-              <div style={{ fontWeight: 600, color: 'var(--color-warning)', fontSize: '0.8rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {rule.intermediate_channel_name || rule.intermediate_channel_id}
-              </div>
-            </div>
-            <span className="font-mono-ltr channel-id-mono" style={{ fontSize: 'var(--type-xs)', color: '#b45309', flexShrink: 0, marginInlineStart: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '46%' }}>
-              {rule.intermediate_channel_id}
-            </span>
-          </div>
-        )}
-
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--type-xs)' }}>{t('ui_target_b')}</div>
-            <div style={{ fontWeight: 600, color: '#f8fafc', fontSize: '0.82rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {rule.target_chat_name || rule.target_chat_id}
-            </div>
-          </div>
-          <span className="font-mono-ltr channel-id-mono" style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', flexShrink: 0, marginInlineStart: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '46%' }}>
-            {rule.target_chat_id}
-          </span>
-        </div>
-      </div>
-
-      {/* Channel Flow Diagram — Desktop (Horizontal Row) */}
-      <div
-        className="channel-flow-desktop"
-        style={{
-          background: 'rgba(15, 23, 42, 0.6)',
-          borderRadius: 10,
-          padding: '12px 14px',
-          marginBottom: 14,
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 8,
-          fontSize: '0.82rem',
-        }}
-      >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--type-xs)' }}>{t('ui_source_a')}</div>
-          <div style={{ fontWeight: 600, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {rule.source_chat_name || rule.source_chat_id}
-          </div>
-          <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>
-            <span className="font-mono-ltr">{rule.source_chat_id}</span>
-          </div>
-        </div>
-
-        {rule.use_intermediate ? (
-          <>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: 'var(--color-warning)', flexShrink: 0 }}>
-              <span style={{ fontSize: 'var(--type-xs)' }}>{t('ui_hop')}</span>
-              <ArrowRightLeft size={14} />
-            </div>
-            <div style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
-              <div style={{ color: 'var(--color-warning)', fontSize: 'var(--type-xs)' }}>{t('ui_brand_c')}</div>
-              <div style={{ fontWeight: 600, color: 'var(--color-warning)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {rule.intermediate_channel_name || rule.intermediate_channel_id || t('ui_channel_c')}
-              </div>
-              <div style={{ fontSize: 'var(--type-xs)', color: '#b45309' }}>
-                <span className="font-mono-ltr">{rule.intermediate_channel_id}</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: 'var(--color-success)', flexShrink: 0 }}>
-              <span style={{ fontSize: 'var(--type-xs)' }}>{t('ui_native')}</span>
-              {isRtl ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-            </div>
-          </>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', color: '#3b82f6', padding: '0 8px', flexShrink: 0 }}>
-            <span style={{ fontSize: 'var(--type-xs)' }}>{t('ui_direct')}</span>
-            {isRtl ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
-          </div>
-        )}
-
-        <div style={{ flex: 1, minWidth: 0, textAlign: isRtl ? 'left' : 'right' }}>
-          <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--type-xs)' }}>{t('ui_target_b')}</div>
-          <div style={{ fontWeight: 600, color: '#f8fafc', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {rule.target_chat_name || rule.target_chat_id}
-          </div>
-          <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>
-            <span className="font-mono-ltr">{rule.target_chat_id}</span>
-          </div>
-        </div>
-      </div>
+      {/* Channel Flow Diagram — one markup, CSS reflows it (≥768 horizontal,
+          <768 vertical). The old .channel-flow-mobile/.channel-flow-desktop
+          duplicates are gone; see components/FlowDiagram.tsx. */}
+      <FlowDiagram rule={rule} t={t} />
 
       {/* Criteria & Details */}
       <div style={{ fontSize: '0.78rem', color: 'var(--color-text-subtle)', marginBottom: 12 }}>
@@ -488,7 +368,6 @@ export default function RulesPanel({ d }: { d: DashboardCtx }) {
     openRuleModal,
     setTaskOverviewRule,
     setIsTaskOverviewOpen,
-    isRtl,
     t,
     handleToggleRule,
     handleDeleteRule,
@@ -566,7 +445,16 @@ export default function RulesPanel({ d }: { d: DashboardCtx }) {
                 <div className="rules-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
                   {(Array.isArray(rules) ? rules : []).length === 0 && (
                     <div style={{ gridColumn: '1 / -1' }}>
-                      <EmptyState title={t('ui_empty_title')} description={t('ui_empty_body')} />
+                      <EmptyState
+                        title={t('ui_empty_title')}
+                        description={t('ui_empty_body')}
+                        action={
+                          <Button variant="primary" onClick={() => openRuleModal(null)}>
+                            <Plus size={16} aria-hidden="true" />
+                            <span>{t('ui_create_first_task')}</span>
+                          </Button>
+                        }
+                      />
                     </div>
                   )}
                   {(Array.isArray(rules) ? rules : []).map((rule) => (
@@ -574,7 +462,6 @@ export default function RulesPanel({ d }: { d: DashboardCtx }) {
                       key={rule.id}
                       rule={rule}
                       liveStat={(ruleLiveStats || []).find((st) => st.rule_id === rule.id)}
-                      isRtl={isRtl}
                       t={t}
                       onToggle={onToggle}
                       onPause={onPause}
