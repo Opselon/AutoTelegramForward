@@ -1,8 +1,8 @@
 /**
  * The delivery queue and the dead-letter queue.
  */
-import { Activity, Clock, RefreshCw, Trash2 } from 'lucide-react'
-import { EmptyState } from '../components/ui/Primitives'
+import { Activity, Clock, Plus, RefreshCw, Trash2 } from 'lucide-react'
+import { Button, EmptyState } from '../components/ui/Primitives'
 import type { DashboardCtx } from '../App'
 
 export default function QueuePanel({ d }: { d: DashboardCtx }) {
@@ -13,6 +13,7 @@ export default function QueuePanel({ d }: { d: DashboardCtx }) {
     t,
     handleRetryDLQ,
     handlePurgeDLQ,
+    openRuleModal,
   } = d
   return (
     <>
@@ -69,7 +70,16 @@ export default function QueuePanel({ d }: { d: DashboardCtx }) {
                     </h3>
 
                     {queueJobs.length === 0 ? (
-                      <EmptyState title={t('ui_empty_title')} description={t('ui_no_pending_jobs_in_queue')} />
+                      <EmptyState
+                        title={t('ui_empty_title')}
+                        description={t('ui_no_pending_jobs_in_queue')}
+                        action={
+                          <Button variant="primary" onClick={() => openRuleModal(null)}>
+                            <Plus size={16} aria-hidden="true" />
+                            <span>{t('ui_create_first_task')}</span>
+                          </Button>
+                        }
+                      />
                     ) : (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         {(Array.isArray(queueJobs) ? queueJobs : []).map((q) => (

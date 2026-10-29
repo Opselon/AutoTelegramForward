@@ -1,10 +1,22 @@
 import React, { useState } from 'react'
+import { ArrowRightLeft, Eye, EyeOff, Filter, Radio, Sparkles } from 'lucide-react'
 import { api } from '../api'
 import { LanguagePicker } from '../components/LanguagePicker'
 
 import { applySession } from '../session'
 import { isRtlLang, makeT, preferredLang, rememberLang, type UiLang } from '../locales/engine'
 
+/**
+ * Sign-in / registration screen.
+ *
+ * Presentation only — the register/login flow below is the same two calls
+ * through `api` it has always been. The frame is a two-panel layout: on wide
+ * screens a brand panel (wordmark, one-line value proposition, three feature
+ * bullets) sits beside the form; below 1024 px only the form renders, with a
+ * compact wordmark of its own. Every colour and spacing value resolves to the
+ * design-system layer in `index.css` (`.auth-*`), so this file carries no
+ * inline styles.
+ */
 export default function Auth({ onLogin }: { onLogin: () => void }) {
   // The login page is the first screen a user sees, so it must not guess: the
   // stored choice wins, then the browser's own language, then English. A
@@ -16,6 +28,7 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
   const [displayName, setDisplayName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
 
   const isRtl = isRtlLang(lang)
   const t = makeT(lang)
@@ -62,208 +75,175 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
     }
   }
 
-  return (
-    <div
-      dir={isRtl ? 'rtl' : 'ltr'}
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: '20px 16px',
-        background: '#0b0f19',
-        backgroundImage:
-          'radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.18) 0px, transparent 50%), radial-gradient(at 100% 100%, rgba(245, 158, 11, 0.12) 0px, transparent 50%)',
-        color: '#f8fafc',
-        fontFamily: "'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-      }}
-    >
-      {/* Language picker: the same ten catalogs the dashboard uses */}
-      <div
-        style={{
-          width: '100%',
-          maxWidth: 390,
-          display: 'flex',
-          justifyContent: 'flex-end',
-          marginBottom: 12,
-        }}
-      >
-        <LanguagePicker
-          lang={lang}
-          onChange={(next) => {
-            setLang(next)
-            rememberLang(next)
-          }}
-        />
-      </div>
+  const features = [
+    { icon: <ArrowRightLeft size={16} aria-hidden="true" />, text: t('ui_auth_feature_forwarding') },
+    { icon: <Filter size={16} aria-hidden="true" />, text: t('ui_auth_feature_filters') },
+    { icon: <Sparkles size={16} aria-hidden="true" />, text: t('ui_auth_feature_ai') },
+  ]
 
-      <div
-        className="glass-panel"
-        style={{
-          maxWidth: 390,
-          width: '100%',
-          padding: '32px 24px',
-          background: 'rgba(18, 24, 38, 0.85)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
-          borderRadius: 18,
-          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.7)',
-        }}
-      >
-        {/* Brand Icon & Title */}
-        <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <div
-            style={{
-              width: 56,
-              height: 56,
-              margin: '0 auto 14px',
-              borderRadius: 16,
-              background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 26,
-              boxShadow: '0 8px 24px rgba(99, 102, 241, 0.45)',
+  return (
+    <div dir={isRtl ? 'rtl' : 'ltr'} className="auth-page">
+      {/* Brand panel: the story, wide screens only. */}
+      <aside className="auth-brand" aria-hidden="false">
+        <div className="auth-brand__wordmark">
+          <span className="auth-brand__mark" aria-hidden="true">
+            <Radio size={22} />
+          </span>
+          <span className="auth-brand__name">
+            AutoTelegramForward <em>PRO</em>
+          </span>
+        </div>
+        <p className="auth-brand__prop">{t('ui_auth_value_prop')}</p>
+        <ul className="auth-brand__features">
+          {features.map((feature) => (
+            <li key={feature.text} className="auth-brand__feature">
+              <span className="auth-brand__feature-icon" aria-hidden="true">
+                {feature.icon}
+              </span>
+              <span>{feature.text}</span>
+            </li>
+          ))}
+        </ul>
+      </aside>
+
+      {/* Form panel. */}
+      <main className="auth-main">
+        <div className="auth-lang-row">
+          <LanguagePicker
+            lang={lang}
+            onChange={(next) => {
+              setLang(next)
+              rememberLang(next)
             }}
-          >
-            ⚡
+          />
+        </div>
+
+        <div className="glass-panel auth-card">
+          {/* Compact wordmark: the narrow screens' stand-in for the side panel. */}
+          <div className="auth-brand-mini">
+            <span className="auth-brand__mark auth-brand__mark--sm" aria-hidden="true">
+              <Radio size={18} />
+            </span>
+            <span className="auth-brand__name auth-brand__name--sm">
+              AutoTelegramForward <em>PRO</em>
+            </span>
           </div>
-          <h2 style={{ margin: '0 0 6px', fontSize: '1.35rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
-            AutoTelegramForward <span style={{ color: '#818cf8' }}>PRO</span>
-          </h2>
-          <p style={{ margin: 0, fontSize: '0.825rem', color: '#94a3b8', lineHeight: 1.5 }}>
+
+          {/* Sign in / Register segmented toggle. */}
+          <div className="auth-seg" role="tablist" aria-label={t('ui_sign_in')}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!isRegister}
+              className={`auth-seg__btn${isRegister ? '' : ' is-active'}`}
+              onClick={() => {
+                setIsRegister(false)
+                setError(null)
+              }}
+            >
+              {t('ui_sign_in')}
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={isRegister}
+              className={`auth-seg__btn${isRegister ? ' is-active' : ''}`}
+              onClick={() => {
+                setIsRegister(true)
+                setError(null)
+              }}
+            >
+              {t('ui_register')}
+            </button>
+          </div>
+
+          <p className="auth-card__lead">
             {isRegister
               ? t('ui_create_your_control_panel_account')
               : t('ui_sign_in_to_your_control_panel')}
           </p>
-        </div>
 
-        {/* Telegram Bot Hint */}
-        <div
-          style={{
-            background: 'rgba(99, 102, 241, 0.1)',
-            border: '1px solid rgba(99, 102, 241, 0.25)',
-            borderRadius: 10,
-            padding: '10px 14px',
-            marginBottom: 20,
-            fontSize: '0.8rem',
-            lineHeight: 1.5,
-            color: '#c7d2fe',
-          }}
-        >
-          💡 <b>{t('ui_tip_label')}:</b> {t('ui_telegram_bot_hint')}
-        </div>
-
-        {error && (
-          <div
-            style={{
-              padding: '10px 14px',
-              marginBottom: 16,
-              borderRadius: 8,
-              background: 'rgba(239, 68, 68, 0.15)',
-              border: '1px solid rgba(239, 68, 68, 0.35)',
-              color: '#f87171',
-              fontSize: '0.825rem',
-              lineHeight: 1.4,
-            }}
-          >
-            {error}
+          {/* Telegram Bot Hint */}
+          <div className="auth-hint">
+            <b>{t('ui_tip_label')}:</b> {t('ui_telegram_bot_hint')}
           </div>
-        )}
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {isRegister && (
-            <div>
-              <label style={{ display: 'block', fontSize: '0.775rem', color: '#94a3b8', marginBottom: 6 }}>
-                {t('ui_display_name_optional')}
-              </label>
-              <input
-                type="text"
-                placeholder={t('ui_e_g_john_doe')}
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="input-field"
-                style={{ fontSize: 16 }}
-              />
+          {error && (
+            <div className="auth-error" role="alert">
+              {error}
             </div>
           )}
 
-          <div>
-            <label style={{ display: 'block', fontSize: '0.775rem', color: '#94a3b8', marginBottom: 6 }}>
-              {t('ui_username')}
-            </label>
-            <input
-              type="text"
-              placeholder={t('ui_username_min_4_chars')}
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-              className="input-field"
-              style={{ fontSize: 16 }}
-              autoComplete="username"
-              autoCapitalize="none"
-              spellCheck={false}
-            />
-          </div>
+          <form onSubmit={handleSubmit} className="auth-form">
+            {isRegister && (
+              <div className="field">
+                <label className="field__label" htmlFor="auth-display-name">
+                  {t('ui_display_name_optional')}
+                </label>
+                <input
+                  id="auth-display-name"
+                  type="text"
+                  placeholder={t('ui_e_g_john_doe')}
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  className="input-field auth-input"
+                />
+              </div>
+            )}
 
-          <div>
-            <label style={{ display: 'block', fontSize: '0.775rem', color: '#94a3b8', marginBottom: 6 }}>
-              {t('ui_password')}
-            </label>
-            <input
-              type="password"
-              placeholder={t('ui_secure_password_min_6_chars')}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="input-field"
-              style={{ fontSize: 16 }}
-              autoComplete={isRegister ? 'new-password' : 'current-password'}
-            />
-          </div>
+            <div className="field">
+              <label className="field__label" htmlFor="auth-username">
+                {t('ui_username')}
+              </label>
+              <input
+                id="auth-username"
+                type="text"
+                placeholder={t('ui_username_min_4_chars')}
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                className="input-field auth-input"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="btn btn-primary"
-            style={{
-              padding: '12px',
-              fontSize: '0.95rem',
-              fontWeight: 700,
-              borderRadius: 10,
-              marginTop: 4,
-            }}
-          >
-            {loading ? (t('ui_please_wait')) : isRegister ? (t('ui_create_account')) : (t('ui_sign_in'))}
-          </button>
-        </form>
+            <div className="field">
+              <label className="field__label" htmlFor="auth-password">
+                {t('ui_password')}
+              </label>
+              <div className="auth-pass">
+                <input
+                  id="auth-password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder={t('ui_secure_password_min_6_chars')}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="input-field auth-input"
+                  autoComplete={isRegister ? 'new-password' : 'current-password'}
+                />
+                <button
+                  type="button"
+                  className="auth-pass__toggle"
+                  aria-label={showPassword ? t('ui_hide_password') : t('ui_show_password')}
+                  aria-pressed={showPassword}
+                  title={showPassword ? t('ui_hide_password') : t('ui_show_password')}
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  {showPassword ? <EyeOff size={16} aria-hidden="true" /> : <Eye size={16} aria-hidden="true" />}
+                </button>
+              </div>
+            </div>
 
-        <div style={{ marginTop: 20, textAlign: 'center', fontSize: '0.825rem', color: '#94a3b8' }}>
-          {isRegister ? (t('ui_already_have_an_account')) : (t('ui_don_t_have_an_account'))}{' '}
-          <button
-            type="button"
-            onClick={() => {
-              setIsRegister(!isRegister)
-              setError(null)
-            }}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: '#818cf8',
-              fontWeight: 700,
-              cursor: 'pointer',
-              padding: 0,
-              textDecoration: 'underline',
-              fontFamily: 'inherit',
-            }}
-          >
-            {isRegister ? (t('ui_sign_in')) : (t('ui_register'))}
-          </button>
+            <button type="submit" disabled={loading} className="btn btn--primary auth-submit">
+              {loading ? (t('ui_please_wait')) : isRegister ? (t('ui_create_account')) : (t('ui_sign_in'))}
+            </button>
+          </form>
         </div>
-      </div>
+      </main>
     </div>
   )
 }
