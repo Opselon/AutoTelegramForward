@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 /**
  * DevOps console: live logs, the delivery pipeline, recent errors and the
  * maintenance actions. The largest tab by far, which is why the shell never pays
@@ -21,6 +21,9 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
     setLogFilterLevel,
     logSearch,
     setLogSearch,
+    logScope,
+    setLogScope,
+    currentUser,
     logAutoRefresh,
     setLogAutoRefresh,
     logStats,
@@ -64,6 +67,26 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
     handleBackupImport,
     onBackupFileChosen,
   } = d
+
+  // The search field used to push every keystroke straight into the shared
+  // `logSearch`, which re-armed the 3s polling effect each time. The input
+  // keeps its own draft and commits it debounced (300ms), so both the initial
+  // fetch and the poller read a settled value.
+  const [searchDraft, setSearchDraft] = useState(logSearch)
+  useEffect(() => {
+    // An external write (e.g. the correlation-id chip) must land in the field.
+    setSearchDraft(logSearch)
+  }, [logSearch])
+  useEffect(() => {
+    if (searchDraft === logSearch) return
+    const timer = setTimeout(() => setLogSearch(searchDraft), 300)
+    return () => clearTimeout(timer)
+  }, [searchDraft, logSearch, setLogSearch])
+
+  // Tenant scope of the console: visible to admins only (the API pins everyone
+  // else to their own events regardless of what this control would say).
+  const canPickScope = !!currentUser?.is_admin
+
   return (
     <>
               <div>
@@ -252,6 +275,29 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                     }}
                   >
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                      {/* Tenant scope: admins only. Switching refetches — the
+                          poller effect re-arms on `logScope` too. */}
+                      {canPickScope && (
+                        <div className="scope-toggle" role="group" aria-label={t('ui_log_scope_all_tenants')}>
+                          <button
+                            type="button"
+                            className={`scope-toggle__btn${logScope === 'mine' ? ' is-active' : ''}`}
+                            aria-pressed={logScope === 'mine'}
+                            onClick={() => setLogScope('mine')}
+                          >
+                            {t('ui_log_scope_my_events')}
+                          </button>
+                          <button
+                            type="button"
+                            className={`scope-toggle__btn${logScope === 'all' ? ' is-active' : ''}`}
+                            aria-pressed={logScope === 'all'}
+                            onClick={() => setLogScope('all')}
+                          >
+                            {t('ui_log_scope_all_tenants')}
+                          </button>
+                        </div>
+                      )}
+
                       {/* Service Filter */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{t('ui_service')}</span>
@@ -363,25 +409,20 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                       </div>
                     </div>
 
-                    {/* Text Search Input */}
+                    {/* Text Search Input — debounced; typing never re-arms the
+                        poller per keystroke and never fires a fetch per key. */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 260, flex: 1, maxWidth: 380 }}>
                       <input
                         type="text"
                         placeholder={t('ui_search_logs_live')}
-                        value={logSearch}
-                        onChange={(e) => {
-                          setLogSearch(e.target.value)
-                          fetchLogs(logFilterService, logFilterLevel, e.target.value)
-                        }}
+                        value={searchDraft}
+                        onChange={(e) => setSearchDraft(e.target.value)}
                         className="input-field"
                         style={{ padding: '6px 12px', fontSize: '0.8rem' }}
                       />
-                      {logSearch && (
+                      {searchDraft && (
                         <button
-                          onClick={() => {
-                            setLogSearch('')
-                            fetchLogs(logFilterService, logFilterLevel, '')
-                          }}
+                          onClick={() => setSearchDraft('')}
                           style={{
                             background: 'none',
                             border: 'none',

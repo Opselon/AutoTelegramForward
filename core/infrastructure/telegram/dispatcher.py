@@ -145,6 +145,7 @@ class MessageDispatcher:
                         "recoverable": recoverable,
                         "error_key": key,
                         "event_code": "SEND_ERROR",
+                        "owner_user_id": int(getattr(rule, "owner_user_id", 0) or 0),
                     },
                 )
             except Exception:

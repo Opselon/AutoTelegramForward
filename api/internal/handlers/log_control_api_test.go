@@ -153,11 +153,20 @@ func TestParseLogFilters_MineScopesToCaller(t *testing.T) {
 	if got := parseLogFilters(req).UserID; got != 5094837833 {
 		t.Fatalf("mine=1 must scope to the caller, got %d", got)
 	}
-	// Without mine, tenant scoping stays off so the whole-box view works.
+	// Without mine, a tenant is still pinned to their own id: the archive is
+	// one shared store and user_id == 0 means "every tenant" in the logger,
+	// so an unscoped default would serve the whole installation to anyone
+	// (see log_tenant_scope_test.go for the adversarial contract).
 	req = httptest.NewRequest("GET", "/api/logs", nil)
 	req = req.WithContext(context.WithValue(req.Context(), identityKey{}, &Identity{UserID: 5094837833}))
+	if got := parseLogFilters(req).UserID; got != 5094837833 {
+		t.Fatalf("a tenant default must stay pinned to their own id, got %d", got)
+	}
+	// An admin keeps the installation-wide default (user id 0 = every tenant).
+	req = httptest.NewRequest("GET", "/api/logs", nil)
+	req = req.WithContext(context.WithValue(req.Context(), identityKey{}, &Identity{UserID: 1, IsAdmin: true}))
 	if got := parseLogFilters(req).UserID; got != 0 {
-		t.Fatalf("unscoped query must not filter by user, got %d", got)
+		t.Fatalf("admin default must stay unscoped, got %d", got)
 	}
 }
 
