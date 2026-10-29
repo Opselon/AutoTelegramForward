@@ -2085,3 +2085,342 @@ input[type='radio']:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
+
+
+/* -------------------------------------------------------------------- */
+/* Overhaul additions (2026-10): shell widgets, rule/filter editors.     */
+/* Same contract as everything above: tokens only, logical properties,  */
+/* 44px controls, 12px type floor.                                      */
+/* -------------------------------------------------------------------- */
+
+/* Load-failure banner: names the feeds that did not load, offers a Retry. */
+.load-failure-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-block-end: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  font-size: var(--type-sm);
+  color: var(--color-danger-text);
+}
+
+/* Header health chips: one class instead of four inline copies, and the
+   web dot is wired to the gateway probe instead of being hardcoded green. */
+.header-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: var(--color-surface-inset);
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  font-size: var(--type-sm);
+  color: var(--color-text-subtle);
+  white-space: nowrap;
+}
+
+.header-chip__dot {
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: var(--radius-full);
+  background: var(--color-danger);
+  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+  flex-shrink: 0;
+}
+
+.header-chip__dot.is-online {
+  background: var(--color-success);
+  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+}
+
+@media (max-width: 767px) {
+  /* Chips wrap as a row of their own instead of squeezing the title. */
+  .header-chip {
+    font-size: var(--type-xs);
+    padding: 4px 8px;
+  }
+}
+
+/* Overview KPI cards: icon + label + tabular number, skeleton until loaded. */
+.overview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--space-3);
+  margin-block-end: var(--space-4);
+}
+
+.overview-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  min-inline-size: 0;
+}
+
+.overview-card__icon {
+  display: inline-flex;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
+
+.overview-card__icon--primary {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+}
+
+.overview-card__icon--warning {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.overview-card__icon--success {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.overview-card__icon--danger {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.overview-card__icon--neutral {
+  background: var(--color-neutral-soft);
+  color: var(--color-text-muted);
+}
+
+.overview-card__text {
+  min-inline-size: 0;
+}
+
+.overview-card__label {
+  font-size: var(--type-xs);
+  color: var(--color-text-muted);
+}
+
+.overview-card__value {
+  font-size: var(--type-lg);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* Extracted editors: shared chrome for the rule + filter modals. */
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-block-end: var(--space-4);
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.rule-section {
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  margin-block-start: var(--space-4);
+}
+
+.rule-section__title {
+  font-size: var(--type-sm);
+  font-weight: 800;
+  color: var(--color-text);
+  margin-block-end: var(--space-2);
+}
+
+.rule-loop-warning {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-danger-soft);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  color: var(--color-danger-text);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2) var(--space-3);
+  margin-block-start: var(--space-2);
+  font-size: var(--type-sm);
+}
+
+.rule-toggle-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: var(--type-sm);
+  color: var(--color-text-subtle);
+  background: rgba(255, 255, 255, 0.04);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+}
+
+.rule-hop-summary {
+  margin-block-start: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-warning-soft);
+  border: 1px dashed rgba(245, 158, 11, 0.35);
+  border-radius: var(--radius-sm);
+  font-size: var(--type-xs);
+  color: var(--color-warning);
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+/* Endpoint chip lists (sources/targets) in the rule editor. */
+.endpoint-picker {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+}
+
+.endpoint-chip {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  margin-block-end: var(--space-1);
+  min-inline-size: 0;
+}
+
+.endpoint-chip__name {
+  font-size: var(--type-sm);
+  font-weight: 600;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.endpoint-chip__id {
+  font-size: var(--type-xs);
+  color: var(--color-text-muted);
+}
+
+.endpoint-picker__browse {
+  margin-block-start: var(--space-2);
+  border-style: dashed;
+}
+
+/* Filter editor: media-type chip toggles and the live verdict card. */
+.filter-media-group {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  margin: 0;
+  min-inline-size: 0;
+}
+
+.filter-media-group legend {
+  padding-inline: var(--space-1);
+}
+
+.filter-media-chip {
+  background: var(--color-neutral-soft);
+  border: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-full);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--type-xs);
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.filter-media-chip.is-on {
+  background: var(--color-primary-soft);
+  border-color: rgba(99, 102, 241, 0.5);
+  color: var(--color-text);
+}
+
+.filter-verdict {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin-block-start: var(--space-2);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  font-size: var(--type-sm);
+}
+
+.filter-verdict--allowed {
+  border-color: rgba(16, 185, 129, 0.45);
+  background: var(--color-success-soft);
+}
+
+.filter-verdict--dropped {
+  border-color: rgba(239, 68, 68, 0.45);
+  background: var(--color-danger-soft);
+}
+
+.filter-verdict__badge {
+  font-weight: 800;
+  font-size: var(--type-sm);
+}
+
+.filter-verdict--allowed .filter-verdict__badge {
+  color: var(--color-success);
+}
+
+.filter-verdict--dropped .filter-verdict__badge {
+  color: var(--color-danger-text);
+}
+
+.filter-card__row-label {
+  display: block;
+  color: var(--color-text-muted);
+  margin-block-end: 2px;
+  font-weight: 600;
+  font-size: var(--type-xs);
+}
+
+/* Tenant scope segmented control (DevOps log console, admins only). */
+.scope-toggle {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.scope-toggle__btn {
+  background: transparent;
+  border: 0;
+  color: var(--color-text-muted);
+  font-size: var(--type-sm);
+  font-weight: 600;
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.scope-toggle__btn.is-active {
+  background: var(--color-primary-soft);
+  color: var(--color-text);
+}
+
+/* Confirm dialog (replaces window.confirm across the panels). */
+.confirm-dialog__body {
+  margin: 0 0 var(--space-3);
+  color: var(--color-text-subtle);
+  font-size: var(--type-base);
+}
+
+.confirm-dialog__actions {
+  justify-content: flex-end;
+}

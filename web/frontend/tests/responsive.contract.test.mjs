@@ -13,9 +13,12 @@
 import assert from 'node:assert/strict'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
-const ROOT = new URL('..', import.meta.url).pathname
-const read = (rel) => readFileSync(join(ROOT, rel), 'utf8')
+const ROOT = fileURLToPath(new URL('..', import.meta.url))
+// Windows checkouts carry CRLF; the assertions below match LF-joined snippets,
+// so the source is normalized before any string math (content is unchanged).
+const read = (rel) => readFileSync(join(ROOT, rel), 'utf8').replace(/\r\n/g, '\n')
 const css = read('src/index.css')
 
 let checks = 0
@@ -107,7 +110,7 @@ const walk = (dir) => {
 walk(join(ROOT, 'src'))
 const tiny = []
 for (const file of tsxFiles) {
-  const text = readFileSync(file, 'utf8')
+  const text = readFileSync(file, 'utf8').replace(/\r\n/g, '\n')
   for (const m of text.matchAll(/fontSize:\s*'([0-9.]+)rem'/g)) {
     if (Number(m[1]) < 0.75) tiny.push(`${file}: ${m[0]}`)
   }

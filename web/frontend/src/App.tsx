@@ -1,4 +1,4 @@
-import React, { lazy, useMemo, useState, useEffect } from 'react'
+import React, { lazy, Suspense, useCallback, useMemo, useState, useEffect } from 'react'
 import {
   Send,
   Radio,
@@ -25,13 +25,12 @@ import { isAccepted, purgedCount, refusalReason } from './actionResult'
 import { describeSaveFailure } from './providerKey'
 import { isRtlLang, makeT, preferredLang, rememberLang, type UiLang } from './locales/engine'
 import { LanguagePicker } from './components/LanguagePicker'
-import type { ForwardRule, SaveRuleRequest, Session, AIConfig, AIProviderInfo, SaveAIConfigRequest, PromptTemplate, FilterRule, SaveFilterRuleRequest, DeliveryJob, DeadLetterJob, DeliveryStats, RuleLiveStat, RecentError, GatewaySystemInfo, SimulateResponse, StatsResponse, LogItem, LogStats, ServicesHealthResponse, PVResponderConfig, DiagnosticsResponse, MeInfo } from './types'
+import type { ForwardRule, Session, AIConfig, AIProviderInfo, SaveAIConfigRequest, PromptTemplate, FilterRule, DeliveryJob, DeadLetterJob, DeliveryStats, RuleLiveStat, RecentError, GatewaySystemInfo, SimulateResponse, StatsResponse, LogItem, LogStats, ServicesHealthResponse, PVResponderConfig, DiagnosticsResponse, MeInfo } from './types'
 import { getToken, applySession } from './session'
 import { PanelBoundary } from './components/PanelBoundary'
 import { Navigation, NavTrigger, type NavItem } from './components/Navigation'
 import { ProviderKeyCheck, UserBar } from './components/ShellWidgets'
-import { Toast } from './components/ui/Primitives'
-import { BRANDING_HOP_KEY, brandingHopSummary, brandingListToText, brandingTextToList, readBrandingHop, type BrandingHopConfig } from './dashboard/branding'
+import { Skeleton, Toast } from './components/ui/Primitives'
 
 // Every non-landing tab is a chunk. The shell ships with the landing panel
 // and fetches the rest the first time they are opened.
@@ -47,6 +46,12 @@ const QueuePanel = lazy(() => import('./panels/QueuePanel'))
 const DevopsPanel = lazy(() => import('./panels/DevopsPanel'))
 const TaskOverviewModal = lazy(() =>
   import('./components/TaskOverviewModal').then((m) => ({ default: m.TaskOverviewModal })),
+)
+const RuleModal = lazy(() =>
+  import('./components/RuleModal').then((m) => ({ default: m.RuleModal })),
+)
+const FilterModal = lazy(() =>
+  import('./components/FilterModal').then((m) => ({ default: m.FilterModal })),
 )
 const AdminPanel = lazy(() => import('./components/AdminPanel').then((m) => ({ default: m.AdminPanel })))
 const JobsPanel = lazy(() => import('./components/JobsPanel').then((m) => ({ default: m.JobsPanel })))
@@ -133,6 +138,9 @@ function useDashboard(me?: MeInfo) {
     }
   }
   const [errorBanner, setErrorBanner] = useState<string | null>(null)
+  // Feeds that failed to load on the last pass, surfaced in the error banner
+  // with a Retry (the pipeline-error banner below reuses the same surface).
+  const [loadFailures, setLoadFailures] = useState<string[] | null>(null)
   const [dismissedErrors, setDismissedErrors] = useState<Set<string>>(() => {
     try {
       const saved = sessionStorage.getItem('atf_dismissed_errors')
@@ -147,6 +155,14 @@ function useDashboard(me?: MeInfo) {
   const [logFilterService, setLogFilterService] = useState<string>('all')
   const [logFilterLevel, setLogFilterLevel] = useState<string>('all')
   const [logSearch, setLogSearch] = useState<string>('')
+  // Tenant scope of the log console. The API pins every non-admin to their own
+  // tenant regardless; admins choose, and default to the installation-wide view.
+  const [logScope, setLogScope] = useState<'mine' | 'all'>('all')
+  // Once identity settles, everyone who is not an admin reads their own events
+  // by default — matching the API's own default for them.
+  useEffect(() => {
+    if (currentUser && !currentUser.is_admin) setLogScope('mine')
+  }, [currentUser])
   const [logAutoRefresh, setLogAutoRefresh] = useState<boolean>(true)
   const [logStats, setLogStats] = useState<LogStats | null>(null)
   // v18 history controls: which task, which way, and how far back.
@@ -175,11 +191,10 @@ function useDashboard(me?: MeInfo) {
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
-  // Rule Modal
+  // Rule Modal — the draft lives inside <RuleModal />; the shell only tracks
+  // which rule is open (null = create a new one from the clean default).
   const [isRuleModalOpen, setIsRuleModalOpen] = useState(false)
-  const [ruleFormData, setRuleFormData] = useState<Partial<SaveRuleRequest>>({})
-  // Bot-parity toggles that live inside rule metadata (block_voice, album_mode, …)
-  const [ruleMeta, setRuleMeta] = useState<Record<string, any>>({})
+  const [ruleModalRule, setRuleModalRule] = useState<ForwardRule | null>(null)
   const [taskOverviewRule, setTaskOverviewRule] = useState<ForwardRule | null>(null)
   const [isTaskOverviewOpen, setIsTaskOverviewOpen] = useState(false)
 
@@ -187,9 +202,9 @@ function useDashboard(me?: MeInfo) {
   const [isAiModalOpen, setIsAiModalOpen] = useState(false)
   const [aiFormData, setAiFormData] = useState<Partial<SaveAIConfigRequest>>({})
 
-  // Filter Modal
+  // Filter Modal — same split: the draft lives inside <FilterModal />.
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false)
-  const [filterFormData, setFilterFormData] = useState<Partial<SaveFilterRuleRequest>>({})
+  const [filterModalRule, setFilterModalRule] = useState<FilterRule | null>(null)
 
   // Simulator State
   const [simText, setSimText] = useState('💎 VIP SIGNAL: BUY XAUUSD @ 2655 | TP1: 2680 | SL: 2640')
@@ -208,30 +223,40 @@ function useDashboard(me?: MeInfo) {
   const [pvPreset, setPvPreset] = useState<'casual' | 'business' | 'short' | 'custom'>('casual')
 
   const isRtl = isRtlLang(lang)
-  const t = makeT(lang)
+  // Memoized on the language so the callbacks below (and the memoized rule
+  // cards that receive them) stay stable between renders of the same locale.
+  const t = useMemo(() => makeT(lang), [lang])
 
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToast(msg)
     setTimeout(() => setToast(null), 4000)
-  }
+  }, [])
 
   const loadData = async () => {
     setLoading(true)
+    // Every panel feed is independent, so one failed endpoint must not blank
+    // the others. Failures are collected (not swallowed) and surfaced in the
+    // dismissible banner with a Retry that re-runs this loader.
+    const failures: string[] = []
+    const track = <T,>(label: string, fallback: T) => (): T => {
+      failures.push(label)
+      return fallback
+    }
     try {
       const [r, s, ai, pt, f, q, dlq, gw, st, l, ds, pv, prov] = await Promise.all([
-        api.getRules().catch(() => []),
-        api.getSessions().catch(() => []),
-        api.getAIConfigs().catch(() => []),
-        api.getPromptTemplates().catch(() => []),
-        api.getFilters().catch(() => []),
-        api.getQueueJobs().catch(() => []),
-        api.getDLQJobs().catch(() => []),
-        api.getGatewayInfo().catch(() => null),
-        api.getStats().catch(() => null),
-        api.getLogs().catch(() => []),
-        api.getDeliveryStats().catch(() => null),
-        api.getPVResponder().catch(() => null),
-        api.getAIProviders().catch(() => []),
+        api.getRules().catch(track('rules', [] as ForwardRule[])),
+        api.getSessions().catch(track('sessions', [] as Session[])),
+        api.getAIConfigs().catch(track('ai', [] as AIConfig[])),
+        api.getPromptTemplates().catch(track('prompts', [] as PromptTemplate[])),
+        api.getFilters().catch(track('filters', [] as FilterRule[])),
+        api.getQueueJobs().catch(track('queue', [] as DeliveryJob[])),
+        api.getDLQJobs().catch(track('dlq', [] as DeadLetterJob[])),
+        api.getGatewayInfo().catch(track('gateway', null)),
+        api.getStats().catch(track('stats', null)),
+        api.getLogs().catch(track('logs', [] as LogItem[])),
+        api.getDeliveryStats().catch(track('delivery', null)),
+        api.getPVResponder().catch(track('pv', null)),
+        api.getAIProviders().catch(track('providers', [] as AIProviderInfo[])),
       ])
       setRules(Array.isArray(r) ? r : [])
       setSessions(Array.isArray(s) ? s : [])
@@ -282,6 +307,7 @@ function useDashboard(me?: MeInfo) {
       if (r.length > 0 && !simSelectedRuleId) {
         setSimSelectedRuleId(r[0].id)
       }
+      setLoadFailures(failures.length ? failures : null)
     } catch (e: any) {
       showToast(e.message || t('ui_error_loading_dashboard_data'))
     } finally {
@@ -310,9 +336,16 @@ function useDashboard(me?: MeInfo) {
       if (lvl !== 'all') params.level = lvl
       if (srch.trim()) params.search = srch.trim()
       if (rule !== 'all') params.rule_id = rule
+      // Tenant scope: 'mine' asks the API for the caller's own events
+      // (`mine=1`); 'all' sends nothing, which the server reads as the default
+      // (installation-wide for admins, own tenant for everyone else).
+      if (logScope === 'mine') params.mine = true
       const [page, stats] = await Promise.all([
         api.getLogsPage(params).catch(() => null),
-        api.getLogStats(rule !== 'all' ? { rule_id: rule } : undefined).catch(() => null),
+        api.getLogStats({
+          ...(rule !== 'all' ? { rule_id: rule } : {}),
+          ...(logScope === 'mine' ? { mine: true } : {}),
+        }).catch(() => null),
       ])
       setLogs(Array.isArray(page?.logs) ? page!.logs : [])
       setLogTotal(page?.total ?? 0)
@@ -531,97 +564,151 @@ function useDashboard(me?: MeInfo) {
     // v18 history controls are part of the query, so the poller must re-arm
     // when they change — otherwise auto-refresh would silently re-fetch a
     // stale offset and the operator would watch a page they had navigated away
-    // from.
-  }, [activeTab, logAutoRefresh, logFilterService, logFilterLevel, logSearch, logFilterRule, logOrder, logOffset, logPageSize])
+    // from. The tenant scope is part of the query too.
+  }, [activeTab, logAutoRefresh, logFilterService, logFilterLevel, logSearch, logFilterRule, logOrder, logOffset, logPageSize, logScope])
 
-  // Rules Handlers
-  const handleToggleRule = async (id: string) => {
-    try {
-      const updated = await api.toggleRule(id)
-      setRules((prev) => prev.map((r) => (r.id === id ? updated : r)))
-      showToast(t('ui_rule_status_updated'))
-    } catch (e: any) {
-      showToast(e.message)
-    }
-  }
+  // Rules Handlers — memoized so the memoized rule cards in RulesPanel do not
+  // re-render every time the shell re-renders around them.
+  const handleToggleRule = useCallback(
+    async (id: string) => {
+      try {
+        const updated = await api.toggleRule(id)
+        setRules((prev) => prev.map((r) => (r.id === id ? updated : r)))
+        showToast(t('ui_rule_status_updated'))
+      } catch (e: any) {
+        showToast(e.message)
+      }
+    },
+    [showToast, t],
+  )
 
-  const handleDeleteRule = async (id: string) => {
-    if (!confirm(t('ui_are_you_sure_you_want_to_delete_this_rule'))) return
-    try {
-      await api.deleteRule(id)
-      setRules((prev) => prev.filter((r) => r.id !== id))
-      setIsTaskOverviewOpen(false)
-      showToast(t('ui_rule_deleted_successfully'))
-    } catch (e: any) {
-      showToast(e.message)
-    }
-  }
+  // Deletion is confirmed by the caller (a ConfirmDialog), never here.
+  const handleDeleteRule = useCallback(
+    async (id: string) => {
+      try {
+        await api.deleteRule(id)
+        setRules((prev) => prev.filter((r) => r.id !== id))
+        setIsTaskOverviewOpen(false)
+        showToast(t('ui_rule_deleted_successfully'))
+      } catch (e: any) {
+        showToast(e.message)
+      }
+    },
+    [showToast, t],
+  )
 
-  const handleDuplicateRule = async (id: string) => {
-    try {
-      const cloned = await api.duplicateRule(id)
-      setRules((prev) => [cloned, ...prev])
-      showToast(t('ui_task_duplicated_successfully'))
-    } catch (e: any) {
-      showToast(e.message || (t('ui_failed_to_duplicate_task')))
-    }
-  }
+  const handleDuplicateRule = useCallback(
+    async (id: string) => {
+      try {
+        const cloned = await api.duplicateRule(id)
+        setRules((prev) => [cloned, ...prev])
+        showToast(t('ui_task_duplicated_successfully'))
+      } catch (e: any) {
+        showToast(e.message || (t('ui_failed_to_duplicate_task')))
+      }
+    },
+    [showToast, t],
+  )
 
-  const handleSaveTaskOverview = async (updated: ForwardRule) => {
-    try {
-      const res = await api.saveRule(updated as any)
-      setRules((prev) => prev.map((r) => (r.id === res.id ? res : r)))
-      showToast(t('ui_task_updated_successfully'))
-    } catch (e: any) {
-      showToast(e.message || (t('ui_failed_to_save_task')))
-    }
-  }
+  const handleSaveTaskOverview = useCallback(
+    async (updated: ForwardRule) => {
+      try {
+        const res = await api.saveRule(updated as any)
+        setRules((prev) => prev.map((r) => (r.id === res.id ? res : r)))
+        showToast(t('ui_task_updated_successfully'))
+      } catch (e: any) {
+        showToast(e.message || (t('ui_failed_to_save_task')))
+      }
+    },
+    [showToast, t],
+  )
 
-  const handleQuickRouteSwitch = async (ruleId: string, pathType: 'route1_direct' | 'route2_vip_hop' | 'route3_native') => {
-    try {
-      const updated = await api.quickSetRoutePath(ruleId, {
-        path_type: pathType,
+  const handleQuickRouteSwitch = useCallback(
+    async (ruleId: string, pathType: 'route1_direct' | 'route2_vip_hop' | 'route3_native') => {
+      try {
+        const updated = await api.quickSetRoutePath(ruleId, {
+          path_type: pathType,
+        })
+        setRules((prev) => prev.map((r) => (r.id === ruleId ? updated : r)))
+        showToast(t('ui_rule_route_switched_successfully'))
+      } catch (e: any) {
+        showToast(e.message)
+      }
+    },
+    [showToast, t],
+  )
+
+  const handlePauseRule = useCallback(
+    async (id: string) => {
+      try {
+        await api.pauseRule(id)
+        setRules((prev) => prev.map((r) => (r.id === id ? { ...r, is_paused: true } : r)))
+        showToast(t('ui_rule_paused'))
+      } catch (e: any) {
+        showToast(e.message)
+      }
+    },
+    [showToast, t],
+  )
+
+  const handleResumeRule = useCallback(
+    async (id: string) => {
+      try {
+        await api.resumeRule(id)
+        setRules((prev) => prev.map((r) => (r.id === id ? { ...r, is_paused: false } : r)))
+        showToast(t('ui_rule_resumed'))
+      } catch (e: any) {
+        showToast(e.message)
+      }
+    },
+    [showToast, t],
+  )
+
+  // The modal owns its draft; the shell only remembers which rule to seed it
+  // with (null = a new task from the clean default, no demo data).
+  const openRuleModal = useCallback((rule: ForwardRule | null) => {
+    setRuleModalRule(rule)
+    setIsRuleModalOpen(true)
+  }, [])
+
+  const handleSavedRule = useCallback(
+    (saved: ForwardRule) => {
+      setRules((prev) => {
+        const idx = prev.findIndex((r) => r.id === saved.id)
+        if (idx >= 0) {
+          const next = [...prev]
+          next[idx] = saved
+          return next
+        }
+        return [saved, ...prev]
       })
-      setRules((prev) => prev.map((r) => (r.id === ruleId ? updated : r)))
-      showToast(t('ui_rule_route_switched_successfully'))
-    } catch (e: any) {
-      showToast(e.message)
-    }
-  }
+      setIsRuleModalOpen(false)
+      showToast(t('ui_rule_saved_successfully'))
+    },
+    [showToast, t],
+  )
 
-  // Branding hop (A → C → B) triggers: read from `metadata.branding_hop` and
-  // merged back into the *raw* blob, so a sibling key written by the bot or
-  // another client survives an edit here. Nothing is written until a field is
-  // touched, which keeps an untouched rule's metadata byte-identical.
-  const brandingHop = readBrandingHop(ruleMeta)
-  const patchBrandingHop = (patch: Partial<BrandingHopConfig>) => {
-    setRuleMeta((prev) => {
-      const raw = prev?.[BRANDING_HOP_KEY]
-      const blob = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {}
-      return { ...prev, [BRANDING_HOP_KEY]: { ...blob, ...patch } }
-    })
-  }
-  // The list fields are typed as free text, so a draft keeps exactly what was
-  // typed: deriving the input value from the parsed list would eat the ", "
-  // separator mid-keystroke and make a second entry impossible to type. The
-  // draft is keyed by the open task, so switching tasks drops it during render
-  // (no effect, no stale flash).
-  const [brandingListDrafts, setBrandingListDrafts] = useState<{ key: string; values: Record<string, string> }>({
-    key: '',
-    values: {},
-  })
-  const brandingDraftKey = `${ruleFormData.id || 'new'}:${isRuleModalOpen ? 'open' : 'closed'}`
-  const brandingListValue = (key: 'origin_ids' | 'origin_titles' | 'keywords') =>
-    (brandingListDrafts.key === brandingDraftKey && brandingListDrafts.values[key] !== undefined)
-      ? brandingListDrafts.values[key]
-      : brandingListToText(brandingHop[key])
-  const onBrandingListInput = (key: 'origin_ids' | 'origin_titles' | 'keywords', raw: string) => {
-    setBrandingListDrafts((prev) => ({
-      key: brandingDraftKey,
-      values: { ...(prev.key === brandingDraftKey ? prev.values : {}), [key]: raw },
-    }))
-    patchBrandingHop({ [key]: brandingTextToList(raw) } as Partial<BrandingHopConfig>)
-  }
+  const openFilterModal = useCallback((filter: FilterRule | null) => {
+    setFilterModalRule(filter)
+    setIsFilterModalOpen(true)
+  }, [])
+
+  const handleSavedFilter = useCallback(
+    (saved: FilterRule) => {
+      setFilterRules((prev) => {
+        const idx = prev.findIndex((f) => f.id === saved.id)
+        if (idx >= 0) {
+          const next = [...prev]
+          next[idx] = saved
+          return next
+        }
+        return [saved, ...prev]
+      })
+      setIsFilterModalOpen(false)
+      showToast(t('ui_filter_rule_saved_successfully'))
+    },
+    [showToast, t],
+  )
 
   const handleSavePV = async (updated?: Partial<PVResponderConfig>) => {
     setPvSaving(true)
@@ -644,70 +731,6 @@ function useDashboard(me?: MeInfo) {
       showToast(e.message || t('ui_error_saving_pv_config'))
     } finally {
       setPvSaving(false)
-    }
-  }
-
-  const handleSaveRule = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      if (!ruleFormData.source_chat_id || !ruleFormData.target_chat_id) {
-        showToast(t('ui_source_and_target_ids_are_required'))
-        return
-      }
-      const s = (ruleFormData.source_chat_id || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
-      const targetId = (ruleFormData.target_chat_id || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
-      if (s === targetId) {
-        showToast(t('ui_routing_loop_detected_source_and_target_ids_cannot_be_identical'))
-        return
-      }
-      if (ruleFormData.use_intermediate && ruleFormData.intermediate_channel_id) {
-        const im = (ruleFormData.intermediate_channel_id || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
-        if (im === s || im === targetId) {
-          showToast(t('ui_routing_loop_detected_intermediate_channel_cannot_match_source_o'))
-          return
-        }
-      }
-      const metaToSave: Record<string, any> = { ...ruleMeta }
-      if (ruleFormData.ai_config_id) {
-        metaToSave.ai_config_id = ruleFormData.ai_config_id
-      }
-      if (ruleMeta.prompt_id) {
-        metaToSave.prompt_id = ruleMeta.prompt_id
-      }
-      const saved = await api.saveRule({
-        ...ruleFormData,
-        prompt_id: ruleMeta.prompt_id || ruleFormData.prompt_id,
-        // The per-task metadata is sent through the top-level `metadata` object
-        // as well as the JSON string. The server merges `metadata` *over*
-        // `custom_metadata_json`, and editing a task spreads the rule as it came
-        // back from a GET — so without this the stale copy wins and every edit
-        // to a metadata-backed field (the branding-hop triggers included) is
-        // silently reverted on save. Both objects carry the whole key set
-        // (`metaToSave` is the metadata blob with this form's edits applied), so
-        // no other feature loses a key.
-        metadata: metaToSave,
-        custom_metadata_json: JSON.stringify(metaToSave),
-      } as SaveRuleRequest)
-      setRules((prev) => {
-        const idx = prev.findIndex((r) => r.id === saved.id)
-        if (idx >= 0) {
-          const next = [...prev]
-          next[idx] = saved
-          return next
-        }
-        return [saved, ...prev]
-      })
-      setIsRuleModalOpen(false)
-      showToast(t('ui_rule_saved_successfully'))
-    } catch (e: any) {
-      let msg = e.message || t('ui_error')
-      if (msg.includes('loop_detected') || msg.includes('Invalid rule endpoints')) {
-        msg = t('ui_routing_loop_detected_source_and_target_endpoints_cannot_be_iden')
-      }
-      if (msg.includes('not_numeric') || msg.includes('resolve_failed')) {
-        msg = t('ui_invalid_chat_id_use_a_numeric_id_or_a_username_the_connected_acc')
-      }
-      showToast(msg)
     }
   }
 
@@ -748,33 +771,9 @@ function useDashboard(me?: MeInfo) {
     }
   }
 
-  // Filter Handlers
-  const handleSaveFilter = async (e: React.FormEvent) => {
-    e.preventDefault()
-    try {
-      if (!filterFormData.name) {
-        showToast(t('ui_filter_name_is_required'))
-        return
-      }
-      const saved = await api.saveFilter(filterFormData as SaveFilterRuleRequest)
-      setFilterRules((prev) => {
-        const idx = prev.findIndex((f) => f.id === saved.id)
-        if (idx >= 0) {
-          const next = [...prev]
-          next[idx] = saved
-          return next
-        }
-        return [saved, ...prev]
-      })
-      setIsFilterModalOpen(false)
-      showToast(t('ui_filter_rule_saved_successfully'))
-    } catch (e: any) {
-      showToast(e.message)
-    }
-  }
-
+  // Filter Handlers — saving lives in <FilterModal />; the shell applies the
+  // result. Deletion is confirmed by the panel's ConfirmDialog, never here.
   const handleDeleteFilter = async (id: string) => {
-    if (!confirm(t('ui_delete_this_filter_rule'))) return
     try {
       await api.deleteFilter(id)
       setFilterRules((prev) => prev.filter((f) => f.id !== id))
@@ -824,27 +823,6 @@ function useDashboard(me?: MeInfo) {
           : (t('ui_dlq_purged')),
       )
       await loadData()
-    } catch (e: any) {
-      showToast(e.message)
-    }
-  }
-
-  // Rule pause / resume (mirrors bot's pause/resume feature)
-  const handlePauseRule = async (id: string) => {
-    try {
-      await api.pauseRule(id)
-      setRules((prev) => prev.map((r) => (r.id === id ? { ...r, is_paused: true } : r)))
-      showToast(t('ui_rule_paused'))
-    } catch (e: any) {
-      showToast(e.message)
-    }
-  }
-
-  const handleResumeRule = async (id: string) => {
-    try {
-      await api.resumeRule(id)
-      setRules((prev) => prev.map((r) => (r.id === id ? { ...r, is_paused: false } : r)))
-      showToast(t('ui_rule_resumed'))
     } catch (e: any) {
       showToast(e.message)
     }
@@ -948,6 +926,7 @@ function useDashboard(me?: MeInfo) {
     refreshDiagnostics,
     errorBanner,
     setErrorBanner,
+    loadFailures,
     dismissedErrors,
     setDismissedErrors,
     gatewayInfo,
@@ -962,6 +941,8 @@ function useDashboard(me?: MeInfo) {
     setLogFilterLevel,
     logSearch,
     setLogSearch,
+    logScope,
+    setLogScope,
     logAutoRefresh,
     setLogAutoRefresh,
     logStats,
@@ -1012,10 +993,8 @@ function useDashboard(me?: MeInfo) {
     setToast,
     isRuleModalOpen,
     setIsRuleModalOpen,
-    ruleFormData,
-    setRuleFormData,
-    ruleMeta,
-    setRuleMeta,
+    ruleModalRule,
+    openRuleModal,
     taskOverviewRule,
     setTaskOverviewRule,
     isTaskOverviewOpen,
@@ -1026,8 +1005,8 @@ function useDashboard(me?: MeInfo) {
     setAiFormData,
     isFilterModalOpen,
     setIsFilterModalOpen,
-    filterFormData,
-    setFilterFormData,
+    filterModalRule,
+    openFilterModal,
     simText,
     setSimText,
     simOriginChatId,
@@ -1066,18 +1045,11 @@ function useDashboard(me?: MeInfo) {
     handleDuplicateRule,
     handleSaveTaskOverview,
     handleQuickRouteSwitch,
-    brandingHop,
-    patchBrandingHop,
-    brandingListDrafts,
-    setBrandingListDrafts,
-    brandingDraftKey,
-    brandingListValue,
-    onBrandingListInput,
     handleSavePV,
-    handleSaveRule,
+    handleSavedRule,
     handleSaveAI,
     handleDeleteAI,
-    handleSaveFilter,
+    handleSavedFilter,
     handleDeleteFilter,
     handleRetryDLQ,
     handlePurgeDLQ,
@@ -1100,6 +1072,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
     activeTab,
     setActiveTab,
     currentUser,
+    sessions,
     aiConfigs,
     aiProviders,
     promptTemplates,
@@ -1109,16 +1082,15 @@ export function App({ me }: { me?: MeInfo } = {}) {
     errorBanner,
     setErrorBanner,
     setDismissedErrors,
+    loadFailures,
     gatewayInfo,
     stats,
     loading,
     toast,
     isRuleModalOpen,
     setIsRuleModalOpen,
-    ruleFormData,
-    setRuleFormData,
-    ruleMeta,
-    setRuleMeta,
+    ruleModalRule,
+    handleSavedRule,
     taskOverviewRule,
     isTaskOverviewOpen,
     setIsTaskOverviewOpen,
@@ -1128,21 +1100,38 @@ export function App({ me }: { me?: MeInfo } = {}) {
     setAiFormData,
     isFilterModalOpen,
     setIsFilterModalOpen,
-    filterFormData,
-    setFilterFormData,
+    filterModalRule,
+    handleSavedFilter,
     isRtl,
     t,
     loadData,
     handleDeleteRule,
     handleSaveTaskOverview,
-    brandingHop,
-    patchBrandingHop,
-    brandingListValue,
-    onBrandingListInput,
-    handleSaveRule,
     handleSaveAI,
-    handleSaveFilter,
+    showToast,
   } = d
+
+  // Labels for the load-failure banner, resolved through the catalog so every
+  // locale names the feed that failed.
+  const loadFailureLabels = useMemo(() => {
+    if (!loadFailures?.length) return []
+    const labels: Record<string, string> = {
+      rules: t('ui_rules_routes'),
+      sessions: t('ui_telegram_sessions'),
+      ai: t('ui_ai_intelligence'),
+      prompts: t('ui_rewrite_prompt_editor'),
+      filters: t('ui_advanced_filters'),
+      queue: t('ui_queue_dlq'),
+      dlq: t('ui_queue_dlq'),
+      delivery: t('ui_queue_dlq'),
+      gateway: t('ui_web_gateway'),
+      stats: t('ui_overview_stats'),
+      logs: t('ui_devops_logs'),
+      pv: t('ui_pv_assistant'),
+      providers: t('ui_ai_intelligence'),
+    }
+    return [...new Set(loadFailures.map((f) => labels[f] || f))]
+  }, [loadFailures, t])
 
   // The navigation is data, not markup: one list feeds the docked rail and the
   // drawer, so a tab cannot exist in one and be missing from the other.
@@ -1177,6 +1166,27 @@ export function App({ me }: { me?: MeInfo } = {}) {
       </a>
       {/* User bar */}
       <UserBar lang={lang} />
+      {/* Load-failure banner — which feeds did not load, with a Retry that
+          re-runs the loader. Failures used to be swallowed with `.catch(() => [])`,
+          so a dead endpoint looked like an empty account. */}
+      {loadFailureLabels.length > 0 && (
+        <div className="load-failure-banner" role="alert">
+          <span style={{ flexShrink: 0, lineHeight: 1.4 }} aria-hidden="true">⚠️</span>
+          <span style={{ flex: 1, minWidth: 0, wordBreak: 'break-word' }}>
+            {t('ui_data_load_failed')}
+            {': '}
+            <span style={{ fontWeight: 700 }}>{loadFailureLabels.join(' · ')}</span>
+          </span>
+          <button
+            onClick={() => void loadData()}
+            className="btn btn--ghost btn--sm"
+            style={{ flexShrink: 0 }}
+          >
+            <RotateCcw size={13} aria-hidden="true" />
+            <span>{t('ui_try_again')}</span>
+          </button>
+        </div>
+      )}
       {/* Proactive Error Banner — newest ERROR/WARN from the delivery pipeline */}
       {errorBanner && (
         <div
@@ -1273,79 +1283,22 @@ export function App({ me }: { me?: MeInfo } = {}) {
           </div>
         </div>
 
-        {/* Microservice Health Indicators */}
+        {/* Microservice Health Indicators — every dot is a real probe answer
+            from the stats/gateway payloads, including the web process itself. */}
         <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: 'rgba(15, 23, 42, 0.6)',
-              padding: '5px 10px',
-              borderRadius: 8,
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              fontSize: '0.75rem',
-            }}
-          >
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                background: stats?.atf_core_online ? '#10b981' : '#ef4444',
-                boxShadow: stats?.atf_core_online ? '0 0 8px #10b981' : '0 0 8px #ef4444',
-              }}
-            />
-            <span style={{ color: '#cbd5e1' }}>Core:6001</span>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: 'rgba(15, 23, 42, 0.6)',
-              padding: '5px 10px',
-              borderRadius: 8,
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              fontSize: '0.75rem',
-            }}
-          >
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                background: stats?.atf_logger_online ? '#10b981' : '#ef4444',
-                boxShadow: stats?.atf_logger_online ? '0 0 8px #10b981' : '0 0 8px #ef4444',
-              }}
-            />
-            <span style={{ color: '#cbd5e1' }}>Log:6002</span>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: 'rgba(15, 23, 42, 0.6)',
-              padding: '5px 10px',
-              borderRadius: 8,
-              border: '1px solid rgba(255, 255, 255, 0.06)',
-              fontSize: '0.75rem',
-            }}
-          >
-            <span
-              style={{
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                background: '#10b981',
-                boxShadow: '0 0 8px #10b981',
-              }}
-            />
-            <span style={{ color: '#cbd5e1' }}>Web:8088</span>
-          </div>
+          {([
+            { label: 'Core:6001', online: stats?.atf_core_online },
+            { label: 'Log:6002', online: stats?.atf_logger_online },
+            { label: 'Web:8088', online: gatewayInfo?.atf_web_online },
+          ] as const).map((chip) => (
+            <div key={chip.label} className="header-chip">
+              <span
+                className={`header-chip__dot${chip.online ? ' is-online' : ''}`}
+                aria-hidden="true"
+              />
+              <span>{chip.label}</span>
+            </div>
+          ))}
 
           {/* Language picker: all ten catalogs, by endonym */}
           <LanguagePicker lang={lang} onChange={setLang} compact />
@@ -1363,63 +1316,47 @@ export function App({ me }: { me?: MeInfo } = {}) {
         </div>
       </header>
 
-      {/* Overview Stat Badges */}
-      <div
-        className="overview-grid"
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-          gap: 14,
-          marginBottom: 20,
-        }}
-      >
-        <div className="glass-panel overview-card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ padding: 8, borderRadius: 10, background: 'rgba(99, 102, 241, 0.15)', color: '#818cf8', flexShrink: 0 }}>
-            <Layers size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--type-xs)', color: '#94a3b8' }}>{t('ui_active_rules')}</div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>
-              {stats?.active_rules ?? 0} <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>/ {stats?.total_rules ?? 0}</span>
+      {/* Overview Stat Badges — one card per KPI, skeleton until the payload
+          lands, tabular numbers so the digits do not jitter as they update. */}
+      <div className="overview-grid">
+        {([
+          {
+            icon: <Layers size={20} aria-hidden="true" />,
+            label: t('ui_active_rules'),
+            value: stats ? `${(stats.active_rules ?? 0).toLocaleString()} / ${(stats.total_rules ?? 0).toLocaleString()}` : null,
+            tone: 'primary',
+          },
+          {
+            icon: <Send size={20} aria-hidden="true" />,
+            label: t('ui_forwarded_24h'),
+            value: stats ? (stats.total_forwarded_24h ?? 0).toLocaleString() : null,
+            tone: 'warning',
+          },
+          {
+            icon: <Users size={20} aria-hidden="true" />,
+            label: t('ui_connected_sessions'),
+            value: stats ? `${(stats.active_sessions ?? 0).toLocaleString()} / ${(stats.total_sessions ?? 0).toLocaleString()}` : null,
+            tone: 'success',
+          },
+          {
+            icon: <Activity size={20} aria-hidden="true" />,
+            label: t('ui_dead_letter_queue'),
+            value: dlqJobs.length.toLocaleString(),
+            tone: dlqJobs.length > 0 ? 'danger' : 'neutral',
+          },
+        ] as const).map((card) => (
+          <div key={card.label} className="glass-panel overview-card">
+            <span className={`overview-card__icon overview-card__icon--${card.tone}`}>{card.icon}</span>
+            <div className="overview-card__text">
+              <div className="overview-card__label">{card.label}</div>
+              {card.value === null ? (
+                <Skeleton height={20} width="60%" />
+              ) : (
+                <div className="overview-card__value">{card.value}</div>
+              )}
             </div>
           </div>
-        </div>
-
-        <div className="glass-panel overview-card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ padding: 8, borderRadius: 10, background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24', flexShrink: 0 }}>
-            <Send size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--type-xs)', color: '#94a3b8' }}>{t('ui_forwarded_24h')}</div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#fbbf24' }}>
-              {stats?.total_forwarded_24h ?? 0}
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-panel overview-card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ padding: 8, borderRadius: 10, background: 'rgba(16, 185, 129, 0.15)', color: '#34d399', flexShrink: 0 }}>
-            <Users size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--type-xs)', color: '#94a3b8' }}>{t('ui_connected_sessions')}</div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 800 }}>
-              {stats?.active_sessions ?? 0} <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>/ {stats?.total_sessions ?? 0}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-panel overview-card" style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ padding: 8, borderRadius: 10, background: 'rgba(239, 68, 68, 0.15)', color: '#f87171', flexShrink: 0 }}>
-            <Activity size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--type-xs)', color: '#94a3b8' }}>{t('ui_dead_letter_queue')}</div>
-            <div style={{ fontSize: '1.25rem', fontWeight: 800, color: dlqJobs.length > 0 ? '#ef4444' : '#94a3b8' }}>
-              {dlqJobs.length}
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
 
       {/* Body: docked rail (>= 1024px) or drawer (< 1024px), then the panels. */}
@@ -1564,536 +1501,20 @@ export function App({ me }: { me?: MeInfo } = {}) {
         lang={lang}
       />
 
-      {/* CREATE / EDIT RULE MODAL */}
-      {isRuleModalOpen && (
-        <div
-          className="modal-overlay"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
-            backdropFilter: 'blur(8px)',
-            zIndex: 999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 20,
-          }}
-        >
-          <div
-            className="glass-panel modal-sheet"
-            style={{
-              width: '100%',
-              maxWidth: 680,
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              padding: 28,
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexShrink: 0 }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>
-                {ruleFormData.id ? (t('ui_edit_forward_rule')) : (t('ui_new_forward_rule'))}
-              </h3>
-              <button onClick={() => setIsRuleModalOpen(false)} className="btn btn-secondary icon-btn" style={{ padding: 6 }}>
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className="modal-sheet-body">
-            <form onSubmit={handleSaveRule}>
-              <div className="rule-modal-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {t('ui_source_chat_id_a')} *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={ruleFormData.source_chat_id || ''}
-                    onChange={(e) => setRuleFormData({ ...ruleFormData, source_chat_id: e.target.value })}
-                    className="input-field"
-                    placeholder="-1001111111111"
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {t('ui_source_title')}
-                  </label>
-                  <input
-                    type="text"
-                    value={ruleFormData.source_chat_name || ''}
-                    onChange={(e) => setRuleFormData({ ...ruleFormData, source_chat_name: e.target.value })}
-                    className="input-field"
-                    placeholder={t('ui_forex_signals')}
-                  />
-                </div>
-              </div>
-
-              <div className="rule-modal-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {t('ui_target_chat_id_b')} *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={ruleFormData.target_chat_id || ''}
-                    onChange={(e) => setRuleFormData({ ...ruleFormData, target_chat_id: e.target.value })}
-                    className="input-field"
-                    placeholder="-1003333333333"
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {t('ui_target_title')}
-                  </label>
-                  <input
-                    type="text"
-                    value={ruleFormData.target_chat_name || ''}
-                    onChange={(e) => setRuleFormData({ ...ruleFormData, target_chat_name: e.target.value })}
-                    className="input-field"
-                    placeholder={t('ui_usdjpy_vip')}
-                  />
-                </div>
-              </div>
-
-              {/* Loop Detection Real-time Warning */}
-              {(() => {
-                const normEp = (s?: string) => (s || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
-                const s = normEp(ruleFormData.source_chat_id)
-                const targetId = normEp(ruleFormData.target_chat_id)
-                const isLoop = Boolean(s && targetId && s === targetId)
-                if (!isLoop) return null
-                return (
-                  <div
-                    style={{
-                      background: 'rgba(239, 68, 68, 0.15)',
-                      border: '1px solid rgba(239, 68, 68, 0.5)',
-                      borderRadius: 8,
-                      padding: '10px 14px',
-                      marginBottom: 14,
-                      color: '#fca5a5',
-                      fontSize: '0.825rem',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                    }}
-                  >
-                    <Shield size={16} color="#ef4444" style={{ flexShrink: 0 }} />
-                    <span>
-                      {t('ui_routing_loop_detected_source_and_target_chat_ids_cannot_be_ident')}
-                    </span>
-                  </div>
-                )
-              })()}
-
-              {(() => {
-                if (!ruleFormData.use_intermediate || !ruleFormData.intermediate_channel_id) return null
-                const normEp = (s?: string) => (s || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
-                const s = normEp(ruleFormData.source_chat_id)
-                const targetId = normEp(ruleFormData.target_chat_id)
-                const im = normEp(ruleFormData.intermediate_channel_id)
-                if (im && (im === s || im === targetId)) {
-                  return (
-                    <div
-                      style={{
-                        background: 'rgba(239, 68, 68, 0.15)',
-                        border: '1px solid rgba(239, 68, 68, 0.5)',
-                        borderRadius: 8,
-                        padding: '10px 14px',
-                        marginBottom: 14,
-                        color: '#fca5a5',
-                        fontSize: '0.825rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 8,
-                      }}
-                    >
-                      <Shield size={16} color="#ef4444" style={{ flexShrink: 0 }} />
-                      <span>
-                        {t('ui_routing_loop_detected_intermediate_hop_channel_cannot_match_sour')}
-                      </span>
-                    </div>
-                  )
-                }
-                return null
-              })()}
-
-              {/* Branding hop (A → C → B). The enable switch and channel C are
-                  rule fields; the trigger configuration is metadata.branding_hop. */}
-              <div
-                style={{
-                  background: 'rgba(15, 23, 42, 0.6)',
-                  border: '1px solid rgba(245, 158, 11, 0.3)',
-                  padding: 16,
-                  borderRadius: 10,
-                  marginBottom: 16,
-                }}
-              >
-                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 12 }}>
-                  <input
-                    type="checkbox"
-                    checked={ruleFormData.use_intermediate ?? false}
-                    onChange={(e) => setRuleFormData({ ...ruleFormData, use_intermediate: e.target.checked })}
-                  />
-                  <span style={{ fontWeight: 700, color: '#fbbf24' }}>
-                    {t('ui_use_intermediate_branding_channel_hop_via_c')}
-                  </span>
-                </label>
-
-                {ruleFormData.use_intermediate && (
-                  <>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                          {t('ui_intermediate_channel_id_c')}
-                        </label>
-                        <input
-                          type="text"
-                          value={ruleFormData.intermediate_channel_id || ''}
-                          onChange={(e) => setRuleFormData({ ...ruleFormData, intermediate_channel_id: e.target.value })}
-                          className="input-field"
-                          placeholder="-1002222222222"
-                        />
-                      </div>
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                          {t('ui_intermediate_title')}
-                        </label>
-                        <input
-                          type="text"
-                          value={ruleFormData.intermediate_channel_name || ''}
-                          onChange={(e) => setRuleFormData({ ...ruleFormData, intermediate_channel_name: e.target.value })}
-                          className="input-field"
-                          placeholder={t('ui_my_brand_channel')}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Hop triggers — stored in the rule metadata under branding_hop */}
-                    <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(245, 158, 11, 0.25)' }}>
-                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#fbbf24', marginBottom: 8 }}>
-                        {t('ui_branding_hop_triggers_optional')}
-                      </div>
-
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.78rem', color: '#cbd5e1', marginBottom: 10 }}>
-                        <input
-                          type="checkbox"
-                          checked={brandingHop.triggers_enabled}
-                          onChange={(e) => patchBrandingHop({ triggers_enabled: e.target.checked })}
-                        />
-                        <span>
-                          {t('ui_only_hop_messages_matching_the_triggers_below_otherwise_every_ma')}
-                        </span>
-                      </label>
-
-                      {brandingHop.triggers_enabled && (
-                        <>
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                            <div>
-                              <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                                {t('ui_forward_origin_channel_names')}
-                              </label>
-                              <input
-                                type="text"
-                                value={brandingListValue('origin_titles')}
-                                onChange={(e) => onBrandingListInput('origin_titles', e.target.value)}
-                                className="input-field"
-                                placeholder={t('ui_premium_deals_forex_vip')}
-                              />
-                              <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                                {t('ui_comma_separated_matches_the_channel_name_in_the_forward_header_n')}
-                              </div>
-                            </div>
-                            <div>
-                              <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                                {t('ui_forward_origin_channel_ids')}
-                              </label>
-                              <input
-                                type="text"
-                                value={brandingListValue('origin_ids')}
-                                onChange={(e) => onBrandingListInput('origin_ids', e.target.value)}
-                                className="input-field"
-                                placeholder="-1001111111111, @premium_deals"
-                              />
-                            </div>
-                          </div>
-
-                          <div style={{ marginTop: 12 }}>
-                            <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                              {t('ui_message_text_keywords')}
-                            </label>
-                            <input
-                              type="text"
-                              value={brandingListValue('keywords')}
-                              onChange={(e) => onBrandingListInput('keywords', e.target.value)}
-                              className="input-field"
-                              placeholder={t('ui_example_keywords')}
-                            />
-                          </div>
-
-                          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 12 }}>
-                            <div>
-                              <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                                {t('ui_trigger_match_mode')}
-                              </label>
-                              <select
-                                value={brandingHop.match_mode}
-                                onChange={(e) => patchBrandingHop({ match_mode: e.target.value === 'all' ? 'all' : 'any' })}
-                                className="input-field"
-                                style={{ width: '100%' }}
-                              >
-                                <option value="any">{t('ui_any_one_matching_group_is_enough')}</option>
-                                <option value="all">{t('ui_all_every_matching_group_must_match')}</option>
-                              </select>
-                            </div>
-                            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.78rem', color: '#cbd5e1', marginTop: 18 }}>
-                              <input
-                                type="checkbox"
-                                checked={brandingHop.require_forward}
-                                onChange={(e) => patchBrandingHop({ require_forward: e.target.checked })}
-                              />
-                              <span>{t('ui_refuse_messages_that_are_not_forwards')}</span>
-                            </label>
-                          </div>
-                        </>
-                      )}
-
-                      <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.78rem', color: '#cbd5e1', marginTop: 12 }}>
-                        <input
-                          type="checkbox"
-                          checked={brandingHop.force_forward}
-                          onChange={(e) => patchBrandingHop({ force_forward: e.target.checked })}
-                        />
-                        <span>
-                          {t('ui_native_forward_from_c_the_only_way_b_shows_c_in_the_header')}
-                        </span>
-                      </label>
-
-                      <div
-                        dir={isRtl ? 'rtl' : 'ltr'}
-                        style={{
-                          marginTop: 10,
-                          padding: '8px 10px',
-                          background: 'rgba(245, 158, 11, 0.08)',
-                          border: '1px dashed rgba(245, 158, 11, 0.35)',
-                          borderRadius: 8,
-                          fontSize: '0.75rem',
-                          color: '#fcd34d',
-                          lineHeight: 1.6,
-                          wordBreak: 'break-word',
-                        }}
-                      >
-                        {brandingHopSummary(
-                          lang,
-                          brandingHop,
-                          `${ruleFormData.source_chat_name || ruleFormData.source_chat_id || 'A'} → ${ruleFormData.intermediate_channel_name || ruleFormData.intermediate_channel_id || 'C'} → ${ruleFormData.target_chat_name || ruleFormData.target_chat_id || 'B'}`,
-                        )}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Custom Header & Footer */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {t('ui_custom_header')}
-                  </label>
-                  <input
-                    type="text"
-                    value={ruleFormData.custom_header || ''}
-                    onChange={(e) => setRuleFormData({ ...ruleFormData, custom_header: e.target.value })}
-                    className="input-field"
-                    placeholder={t('ui_vip_forex')}
-                  />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {t('ui_custom_footer')}
-                  </label>
-                  <input
-                    type="text"
-                    value={ruleFormData.custom_footer || ''}
-                    onChange={(e) => setRuleFormData({ ...ruleFormData, custom_footer: e.target.value })}
-                    className="input-field"
-                    placeholder="@usdjp"
-                  />
-                </div>
-              </div>
-
-              {/* Bot-parity media toggles (stored in rule metadata) */}
-              <div
-                style={{
-                  border: '1px solid rgba(99, 102, 241, 0.25)',
-                  background: 'rgba(99, 102, 241, 0.06)',
-                  padding: 16,
-                  borderRadius: 10,
-                  marginBottom: 16,
-                }}
-              >
-                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#a5b4fc', marginBottom: 10 }}>
-                  {t('ui_media_sync_settings_bot_parity')}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
-                  {([
-                    ['block_voice', '🎙', t('ui_block_voice')],
-                    ['block_stickers', '🎭', t('ui_block_stickers')],
-                    ['block_video', '🎬', t('ui_block_video')],
-                    ['block_audio', '🎵', t('ui_block_audio')],
-                    ['block_text', '📝', t('ui_block_text')],
-                    ['remove_emojis', '😀', t('ui_strip_emojis')],
-                    ['sync_deletes', '🗑', t('ui_sync_deletes')],
-                    ['ignore_edits', '✏️', t('ui_ignore_edits')],
-                  ] as const).map(([key, icon, label]) => (
-                    <label
-                      key={key}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer',
-                        fontSize: '0.78rem', color: '#cbd5e1',
-                        background: 'rgba(255,255,255,0.04)',
-                        padding: '8px 10px', borderRadius: 8,
-                        border: ruleMeta[key] ? '1px solid rgba(99,102,241,0.5)' : '1px solid rgba(255,255,255,0.06)',
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={!!ruleMeta[key]}
-                        onChange={(e) => setRuleMeta({ ...ruleMeta, [key]: e.target.checked })}
-                        style={{ accentColor: '#6366f1' }}
-                      />
-                      <span>{icon} {label}</span>
-                    </label>
-                  ))}
-                </div>
-                <div style={{ marginTop: 12 }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {t('ui_album_mode')}
-                  </label>
-                  <select
-                    value={ruleMeta.album_mode || 'album'}
-                    onChange={(e) => setRuleMeta({ ...ruleMeta, album_mode: e.target.value })}
-                    className="input-field"
-                    style={{ width: '100%' }}
-                  >
-                    <option value="album">{t('ui_full_album')}</option>
-                    <option value="first">{t('ui_first_media_only')}</option>
-                    <option value="split">{t('ui_split_messages')}</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* AI Rewrite (per-rule) */}
-              <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-                <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#c084fc', marginBottom: 10 }}>
-                  🤖 {t('ui_ai_message_rewrite')}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                      {t('ui_ai_config')}
-                    </label>
-                    <select
-                      value={ruleFormData.ai_config_id || ''}
-                      onChange={(e) => setRuleFormData({ ...ruleFormData, ai_config_id: e.target.value || undefined })}
-                      className="input-field"
-                      style={{ width: '100%' }}
-                    >
-                      <option value="">{t('ui_disabled_no_rewrite')}</option>
-                      {(Array.isArray(aiConfigs) ? aiConfigs : []).map((a) => (
-                        <option key={a.id} value={a.id}>
-                          {a.is_enabled ? '🟢' : '🔴'} {a.name} [{a.provider}/{a.model}]
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                      {t('ui_rewrite_prompt')}
-                    </label>
-                    <select
-                      value={ruleMeta.prompt_id || ''}
-                      onChange={(e) => setRuleMeta({ ...ruleMeta, prompt_id: e.target.value || undefined })}
-                      className="input-field"
-                      style={{ width: '100%' }}
-                    >
-                      <option value="">{t('ui_default_no_system_prompt')}</option>
-                      {(Array.isArray(promptTemplates) ? promptTemplates : []).map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.is_system ? '⭐' : '👤'} {p.name} (v{p.current_version})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                      {t('ui_on_ai_failure')}
-                    </label>
-                    <select
-                      value={ruleFormData.ai_fallback_policy || 'DROP'}
-                      onChange={(e) => setRuleFormData({ ...ruleFormData, ai_fallback_policy: e.target.value })}
-                      className="input-field"
-                      style={{ width: '100%' }}
-                    >
-                      <option value="SEND_ORIGINAL">{t('ui_send_original_fail_open')}</option>
-                      <option value="DROP">{t('ui_drop_fail_closed')}</option>
-                      <option value="RETRY">{t('ui_app_retry')}</option>
-                      <option value="QUARANTINE">{t('ui_quarantine')}</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
-                      {t('ui_timeout_s')}
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={120}
-                      value={ruleFormData.ai_timeout_seconds ?? 15}
-                      onChange={(e) => setRuleFormData({ ...ruleFormData, ai_timeout_seconds: Number(e.target.value) || 15 })}
-                      className="input-field"
-                      style={{ width: '100%' }}
-                    />
-                  </div>
-                </div>
-                <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', marginTop: 8 }}>
-                  {t('ui_fail_open_sends_the_original_text_if_ai_fails_and_logs_the_fallb')}
-                </div>
-              </div>
-
-              <div className="modal-sheet-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24 }}>
-                <button type="button" onClick={() => setIsRuleModalOpen(false)} className="btn btn-secondary">
-                  {t('ui_cancel')}
-                </button>
-                {(() => {
-                  const normEp = (s?: string) => (s || '').trim().toLowerCase().replace(/^(https?:\/\/)?(t\.me\/)?@?/, '')
-                  const s = normEp(ruleFormData.source_chat_id)
-                  const targetId = normEp(ruleFormData.target_chat_id)
-                  const im = normEp(ruleFormData.intermediate_channel_id)
-                  const hasLoop = Boolean(s && targetId && s === targetId) ||
-                    Boolean(ruleFormData.use_intermediate && im && (im === s || im === targetId))
-                  return (
-                    <button
-                      type="submit"
-                      disabled={hasLoop}
-                      className="btn btn-primary"
-                      style={{
-                        opacity: hasLoop ? 0.45 : 1,
-                        cursor: hasLoop ? 'not-allowed' : 'pointer',
-                      }}
-                    >
-                      <Check size={16} />
-                      <span>{t('ui_save_rule')}</span>
-                    </button>
-                  )
-                })()}
-              </div>
-            </form>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* CREATE / EDIT RULE MODAL — extracted; the draft lives inside it */}
+      <Suspense fallback={null}>
+        <RuleModal
+          open={isRuleModalOpen}
+          lang={lang}
+          sessions={sessions}
+          aiConfigs={aiConfigs}
+          promptTemplates={promptTemplates}
+          rule={ruleModalRule}
+          onClose={() => setIsRuleModalOpen(false)}
+          onSaved={handleSavedRule}
+          showToast={showToast}
+        />
+      </Suspense>
 
       {/* CREATE / EDIT AI MODAL */}
       {isAiModalOpen && (() => {
@@ -2271,94 +1692,18 @@ export function App({ me }: { me?: MeInfo } = {}) {
         )
       })()}
 
-      {/* CREATE / EDIT FILTER MODAL */}
-      {isFilterModalOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
-            backdropFilter: 'blur(8px)',
-            zIndex: 999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 20,
-          }}
-        >
-          <div
-            className="glass-panel"
-            style={{
-              width: '100%',
-              maxWidth: 580,
-              padding: 28,
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>
-                {t('ui_content_filter_rule')}
-              </h3>
-              <button onClick={() => setIsFilterModalOpen(false)} className="btn btn-secondary" style={{ padding: 6 }}>
-                <X size={16} />
-              </button>
-            </div>
+      {/* CREATE / EDIT FILTER MODAL — extracted; the draft lives inside it */}
+      <Suspense fallback={null}>
+        <FilterModal
+          open={isFilterModalOpen}
+          lang={lang}
+          filter={filterModalRule}
+          onClose={() => setIsFilterModalOpen(false)}
+          onSaved={handleSavedFilter}
+          showToast={showToast}
+        />
+      </Suspense>
 
-            <form onSubmit={handleSaveFilter}>
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  {t('ui_filter_name')} *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={filterFormData.name || ''}
-                  onChange={(e) => setFilterFormData({ ...filterFormData, name: e.target.value })}
-                  className="input-field"
-                  placeholder={t('ui_anti_spam_filter')}
-                />
-              </div>
-
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  {t('ui_blacklist_keywords_comma_separated')}
-                </label>
-                <input
-                  type="text"
-                  value={filterFormData.blacklist_keywords?.join(', ') || ''}
-                  onChange={(e) =>
-                    setFilterFormData({
-                      ...filterFormData,
-                      // The same separators the engine's split_word_list
-                      // accepts: comma, Persian/Arabic comma, newline. A pasted
-                      // "spam, scam" or a phrase with a comma-less space both
-                      // land as the entries the matcher will see.
-                      blacklist_keywords: e.target.value
-                        .split(/[\n,،]/)
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                  className="input-field"
-                  placeholder={t('ui_blacklist_keywords_placeholder')}
-                />
-                <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: 4 }}>
-                  {t('ui_words_matching_help')}
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
-                <button type="button" onClick={() => setIsFilterModalOpen(false)} className="btn btn-secondary">
-                  {t('ui_cancel')}
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  <Check size={16} />
-                  <span>{t('ui_save_filter')}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   )
 }

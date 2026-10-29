@@ -287,7 +287,7 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
                     width: '16px',
                     height: '16px',
                     borderRadius: '4px',
-                    border: `1px solid ${isSelected ? '#3b82f6' : '#475569'}`,
+                    border: `1px solid ${isSelected ? '#3b82f6' : 'var(--color-border-strong)'}`,
                     backgroundColor: isSelected ? '#2563eb' : 'transparent',
                     display: 'flex',
                     alignItems: 'center',

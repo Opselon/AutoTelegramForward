@@ -341,7 +341,7 @@ export function TaskOverviewModal({
             >
               {t('ui_refresh')}
             </button>
-            <span style={{ fontSize: '12px', fontWeight: 600, color: enabled ? accent : '#64748b' }}>
+            <span style={{ fontSize: '12px', fontWeight: 600, color: enabled ? accent : 'var(--color-text-muted)' }}>
               {title} {entries.length}
             </span>
           </div>
@@ -465,7 +465,7 @@ export function TaskOverviewModal({
                             fontFamily: entry.kind === 'regex' ? 'monospace' : 'inherit',
                           }}
                         />
-                        <button type="button" onClick={() => setEditing(null)} style={smallBtnStyle('#64748b')}>
+                        <button type="button" onClick={() => setEditing(null)} style={smallBtnStyle('var(--color-text-muted)')}>
                           {t('ui_cancel')}
                         </button>
                         <button
@@ -2515,7 +2515,7 @@ export function TaskOverviewModal({
                   ))}
                 </div>
 
-                <div style={{ fontSize: '11px', color: '#64748b', marginTop: '12px' }}>
+                <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '12px' }}>
                   {t('ui_every_n_example')}
                 </div>
               </div>

@@ -25,6 +25,7 @@
 import assert from 'node:assert/strict'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 import {
   CATALOGS,
@@ -35,7 +36,7 @@ import {
 } from '../.catalog-build/index.js'
 import { normalizeLang, REFERENCE_LANG } from '../.catalog-build/types.js'
 
-const SRC = new URL('../src/', import.meta.url).pathname
+const SRC = fileURLToPath(new URL('../src/', import.meta.url))
 
 let failures = 0
 const check = (name, fn) => {
@@ -180,10 +181,13 @@ check('makeT binds one language without touching the call site', () => {
 check('every t(…) key used in src/** exists in the catalog', () => {
   const used = new Map()
   for (const file of sourceFiles(SRC)) {
-    if (file.includes('/locales/')) continue
+    // Forward slashes: on a Windows checkout the separator is `\` and the
+    // generated-catalog modules below would fail the skip check.
+    const rel = file.slice(SRC.length).split('\\').join('/')
+    if (/(^|\/)locales\//.test(rel)) continue
     const text = readFileSync(file, 'utf8')
     for (const m of text.matchAll(/(^|[^A-Za-z0-9_.$])t\(\s*(['"])([^'"\\]+)\2/g)) {
-      used.set(m[3], file.slice(SRC.length))
+      used.set(m[3], rel)
     }
   }
   assert.ok(used.size > 200, `only ${used.size} t() call sites found — did the scanner drift?`)
@@ -210,7 +214,7 @@ check('no source file still branches on isRtl to pick a string', () => {
     text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1')
   const offenders = []
   for (const file of sourceFiles(SRC)) {
-    if (file.includes('/locales/')) continue
+    if (/(^|\/)locales\//.test(file.slice(SRC.length).split('\\').join('/'))) continue
     const text = stripComments(readFileSync(file, 'utf8'))
     const rx = /isRtl\s*\?\s*(['"`])([^'"`]*)\1\s*:\s*(['"`])([^'"`]*)\3/g
     for (const m of text.matchAll(rx)) {

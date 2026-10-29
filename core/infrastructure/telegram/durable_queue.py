@@ -262,7 +262,7 @@ class DurableQueueManager:
                         "queue", "forward",
                         f"Durable queue full ({pending_count} pending >= {self._max_queue_size} max); "
                         f"delivery for target {target_chat_id} refused",
-                        {"target": str(target_chat_id), "pending": pending_count, "event_code": "QUEUE_BACKPRESSURE"},
+                        {"target": str(target_chat_id), "pending": pending_count, "event_code": "QUEUE_BACKPRESSURE", "owner_user_id": int(getattr(rule, "owner_user_id", 0) or 0)},
                     )
                 except Exception:
                     pass
@@ -304,6 +304,11 @@ class DurableQueueManager:
             # does: with this off, a refused forward fails the job instead of
             # being rescued by a copy/re-upload the owner did not ask for.
             "fallback_enabled": bool(getattr(rule, "fallback_enabled", True)),
+            # The owner's log attribution: pipeline events ride into the shared
+            # log store carrying this id, so a tenant's Log Center shows their
+            # own deliveries (the API pins log reads to it) without the worker
+            # re-resolving the rule on every emission.
+            "owner_user_id": int(getattr(rule, "owner_user_id", 0) or 0),
             "delay_seconds": float(getattr(rule, "delay_seconds", 0.0) or 0.0),
             # --- Phase 2: advanced task-overview settings reach the worker ---
             "advanced_delay_seconds": AdvancedSettingsEngine.get_dispatch_delay(rule),
@@ -675,6 +680,7 @@ class DurableQueueManager:
                         "scope": scope,
                         "error": err_msg,
                         "event_code": "TASK_AUTO_PAUSED",
+                        "owner_user_id": int(getattr(rule_obj, "owner_user_id", 0) or 0),
                     },
                 )
             except Exception:
@@ -1000,7 +1006,12 @@ class DurableQueueManager:
                     self._log_client.info(
                         "pipeline", "forward",
                         f"delivered rule={job.rule_id[:8]} {job.source_chat_id}:{job.source_message_id} → {target}",
-                        {"msg_id": target_msg_id, "ms": round(send_duration * 1000)},
+                        {
+                            "msg_id": target_msg_id,
+                            "ms": round(send_duration * 1000),
+                            "owner_user_id": int(getattr(rule_obj, "owner_user_id", 0) or 0)
+                            or int((job.payload_data or {}).get("owner_user_id") or 0),
+                        },
                     )
                 except Exception:
                     pass
@@ -1028,6 +1039,11 @@ class DurableQueueManager:
             self.total_dispatches += 1
             key, sev, recoverable = tg_error(exc)
             err_msg = tg_detail(exc)
+            # Log attribution: the owner this delivery belongs to, resolved
+            # from the loaded rule with the enqueue-time snapshot as fallback.
+            owner_id = int(getattr(rule_obj, "owner_user_id", 0) or 0) or int(
+                (job.payload_data or {}).get("owner_user_id") or 0
+            )
 
             # 0. Everything was tried and *nothing* was sent. Reporting this as
             # SENT (the old behavior: the bypass returned 0) manufactured a
@@ -1055,6 +1071,7 @@ class DurableQueueManager:
                                 "source_message_id": job.source_message_id,
                                 "target": target,
                                 "event_code": "DELIVERY_BLOCKED",
+                                "owner_user_id": owner_id,
                             },
                         )
                     except Exception:
@@ -1082,7 +1099,7 @@ class DurableQueueManager:
                         self._log_client.error(
                             "queue", "forward",
                             f"Telegram timeout delivering rule={job.rule_id[:8]} to target={target}: {err_msg}",
-                            {"rule_id": job.rule_id, "target": target, "src": f"{job.source_chat_id}:{job.source_message_id}", "event_code": "DELIVERY_TIMEOUT"},
+                            {"rule_id": job.rule_id, "target": target, "src": f"{job.source_chat_id}:{job.source_message_id}", "event_code": "DELIVERY_TIMEOUT", "owner_user_id": owner_id},
                         )
                     except Exception:
                         pass
@@ -1129,7 +1146,7 @@ class DurableQueueManager:
                         self._log_client.warn(
                             "queue", "forward",
                             f"Rate limit / FloodWait delivering rule={job.rule_id[:8]} to {target}: {err_msg} (waiting {round(wait_sec, 1)}s)",
-                            {"rule_id": job.rule_id, "target": target, "wait_seconds": round(wait_sec, 1), "event_code": "RATE_LIMITED"},
+                            {"rule_id": job.rule_id, "target": target, "wait_seconds": round(wait_sec, 1), "event_code": "RATE_LIMITED", "owner_user_id": owner_id},
                         )
                     except Exception:
                         pass
@@ -1175,6 +1192,7 @@ class DurableQueueManager:
                                 "error": err_msg,
                                 "exception": exc_name,
                                 "event_code": "DELIVERY_FAILED",
+                                "owner_user_id": owner_id,
                             },
                         )
                     except Exception:
@@ -1191,7 +1209,7 @@ class DurableQueueManager:
                 logger.error(
                     "[PIPELINE:ACCOUNT_BLOCKED] [%s] Session %s cannot send (code=%s): %s. Deferring job %s.",
                     worker_id, str(session_id or "?")[:8], decision.code or "?", err_msg, job.id,
-                    extra={"event_code": "ACCOUNT_BLOCKED"},
+                    extra={"event_code": "ACCOUNT_BLOCKED", "user_id": owner_id},
                 )
                 await self._notify_owner(
                     worker_id, job,
@@ -1235,6 +1253,7 @@ class DurableQueueManager:
                                 "backoff_seconds": round(backoff, 1),
                                 "error": err_msg,
                                 "event_code": "DELIVERY_RETRY",
+                                "owner_user_id": owner_id,
                             },
                         )
                     except Exception:
@@ -1477,7 +1496,7 @@ class DurableQueueManager:
         )
         return BotRouteAdapter(transport, buttons=buttons, thread_id=thread_id)
 
-    def _note_fallback(self, job_id: str, what: str) -> None:
+    def _note_fallback(self, job_id: str, what: str, owner: int = 0) -> None:
         """Count and log a delivery that needed the copy/re-upload bypass."""
         self.stats["fallback_copies"] += 1
         logger.info(
@@ -1489,7 +1508,12 @@ class DurableQueueManager:
                 self._log_client.info(
                     "queue", "forward",
                     f"job {job_id} delivered via {what} (native forward unavailable)",
-                    {"job_id": job_id, "delivery_method": what, "event_code": "FALLBACK_COPY_USED"},
+                    {
+                        "job_id": job_id,
+                        "delivery_method": what,
+                        "event_code": "FALLBACK_COPY_USED",
+                        "owner_user_id": int(owner or 0),
+                    },
                 )
             except Exception:
                 pass
@@ -1606,7 +1630,7 @@ class DurableQueueManager:
                 except Exception as hop_err:
                     if is_restricted_source_error(hop_err):
                         if await self._on_restricted(client, hop_err, fallback_enabled, "forward from C"):
-                            self._note_fallback(job.id, "copy of C")
+                            self._note_fallback(job.id, owner=int(data.get("owner_user_id") or 0), what="copy of C")
                     else:
                         raise
             elif bool(branding.get("force_forward", True)):
@@ -1641,7 +1665,7 @@ class DurableQueueManager:
                 if is_restricted_source_error(copy_err) and await self._on_restricted(
                     client, copy_err, fallback_enabled, "copy from C",
                 ):
-                    self._note_fallback(job.id, "re-upload of C")
+                    self._note_fallback(job.id, owner=int(data.get("owner_user_id") or 0), what="re-upload of C")
                     return await self._reupload_media(
                         client, c_chat, c_ids[0], target,
                         None if content_mode == "MEDIA_ONLY" else caption,
@@ -1674,7 +1698,7 @@ class DurableQueueManager:
                 except Exception as fwd_err:
                     if is_restricted_source_error(fwd_err):
                         if await self._on_restricted(client, fwd_err, fallback_enabled, "direct forward"):
-                            self._note_fallback(job.id, "copy/re-upload bypass")
+                            self._note_fallback(job.id, owner=int(data.get("owner_user_id") or 0), what="copy/re-upload bypass")
                     else:
                         raise
 
@@ -1699,7 +1723,7 @@ class DurableQueueManager:
                     if is_restricted_source_error(one_err) and await self._on_restricted(
                         client, one_err, fallback_enabled, "first-album-item copy",
                     ):
-                        self._note_fallback(job.id, "first-item re-upload")
+                        self._note_fallback(job.id, owner=int(data.get("owner_user_id") or 0), what="first-item re-upload")
                         return await self._reupload_media(
                             client, src_chat, int(album_ids[0]), target, caption,
                             data.get("media_type", ""),
@@ -1724,7 +1748,7 @@ class DurableQueueManager:
                         if is_restricted_source_error(item_err) and await self._on_restricted(
                             client, item_err, fallback_enabled, "split-album copy",
                         ):
-                            self._note_fallback(job.id, "split-item re-upload")
+                            self._note_fallback(job.id, owner=int(data.get("owner_user_id") or 0), what="split-item re-upload")
                             res = await self._reupload_media(
                                 client, src_chat, int(item_id), target, caption,
                                 data.get("media_type", ""),
@@ -1752,7 +1776,7 @@ class DurableQueueManager:
                 if is_restricted_source_error(grp_err) and await self._on_restricted(
                     client, grp_err, fallback_enabled, "album group copy",
                 ):
-                    self._note_fallback(job.id, "album re-upload")
+                    self._note_fallback(job.id, owner=int(data.get("owner_user_id") or 0), what="album re-upload")
                 else:
                     logger.info("copy_media_group failed (%s), falling back to re-upload bypass", grp_err)
 
@@ -1775,7 +1799,7 @@ class DurableQueueManager:
                     if is_restricted_source_error(c_err) and await self._on_restricted(
                         client, c_err, fallback_enabled, "MEDIA_ONLY copy",
                     ):
-                        self._note_fallback(job.id, "media re-upload")
+                        self._note_fallback(job.id, owner=int(data.get("owner_user_id") or 0), what="media re-upload")
                         return await self._reupload_media(client, src_chat, src_msg_id, target, None, data.get("media_type", ""))
                     raise
             return 0
@@ -1795,7 +1819,7 @@ class DurableQueueManager:
                 if is_restricted_source_error(c_err) and await self._on_restricted(
                     client, c_err, fallback_enabled, "copy_message",
                 ):
-                    self._note_fallback(job.id, "media re-upload")
+                    self._note_fallback(job.id, owner=int(data.get("owner_user_id") or 0), what="media re-upload")
                     return await self._reupload_media(client, src_chat, src_msg_id, target, caption, data.get("media_type", ""))
                 raise
 

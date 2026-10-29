@@ -2895,14 +2895,25 @@ func parseLogFilters(r *http.Request) logFilters {
 			}
 		}
 	}
-	// ?mine=1 scopes to the caller's own tenant; admins may name a user_id.
+	// ?mine=1 scopes to the caller's own tenant.
+	//
+	// Fail-closed tenant scoping, same policy as QueryAuditEvents: the log
+	// archive is one shared store, `user_id == 0` means "every tenant" in the
+	// logger's filter, and the events carry rule ids, chat ids and error text
+	// from every task on the installation. So a normal tenant is PINNED to
+	// their own user id — the query string can never widen the read. Only an
+	// admin may name a user_id (or leave it 0 to read across tenants).
 	if v := q.Get("user_id"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
 			f.UserID = n
 		}
 	}
+	id := identity(r)
 	if f.UserID == 0 && (q.Get("mine") == "1" || q.Get("mine") == "true") {
-		f.UserID = identity(r).UserID
+		f.UserID = id.UserID
+	}
+	if !id.IsAdmin {
+		f.UserID = id.UserID
 	}
 	return f
 }
@@ -3139,9 +3150,22 @@ func (h *Handlers) LogStats(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
+	// Fail-closed tenant scoping, same policy as QueryLogs: aggregates leak
+	// activity shapes (task names, error counts) across tenants, so a normal
+	// tenant's stats are pinned to their own user id. Only an admin may read
+	// the installation-wide aggregate or name another user.
 	req := &pb.LogStatsRequest{RuleId: r.URL.Query().Get("rule_id")}
+	id := identity(r)
 	if v := r.URL.Query().Get("mine"); v == "1" || v == "true" {
-		req.UserId = identity(r).UserID
+		req.UserId = id.UserID
+	}
+	if v := r.URL.Query().Get("user_id"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 && id.IsAdmin {
+			req.UserId = n
+		}
+	}
+	if !id.IsAdmin {
+		req.UserId = id.UserID
 	}
 
 	resp, cached, age, err := h.statsFor(ctx, req, r.URL.Query().Get("fresh") == "1")
