@@ -74,12 +74,18 @@ HttpTransport _transport(
           headers: _json,
         );
       }
-      return http.Response(acted ? afterActionBody : tasksBody, 200,
-          headers: _json);
+      return http.Response(
+        acted ? afterActionBody : tasksBody,
+        200,
+        headers: _json,
+      );
     }
     acted = true;
-    return http.Response('{"task":{"id":"x","status":"CANCELLED"}}', 200,
-        headers: _json);
+    return http.Response(
+      '{"task":{"id":"x","status":"CANCELLED"}}',
+      200,
+      headers: _json,
+    );
   };
 }
 
@@ -174,9 +180,7 @@ void main() {
     tester,
   ) async {
     final log = <_Sent>[];
-    await tester.pumpWidget(
-      _host(await _state(_transport(log, ok: false))),
-    );
+    await tester.pumpWidget(_host(await _state(_transport(log, ok: false))));
     await tester.pumpAndSettle();
 
     expect(find.byType(ErrorState), findsOneWidget);

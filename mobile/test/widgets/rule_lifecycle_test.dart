@@ -110,8 +110,9 @@ void main() {
     return state;
   }
 
-  testWidgets('the three server states render under their own names',
-      (tester) async {
+  testWidgets('the three server states render under their own names', (
+    tester,
+  ) async {
     final log = <_Sent>[];
     await pump(tester, log);
     final t = AppMessages(const Locale('en'));
@@ -121,8 +122,9 @@ void main() {
     expect(find.text(t.get('rules_status_stopped')), findsOneWidget);
   });
 
-  testWidgets('Pause on a running task hits /pause, not /toggle',
-      (tester) async {
+  testWidgets('Pause on a running task hits /pause, not /toggle', (
+    tester,
+  ) async {
     final log = <_Sent>[];
     await pump(tester, log);
     final t = AppMessages(const Locale('en'));
@@ -138,13 +140,17 @@ void main() {
 
     expect(
       log.any(
-        (s) => s.method == 'POST' && s.path.endsWith('/api/rules/rule-running/pause'),
+        (s) =>
+            s.method == 'POST' &&
+            s.path.endsWith('/api/rules/rule-running/pause'),
       ),
       isTrue,
     );
     expect(
       log.any(
-        (s) => s.method == 'POST' && s.path.endsWith('/api/rules/rule-running/toggle'),
+        (s) =>
+            s.method == 'POST' &&
+            s.path.endsWith('/api/rules/rule-running/toggle'),
       ),
       isFalse,
       reason: 'pause must use the pause endpoint, not the blind toggle',
@@ -167,7 +173,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       log.any(
-        (s) => s.method == 'POST' && s.path.endsWith('/api/rules/rule-stopped/restart'),
+        (s) =>
+            s.method == 'POST' &&
+            s.path.endsWith('/api/rules/rule-stopped/restart'),
       ),
       isTrue,
     );
@@ -194,7 +202,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       log.any(
-        (s) => s.method == 'POST' && s.path.endsWith('/api/rules/rule-paused/resume'),
+        (s) =>
+            s.method == 'POST' &&
+            s.path.endsWith('/api/rules/rule-paused/resume'),
       ),
       isTrue,
     );

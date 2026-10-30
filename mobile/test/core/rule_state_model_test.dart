@@ -29,14 +29,22 @@ void main() {
 
   test('a paused rule is still active but held', () {
     final rule = _rule({'is_active': true, 'is_paused': true});
-    expect(rule.isEnabled, isTrue, reason: 'pause must not flip the master switch');
+    expect(
+      rule.isEnabled,
+      isTrue,
+      reason: 'pause must not flip the master switch',
+    );
     expect(rule.isPaused, isTrue);
     expect(rule.isRunning, isFalse);
   });
 
   test('a stopped rule (is_active=false) must not parse as enabled', () {
     final rule = _rule({'is_active': false, 'is_paused': false});
-    expect(rule.isEnabled, isFalse, reason: 'the regression: stopped read as active');
+    expect(
+      rule.isEnabled,
+      isFalse,
+      reason: 'the regression: stopped read as active',
+    );
     expect(rule.isPaused, isFalse);
     expect(rule.isRunning, isFalse);
   });
