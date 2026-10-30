@@ -83,6 +83,11 @@ type policyScope struct {
 
 // LogPolicy reports the effective collection policy for every producer this API
 // can see, with the scope of each answer stated explicitly.
+//
+// The engine's admission policy is reported alongside the producer's (issue
+// #102): "collected by the producer" and "admitted by the engine" are two
+// different gates, and the operator looking at this answer is the one who has
+// to notice when they disagree.
 func (h *Handlers) LogPolicy(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	scopes := map[string]policyScope{
@@ -94,6 +99,9 @@ func (h *Handlers) LogPolicy(w http.ResponseWriter, r *http.Request) {
 		// missing, the scope stays unavailable with the reason — a plausible
 		// looking zero would be a lie an operator would act on.
 		"core": h.corePolicyScope(r, now),
+		// The engine is the second gate: it can refuse what the producer
+		// collected. Its report rides on LogStats, which the API already serves.
+		"engine": h.enginePolicyScope(r, now),
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"generated_at": now.Format(time.RFC3339),
@@ -101,8 +109,59 @@ func (h *Handlers) LogPolicy(w http.ResponseWriter, r *http.Request) {
 		"notes": []string{
 			"counters are process-local and reset when the process restarts; they are never a system total",
 			"collection is not retention: suppressing a category does not delete, or stop deleting, stored records",
+			"`collected` is the producer's verdict and `admitted` the engine's: a level that appears in scope=api/core but not in scope=engine will be counted as filtered, not stored",
 		},
 	})
+}
+
+// enginePolicyScope reports what the logger engine itself admits, so the two
+// halves of the collection contract are visible side by side. The producer's
+// answer alone says "emitted" for an INFO event the engine refuses, which reads
+// to an operator as "queryable" — the exact conflation issue #102 reports.
+//
+// The engine reports its policy on LogStats (v20). An engine that predates the
+// field answers a scope that says so, rather than a zero that would look like
+// "the engine admits everything".
+func (h *Handlers) enginePolicyScope(r *http.Request, now time.Time) policyScope {
+	scope := policyScope{
+		Scope:      "logger engine admission policy",
+		Process:    "atf-logger",
+		ObservedAt: now.Format(time.RFC3339),
+	}
+	if h.c == nil || h.c.Logs == nil {
+		scope.Available = false
+		scope.Reason = "no logger gRPC client configured"
+		return scope
+	}
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	resp, err := h.c.Logs.LogStats(ctx, &pb.LogStatsRequest{})
+	if err != nil {
+		scope.Available = false
+		scope.Reason = "engine policy query failed: " + err.Error()
+		return scope
+	}
+	admission := resp.GetAdmission()
+	if admission == nil {
+		scope.Available = false
+		scope.Reason = "engine reports no admission policy (older atf-logger)"
+		return scope
+	}
+	scope.Available = true
+	scope.Scope = "logger engine admission policy (queried live from the engine)"
+	scope.ConfiguredLevels = admission.GetCollectLevels()
+	// `omitted_levels` is reported as the effective set the engine will *not*
+	// store, named in the same vocabulary as the producer's levels so the two
+	// columns can be diffed by eye.
+	scope.EffectiveLevels = admission.GetOmittedLevels()
+	scope.CounterScope = "engine admission refusals since the engine last started"
+	scope.Counters = &policyCounters{
+		// One engine-wide refusal counter exists; the per-level breakdown is
+		// carried on the Log Stats surface (`admission.filtered_by_level`) and
+		// is deliberately not flattened into the policy answer's shape.
+		SuppressedLevel: admission.GetFilteredTotal(),
+	}
+	return scope
 }
 
 // corePolicyScope asks atf-core itself what it is collecting, over the

@@ -105,6 +105,22 @@ message LogStatsResponse {
   // often and how recently it fired. Bounded to `MAX_ERROR_GROUPS` entries
   // so a producer that invents a message per request cannot grow the response.
   repeated ErrorGroup error_groups = 8;
+  // ---- Engine admission (additive, v20) ----
+  // The engine's own admission policy and its filtered counters, so a control
+  // plane can show why a *collected* event never became a queryable row
+  // without scraping /metrics. An older client ignores the field.
+  AdmissionPolicy admission = 9;
+}
+
+// What the logger engine itself admits, in its own words. Must stay
+// byte-compatible with the same message in proto/autoforward.proto.
+message AdmissionPolicy {
+  repeated string collect_levels = 1;
+  repeated string omitted_levels = 2;
+  string configured_by = 3;
+  int64 filtered_total = 4;
+  map<string, int64> filtered_by_level = 5;
+  bool collect_unknown = 6;
 }
 
 // One recurring-error signature, for the "same failure, N times" view.

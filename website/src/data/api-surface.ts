@@ -500,11 +500,13 @@ export const endpointDetail: Record<string, EndpointDetail> = {
     statuses: auth,
   },
   'GET /api/logs/stats': {
-    summary: 'Counts per level and per task over a window — the numbers behind the log explorer.',
+    summary:
+      'Counts per level and per task over a window — the numbers behind the log explorer. Also carries `admission`: the levels the logger engine itself collects and refuses, and how many events it filtered, so "collected by a producer" can be told apart from "stored by the engine".',
     statuses: auth,
   },
   'GET /api/logs/policy': {
-    summary: 'The collection policy this process is actually applying: levels, retention and sampling.',
+    summary:
+      'The collection policy each producer applies (scope=api, scope=core) next to the engine\'s own admission gate (scope=engine). A level the producers admit but the engine omits is counted as filtered, not stored — the two halves of the contract in one answer.',
     statuses: auth,
   },
   'PUT /api/logs/policy': {

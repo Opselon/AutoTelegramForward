@@ -761,6 +761,28 @@ message LogStatsResponse {
   // often and how recently it fired. Bounded so a producer that invents a new
   // message per request cannot grow the response.
   repeated ErrorGroup error_groups = 8;
+  // v20: the engine's own admission policy and its filtered counter, so a
+  // control plane can show *why* a collected event never became a queryable
+  // row without scraping /metrics (issue #102). Additive: an older client
+  // ignores it, and an older engine leaves it unset.
+  AdmissionPolicy admission = 9;
+}
+
+// What the logger engine itself admits, in its own words.
+message AdmissionPolicy {
+  // The levels this engine collects at all, from its own CollectPolicy.
+  repeated string collect_levels = 1;
+  // Levels the engine knows but does not collect: the producer policy may
+  // still admit them, so this is the set the two can disagree on.
+  repeated string omitted_levels = 2;
+  // The exact env var an operator sets to change it (documented, not guessed).
+  string configured_by = 3;
+  // Total events the engine refused at admission, across every level.
+  int64 filtered_total = 4;
+  // filtered_total broken down per level, matching the /metrics label.
+  map<string, int64> filtered_by_level = 5;
+  // Whether unknown levels are collected.
+  bool collect_unknown = 6;
 }
 
 // One recurring-error signature, for the "same failure, N times" view.

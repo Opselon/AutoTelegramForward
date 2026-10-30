@@ -272,6 +272,11 @@ impl CollectPolicy {
         out
     }
 
+    /// Whether a level the schema does not name is still collected.
+    pub fn collects_unknown(&self) -> bool {
+        self.collect_unknown
+    }
+
     pub fn protected_categories(&self) -> &[String] {
         &self.protected_categories
     }
