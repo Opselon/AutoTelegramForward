@@ -110,7 +110,7 @@ void main() {
   ) async {
     final log = <_Sent>[];
     final state = await _state(_transport(log));
-    tester.view.physicalSize = const Size(400, 900);
+    tester.view.physicalSize = const Size(400, 1800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(state));
@@ -146,7 +146,7 @@ void main() {
     tester,
   ) async {
     final log = <_Sent>[];
-    tester.view.physicalSize = const Size(400, 900);
+    tester.view.physicalSize = const Size(400, 1800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(await _state(_transport(log))));
@@ -165,7 +165,7 @@ void main() {
 
   testWidgets('a short new password is rejected client-side', (tester) async {
     final log = <_Sent>[];
-    tester.view.physicalSize = const Size(400, 900);
+    tester.view.physicalSize = const Size(400, 1800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(await _state(_transport(log))));
@@ -186,7 +186,7 @@ void main() {
     tester,
   ) async {
     final log = <_Sent>[];
-    tester.view.physicalSize = const Size(400, 900);
+    tester.view.physicalSize = const Size(400, 1800);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(await _state(_transport(log, ok: false))));

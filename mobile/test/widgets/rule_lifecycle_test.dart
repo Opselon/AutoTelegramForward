@@ -40,6 +40,16 @@ const String _rulesBody =
     '{"id":"rule-stopped","name":"Stopped relay","source_chat_id":"-1001111111111","target_chat_id":"-1002222222222","is_active":false,"is_paused":false,"version":5}'
     '],"total":3}';
 
+/// The server echoes the updated rule back from /stop and /restart (both
+/// parse as ForwardRule), so a lifecycle POST must answer with the rule's
+/// own JSON — an empty object would crash the model parse, which is exactly
+/// what the real server never does.
+const Map<String, String> _ruleById = {
+  'rule-running': '{"id":"rule-running","name":"Running relay","source_chat_id":"-1001111111111","target_chat_id":"-1002222222222","is_active":true,"is_paused":false,"version":3}',
+  'rule-paused': '{"id":"rule-paused","name":"Paused relay","source_chat_id":"-1001111111111","target_chat_id":"-1002222222222","is_active":true,"is_paused":true,"version":4}',
+  'rule-stopped': '{"id":"rule-stopped","name":"Stopped relay","source_chat_id":"-1001111111111","target_chat_id":"-1002222222222","is_active":false,"is_paused":false,"version":5}',
+};
+
 HttpTransport _transport(List<_Sent> log) {
   return (
     Uri url, {
@@ -51,6 +61,13 @@ HttpTransport _transport(List<_Sent> log) {
     log.add((method: method, path: url.path, body: body));
     if (method == 'GET' && url.path.endsWith('/api/rules')) {
       return http.Response(_rulesBody, 200, headers: _json);
+    }
+    final match = RegExp(r'/api/rules/([^/]+)').firstMatch(url.path);
+    if (method == 'POST' && match != null) {
+      final ruleJson = _ruleById[match.group(1)];
+      if (ruleJson != null) {
+        return http.Response(ruleJson, 200, headers: _json);
+      }
     }
     return http.Response('{}', 200, headers: _json);
   };
