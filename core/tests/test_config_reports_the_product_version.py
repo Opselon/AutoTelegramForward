@@ -38,6 +38,23 @@ def test_the_default_is_not_a_release_number():
     assert Config().version == ""
 
 
+def test_an_explicit_version_file_is_honoured(tmp_path, monkeypatch):
+    """ATF_VERSION_FILE wins, exactly as it does for the Go API.
+
+    The Docker image copies the file to /etc/atf/VERSION rather than into the
+    source tree, so without this path the core in a container cannot find it
+    and every surface that forwards the core's answer reports "unknown".
+    """
+    pinned = tmp_path / "VERSION"
+    pinned.write_text("9.9.9-image\n", encoding="utf-8")
+    monkeypatch.setenv("ATF_VERSION_FILE", str(pinned))
+    monkeypatch.chdir(tmp_path)
+
+    cfg = Config.load()
+
+    assert cfg.version == "9.9.9-image"
+
+
 def test_an_explicit_override_still_wins(tmp_path, monkeypatch):
     """A packaged build that knows its own version is not overridden by the file."""
     monkeypatch.chdir(tmp_path)

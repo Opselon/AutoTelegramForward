@@ -12,6 +12,12 @@ RUN --mount=type=cache,id=atf-core-pip,target=/root/.cache/pip pip install -r re
 
 COPY proto/ ./proto/
 COPY core/ ./core/
+# The product version this build reports. The Go API image ships the same file
+# at /etc/atf/VERSION and points ATF_VERSION_FILE at it; the core resolves it
+# from the same locations, so the file has to be there for /api/stats to agree
+# with /api/version and /api/system/setup. Without it every surface that
+# forwards the core's answer reads "unknown".
+COPY VERSION /etc/atf/VERSION
 
 RUN mkdir -p /app/data
 
@@ -20,6 +26,7 @@ EXPOSE 50051
 ENV ATF_DB_PATH=/app/data/atf.db \
     ATF_GRPC_HOST=0.0.0.0 \
     ATF_GRPC_PORT=50051 \
-    ATF_LOGGER_ADDR=logger:50052
+    ATF_LOGGER_ADDR=logger:50052 \
+    ATF_VERSION_FILE=/etc/atf/VERSION
 
 CMD ["python", "-m", "core.main"]
