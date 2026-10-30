@@ -3183,7 +3183,25 @@ func (h *Handlers) LogStats(w http.ResponseWriter, r *http.Request) {
 		"newest_ts":   resp.NewestTs,
 		"cached":      cached,
 		"age_ms":      age.Milliseconds(),
+		"admission":   admissionPayload(resp.Admission),
 	})
+}
+
+// admissionPayload is the engine's own admission policy for the Log Stats
+// surface, when the engine reports one. Nil when it does not: an older engine
+// leaves the field unset and the caller must not render a zero-entry policy.
+func admissionPayload(a *pb.AdmissionPolicy) map[string]any {
+	if a == nil {
+		return nil
+	}
+	return map[string]any{
+		"collect_levels":     a.CollectLevels,
+		"omitted_levels":     a.OmittedLevels,
+		"configured_by":      a.ConfiguredBy,
+		"filtered_total":     a.FilteredTotal,
+		"filtered_by_level":  a.FilteredByLevel,
+		"collect_unknown":    a.CollectUnknown,
+	}
 }
 
 // statsFor answers one aggregate, through the TTL cache unless bypass is set.

@@ -670,6 +670,7 @@ impl pb::log_control_service_server::LogControlService for LogControl {
                             last_ts: group.last_ts,
                         })
                         .collect(),
+                    admission: Some(self.admission_report()),
                 }))
             }
             Ok(Err(err)) => {
@@ -801,6 +802,46 @@ impl LogControl {
         }
     }
 
+    /// The engine's own admission policy, as a report a control plane can show
+    /// next to a producer's policy.
+    ///
+    /// This is the missing half of issue #102: the producer's answer said
+    /// "collected" for an INFO event the engine refuses, and the operator had
+    /// to scrape `/metrics` to find out. The report is built from the same
+    /// `CollectPolicy` the ingest path consults, so it can never drift from
+    /// what the engine actually does, and the filtered counters come from the
+    /// same labeled family `/metrics` renders.
+    fn admission_report(&self) -> pb::AdmissionPolicy {
+        let enabled = self
+            .policy
+            .enabled_levels()
+            .iter()
+            .map(|level| level.to_string())
+            .collect::<Vec<_>>();
+        let omitted = crate::ingest::CANONICAL_LEVELS
+            .iter()
+            .copied()
+            .filter(|level| !self.policy.enabled_levels().iter().any(|on| on == level))
+            .map(str::to_string)
+            .collect::<Vec<_>>();
+        let filtered_by_level = {
+            let series = self.metrics.events_filtered.series();
+            series
+                .iter()
+                .map(|(level, counter)| (level.clone(), counter.get() as i64))
+                .collect::<std::collections::HashMap<String, i64>>()
+        };
+        let collect_unknown = self.policy.collects_unknown();
+        pb::AdmissionPolicy {
+            collect_levels: enabled,
+            omitted_levels: omitted,
+            configured_by: "ATF_LOGGER_COLLECT_LEVELS".to_string(),
+            filtered_total: self.metrics.events_filtered.total() as i64,
+            filtered_by_level,
+            collect_unknown,
+        }
+    }
+
     /// The durable-ack warning the health state carries in queued mode.
     pub fn mark_ack_mode(&self, health: &HealthState) {
         if self.ack_mode == "queued" {
@@ -833,6 +874,59 @@ mod tests {
 
     fn harness(config: Config) -> Harness {
         harness_with(config, AckMode::Durable)
+    }
+
+    /// A harness with an explicit ingest policy, so a test can pin what the
+    /// engine admits independently of what the shared default is.
+    fn harness_with_policy(config: Config, ack_mode: AckMode, policy: CollectPolicy) -> Harness {
+        let dir = tempfile::tempdir().unwrap();
+        let metrics = Arc::new(Metrics::new());
+        let backend = BackendConfig {
+            backend: Backend::Sqlite,
+            sqlite_path: dir
+                .path()
+                .join("transport-policy.db")
+                .to_string_lossy()
+                .to_string(),
+            postgres_dsn: None,
+            busy_timeout_ms: 5_000,
+            read_pool_size: 2,
+            pool_timeout_ms: 5_000,
+            statement_timeout_ms: 0,
+            transaction_timeout_ms: 0,
+            max_rows_per_statement: 500,
+        };
+        let storage: Arc<dyn Storage> =
+            Arc::new(SqliteStorage::open(&config, &backend, Arc::clone(&metrics)).unwrap());
+        let pipeline = Pipeline::start(
+            PipelineConfig {
+                ack_mode,
+                batch_size: 32,
+                ..PipelineConfig::from_config(&config)
+            },
+            Arc::clone(&storage),
+            Arc::clone(&metrics),
+        )
+        .unwrap();
+        let health = Arc::new(HealthState::new());
+        health.mark_ready("test storage probe ok");
+        let service = LogControl::new(
+            &config,
+            policy,
+            Arc::clone(&pipeline),
+            Arc::clone(&storage),
+            Arc::clone(&metrics),
+            Arc::clone(&health),
+        )
+        .with_backend("sqlite(test)");
+        Harness {
+            _dir: dir,
+            pipeline: Arc::clone(&pipeline),
+            storage,
+            metrics,
+            _health: Arc::clone(&health),
+            service,
+        }
     }
 
     /// The ack mode is a parameter, not a constant, because it decides whether a
@@ -1185,6 +1279,61 @@ mod tests {
         assert_eq!(clamped.logs.len(), 25);
         assert_eq!(harness.metrics.rpc_total.with("QueryLogs").get(), 10);
         harness.pipeline.stop(Duration::from_secs(5));
+    }
+
+    #[test]
+    /// issue #102: the engine must say *which* levels it refuses, so a control
+    /// plane can put that next to a producer policy that admits them.
+    fn log_stats_reports_the_engines_own_admission_policy() {
+        let config = Config::default();
+        let policy = CollectPolicy::from_env(&config.protected_categories, &|_key| None);
+        let harness = harness_with_policy(config, AckMode::Durable, policy);
+        let runtime = runtime();
+
+        // One INFO record: the *producer* policy may admit it, the engine's
+        // default contract does not.
+        runtime
+            .block_on(pb::log_control_service_server::LogControlService::log(
+                &harness.service,
+                tonic::Request::new(pb::LogRequest {
+                    entry: Some(entry("INFO", "an info event")),
+                }),
+            ))
+            .unwrap();
+
+        let stats = runtime
+            .block_on(
+                pb::log_control_service_server::LogControlService::log_stats(
+                    &harness.service,
+                    tonic::Request::new(pb::LogStatsRequest {
+                        rule_id: String::new(),
+                        user_id: 0,
+                        include_errors: false,
+                    }),
+                ),
+            )
+            .unwrap()
+            .into_inner();
+
+        let admission = stats
+            .admission
+            .expect("LogStats carries the admission report");
+        // The contract default: WARN/ERROR/CRITICAL collected, INFO refused.
+        assert!(admission.collect_levels.iter().any(|l| l == "WARN"));
+        assert!(admission.omitted_levels.iter().any(|l| l == "INFO"));
+        assert_eq!(admission.configured_by, "ATF_LOGGER_COLLECT_LEVELS");
+        assert!(admission.filtered_total >= 1);
+        assert!(
+            admission
+                .filtered_by_level
+                .get("INFO")
+                .copied()
+                .unwrap_or(0)
+                >= 1,
+            "the INFO refusal must be visible per level: {:?}",
+            admission.filtered_by_level
+        );
+        assert!(!admission.collect_unknown);
     }
 
     #[test]

@@ -491,3 +491,99 @@ func TestLoggingHealth_DegradesWhenCoreCannotAnswer(t *testing.T) {
 	}
 	t.Fatal("core must appear in the logging chain")
 }
+
+// Issue #102: a producer policy that admits INFO while the engine refuses it
+// read to the operator as "collected", which is not "queryable". The answer now
+// carries the engine's own gate next to the producer's, so the disagreement is
+// visible in the one place the operator looks.
+func TestLogPolicy_ReportsTheEngineAdmissionGateNextToTheProducer(t *testing.T) {
+	policy := logpolicy.New(nil, 0)
+	h, _ := newPolicyHandlers(policy)
+	h.c = &grpcclient.Clients{
+		Logs: &fakeEngineAdmissionClient{resp: &pb.LogStatsResponse{
+			Total: 660,
+			Admission: &pb.AdmissionPolicy{
+				CollectLevels:  []string{"WARN", "ERROR", "CRITICAL"},
+				OmittedLevels:  []string{"TRACE", "DEBUG", "INFO", "SUCCESS"},
+				ConfiguredBy:   "ATF_LOGGER_COLLECT_LEVELS",
+				FilteredTotal:  3,
+				FilteredByLevel: map[string]int64{"INFO": 3},
+				CollectUnknown: false,
+			},
+		}},
+	}
+
+	rec := httptest.NewRecorder()
+	h.LogPolicy(rec, adminRequest("GET", "/logs/policy", ""))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("policy read must succeed, got %d", rec.Code)
+	}
+	body := decode(t, rec)
+	scopes, ok := body["scopes"].(map[string]any)
+	if !ok {
+		t.Fatalf("response must be scoped per process: %v", body)
+	}
+	engine, ok := scopes["engine"].(map[string]any)
+	if !ok {
+		t.Fatal("the engine scope must be present: its admission gate is the half the producer's answer cannot show")
+	}
+	if engine["available"] != true {
+		t.Fatalf("an engine that answered must be reported as available: %v", engine)
+	}
+	collect, _ := engine["configured_levels"].([]any)
+	if len(collect) != 3 || collect[0] != "WARN" {
+		t.Fatalf("the engine's collected levels must be its own: %v", engine["configured_levels"])
+	}
+	omitted, _ := engine["effective_levels"].([]any)
+	if len(omitted) == 0 || omitted[len(omitted)-1] != "SUCCESS" {
+		t.Fatalf("the engine's omitted levels must be reported as the effective set it will not store: %v", engine["effective_levels"])
+	}
+	counters, _ := engine["counters"].(map[string]any)
+	if got, _ := counters["suppressed_level"].(float64); got != 3 {
+		t.Fatalf("engine refusals must be counted: got %v, want 3 (%v)", counters["suppressed_level"], counters)
+	}
+	if scope, _ := engine["counter_scope"].(string); !strings.Contains(scope, "engine") {
+		t.Fatalf("engine counters must be labelled as the engine's, got %q", scope)
+	}
+}
+
+// An engine that predates the admission field must say so, not answer a scope
+// that looks like "the engine admits everything".
+func TestLogPolicy_AnEngineWithoutAnAdmissionReportSaysSo(t *testing.T) {
+	policy := logpolicy.New(nil, 0)
+	h, _ := newPolicyHandlers(policy)
+	h.c = &grpcclient.Clients{Logs: &fakeEngineAdmissionClient{resp: &pb.LogStatsResponse{Total: 10}}}
+
+	rec := httptest.NewRecorder()
+	h.LogPolicy(rec, adminRequest("GET", "/logs/policy", ""))
+	body := decode(t, rec)
+	scopes, _ := body["scopes"].(map[string]any)
+	engine, _ := scopes["engine"].(map[string]any)
+	if engine["available"] != false {
+		t.Fatalf("an engine without an admission report is not 'available': %v", engine)
+	}
+	if reason, _ := engine["reason"].(string); !strings.Contains(reason, "admission") {
+		t.Fatalf("the reason must name the missing admission report, got %q", reason)
+	}
+	if _, hasCounters := engine["counters"]; hasCounters {
+		t.Fatalf("an unavailable engine scope must carry no counters: %v", engine)
+	}
+}
+
+// fakeEngineAdmissionClient stands in for the logger's LogControlService: the
+// engine reports its own admission policy on LogStats, so that is the call the
+// handler has to make.
+type fakeEngineAdmissionClient struct {
+	pb.LogControlServiceClient
+	resp *pb.LogStatsResponse
+	err  error
+}
+
+func (f *fakeEngineAdmissionClient) LogStats(
+	ctx context.Context, in *pb.LogStatsRequest, opts ...grpc.CallOption,
+) (*pb.LogStatsResponse, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	return f.resp, nil
+}

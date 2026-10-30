@@ -244,6 +244,15 @@ impl LabeledCounter {
         }
     }
 
+    /// Read-only access to the label→counter series.
+    ///
+    /// Used by the admission report on `LogStats` so a control plane can show
+    /// *which* levels the engine refused without scraping `/metrics` (issue
+    /// #102): the report and the Prometheus family read the same map.
+    pub fn series(&self) -> std::sync::MutexGuard<'_, BTreeMap<String, Arc<Counter>>> {
+        self.series.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     /// Fetch (or create) one series. Label values must come from a bounded set.
     pub fn with(&self, value: &str) -> Arc<Counter> {
         let mut series = self.series.lock().unwrap_or_else(|e| e.into_inner());

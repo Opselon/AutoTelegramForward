@@ -207,6 +207,47 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
         {scopes ? Object.entries(scopes).map(([k, v]) => scopeCard(k, v)) : null}
       </div>
 
+      {/* Collected ≠ stored. The engine is the second gate: a level the
+          producers admit but the engine omits is counted as filtered, so the
+          card that says that has to sit where the operator already looks
+          (issue #102). */}
+      {scopes?.engine?.available && (
+        <div
+          style={{
+            marginTop: 12,
+            padding: '10px 12px',
+            borderRadius: 10,
+            border:
+              scopes.engine.effective_levels && scopes.engine.effective_levels.length > 0
+                ? '1px solid rgba(245, 158, 11, 0.35)'
+                : '1px solid rgba(16, 185, 129, 0.3)',
+            background:
+              scopes.engine.effective_levels && scopes.engine.effective_levels.length > 0
+                ? 'rgba(245, 158, 11, 0.08)'
+                : 'rgba(16, 185, 129, 0.06)',
+            fontSize: '0.78rem',
+          }}
+        >
+          <strong>{t('ui_engine_admission_title')}</strong>
+          <div className="muted" style={{ marginTop: 4 }}>
+            {t('ui_engine_admission_explain')}
+          </div>
+          {scopes.engine.effective_levels && scopes.engine.effective_levels.length > 0 && (
+            <div style={{ marginTop: 6 }}>
+              <span className="muted">{t('ui_engine_omitted_levels')}: </span>
+              <Levels levels={scopes.engine.effective_levels} tone="configured" />
+            </div>
+          )}
+          {scopes.engine.counters && Number(scopes.engine.counters.suppressed_level) > 0 && (
+            <div className="muted" style={{ marginTop: 4 }}>
+              {t('ui_engine_filtered_total', {
+                count: scopes.engine.counters.suppressed_level,
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
       <div
         style={{
           marginTop: 16,

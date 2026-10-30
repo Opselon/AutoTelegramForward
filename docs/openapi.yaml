@@ -2088,7 +2088,7 @@ paths:
   /api/logs/policy:
     get:
       tags: [logs]
-      summary: 'The effective log collection policy'
+      summary: 'The effective log collection policy per producer (scope=api, scope=core) and the engine admission gate (scope=engine)'
       operationId: getApiLogsPolicy
       security: [{ bearerAuth: [] }]
       x-atf-authorization: user

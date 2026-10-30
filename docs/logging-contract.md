@@ -258,6 +258,31 @@ enforcement point and this producer-side policy stays as defence in depth.
 Confusing (1) with (4) is how administrators lose history they thought they
 still had.
 
+### 3a. Collection is decided twice, and both answers are visible
+
+"Collected" is not one verdict: the **producer** policy (`atf-api`, `atf-core`)
+decides whether the event is sent, and the **engine** (`atf-logger`) decides
+whether it is stored. The defaults are intentionally different — the producers
+may open a diagnostic window that admits `INFO`, while the engine's contract
+default still collects only `WARN`/`ERROR`/`CRITICAL` — so the two can disagree,
+and when they do the event is **counted as filtered, not stored**. It never
+becomes a queryable row.
+
+That disagreement used to be silent: the producer's answer said "emitted" and
+the operator had to scrape `atf_logger_events_filtered_total` to notice. Both
+gates are now reported in one place:
+
+* `GET /api/logs/policy` carries a `scope=engine` entry next to the producer
+  scopes — the levels the engine *collects*, the levels it *omits*, and its
+  filtered total.
+* `GET /api/logs/stats` carries `admission` — `collect_levels`,
+  `omitted_levels`, `filtered_total`, `filtered_by_level`, and the env var
+  (`ATF_LOGGER_COLLECT_LEVELS`) that changes it.
+
+A level that appears in `scope=api` or `scope=core` but not in
+`scope=engine` is the visible answer to "why is this event not in the
+explorer?".
+
 ## 4. Storage backends
 
 Both SQLite and PostgreSQL are supported first-class; the choice is explicit
