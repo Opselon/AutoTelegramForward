@@ -33,11 +33,6 @@ const _json = {'content-type': 'application/json'};
 
 typedef _Sent = ({String method, String path, Object? body});
 
-String _rule(String id, String name, bool active, bool paused) =>
-    '{"id":"$id","name":"$name","source_chat_id":"-1001111111111",'
-    '"target_chat_id":"-1002222222222","is_active":$active,'
-    '"is_paused":$paused,"version":3}';
-
 const String _rulesBody =
     '{"rules":['
     '{"id":"rule-running","name":"Running relay","source_chat_id":"-1001111111111","target_chat_id":"-1002222222222","is_active":true,"is_paused":false,"version":3},'
