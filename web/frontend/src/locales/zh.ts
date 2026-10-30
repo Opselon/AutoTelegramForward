@@ -770,6 +770,7 @@ export const zh: Catalog = {
   "ui_primary": "主",
   "ui_pro_active_logger_diagnostics": "主动式日志与诊断",
   "ui_probing": "… 探测中",
+  "ui_version_probing": "版本 …",
   "ui_process_raw_text": "处理原始文本",
   "ui_processed": "已处理",
   "ui_processing_messages": "消息处理（?）",

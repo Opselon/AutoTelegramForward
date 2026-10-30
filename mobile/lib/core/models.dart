@@ -1336,6 +1336,7 @@ class SetupReport {
     this.missingRequired = const [],
     this.missingRecommended = const [],
     this.nextSteps = const [],
+    this.rateLimit = const RateLimitSummary(),
   });
 
   final bool ready;
@@ -1350,6 +1351,11 @@ class SetupReport {
   final List<String> missingRequired;
   final List<String> missingRecommended;
   final List<String> nextSteps;
+
+  /// Where the shared rate limiter stands. Always present here (a defaulted
+  /// value) so the System screen never has to branch on null, even though an
+  /// older server does not send the field.
+  final RateLimitSummary rateLimit;
 
   int get onlineServices => services.where((s) => s.online).length;
 
@@ -1384,7 +1390,41 @@ class SetupReport {
         const [],
     nextSteps:
         (json['next_steps'] as List?)?.whereType<String>().toList() ?? const [],
+    rateLimit: RateLimitSummary.fromJson(
+      (json['ratelimit'] as Map?)?.cast<String, dynamic>() ?? const {},
+    ),
   );
+}
+
+/// The rate-limiter verdict `/api/system/setup` carries: whether a shared
+/// budget is enforced, which mode it runs in, and whether the shared store is
+/// currently unreachable (in which case each replica falls back to its own
+/// counter — the limiter still enforces, just not globally).
+@immutable
+class RateLimitSummary {
+  const RateLimitSummary({
+    this.enabled = false,
+    this.mode = '',
+    this.degraded = false,
+    this.breaker = '',
+  });
+
+  final bool enabled;
+
+  /// `cluster`, `per-process`, or empty when an older server sent nothing.
+  final String mode;
+  final bool degraded;
+
+  /// The circuit breaker's state name, present only while degraded.
+  final String breaker;
+
+  factory RateLimitSummary.fromJson(Map<String, dynamic> json) =>
+      RateLimitSummary(
+        enabled: json['enabled'] as bool? ?? false,
+        mode: json['mode'] as String? ?? '',
+        degraded: json['degraded'] as bool? ?? false,
+        breaker: json['breaker'] as String? ?? '',
+      );
 }
 
 @immutable

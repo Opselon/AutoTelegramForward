@@ -65,8 +65,11 @@ func TestGatewayInfoReportsLiveCoreState(t *testing.T) {
 	if body["atf_core_online"] != true {
 		t.Fatalf("atf_core_online = %v, want true", body["atf_core_online"])
 	}
-	if body["version"] != "9.9.9" {
-		t.Fatalf("version = %v, want the core's version", body["version"])
+	// The dashboard renders one version for the whole product; the core's own
+	// build string must not displace it (that is what made the header chip and
+	// the System panel disagree). See TestGatewayInfoVersionMatchesProduct.
+	if body["version"] == "9.9.9" {
+		t.Fatalf("version = the core's build string; want the product version")
 	}
 	if body["total_rules"] != float64(3) || body["total_sessions"] != float64(2) {
 		t.Fatalf("counts = %v/%v", body["total_rules"], body["total_sessions"])
@@ -92,5 +95,25 @@ func TestGatewayInfoWithoutCoreStillAnswers(t *testing.T) {
 	body := readGateway(t, h, 0)
 	if body["atf_core_online"] != false {
 		t.Fatalf("atf_core_online = %v, want false when core is unreachable", body["atf_core_online"])
+	}
+}
+
+// One product, one version. The dashboard shows the version in the header chip
+// (GET /api/gateway), on the Home hero and in the System panel
+// (GET /api/system/setup). When /api/gateway forwarded the core's build string
+// instead of the product version, one screen showed two different versions and
+// neither was labelled, so "is this deployment current?" had no answer.
+func TestGatewayInfoVersionIsTheProductVersion(t *testing.T) {
+	fake := &gatewaySystemClient{}
+	h := &Handlers{c: &grpcclient.Clients{System: fake}}
+
+	body := readGateway(t, h, 501)
+
+	want := resolveProductVersion()
+	if want == "" || want == "dev" {
+		t.Fatalf("resolveProductVersion() = %q; the test needs a real VERSION", want)
+	}
+	if body["version"] != want {
+		t.Fatalf("version = %v, want the product version %q", body["version"], want)
 	}
 }

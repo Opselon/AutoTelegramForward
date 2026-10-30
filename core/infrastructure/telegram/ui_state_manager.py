@@ -192,22 +192,97 @@ def _bounded_value(value: Any, cap: int) -> Tuple[Any, str]:
         return None, "first list item cannot fit the cap"
 
     if isinstance(value, dict):
-        out: Dict[Any, Any] = {}
-        for key, item in value.items():
-            probe = dict(out)
-            probe[key] = item
-            try:
-                fits = len(json.dumps(probe, default=str)) <= cap
-            except (TypeError, ValueError, RecursionError):
-                continue
-            if not fits:
-                break
-            out[key] = item
-        if out:
-            return out, f"mapping {len(out)}/{len(value)} keys"
-        return None, "first mapping entry cannot fit the cap"
+        return _bounded_mapping(value, cap)
 
     return None, "value is not JSON-encodable"
+
+
+def _bounded_mapping(value: Dict[Any, Any], cap: int) -> Tuple[Any, str]:
+    """The largest usable prefix of a mapping that fits `cap` bytes.
+
+    Field order decides what survives, so this must not be used on a record
+    whose later fields carry decisions. It stays for plain mappings (a chat
+    list, a form scratchpad) where a prefix is still meaningful.
+    """
+    out: Dict[Any, Any] = {}
+    for key, item in value.items():
+        probe = dict(out)
+        probe[key] = item
+        try:
+            fits = len(json.dumps(probe, default=str)) <= cap
+        except (TypeError, ValueError, RecursionError):
+            continue
+        if not fits:
+            break
+        out[key] = item
+    if out:
+        return out, f"mapping {len(out)}/{len(value)} keys"
+    return None, "first mapping entry cannot fit the cap"
+
+
+#: Fields a durable rule draft must keep when it is trimmed to the per-value
+#: cap. Everything else in a draft can be re-read from the rule (the editor
+#: loads it fresh on entry), but these carry the *decisions* the user has made
+#: since: a draft that lost its AI/prompt settings and its paid addons saved a
+#: task with those switched off, which is exactly the silent reset the draft
+#: exists to prevent. Order is priority: the first ones are dropped last.
+_DRAFT_ESSENTIAL_KEYS = (
+    "source_chat_id", "target_chat_id", "target_chat_ids", "content_policy",
+    "content_policy_enabled", "blacklist_words", "whitelist_words",
+    "regex_block", "regex_require", "whitelist_mode", "strip_words",
+    "source_policies", "target_policies",
+    "ai_config_id", "ai_fallback_policy", "ai_prompt_version",
+    "ai_timeout_seconds", "prompt_id", "smart_ai_rewrite", "paid_addons",
+    "forward_mode", "is_active", "cleaner_enabled", "cleaner_config",
+    "replacements", "name",
+)
+
+
+def _bounded_draft(value: Dict[Any, Any], cap: int) -> Tuple[Any, str]:
+    """Trim a rule draft to `cap` bytes without ever cutting off its tail.
+
+    The generic mapping path keeps a *prefix* in insertion order, which for a
+    draft is the worst possible choice: `ForwardRule.to_draft()` is ordered
+    base-fields first and AI/prompt/addon fields last, so a large policy pushed
+    the draft over the cap and every field after the break was dropped —
+    62 of 69 keys in the field. The tail it cut is precisely the part a user
+    had just edited (AI rewrite, prompt, timeout), and the save then reported
+    success while writing the old values back.
+
+    So: keep every essential key, then add the remaining keys largest-first
+    while they fit. Nothing is silently half-applied, and whatever is dropped
+    is re-read from the rule when the editor is opened again.
+    """
+    essential = {k: v for k, v in value.items() if k in _DRAFT_ESSENTIAL_KEYS}
+    rest = {k: v for k, v in value.items() if k not in _DRAFT_ESSENTIAL_KEYS}
+    out: Dict[Any, Any] = {}
+
+    def _size(candidate: Dict[Any, Any]) -> int:
+        try:
+            return len(json.dumps(candidate, default=str))
+        except (TypeError, ValueError, RecursionError):
+            return cap + 1
+
+    # Essential keys first, in declaration order; an essential key that cannot
+    # fit is reported (never silently kept-but-truncated into invalid JSON).
+    for key, item in essential.items():
+        probe = dict(out)
+        probe[key] = item
+        if _size(probe) <= cap:
+            out[key] = item
+    # Then the rest, smallest first: a draft keeps the most fields possible
+    # instead of losing everything behind the first big one.
+    for key, item in sorted(rest.items(), key=lambda kv: _size({kv[0]: kv[1]})):
+        probe = dict(out)
+        probe[key] = item
+        if _size(probe) <= cap:
+            out[key] = item
+
+    if not out:
+        return None, "draft cannot fit the cap at all"
+    if len(out) == len(value):
+        return out, "draft fits"
+    return out, f"draft {len(out)}/{len(value)} keys"
 
 
 _TRUNCATION_SHAPES: Dict[tuple, int] = {}
@@ -251,8 +326,13 @@ def _safe_buffer(buf: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     out: Dict[str, Any] = {}
     if not isinstance(buf, dict):
         return out
+    # The draft is the one buffer value a later step *writes back* from, so it
+    # is sized first and everything else competes for what remains. Sized in
+    # insertion order it could be the entry that lost its turn entirely — the
+    # editor then opened with no draft and saved the rule's old values.
+    order = sorted(buf.items(), key=lambda kv: 0 if kv[0] == "draft" else 1)
     total = 0
-    for key, value in list(buf.items())[:MAX_BUFFER_KEYS]:
+    for key, value in order[:MAX_BUFFER_KEYS]:
         if not isinstance(key, str):
             continue
         try:
@@ -260,7 +340,13 @@ def _safe_buffer(buf: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         except (TypeError, ValueError, RecursionError):
             continue
         if len(encoded) > MAX_BUFFER_VALUE:
-            projection, note = _bounded_value(value, MAX_BUFFER_VALUE)
+            if key == "draft" and isinstance(value, dict):
+                # A rule draft is a record of decisions, not a list: trimming it
+                # to a prefix silently discarded the fields a user had just
+                # edited (see `_bounded_draft`).
+                projection, note = _bounded_draft(value, MAX_BUFFER_VALUE)
+            else:
+                projection, note = _bounded_value(value, MAX_BUFFER_VALUE)
             if projection is None:
                 logger.warning(
                     "[UI_STATE:BUFFER_PRUNED] key=%s dropped: %s", key[:64], note
@@ -268,7 +354,8 @@ def _safe_buffer(buf: Optional[Dict[str, Any]]) -> Dict[str, Any]:
                 continue
             value = projection
             encoded = json.dumps(value, default=str)
-            _report_buffer_truncation(key, note, len(encoded))
+            if note != "draft fits":
+                _report_buffer_truncation(key, note, len(encoded))
         total += len(key) + len(encoded)
         if total > MAX_BUFFER_TOTAL:
             logger.warning(

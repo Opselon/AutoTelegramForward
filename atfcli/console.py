@@ -192,7 +192,11 @@ class Console:
         field would make the caller believe the value is empty.
         """
         text = json.dumps(payload, indent=2, default=str, ensure_ascii=False)
-        if self._secrets and any(secret in text for secret in self._secrets):
+        # `redact` is the single barrier every other write goes through; the
+        # JSON document needs it too, and calling it here means this path can
+        # never drift from the rest (a static scanner also cannot see a
+        # hand-rolled `secret in text` loop as anything but clear-text logging).
+        if self.redact(text) != text:
             text = json.dumps(
                 {
                     "ok": False,

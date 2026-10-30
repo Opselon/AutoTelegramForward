@@ -770,6 +770,7 @@ export const uz: Catalog = {
   "ui_primary": "ASOSIY",
   "ui_pro_active_logger_diagnostics": "Proaktiv Logger va diagnostika",
   "ui_probing": "… tekshirilmoqda",
+  "ui_version_probing": "versiya …",
   "ui_process_raw_text": "Xom matnni qayta ishlash",
   "ui_processed": "Qayta ishlandi",
   "ui_processing_messages": "Xabarlarni qayta ishlash (?)",

@@ -18,6 +18,14 @@ concurrency:
   group: cd-remote-deploy
   cancel-in-progress: false
 
+# Least privilege. A deploy job needs nothing from the repository except the
+# checkout, and a workflow without a `permissions:` block inherits the
+# repository default — which on this repo is read/write. Declaring the floor
+# here keeps a compromised action (or a mistyped step) from pushing commits or
+# editing releases with the deploy token.
+permissions:
+  contents: read
+
 jobs:
   deploy:
     name: deploy to remote server

@@ -41,6 +41,27 @@
       "level": "optional",
       "reason": "only for bare-metal API deployments that exchange bot tokens themselves (compose puts the bot in core)",
       "set": false
+    },
+    {
+      "hint": "ATF_REDIS_ADDR=redis:6379 (set by docker-compose.yml when the redis service is enabled)",
+      "key": "ATF_REDIS_ADDR",
+      "level": "recommended",
+      "reason": "shared rate-limit store and worker-coordination leases (Redis); without it limits are per-process only",
+      "set": true
+    },
+    {
+      "hint": "leave unset to enable whenever a Redis address is configured; set 0 to disable",
+      "key": "ATF_RATELIMIT_ENABLED",
+      "level": "optional",
+      "reason": "explicit switch; the limiter is enabled automatically when ATF_REDIS_ADDR is set",
+      "set": false
+    },
+    {
+      "hint": "openssl rand -hex 24 > ATF_REDIS_PASSWORD=... (never commit the value)",
+      "key": "ATF_REDIS_PASSWORD",
+      "level": "optional",
+      "reason": "authentication for the Redis instance (recommended when Redis is not on a private network)",
+      "set": true
     }
   ],
   "deployment": "docker-compose",

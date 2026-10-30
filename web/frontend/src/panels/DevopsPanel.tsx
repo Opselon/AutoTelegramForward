@@ -146,6 +146,10 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                 {(() => {
                   const hmap: Record<string, { online: boolean; detail: string; latency_ms: number } | undefined> = {}
                   for (const s of servicesHealth?.services || []) hmap[s.name] = s
+                  // The port labels are the ones the stack actually binds:
+                  // core gRPC 50051, logger gRPC 50052. They read 6001/6002,
+                  // the pre-compose ports, so an operator checking a listener
+                  // looked for a port nothing has ever listened on.
                   const nodes = [
                     { key: 'web', title: t('ui_web_gateway'), sub: 'atf-web · :8088', color: '#f59e0b' },
                     { key: 'api', title: t('ui_rest_control_plane'), sub: 'atf-api · :8080', color: '#a855f7' },
@@ -241,13 +245,18 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                         })}
                       </div>
 
-                      {/* Degraded-service hint — tell the operator which systemctl to poke */}
+                      {/* Degraded-service hint — name the failing service and
+                          give the remedy this deployment actually uses. The
+                          hint used to print `systemctl --user restart atf`,
+                          which is the bare-metal unit; this stack runs under
+                          docker compose, where that command restarts nothing
+                          and the operator is left believing they acted. */}
                       {servicesHealth && servicesHealth.status !== 'healthy' && (
                         <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', fontSize: '0.75rem', color: '#f87171' }}>
                           {t('ui_down_services')}
                           {servicesHealth.services.filter((x) => !x.online).map((x) => x.name).join(', ')}
                           <span style={{ color: '#94a3b8' }}>
-                            {' — '}systemctl --user restart {servicesHealth.services.filter((x) => !x.online).map((x) => x.name === 'core' ? 'atf' : x.name === 'logger' ? 'atf-logger' : x.name === 'api' ? 'atf-api' : 'atf-web').join(' ')}
+                            {' — '}docker compose restart {servicesHealth.services.filter((x) => !x.online).map((x) => x.name).join(' ')}
                           </span>
                         </div>
                       )}

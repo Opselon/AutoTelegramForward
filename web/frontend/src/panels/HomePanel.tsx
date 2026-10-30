@@ -111,10 +111,22 @@ export function HomePanel({ d }: { d: DashboardCtx }) {
   }, [])
 
   const healthChips = [
-    { label: 'Core:6001', online: stats?.atf_core_online },
-    { label: 'Log:6002', online: stats?.atf_logger_online },
+    { label: 'Core:50051', online: stats?.atf_core_online },
+    { label: 'Logger:50052', online: stats?.atf_logger_online },
     { label: 'Web:8088', online: gatewayInfo?.atf_web_online },
   ] as const
+
+  // A chip must say what it means. The dot alone turned "not probed yet"
+  // (undefined on first paint) into the same red as a real outage, and a real
+  // outage named no service — the operator had to open the DevOps panel to
+  // find out which one. Verdict text is the same catalog key the System panel
+  // uses, so all three surfaces agree word for word.
+  const healthVerdict = (online: boolean | undefined) =>
+    online === undefined
+      ? t('ui_probing')
+      : online
+        ? t('ui_system_online')
+        : t('ui_system_offline')
 
   // The four KPIs, moved verbatim from the shell (same sources, same tones).
   const kpis = [
@@ -186,7 +198,9 @@ export function HomePanel({ d }: { d: DashboardCtx }) {
           <div className="home-hero__text">
             <h2 className="home-hero__greeting">{t('ui_home_greeting', { name })}</h2>
             <div className="home-hero__meta">
-              <span className="badge badge--info">v{gatewayInfo?.version ?? '1.2.2'}</span>
+              <span className="badge badge--info">
+                {gatewayInfo?.version ? `v${gatewayInfo.version}` : t('ui_version_probing')}
+              </span>
               <span className="home-hero__tagline">
                 {t('ui_unified_smart_telegram_forwarding_gateway_microservice_platform')}
               </span>
@@ -195,12 +209,17 @@ export function HomePanel({ d }: { d: DashboardCtx }) {
         </div>
         <div className="home-hero__health" role="status">
           {healthChips.map((chip) => (
-            <span key={chip.label} className="header-chip">
+            <span
+              key={chip.label}
+              className={`header-chip${chip.online === false ? ' header-chip--down' : ''}`}
+              title={`${chip.label} — ${healthVerdict(chip.online)}`}
+            >
               <span
-                className={`header-chip__dot${chip.online ? ' is-online' : ''}`}
+                className={`header-chip__dot${chip.online ? ' is-online' : ''}${chip.online === undefined ? ' is-unknown' : ''}`}
                 aria-hidden="true"
               />
               <span>{chip.label}</span>
+              <span className="header-chip__verdict">{healthVerdict(chip.online)}</span>
             </span>
           ))}
         </div>

@@ -22,6 +22,12 @@ func (h *Handlers) GatewayInfo(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	id := identity(r)
+	// The version is the *product* version everywhere else in the API
+	// (/api/stats, /api/system/setup, /api/version). This route used to leave
+	// it to the core's answer, so the dashboard's header chip could read a core
+	// build string while the System panel read the product release — two
+	// versions on one screen, neither labelled. Seed it from the same resolver
+	// and let the core override only when it reports one.
 	out := map[string]any{
 		"atf_core_online":   false,
 		"atf_logger_online": h.c.Logs != nil,
@@ -42,9 +48,6 @@ func (h *Handlers) GatewayInfo(w http.ResponseWriter, r *http.Request) {
 			out["uptime_seconds"] = resp.UptimeSeconds
 			out["total_rules"] = resp.ActiveRulesCount
 			out["total_sessions"] = resp.ActiveSessionsCount
-			if resp.Version != "" {
-				out["version"] = resp.Version
-			}
 		}
 	}
 	writeJSON(w, http.StatusOK, out)

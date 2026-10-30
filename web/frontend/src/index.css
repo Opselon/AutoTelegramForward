@@ -2126,6 +2126,28 @@ input[type='radio']:disabled {
   box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
 }
 
+/* "Not probed yet" is not "down": a grey dot, no glow, so a first paint
+   before the first /api/gateway answer does not read as an outage. */
+.header-chip__dot.is-unknown {
+  background: var(--color-text-muted);
+  box-shadow: none;
+}
+
+.header-chip--down {
+  border-color: var(--color-danger);
+  background: color-mix(in oklab, var(--color-danger) 8%, transparent);
+}
+
+.header-chip__verdict {
+  font-size: var(--type-xs);
+  font-weight: 700;
+  color: var(--color-text-muted);
+}
+
+.header-chip--down .header-chip__verdict {
+  color: var(--color-danger);
+}
+
 @media (max-width: 767px) {
   /* Chips wrap as a row of their own instead of squeezing the title. */
   .header-chip {

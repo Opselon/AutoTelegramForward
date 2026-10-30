@@ -58,6 +58,52 @@ FAILURE_BACKOFF_MAX_SECONDS = 900.0
 class PollFailure(Exception):
     """A channel poll failed in a way that should be retried later, not now."""
 
+    def __init__(self, message: str, *, transient: bool = False) -> None:
+        super().__init__(message)
+        #: True when the failure was the *transport* (the MTProto connection
+        #: dropped, a timeout, a flood wait) rather than the channel. A
+        #: transport failure says nothing about this channel, so it must not
+        #: drive the channel's permanent backoff: one dropped connection used to
+        #: put every source channel on a 900s retry ladder at once, and the
+        #: ladder only clears on a successful poll — so a single blip could
+        #: silence forwarding for 15 minutes after the connection was fine
+        #: again.
+        self.transient = transient
+
+
+#: Substrings that mark a failure as *transport*, not channel-specific. The
+#: connection layer reports these as plain exceptions (`Connection lost`,
+#: `Timeout`, `[10] Retrying ...`) rather than typed RPC errors, so a substring
+#: check is the only signal available; it is deliberately narrow and only ever
+#: used to *soften* a backoff, never to declare a success.
+_TRANSIENT_MARKERS = (
+    "connection lost",
+    "connection reset",
+    "connection aborted",
+    "timeout",
+    "timed out",
+    "temporarily unavailable",
+    "retrying",
+    "flood wait",
+    "floodwait",
+    "service unavailable",
+    "network is unreachable",
+)
+
+
+def _is_transient(exc: BaseException) -> bool:
+    """True when a poll failure came from the transport, not from the channel.
+
+    A dropped MTProto connection fails *every* channel's sweep at once, so it
+    must not advance each channel's permanent backoff ladder: doing that turned
+    one blip into a 900s silence per source channel after the connection was
+    already healthy again (the ladder only clears on a successful poll).
+    """
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError, ConnectionError, OSError)):
+        return True
+    text = str(exc).lower()
+    return any(marker in text for marker in _TRANSIENT_MARKERS)
+
 
 def _is_channel_peer_id(chat_id: object) -> bool:
     """Whether a stored source chat id names a channel/supergroup peer.
@@ -313,7 +359,21 @@ class ChannelPollingService:
         of the same permanent condition (an invalid peer never becomes valid on
         its own) are DEBUG with a periodic WARNING so the log stays truthful
         without drowning in it.
+
+        A *transient* failure (the transport dropped) is different: it says
+        nothing about this channel, and it hits every channel at once. Counting
+        it on the channel's ladder silenced all forwarding for 15 minutes after
+        one blip, so it retries on the next sweep instead.
         """
+        if getattr(exc, "transient", False):
+            # Debug only: the connection layer already logged the drop at
+            # WARNING, and one line per channel per blip is the log storm the
+            # per-channel backoff was introduced to stop.
+            logger.debug(
+                "poll: %s (%s) skipped this sweep (transport): %s",
+                chat_name or chat_id, chat_id, exc,
+            )
+            return
         count = self._failures.get(key, 0) + 1
         self._failures[key] = count
         delay = min(
@@ -401,14 +461,18 @@ class ChannelPollingService:
 
             full = await client.invoke(GetFullChannel(channel=peer))
         except Exception as exc:
-            raise PollFailure(f"GetFullChannel failed: {exc}") from exc
+            raise PollFailure(
+                f"GetFullChannel failed: {exc}", transient=_is_transient(exc)
+            ) from exc
         pts = getattr(getattr(full, "full_chat", None), "pts", 0) or 0
 
         cursor = self._state.get(chat_id, 0)
         try:
             top = await self._channel_top_message(client, chat_id)
         except Exception as exc:
-            raise PollFailure(f"cannot read top message: {exc}") from exc
+            raise PollFailure(
+                f"cannot read top message: {exc}", transient=_is_transient(exc)
+            ) from exc
 
         logger.info(
             "[POLL TRACE] channel=%s (%s) cursor=%s top_msg_id=%s pts=%s",
@@ -433,7 +497,9 @@ class ChannelPollingService:
                 )
             )
         except Exception as exc:
-            raise PollFailure(f"GetChannelDifference failed: {exc}") from exc
+            raise PollFailure(
+                f"GetChannelDifference failed: {exc}", transient=_is_transient(exc)
+            ) from exc
 
         raw_messages = getattr(diff, "new_messages", None) or []
         messages = sorted(raw_messages, key=lambda m: getattr(m, "id", 0) or 0)

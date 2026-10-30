@@ -512,6 +512,15 @@ export interface ServicesHealthResponse {
   status: 'healthy' | 'degraded'
   time: string
   services: ServiceHealth[]
+  /**
+   * How long ago the probe set was measured. The API caches the probe for a
+   * few seconds so a dashboard polling every 3 s does not turn into a probe
+   * storm; a client that renders "measured 4 minutes ago" is telling the truth
+   * while one that renders `time` as "now" is not.
+   */
+  age_ms?: number
+  /** True when this answer came from that cache rather than a fresh probe. */
+  cached?: boolean
 }
 
 /**
@@ -551,6 +560,24 @@ export interface SetupReport {
   missing_required: string[]
   missing_recommended: string[]
   next_steps: string[]
+  /**
+   * Where the shared rate limiter stands: `cluster` (a Redis-backed budget),
+   * `per-process` (no shared store, so each replica counts on its own) or
+   * `degraded` (the store is unreachable and the circuit breaker is open).
+   *
+   * Optional because an older server does not send it; the System panel must
+   * still render a report that predates the field.
+   */
+  ratelimit?: RateLimitSummary
+}
+
+/** The rate-limiter verdict `/api/system/setup` carries. Booleans only. */
+export interface RateLimitSummary {
+  enabled: boolean
+  mode: 'cluster' | 'per-process'
+  degraded: boolean
+  /** Present only while degraded: the breaker's state name. */
+  breaker?: string
 }
 
 export interface SimulateRequest {
