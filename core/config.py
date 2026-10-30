@@ -21,6 +21,42 @@ def _redis_url_from_addr(value: str) -> str:
     return "redis://" + raw
 
 
+#: Fallback when no VERSION file can be found (a source tree without one).
+#: Never the real version — the point is that it is visibly not a release.
+_UNKNOWN_VERSION = "unknown"
+
+
+def _read_product_version() -> str:
+    """The product version from the repo's ``VERSION`` file.
+
+    The Go API resolves the same file (``resolveProductVersion``), the release
+    workflow tags it and ``atf validate`` checks it, so reading it here keeps
+    every surface on one number instead of each process carrying its own
+    default. Compose mounts the repo at ``/app``, and a frozen ``atf.py``
+    bundle has the file next to the executable, so both layouts are covered.
+    """
+    here = Path(__file__).resolve().parent
+    candidates = [
+        here.parent.parent / "VERSION",      # <repo>/VERSION from core/config.py
+        here.parent / "VERSION",             # <repo>/core/VERSION (a stray copy)
+        Path("/app/VERSION"),                # the compose layout
+    ]
+    try:
+        exe = Path(os.argv[0]).resolve().parent
+        candidates.insert(0, exe / "VERSION")
+    except Exception:
+        pass
+    for path in candidates:
+        try:
+            if path.is_file():
+                value = path.read_text(encoding="utf-8").strip()
+                if value:
+                    return value
+        except OSError:
+            continue
+    return _UNKNOWN_VERSION
+
+
 @dataclass
 class Config:
     api_id: int = 0
@@ -33,7 +69,16 @@ class Config:
     grpc_host: str = "0.0.0.0"
     grpc_port: int = 50051
     language: str = "en"
-    version: str = "1.2.2"
+    version: str = ""
+    """The product version this build reports.
+
+    Left empty by default: ``Config.load`` fills it from the repo's ``VERSION``
+    file, and every surface that renders a version (``GetSystemStats``, the
+    startup line, the gRPC handshake) then says the same thing as ``VERSION``.
+    A hardcoded default here is how ``/api/stats`` came to answer ``1.2.2``
+    while ``/api/version`` and ``/api/system/setup`` answered ``2.4.0`` — three
+    version surfaces, one of them frozen in 2026.
+    """
     disable_bot: bool = False
     logger_addr: str = "localhost:50052"
     web_url: str = ""               # public dashboard base URL, e.g. https://sub.legoten.com:8444
@@ -186,6 +231,17 @@ class Config:
             cfg.bot_token = bot_token_env.strip()
 
         cfg.disable_bot = os.environ.get("ATF_DISABLE_BOT", "").lower() in ("1", "true", "yes")
+
+        # The product version this build reports. `version` is deliberately not
+        # in the env/yaml override lists: a deployment overriding the version
+        # would make the core claim a release it is not running. Read from the
+        # repo's VERSION file — the same file the API resolves, the release
+        # workflow tags and `atf validate` checks — so every surface agrees.
+        # An explicit override still wins (a packaged build that knows better),
+        # and an empty VERSION falls back to the literal below rather than to
+        # an empty string a dashboard would render as "v".
+        if not cfg.version:
+            cfg.version = _read_product_version()
         return cfg
 
     def validate(self) -> None:
