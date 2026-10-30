@@ -34,13 +34,21 @@ def _read_product_version() -> str:
     every surface on one number instead of each process carrying its own
     default. Compose mounts the repo at ``/app``, and a frozen ``atf.py``
     bundle has the file next to the executable, so both layouts are covered.
+
+    ``ATF_VERSION_FILE`` is honoured for the same reason the Go API honours it:
+    the Docker image copies the file to ``/etc/atf/VERSION`` rather than into
+    the source tree, and a bare source checkout has no copy there at all. An
+    operator who points at a file gets exactly that file's contents.
     """
     here = Path(__file__).resolve().parent
     candidates = [
         here.parent.parent / "VERSION",      # <repo>/VERSION from core/config.py
         here.parent / "VERSION",             # <repo>/core/VERSION (a stray copy)
         Path("/app/VERSION"),                # the compose layout
+        Path("/etc/atf/VERSION"),            # the Docker image layout (like the Go API)
     ]
+    if explicit := (os.environ.get("ATF_VERSION_FILE") or "").strip():
+        candidates.insert(0, Path(explicit))
     try:
         exe = Path(os.argv[0]).resolve().parent
         candidates.insert(0, exe / "VERSION")
