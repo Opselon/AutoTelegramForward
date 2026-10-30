@@ -1357,7 +1357,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
                 AutoTelegramForward <span style={{ color: '#818cf8', fontWeight: 600 }}>PRO GATEWAY</span>
               </h1>
               <span className="badge badge-vip" style={{ fontSize: 'var(--type-xs)', padding: '2px 8px' }}>
-                v{gatewayInfo?.version ?? '1.2.2'} RELEASE
+                {gatewayInfo?.version ? `v${gatewayInfo.version} RELEASE` : t('ui_version_probing')}
               </span>
             </div>
             <p className="text-balance" style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 2, margin: 0 }}>
@@ -1367,21 +1367,38 @@ export function App({ me }: { me?: MeInfo } = {}) {
         </div>
 
         {/* Microservice Health Indicators — every dot is a real probe answer
-            from the stats/gateway payloads, including the web process itself. */}
+            from the stats/gateway payloads, including the web process itself.
+            The chip carries the service's own verdict as text too: a bare red
+            dot said "something is down" and left the operator to guess which
+            panel to open. `undefined` means "not probed yet", which is not a
+            failure and must not be painted like one. */}
         <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           {([
-            { label: 'Core:6001', online: stats?.atf_core_online },
-            { label: 'Log:6002', online: stats?.atf_logger_online },
+            { label: 'Core:50051', online: stats?.atf_core_online },
+            { label: 'Logger:50052', online: stats?.atf_logger_online },
             { label: 'Web:8088', online: gatewayInfo?.atf_web_online },
-          ] as const).map((chip) => (
-            <div key={chip.label} className="header-chip">
-              <span
-                className={`header-chip__dot${chip.online ? ' is-online' : ''}`}
-                aria-hidden="true"
-              />
-              <span>{chip.label}</span>
-            </div>
-          ))}
+          ] as const).map((chip) => {
+            const verdict =
+              chip.online === undefined
+                ? t('ui_probing')
+                : chip.online
+                  ? t('ui_system_online')
+                  : t('ui_system_offline')
+            return (
+              <div
+                key={chip.label}
+                className={`header-chip${chip.online === false ? ' header-chip--down' : ''}`}
+                title={`${chip.label} — ${verdict}`}
+              >
+                <span
+                  className={`header-chip__dot${chip.online ? ' is-online' : ''}${chip.online === undefined ? ' is-unknown' : ''}`}
+                  aria-hidden="true"
+                />
+                <span>{chip.label}</span>
+                <span className="header-chip__verdict">{verdict}</span>
+              </div>
+            )
+          })}
 
           {/* Language picker: all ten catalogs, by endonym */}
           <LanguagePicker lang={lang} onChange={setLang} compact />

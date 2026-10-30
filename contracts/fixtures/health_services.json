@@ -1,14 +1,16 @@
 {
+  "age_ms": 1174253,
+  "cached": true,
   "services": [
     {
-      "detail": "uptime=29392s sessions=0",
-      "latency_ms": 0,
+      "detail": "uptime=1564s sessions=0",
+      "latency_ms": 4,
       "name": "core",
       "online": true
     },
     {
-      "detail": "events=2316",
-      "latency_ms": 4,
+      "detail": "events=660",
+      "latency_ms": 3,
       "name": "logger",
       "online": true
     },
@@ -20,11 +22,11 @@
     },
     {
       "detail": "http://web:8088/healthz",
-      "latency_ms": 0,
+      "latency_ms": 6,
       "name": "web",
       "online": true
     }
   ],
   "status": "healthy",
-  "time": "2026-10-16T06:56:12Z"
+  "time": "2026-10-30T01:33:58Z"
 }

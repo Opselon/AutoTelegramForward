@@ -770,6 +770,7 @@ export const ru: Catalog = {
   "ui_primary": "ОСНОВНОЙ",
   "ui_pro_active_logger_diagnostics": "Проактивный логгер и диагностика",
   "ui_probing": "… проверка",
+  "ui_version_probing": "версия …",
   "ui_process_raw_text": "Обработка исходного текста",
   "ui_processed": "Обработано",
   "ui_processing_messages": "Обработка сообщений (?)",

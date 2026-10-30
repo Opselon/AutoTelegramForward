@@ -264,7 +264,23 @@ class RawTelegramApiTracer:
                 except Exception as trace_err:
                     logger.debug("Failed logging raw update trace: %s", trace_err)
 
-                return await orig_handle_updates(updates, *args, **kwargs)
+                # The inbound pump runs this coroutine as a bare task, so an
+                # exception raised here has no caller to receive it: asyncio
+                # reports "Task exception was never retrieved" at ERROR and
+                # mirrors it into the central store, where a dropped MTProto
+                # connection looked like a defect in the tracer. The tracer is
+                # an opt-in diagnostic and must never change delivery
+                # behaviour, so a transport failure is reported once at DEBUG
+                # and swallowed; anything else still surfaces, because that
+                # would be a real bug in this wrapper.
+                try:
+                    return await orig_handle_updates(updates, *args, **kwargs)
+                except (ConnectionError, TimeoutError, asyncio.TimeoutError) as transport_err:
+                    logger.debug(
+                        "[RAW UPDATE << %s] transport closed while handling updates: %s",
+                        self.session_id, transport_err,
+                    )
+                    return None
 
             self.client.handle_updates = _traced_handle_updates
 

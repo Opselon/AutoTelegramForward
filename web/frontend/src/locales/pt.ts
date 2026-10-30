@@ -770,6 +770,7 @@ export const pt: Catalog = {
   "ui_primary": "PRINCIPAL",
   "ui_pro_active_logger_diagnostics": "Registo proativo e diagnóstico",
   "ui_probing": "… a sondar",
+  "ui_version_probing": "versão …",
   "ui_process_raw_text": "Processar Texto Bruto",
   "ui_processed": "Processadas",
   "ui_processing_messages": "Processamento de mensagens (?)",

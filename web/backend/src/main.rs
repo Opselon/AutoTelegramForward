@@ -100,7 +100,10 @@ async fn health_handler(State(state): State<Arc<AppState>>) -> impl IntoResponse
         StatusCode::OK,
         Json(json!({
             "service": "atf-web-gateway",
-            "version": "1.2.2",
+            // One source of truth. This literal said 1.2.2 while the crate (and
+            // /api/gateway) said 2.0.0, so `docker inspect --format health`
+            // and the dashboard disagreed about which gateway was running.
+            "version": env!("CARGO_PKG_VERSION"),
             "status": "healthy",
             "upstream_api": state.api_upstream,
             "upstream_connected": upstream_ok

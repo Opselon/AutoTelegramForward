@@ -25,6 +25,8 @@ a redacted reason, and the dead-letter entry carries none of it either.
 
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 import asyncio
 import json
 
@@ -136,8 +138,12 @@ def test_a_dsn_password_is_masked(dsn):
     assert OWNERLESS_PASSWORD not in out, out
     assert "[REDACTED]" in out, out
     # The destination must survive: an operator needs to know *which* peer failed.
-    assert "db:5432" in out or "redis:6379" in out or "rabbit:5672" in out \
-        or "hooks.example.com" in out or "smtp.example.com" in out, out
+    # Compare the parsed host, not a substring: "smtp.example.com" is a
+    # substring of "smtp.example.com.evil.test", so a substring assertion would
+    # pass on a destination that is not the one that failed.
+    host = urlsplit(dsn).hostname or ""
+    assert host in ("db", "redis", "rabbit", "hooks.example.com", "smtp.example.com"), (host, out)
+    assert host in out, f"the failing destination {host!r} was redacted out: {out}"
 
 
 def test_an_ordinary_url_is_left_alone():

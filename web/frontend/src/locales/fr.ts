@@ -770,6 +770,7 @@ export const fr: Catalog = {
   "ui_primary": "PRINCIPALE",
   "ui_pro_active_logger_diagnostics": "Journalisation proactive et diagnostics",
   "ui_probing": "… sonde",
+  "ui_version_probing": "version …",
   "ui_process_raw_text": "Traiter le Texte Brut",
   "ui_processed": "Traités",
   "ui_processing_messages": "Traitement des messages (?)",

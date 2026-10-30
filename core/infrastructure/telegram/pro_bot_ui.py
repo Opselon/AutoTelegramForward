@@ -1485,7 +1485,20 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         return 0
 
     async def _dlq_count(self) -> int:
-        """Failed messages sitting in the dead-letter queue."""
+        """Messages sitting in the dead-letter queue right now.
+
+        This used to count every ERROR-severity row in ``error_log`` and label
+        the total "Dead-letter queue errors". Those are different stores: the
+        error log is an append-only incident trail (nothing is ever replayed
+        out of it), while the DLQ holds deliveries that gave up and can be
+        retried. Reporting the first as the second told an operator the queue
+        had work in it when the queue was empty.
+        """
+        if getattr(self, "_delivery_queue", None) is not None:
+            try:
+                return await diagnostics.count_dead_letters(queue=self._delivery_queue)
+            except Exception:
+                logger.debug("dead-letter count failed", exc_info=True)
         if self._error_log is None:
             return 0
         try:
@@ -1493,6 +1506,42 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             return int(counts.get("error", 0) or 0)
         except Exception:
             return 0
+
+    async def _probe_web_gateway_state(self, lang: str = "en") -> str:
+        """Is the web dashboard actually answering right now?
+
+        The admin screens printed "Web Gateway: 🟢" as a literal. A gateway that
+        is down, misconfigured or unreachable therefore looked exactly like a
+        healthy one — the one question an operator opens this screen to answer.
+        The probe is a plain GET against the configured web URL's ``/healthz``
+        (the gateway's own liveness route, which never needs a credential), with
+        a short timeout so a hung gateway cannot stall the callback.
+
+        ``self._web_url`` is the *dashboard* URL an operator is given, not
+        necessarily the compose service address, so the answer is reported as
+        "on" only when it really answers; anything else is "off" rather than a
+        guess. When no URL is configured the caller renders `ui_not_configured`
+        for the URL itself, and the state is "off" for the same reason.
+        """
+        web_url = getattr(self, "_web_url", "") or ""
+        if not web_url:
+            return self._t("ui_status_off", lang=lang)
+        try:
+            import urllib.request
+
+            url = web_url.rstrip("/") + "/healthz"
+            timeout = float(os.environ.get("ATF_WEB_PROBE_TIMEOUT", "3") or 3)
+
+            def _fetch() -> int:
+                req = urllib.request.Request(url, method="GET")
+                with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 - operator-configured URL
+                    return int(getattr(resp, "status", 0) or resp.getcode() or 0)
+
+            status = await asyncio.to_thread(_fetch)
+            return self._t("ui_status_on" if 200 <= status < 400 else "ui_status_off", lang=lang)
+        except Exception as exc:
+            logger.debug("web gateway probe failed for %s: %s", web_url, exc)
+            return self._t("ui_status_off", lang=lang)
 
     def _main_menu(self, uid: int = 0) -> InlineKeyboardMarkup:
         cur_lang = self._resolve_lang(uid)
@@ -1648,6 +1697,9 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         )
         if fs_enabled and fs_channel:
             fs_status = f"{fs_status} ({fs_channel})"
+        # The body printed "Core 🟢 | Logger 🟢 | Web 🟢" as literals, so the
+        # panel asserted a healthy stack without asking any of the three. Each
+        # value is now the state this process can actually observe.
         body = self._t(
             "ui_admin_panel_body",
             lang=lang,
@@ -1655,6 +1707,12 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             active_rules=active_rules,
             dlq_errors=dlq_errors,
             fs_status=fs_status,
+            core_status=self._t("ui_status_on", lang=lang),
+            logger_status=self._t(
+                "ui_status_on" if getattr(self, "_log", None) is not None else "ui_status_off",
+                lang=lang,
+            ),
+            web_status=await self._probe_web_gateway_state(lang),
         )
         rows = [
             [
@@ -5445,6 +5503,19 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
                 active_rules = sum(1 for r in all_r if getattr(r, "enabled", True))
             dlq_count = await self._dlq_count()
             lang = self._resolve_lang(uid)
+            # The three lines used to print a hardcoded "🟢" and one shared
+            # {service_status}, so the panel claimed a healthy logger and web
+            # gateway without probing either — the exact failure this screen
+            # exists to catch. Report what this process can actually observe:
+            # the core is running (this handler is being served by it), the
+            # logger is up when its client is wired, and the web gateway only
+            # when a health URL is configured and answers.
+            core_state = self._t("ui_status_on", lang=lang)
+            logger_state = self._t(
+                "ui_status_on" if getattr(self, "_log", None) is not None else "ui_status_off",
+                lang=lang,
+            )
+            web_state = await self._probe_web_gateway_state(lang)
             body = self._t(
                 "ui_admin_stats_body",
                 lang=lang,
@@ -5452,7 +5523,9 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
                 active_rules=active_rules,
                 dlq_count=dlq_count,
                 web_url=self._web_url or self._t("ui_not_configured", lang=lang),
-                service_status=self._t("ui_status_on", lang=lang),
+                core_status=core_state,
+                logger_status=logger_state,
+                web_status=web_state,
             )
             kbd = InlineKeyboardMarkup([
                 [InlineKeyboardButton(self._t("ui_back_main_menu", lang=lang), callback_data=CB["admin"])],

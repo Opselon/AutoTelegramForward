@@ -770,6 +770,7 @@ export const fa: Catalog = {
   "ui_primary": "اصلی",
   "ui_pro_active_logger_diagnostics": "مرکز لاگر پیشرفته و مانیتورینگ زنده (Pro Active Logger)",
   "ui_probing": "… در حال بررسی",
+  "ui_version_probing": "نسخه …",
   "ui_process_raw_text": "پردازش متن خام",
   "ui_processed": "پردازش‌شده",
   "ui_processing_messages": "پردازش پیام‌ها (؟)",

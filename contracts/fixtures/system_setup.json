@@ -42,9 +42,30 @@
       "level": "optional",
       "reason": "only for bare-metal API deployments that exchange bot tokens themselves (compose puts the bot in core)",
       "set": false
+    },
+    {
+      "hint": "ATF_REDIS_ADDR=redis:6379 (set by docker-compose.yml when the redis service is enabled)",
+      "key": "ATF_REDIS_ADDR",
+      "level": "recommended",
+      "reason": "shared rate-limit store and worker-coordination leases (Redis); without it limits are per-process only",
+      "set": true
+    },
+    {
+      "hint": "leave unset to enable whenever a Redis address is configured; set 0 to disable",
+      "key": "ATF_RATELIMIT_ENABLED",
+      "level": "optional",
+      "reason": "explicit switch; the limiter is enabled automatically when ATF_REDIS_ADDR is set",
+      "set": false
+    },
+    {
+      "hint": "openssl rand -hex 24 > ATF_REDIS_PASSWORD=... (never commit the value)",
+      "key": "ATF_REDIS_PASSWORD",
+      "level": "optional",
+      "reason": "authentication for the Redis instance (recommended when Redis is not on a private network)",
+      "set": true
     }
   ],
-  "commit_sha": "unknown",
+  "commit_sha": "ea4b4063428bcb4dca119ce12999706abe4ed8ac",
   "deployment": "docker-compose",
   "features": [
     "rules",
@@ -60,20 +81,25 @@
   "missing_recommended": [],
   "missing_required": [],
   "next_steps": [
-    "atf validate --runtime \u2014 full health re-check of the live stack"
+    "atf validate --runtime — full health re-check of the live stack"
   ],
-  "product_version": "dev",
+  "product_version": "2.4.0",
+  "ratelimit": {
+    "degraded": false,
+    "enabled": true,
+    "mode": "cluster"
+  },
   "ready": true,
   "services": [
     {
-      "detail": "uptime=29392s sessions=0",
-      "latency_ms": 3,
+      "detail": "uptime=1564s sessions=0",
+      "latency_ms": 4,
       "name": "core",
       "online": true
     },
     {
-      "detail": "events=2315",
-      "latency_ms": 4,
+      "detail": "events=660",
+      "latency_ms": 3,
       "name": "logger",
       "online": true
     },
@@ -85,10 +111,10 @@
     },
     {
       "detail": "http://web:8088/healthz",
-      "latency_ms": 3,
+      "latency_ms": 6,
       "name": "web",
       "online": true
     }
   ],
-  "time": "2026-10-16T06:56:12Z"
+  "time": "2026-10-30T01:33:58Z"
 }

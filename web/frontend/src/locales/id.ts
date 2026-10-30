@@ -770,6 +770,7 @@ export const id: Catalog = {
   "ui_primary": "UTAMA",
   "ui_pro_active_logger_diagnostics": "Logger Proaktif & Diagnostik",
   "ui_probing": "… memeriksa",
+  "ui_version_probing": "versi …",
   "ui_process_raw_text": "Proses Teks Mentah",
   "ui_processed": "Diproses",
   "ui_processing_messages": "Pemrosesan Pesan (?)",
