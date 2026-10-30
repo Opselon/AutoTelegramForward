@@ -1,7 +1,8 @@
 /// The navigation shell must adapt, not just shrink.
 ///
-/// Nine labelled destinations cannot fit a Material bottom bar on a phone: M3
-/// recommends three to five, and nine equal slices were narrower than their own
+/// Eleven labelled destinations cannot fit a Material bottom bar on a phone:
+/// M3 recommends three to five, and eleven equal slices were narrower than
+/// their own
 /// labels (the first and last were clipped by the screen edges). The shell now
 /// follows the size classes in `docs/ui-ux-system.md`:
 ///
@@ -85,7 +86,7 @@ Future<AppState> _state() async {
 
 Finder _key(String key) => find.byKey(ValueKey<String>(key));
 
-/// The ten destinations, in order, by the l10n key of their label.
+/// The eleven destinations, in order, by the l10n key of their label.
 const _labels = [
   'nav_dashboard',
   'nav_rules',
@@ -94,17 +95,19 @@ const _labels = [
   'nav_sessions',
   'nav_filters',
   'nav_ai',
+  'nav_auto_reply',
   'nav_logs',
   'nav_delivery',
   'nav_settings',
 ];
 
-/// The five the bottom bar cannot hold; they live behind **More**.
+/// The six the bottom bar cannot hold; they live behind **More**.
 const _secondary = [
   'nav_chats',
   'nav_sessions',
   'nav_filters',
   'nav_ai',
+  'nav_auto_reply',
   'nav_delivery',
 ];
 
@@ -185,7 +188,7 @@ void main() {
   });
 
   testWidgets('the bar is not used where it cannot fit: a medium window gets '
-      'the labelled rail with all ten destinations', (tester) async {
+      'the labelled rail with all eleven destinations', (tester) async {
     tester.view.physicalSize = const Size(700, 900);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
@@ -199,7 +202,7 @@ void main() {
     expect(rail.destinations, hasLength(_labels.length));
     expect(rail.labelType, NavigationRailLabelType.all);
 
-    // All ten labels are present in the rail, none truncated into a sheet.
+    // All eleven labels are present in the rail, none truncated into a sheet.
     final t = AppMessages(const Locale('en'));
     for (final label in _labels) {
       expect(find.text(t.get(label)), findsWidgets, reason: label);

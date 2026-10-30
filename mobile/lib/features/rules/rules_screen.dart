@@ -126,19 +126,60 @@ class _RulesScreenState extends State<RulesScreen> {
     r.targetChatId.isNotEmpty ? r.targetChatId : t.get('rules_target_fallback'),
   );
 
+  /// The three states the backend actually distinguishes: running
+  /// (active, not paused), paused (active but held) and stopped
+  /// (`is_active=false`). A rule that was stopped must never read as Active.
+  String _statusLabel(ForwardRule rule, AppMessages t) {
+    if (rule.isPaused) return t.get('rules_status_paused');
+    return rule.isEnabled
+        ? t.get('rules_status_active')
+        : t.get('rules_status_stopped');
+  }
+
+  StatusTone _statusTone(ForwardRule rule) {
+    if (rule.isPaused) return StatusTone.warning;
+    return rule.isEnabled ? StatusTone.success : StatusTone.neutral;
+  }
+
+  IconData _statusIcon(ForwardRule rule) {
+    if (rule.isPaused) return Icons.pause;
+    return rule.isEnabled ? Icons.play_arrow : Icons.stop;
+  }
+
+  /// The switch is the master switch: off→on resumes a paused task (the
+  /// pause flag, not the active flag, is what holds it back) or re-activates
+  /// a stopped one; on→off stops it. Pause/resume/stop/restart stay available
+  /// as explicit menu actions because they carry intent the switch cannot.
   Future<void> _toggle(ForwardRule rule) async {
     final t = AppMessages.of(context);
     final client = context.read<AppState>().buildApiClient();
     try {
-      await client.toggleRule(rule.id);
+      if (!rule.isEnabled && rule.isPaused) {
+        await client.resumeRule(rule.id);
+      } else {
+        await client.toggleRule(rule.id);
+      }
       await _load();
       if (!mounted) return;
       AppToast.success(
         context,
         rule.isEnabled
-            ? t.get('rules_status_paused')
+            ? t.get('rules_status_stopped')
             : t.get('rules_status_active'),
       );
+    } on ApiException catch (exc) {
+      if (!mounted) return;
+      AppToast.failure(context, exc.error.message);
+    }
+  }
+
+  Future<void> _lifecycle(
+    ForwardRule rule,
+    Future<void> Function(String id) action,
+  ) async {
+    try {
+      await action(rule.id);
+      await _load();
     } on ApiException catch (exc) {
       if (!mounted) return;
       AppToast.failure(context, exc.error.message);
@@ -328,9 +369,7 @@ class _RulesScreenState extends State<RulesScreen> {
               source: _sourceLabel(rule, t),
               target: _targetLabel(rule, t),
               selected: rule.id == selectedId,
-              enabledLabel: rule.isEnabled
-                  ? t.get('rules_status_active')
-                  : t.get('rules_status_paused'),
+              enabledLabel: _statusLabel(rule, t),
               onTap: () => setState(() => _selectedId = rule.id),
             );
           }
@@ -388,6 +427,7 @@ class _RulesScreenState extends State<RulesScreen> {
   Widget _buildDetail(BuildContext context, AppMessages t, ForwardRule rule) {
     final palette = AppColors.of(context);
     final theme = Theme.of(context);
+    final client = context.read<AppState>().buildApiClient();
     final name = rule.name.isNotEmpty ? rule.name : '#${rule.shortId}';
 
     return AppCard(
@@ -397,6 +437,14 @@ class _RulesScreenState extends State<RulesScreen> {
         tooltip: t.get('rules_more_actions'),
         onSelected: (value) {
           switch (value) {
+            case 'pause':
+              _lifecycle(rule, client.pauseRule);
+            case 'resume':
+              _lifecycle(rule, client.resumeRule);
+            case 'stop':
+              _lifecycle(rule, client.stopRule);
+            case 'restart':
+              _lifecycle(rule, client.restartRule);
             case 'settings':
               showRuleSettingsSheet(
                 context,
@@ -412,6 +460,38 @@ class _RulesScreenState extends State<RulesScreen> {
           }
         },
         itemBuilder: (ctx) => [
+          // The lifecycle actions map one-to-one onto the backend's
+          // /rules/{id}/pause|resume|stop|restart endpoints. Pause holds the
+          // task without touching the active flag; stop does the opposite;
+          // restart re-activates and clears the pause in one call. Only the
+          // states each action is valid for expose it: a stopped task offers
+          // restart (never resume), a paused one offers resume, a running one
+          // offers pause.
+          if (rule.isPaused)
+            PopupMenuItem(
+              value: 'resume',
+              child: _menuRow(Icons.play_circle_outline, t.get('rules_resume')),
+            )
+          else if (rule.isEnabled)
+            PopupMenuItem(
+              value: 'pause',
+              child: _menuRow(Icons.pause_circle_outline, t.get('rules_pause')),
+            ),
+          if (rule.isEnabled)
+            PopupMenuItem(
+              value: 'stop',
+              child: _menuRow(
+                Icons.stop_circle_outlined,
+                t.get('rules_stop'),
+                color: palette.danger,
+              ),
+            )
+          else
+            PopupMenuItem(
+              value: 'restart',
+              child: _menuRow(Icons.restart_alt, t.get('rules_restart')),
+            ),
+          const PopupMenuDivider(),
           PopupMenuItem(
             value: 'settings',
             child: _menuRow(Icons.tune_outlined, t.get('rules_full_control')),
@@ -444,11 +524,9 @@ class _RulesScreenState extends State<RulesScreen> {
           Row(
             children: [
               StatusBadge(
-                label: rule.isEnabled
-                    ? t.get('rules_status_active')
-                    : t.get('rules_status_paused'),
-                tone: rule.isEnabled ? StatusTone.success : StatusTone.neutral,
-                icon: rule.isEnabled ? Icons.play_arrow : Icons.pause,
+                label: _statusLabel(rule, t),
+                tone: _statusTone(rule),
+                icon: _statusIcon(rule),
               ),
               const Spacer(),
               Semantics(
@@ -620,7 +698,11 @@ class _RuleMasterRow extends StatelessWidget {
                     height: 8,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
-                      color: rule.isEnabled ? palette.success : palette.neutral,
+                      color: rule.isPaused
+                          ? palette.warning
+                          : (rule.isEnabled
+                                ? palette.success
+                                : palette.neutral),
                     ),
                   ),
                   const SizedBox(width: AppSpacing.md),
