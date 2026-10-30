@@ -1,7 +1,7 @@
-/// The Delivery page: what the engine is doing right now, and what it gave up
-/// on.
+/// The Delivery page: what the engine is doing right now, what it gave up on,
+/// and which durable operations are queued.
 ///
-/// Two questions, two tabs:
+/// Three questions, three tabs:
 ///   * **Queue** — live counters (`GET /api/queue`) plus one row per task.
 ///     "In queue" is the number that separates *slow* from *stuck*: a rising
 ///     queue with flat error counts is latency, a rising dead-letter count is
@@ -10,6 +10,9 @@
 ///   * **Dead letter** — the jobs that exhausted their retries
 ///     (`GET /api/dlq`), each one replayable (`POST /api/dlq/{id}/retry`) or
 ///     clearable (`DELETE /api/dlq`, tenant-scoped on the server).
+///   * **Operations** — the durable task queue (`GET /api/tasks`): session
+///     backups, dead-letter replays/purges and account backup exports run as
+///     cancellable, retryable tasks instead of blocking an HTTP request.
 ///
 /// Three properties this screen deliberately keeps:
 ///   * a failed read renders as a failure, never as zeroes — a dashboard that
@@ -32,6 +35,7 @@ import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
 import '../../widgets/app_ui.dart';
 import '../../widgets/loading_list.dart';
+import 'tasks_view.dart';
 
 class DeliveryScreen extends StatefulWidget {
   const DeliveryScreen({super.key});
@@ -301,7 +305,7 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
   Widget build(BuildContext context) {
     final t = AppMessages.of(context);
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         appBar: AppBar(
           title: Text(t.get('delivery_title')),
@@ -316,10 +320,13 @@ class _DeliveryScreenState extends State<DeliveryScreen> {
             tabs: [
               Tab(text: t.get('delivery_tab_queue')),
               Tab(text: t.get('delivery_tab_dlq')),
+              Tab(text: t.get('delivery_tab_tasks')),
             ],
           ),
         ),
-        body: TabBarView(children: [_queueTab(t), _deadLetterTab(t)]),
+        body: TabBarView(
+          children: [_queueTab(t), _deadLetterTab(t), const TasksView()],
+        ),
       ),
     );
   }

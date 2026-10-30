@@ -1,5 +1,5 @@
 /// Settings screen: theme, language (all ten shipped locales), server switch,
-/// logout.
+/// account (password change), logout.
 ///
 /// The picker is generated from [AppMessages.supportedLocales] so a locale
 /// cannot exist in the catalogs yet be unreachable in the UI - which is exactly
@@ -9,10 +9,14 @@ library;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/api_client.dart';
 import '../../core/app_state.dart';
+import '../../core/design_tokens.dart';
 import '../../core/layout.dart';
+import '../../core/models.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
+import '../../widgets/app_button.dart';
 import '../../widgets/server_connection_dialog.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -22,6 +26,7 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppMessages.of(context);
     final state = context.watch<AppState>();
+    final palette = AppColors.of(context);
 
     return Scaffold(
       appBar: AppBar(title: Text(t.get('settings_title'))),
@@ -143,10 +148,16 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           ListTile(
-            leading: const Icon(Icons.logout, color: Colors.red),
+            leading: const Icon(Icons.password_outlined),
+            title: Text(t.get('settings_change_password')),
+            subtitle: Text(t.get('settings_change_password_hint')),
+            onTap: () => _changePassword(context),
+          ),
+          ListTile(
+            leading: Icon(Icons.logout, color: palette.danger),
             title: Text(
               t.get('settings_logout'),
-              style: const TextStyle(color: Colors.red),
+              style: TextStyle(color: palette.danger),
             ),
             onTap: () => _confirmLogout(context),
           ),
@@ -177,8 +188,21 @@ class SettingsScreen extends StatelessWidget {
     showServerConnectionDialog(context);
   }
 
+  Future<void> _changePassword(BuildContext context) async {
+    final changed = await showDialog<bool>(
+      context: context,
+      builder: (_) => const _ChangePasswordDialog(),
+    );
+    if (changed != true || !context.mounted) return;
+    // The saved credentials hold the old password for silent re-login; after
+    // a successful change they are wrong by definition. Signing the user out
+    // is the honest outcome — the dialog already said so.
+    await context.read<AppState>().logout();
+  }
+
   Future<void> _confirmLogout(BuildContext context) async {
     final t = AppMessages.of(context);
+    final palette = AppColors.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -190,7 +214,7 @@ class SettingsScreen extends StatelessWidget {
             child: Text(t.get('action_cancel')),
           ),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            style: ElevatedButton.styleFrom(backgroundColor: palette.danger),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(t.get('action_confirm')),
           ),
@@ -201,5 +225,189 @@ class SettingsScreen extends StatelessWidget {
     if (confirmed == true && context.mounted) {
       await context.read<AppState>().logout();
     }
+  }
+}
+
+/// The change-password flow against `PATCH /api/auth/change-password`.
+///
+/// The dialog walks through three states — form, submitting, done — and the
+/// done state is explicit: the stored credentials are stale once the server
+/// accepted the new password, so the dialog tells the user to sign in again
+/// and the confirm button performs that sign-out. Swallowing this would leave
+/// the app silently re-logging in with the old password on next start.
+class _ChangePasswordDialog extends StatefulWidget {
+  const _ChangePasswordDialog();
+
+  @override
+  State<_ChangePasswordDialog> createState() => _ChangePasswordDialogState();
+}
+
+class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
+  final _oldCtrl = TextEditingController();
+  final _newCtrl = TextEditingController();
+  final _confirmCtrl = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+
+  bool _busy = false;
+  bool _done = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _oldCtrl.dispose();
+    _newCtrl.dispose();
+    _confirmCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final t = AppMessages.of(context);
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+
+    final state = context.read<AppState>();
+    final client = state.buildApiClient();
+    try {
+      await client.changePassword(
+        userId: state.userId,
+        oldPassword: _oldCtrl.text,
+        newPassword: _newCtrl.text,
+      );
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _done = true;
+      });
+    } on ApiException catch (exc) {
+      if (!mounted) return;
+      // A session that died mid-flow is the app-level expiry, not a form
+      // error: hand it to the same expiry path every screen uses.
+      if (exc.error.kind == ErrorKind.unauthorized) {
+        context.read<AppState>().markExpired();
+        return;
+      }
+      setState(() {
+        _busy = false;
+        _error = exc.error.message.isNotEmpty
+            ? exc.error.message
+            : t.get('state_error');
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _error = t.get('state_error');
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppMessages.of(context);
+    final palette = AppColors.of(context);
+
+    return AlertDialog(
+      key: const ValueKey<String>('change_password_dialog'),
+      title: Text(t.get('settings_change_password')),
+      content: _done
+          ? Text(t.get('settings_password_changed'))
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_error != null) ...[
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.sm),
+                    margin: const EdgeInsets.only(bottom: AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: palette.danger.withValues(alpha: 0.12),
+                      borderRadius: AppRadius.allSm,
+                      border: Border.all(
+                        color: palette.danger.withValues(alpha: 0.45),
+                      ),
+                    ),
+                    child: Text(
+                      _error!,
+                      style: TextStyle(
+                        fontSize: AppType.xs,
+                        color: palette.danger,
+                      ),
+                    ),
+                  ),
+                ],
+                Form(
+                  key: _formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        key: const ValueKey<String>('cp_old_field'),
+                        controller: _oldCtrl,
+                        obscureText: true,
+                        enabled: !_busy,
+                        autofocus: true,
+                        decoration: InputDecoration(
+                          labelText: t.get('settings_password_old'),
+                          prefixIcon: const Icon(Icons.lock_outline),
+                        ),
+                        validator: (v) => (v == null || v.isEmpty)
+                            ? t.get('settings_password_required')
+                            : null,
+                      ),
+                      AppSpacing.gapMd,
+                      TextFormField(
+                        key: const ValueKey<String>('cp_new_field'),
+                        controller: _newCtrl,
+                        obscureText: true,
+                        enabled: !_busy,
+                        decoration: InputDecoration(
+                          labelText: t.get('settings_password_new'),
+                          prefixIcon: const Icon(Icons.password_outlined),
+                        ),
+                        validator: (v) => (v == null || v.length < 8)
+                            ? t.get('settings_password_too_short')
+                            : null,
+                      ),
+                      AppSpacing.gapMd,
+                      TextFormField(
+                        key: const ValueKey<String>('cp_confirm_field'),
+                        controller: _confirmCtrl,
+                        obscureText: true,
+                        enabled: !_busy,
+                        decoration: InputDecoration(
+                          labelText: t.get('settings_password_confirm'),
+                          prefixIcon: const Icon(Icons.password_outlined),
+                        ),
+                        validator: (v) => (v != _newCtrl.text)
+                            ? t.get('settings_password_mismatch')
+                            : null,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+      actions: _done
+          ? [
+              AppButton(
+                label: t.get('settings_sign_in_again'),
+                onPressed: () => Navigator.pop(context, true),
+              ),
+            ]
+          : [
+              AppButton(
+                label: t.get('action_cancel'),
+                variant: AppButtonVariant.ghost,
+                onPressed: _busy ? null : () => Navigator.pop(context, false),
+              ),
+              AppButton(
+                key: const ValueKey<String>('cp_submit'),
+                label: t.get('action_save'),
+                onPressed: _busy ? null : _submit,
+              ),
+            ],
+    );
   }
 }

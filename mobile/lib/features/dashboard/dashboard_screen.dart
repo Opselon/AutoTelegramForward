@@ -32,6 +32,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   SystemStats? _stats;
   List<ServiceHealth> _services = const [];
   List<LogEntry> _recentErrors = const [];
+  List<LogEntry> _recentActivity = const [];
+  DeliveryStats? _delivery;
   DiagnosticsReport? _diagnostics;
   SetupReport? _setup;
   bool _loading = false;
@@ -76,12 +78,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
           .systemSetup()
           .then<SetupReport?>((report) => report)
           .catchError((_) => null);
+      // Live throughput (`GET /api/queue`) and the newest log lines feed the
+      // activity sections. Both are advisory: an older server without the
+      // endpoint (or a transient failure) degrades that section to nothing
+      // instead of failing the whole dashboard.
+      final deliveryFuture = client
+          .deliveryStats()
+          .then<DeliveryStats?>((stats) => stats)
+          .catchError((_) => null);
+      final activityFuture = client
+          .queryLogs(limit: 5)
+          .catchError((_) => <LogEntry>[]);
 
       final results = await Future.wait([
         statsFuture,
         healthFuture,
         errorsFuture,
         setupFuture,
+        deliveryFuture,
+        activityFuture,
       ]);
 
       if (!mounted) return;
@@ -90,6 +105,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _services = results[1] as List<ServiceHealth>;
         _recentErrors = results[2] as List<LogEntry>;
         _setup = results[3] as SetupReport?;
+        _delivery = results[4] as DeliveryStats?;
+        _recentActivity = results[5] as List<LogEntry>;
       });
 
       // Preflight is advisory: an older server without /api/diagnostics must
@@ -302,6 +319,97 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 AppSpacing.gapXl,
 
+                // Live throughput — the numbers that answer "is anything
+                // waiting, and is anything dead?" Only rendered when the
+                // server answered /api/queue; an advisory read never fakes a
+                // zero.
+                if (_delivery != null) ...[
+                  SectionCard(
+                    title: t.get('dash_throughput'),
+                    icon: Icons.speed_outlined,
+                    trailing: StatusPill(
+                      label: t.get('delivery_in_queue'),
+                      color: (_delivery!.inQueue > 0
+                          ? AppTheme.warning
+                          : AppTheme.success),
+                      icon: Icons.hourglass_bottom,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _ThroughputCell(
+                            label: t.get('delivery_in_queue'),
+                            value: '${_delivery!.inQueue}',
+                            color: AppTheme.warning,
+                          ),
+                        ),
+                        Expanded(
+                          child: _ThroughputCell(
+                            label: t.get('delivery_dead_lettered'),
+                            value: '${_delivery!.deadLetteredTotal}',
+                            color: _delivery!.deadLetteredTotal > 0
+                                ? AppTheme.error
+                                : AppTheme.success,
+                          ),
+                        ),
+                        Expanded(
+                          child: _ThroughputCell(
+                            label: t.get('delivery_failed'),
+                            value: '${_delivery!.failedTotal}',
+                            color: AppTheme.error,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  AppSpacing.gapLg,
+                ],
+
+                // Newest log lines across the account — the "what just
+                // happened" feed the error card alone cannot tell.
+                if (_recentActivity.isNotEmpty) ...[
+                  SectionCard(
+                    title: t.get('dash_recent_activity'),
+                    icon: Icons.timeline_outlined,
+                    child: Column(
+                      children: [
+                        for (var i = 0; i < _recentActivity.length; i++) ...[
+                          if (i > 0) const Divider(height: 1),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            leading: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: 0.12),
+                                borderRadius: AppRadii.allSm,
+                              ),
+                              child: Icon(
+                                _activityIcon(_recentActivity[i].level),
+                                color: AppTheme.severityColor(
+                                  _recentActivity[i].level,
+                                ),
+                                size: 16,
+                              ),
+                            ),
+                            title: Text(
+                              _recentActivity[i].message,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium,
+                            ),
+                            subtitle: Text(
+                              '${_recentActivity[i].category} • ${_recentActivity[i].timestamp}',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  AppSpacing.gapXl,
+                ],
+
                 // Preflight diagnostics — only shown when the server answered.
                 if (_diagnostics != null)
                   SectionCard(
@@ -434,6 +542,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
     );
+  }
+}
+
+/// One throughput number in the live-traffic card: label, value and the
+/// colour the state deserves (a zero dead-letter count is good news and is
+/// shown in success green, not warning gold).
+class _ThroughputCell extends StatelessWidget {
+  const _ThroughputCell({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: theme.textTheme.labelSmall),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          style: theme.textTheme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w700,
+            color: color,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Picks the feed icon by severity so a scan of the activity list reads the
+/// levels without reading a word.
+IconData _activityIcon(String level) {
+  switch (level) {
+    case 'error':
+      return Icons.error_outline;
+    case 'warning':
+      return Icons.warning_amber_rounded;
+    default:
+      return Icons.info_outline;
   }
 }
 

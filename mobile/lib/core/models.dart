@@ -272,6 +272,7 @@ class ForwardRule {
     required this.sourceChatId,
     required this.targetChatId,
     required this.isEnabled,
+    this.isPaused = false,
     this.sourceChatIds = const [],
     this.targetChatIds = const [],
     this.sourceChatTitle = '',
@@ -446,7 +447,19 @@ class ForwardRule {
   /// Server-side optimistic-concurrency version. Sent back on update so a
   /// concurrent edit is rejected instead of silently overwritten.
   final int version;
+
+  /// The master switch (`is_active` on the wire). Independent from
+  /// [isPaused]: a paused rule is still active, just held.
   final bool isEnabled;
+
+  /// The temporary hold (`is_paused` on the wire). `POST /rules/{id}/pause`
+  /// sets it without touching [isEnabled]; `resume` clears it.
+  final bool isPaused;
+
+  /// True when the task is neither stopped nor paused — the state in which
+  /// the engine actually forwards messages.
+  bool get isRunning => isEnabled && !isPaused;
+
   final int ownerUserId;
 
   ForwardRule copyWith({
@@ -481,6 +494,7 @@ class ForwardRule {
     String? albumMode,
     int? version,
     bool? isEnabled,
+    bool? isPaused,
     String? name,
     int? topicId,
     bool? debugMode,
@@ -543,6 +557,7 @@ class ForwardRule {
     albumMode: albumMode ?? this.albumMode,
     version: version ?? this.version,
     isEnabled: isEnabled ?? this.isEnabled,
+    isPaused: isPaused ?? this.isPaused,
     ownerUserId: ownerUserId,
     name: name ?? this.name,
     topicId: topicId ?? this.topicId,
@@ -636,6 +651,9 @@ class ForwardRule {
   Map<String, dynamic> toUpdateJson() => {
     ...toCreateJson(),
     'expected_version': version,
+    // `is_active` is the field the Go proto binds; `is_enabled` rides along
+    // for a server old enough to predate the rename.
+    'is_active': isEnabled,
     'is_enabled': isEnabled,
   };
 
@@ -836,8 +854,18 @@ class ForwardRule {
         json['forward_every_n'] ?? meta['forward_every_n'],
       ),
       version: jsonInt(json['version']),
+      // The rule projection emits `is_active` (the master switch) and
+      // `is_paused` (a temporary hold) as two independent flags. The old
+      // parse read `is_enabled` — a key the server never sends — and fell
+      // back to the inverted pause flag, so a rule stopped with
+      // `POST /rules/{id}/stop` (is_active=false, is_paused=false) rendered
+      // as Active. `is_active` is authoritative; the older keys remain as
+      // fallbacks for servers that predate the projection.
       isEnabled:
-          json['is_enabled'] as bool? ?? !(json['is_paused'] as bool? ?? false),
+          json['is_active'] as bool? ??
+          json['is_enabled'] as bool? ??
+          !(json['is_paused'] as bool? ?? false),
+      isPaused: json['is_paused'] as bool? ?? false,
       ownerUserId: jsonInt(json['owner_user_id']),
     );
   }

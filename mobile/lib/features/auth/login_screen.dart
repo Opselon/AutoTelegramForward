@@ -13,6 +13,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/api_client.dart';
 import '../../core/app_state.dart';
+import '../../core/design_tokens.dart';
 import '../../core/models.dart';
 import '../../l10n/app_messages.dart';
 import '../../widgets/server_connection_dialog.dart';
@@ -116,6 +117,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final t = AppMessages.of(context);
     final state = context.watch<AppState>();
+    final palette = AppColors.of(context);
 
     return Scaffold(
       body: SafeArea(
@@ -129,11 +131,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Icon(
-                      Icons.send_rounded,
-                      size: 56,
-                      color: Color(0xFF10B981),
-                    ),
+                    Icon(Icons.send_rounded, size: 56, color: palette.success),
                     const SizedBox(height: 16),
                     Text(
                       t.get('app_name'),
@@ -146,7 +144,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       t.get('app_tagline'),
                       textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium
-                          ?.copyWith(color: Colors.grey),
+                          ?.copyWith(color: palette.textMuted),
                     ),
                     const SizedBox(height: 32),
 
@@ -155,15 +153,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         padding: const EdgeInsets.all(12),
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: Colors.amber.withValues(alpha: 0.15),
+                          color: palette.warning.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.amber),
+                          border: Border.all(color: palette.warning),
                         ),
                         child: Row(
                           children: [
-                            const Icon(
+                            Icon(
                               Icons.warning_amber_rounded,
-                              color: Colors.amber,
+                              color: palette.warning,
                             ),
                             const SizedBox(width: 8),
                             Expanded(
@@ -178,13 +176,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         padding: const EdgeInsets.all(12),
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: Colors.red.withValues(alpha: 0.15),
+                          color: palette.danger.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red),
+                          border: Border.all(color: palette.danger),
                         ),
                         child: Text(
                           _error!,
-                          style: const TextStyle(color: Colors.red),
+                          style: TextStyle(color: palette.danger),
                         ),
                       ),
 
@@ -250,10 +248,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Icon(
+                        Icon(
                           Icons.dns_outlined,
                           size: 16,
-                          color: Colors.grey,
+                          color: palette.textMuted,
                         ),
                         const SizedBox(width: 6),
                         Flexible(
@@ -261,7 +259,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             state.serverUrl,
                             overflow: TextOverflow.ellipsis,
                             style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: Colors.grey),
+                                ?.copyWith(color: palette.textMuted),
                           ),
                         ),
                         TextButton(

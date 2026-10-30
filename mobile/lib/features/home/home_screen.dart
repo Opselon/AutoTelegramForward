@@ -1,7 +1,7 @@
 /// Root navigation shell: adaptive by window size class.
 ///
-/// Nine top-level destinations cannot fit a Material bottom bar on a phone:
-/// M3 recommends three to five, and nine equal slices are narrower than their
+/// Eleven top-level destinations cannot fit a Material bottom bar on a phone:
+/// M3 recommends three to five, and eleven equal slices are narrower than their
 /// own labels (the first and last used to be clipped by the screen edges). The
 /// shell therefore follows the size classes in `docs/ui-ux-system.md`:
 ///
@@ -10,12 +10,12 @@
 ///     sheet with the rest. Every destination stays one tap away, every target
 ///     is 48 dp, and no label is ever clipped.
 ///   * **medium** (`600–839 dp`) — a labelled [NavigationRail] where the
-///     vertical space allows all nine labels, and icon+selected-label where a
+///     vertical space allows all eleven labels, and icon+selected-label where a
 ///     landscape window is too short for them.
 ///   * **expanded** (`>= 840 dp`) — the same rail, and the screens behind it
 ///     get two panes (rules, logs) through [MasterDetailPane].
 ///
-/// A landscape phone (short height) keeps the bottom bar: a nine-entry rail
+/// A landscape phone (short height) keeps the bottom bar: an eleven-entry rail
 /// does not fit in 360 dp of height, and squeezing it is how entries become
 /// unreachable. Both surfaces are generated from one destination list, so they
 /// cannot drift apart, and the selected index survives a layout change.
@@ -27,6 +27,7 @@ import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
 import '../ai/ai_screen.dart';
+import '../auto_reply/auto_reply_screen.dart';
 import '../chats/chats_screen.dart';
 import '../dashboard/dashboard_screen.dart';
 import '../delivery/delivery_screen.dart';
@@ -60,8 +61,8 @@ class _Destination {
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
-  /// Screens are created lazily on first visit. Mounting all nine at startup
-  /// fires nine simultaneous API requests and does work for tabs the user may
+  /// Screens are created lazily on first visit. Mounting all eleven at startup
+  /// fires eleven simultaneous API requests and does work for tabs the user may
   /// never open; once visited a screen is kept alive so its scroll position and
   /// loaded data survive tab switches (and a rotation into the rail layout).
   final Set<int> _visited = {0};
@@ -107,6 +108,15 @@ class _HomeScreenState extends State<HomeScreen> {
       selectedIcon: Icons.psychology,
       labelKey: 'nav_ai',
     ),
+    // Auto-reply used to be reachable only from inside the AI screen, which
+    // hid a whole five-tab feature behind an unrelated destination. It is a
+    // first-class surface (settings, prompts, targets, rules, activity) and
+    // now sits next to the other AI capabilities at the top level.
+    _Destination(
+      icon: Icons.smart_toy_outlined,
+      selectedIcon: Icons.smart_toy,
+      labelKey: 'nav_auto_reply',
+    ),
     _Destination(
       icon: Icons.history_outlined,
       selectedIcon: Icons.history,
@@ -135,6 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
     SessionsScreen(),
     FiltersScreen(),
     AiScreen(),
+    AutoReplyScreen(),
     LogsScreen(),
     DeliveryScreen(),
     SettingsScreen(),
@@ -143,7 +154,7 @@ class _HomeScreenState extends State<HomeScreen> {
   /// The four destinations a phone shows directly. Order is the bar's order,
   /// not the destination list's: dashboard, rules, logs, settings are the ones
   /// an operator opens every day.
-  static const List<int> _compactSlots = [0, 1, 7, 9];
+  static const List<int> _compactSlots = [0, 1, 8, 10];
 
   void _select(int idx) {
     if (idx == _currentIndex) return;
@@ -158,10 +169,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final t = AppMessages.of(context);
     final window = AppWindow.of(context);
 
-    // A rail needs vertical room for ten entries: 10 × 56 dp plus the brand
+    // A rail needs vertical room for eleven entries: 11 × 56 dp plus the brand
     // mark. Below that a landscape phone would lose the tail of the list, so it
     // keeps the horizontal bar instead.
-    final railFits = window.size.height >= 636;
+    final railFits = window.size.height >= 692;
     final useRail = window.size.width >= AppBreakpoints.medium && railFits;
 
     final body = IndexedStack(
@@ -175,7 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
           // Rules and logs own their width: they lay out a two-pane
           // master-detail on an expanded window and must not be capped to a
           // single readable column.
-          else if (i == 1 || i == 7)
+          else if (i == 1 || i == 8)
             _screens[i]
           else
             _ContentWidth(child: _screens[i]),
@@ -189,10 +200,10 @@ class _HomeScreenState extends State<HomeScreen> {
             NavigationRail(
               selectedIndex: _currentIndex,
               onDestinationSelected: _select,
-              // All nine labels when the height allows; icon plus the selected
-              // label on a short landscape window, where nine labelled rows
+              // All eleven labels when the height allows; icon plus the selected
+              // label on a short landscape window, where eleven labelled rows
               // would overflow.
-              labelType: window.size.height >= 700
+              labelType: window.size.height >= 756
                   ? NavigationRailLabelType.all
                   : NavigationRailLabelType.selected,
               leading: const Padding(
