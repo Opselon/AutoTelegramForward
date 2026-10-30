@@ -8,12 +8,17 @@
  * here — a title, a body and every button label arrive through `t()` from the
  * caller, like every other primitive.
  */
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 import { makeT, isRtlLang, type UiLang } from '../../locales/engine'
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+/** How long the exit transition runs before the shell actually unmounts.
+    Kept in one place with the matching CSS durations (see index.css, motion
+    round section): enter 200ms, exit subtler and shorter. */
+const EXIT_MS = 170
 
 export function ModalShell({
   open,
@@ -42,6 +47,44 @@ export function ModalShell({
   const isRtl = isRtlLang(lang)
   const sheetRef = useRef<HTMLDivElement | null>(null)
   const restoreRef = useRef<HTMLElement | null>(null)
+  // Exit animation state: the shell keeps rendering for one short beat with
+  // the closing classes applied, THEN calls onClose so the parent unmounts
+  // after the transition instead of snapping the overlay out of existence.
+  // Enter needs no JS — @starting-style drives it in CSS.
+  const [closing, setClosing] = useState(false)
+  const closeTimer = useRef<number | null>(null)
+
+  const requestClose = useCallback(() => {
+    if (closeTimer.current !== null) return // already closing — ignore repeats
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+    if (reduce || EXIT_MS <= 0) {
+      onClose()
+      return
+    }
+    setClosing(true)
+    closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = null
+      onClose()
+    }, EXIT_MS)
+  }, [onClose])
+
+  // Reopening clears the closing beat (and any stray timer) so a fast
+  // close-then-open on the same mounted shell never renders half-faded.
+  useEffect(() => {
+    if (!open) return
+    setClosing(false)
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current)
+      closeTimer.current = null
+    }
+  }, [open])
+
+  useEffect(
+    () => () => {
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current)
+    },
+    [],
+  )
 
   // Focus moves into the dialog on open and returns to whoever opened it on
   // close — the same contract the navigation drawer implements.
@@ -66,7 +109,7 @@ export function ModalShell({
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.stopPropagation()
-        onClose()
+        requestClose()
         return
       }
       if (event.key !== 'Tab') return
@@ -85,7 +128,7 @@ export function ModalShell({
     }
     document.addEventListener('keydown', onKey, true)
     return () => document.removeEventListener('keydown', onKey, true)
-  }, [open, onClose])
+  }, [open, requestClose])
 
   // The page behind a modal must not scroll under a touch drag.
   useEffect(() => {
@@ -101,15 +144,15 @@ export function ModalShell({
 
   return (
     <div
-      className="modal-overlay"
+      className={`modal-overlay${closing ? ' modal-overlay--closing' : ''}`}
       dir={isRtl ? 'rtl' : 'ltr'}
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose()
+        if (event.target === event.currentTarget) requestClose()
       }}
     >
       <div
         ref={sheetRef}
-        className="glass-panel modal-sheet"
+        className={`glass-panel modal-sheet${closing ? ' modal-sheet--closing' : ''}`}
         role={variant === 'alert' ? 'alertdialog' : 'dialog'}
         aria-modal="true"
         aria-labelledby={titleId}
@@ -122,7 +165,7 @@ export function ModalShell({
           {variant === 'dialog' && (
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="btn btn--ghost btn--icon"
               aria-label={t('ui_close')}
             >

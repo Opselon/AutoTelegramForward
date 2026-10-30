@@ -266,14 +266,18 @@ export function Toast({
   message,
   tone = 'success',
   lang,
+  closing = false,
 }: {
   message: string
   tone?: ToastTone
   lang?: UiLang
+  /** Exit beat: the shell applies this one frame before unmounting so the
+      toast leaves with the subtle transition instead of vanishing. */
+  closing?: boolean
 }) {
   const t = makeT(lang ?? 'en')
   return (
-    <div className={`toast toast--${tone}`}>
+    <div className={`toast toast--${tone}${closing ? ' toast--closing' : ''}`}>
       <span className="toast__dot" aria-hidden="true" />
       <span className="toast__text">{message}</span>
       <span className="visually-hidden">{t('ui_status_messages')}</span>

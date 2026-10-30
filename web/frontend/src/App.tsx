@@ -1,4 +1,4 @@
-import React, { lazy, Suspense, useCallback, useMemo, useState, useEffect } from 'react'
+import React, { lazy, Suspense, useCallback, useMemo, useState, useEffect, useRef } from 'react'
 import {
   Radio,
   PlayCircle,
@@ -251,6 +251,7 @@ function useDashboard(me?: MeInfo) {
   const [servicesHealth, setServicesHealth] = useState<ServicesHealthResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [toastClosing, setToastClosing] = useState(false)
 
   // Rule Modal — the draft lives inside <RuleModal />; the shell only tracks
   // which rule is open (null = create a new one from the clean default).
@@ -288,9 +289,27 @@ function useDashboard(me?: MeInfo) {
   // cards that receive them) stay stable between renders of the same locale.
   const t = useMemo(() => makeT(lang), [lang])
 
+  // Toast lifecycle: visible 4s, then a short exit beat (toast--closing)
+  // before the message drops, so it leaves with a transition instead of
+  // vanishing. One ref-held timer chain — a toast shown mid-flight of
+  // another cancels the older timers instead of being closed early by them.
+  const toastTimers = useRef<Array<number>>([])
   const showToast = useCallback((msg: string) => {
+    for (const id of toastTimers.current) window.clearTimeout(id)
+    toastTimers.current = []
     setToast(msg)
-    setTimeout(() => setToast(null), 4000)
+    setToastClosing(false)
+    toastTimers.current.push(
+      window.setTimeout(() => {
+        setToastClosing(true)
+        toastTimers.current.push(
+          window.setTimeout(() => {
+            setToast(null)
+            setToastClosing(false)
+          }, 150),
+        )
+      }, 4000),
+    )
   }, [])
 
   const loadData = async () => {
@@ -1051,6 +1070,7 @@ function useDashboard(me?: MeInfo) {
     loading,
     setLoading,
     toast,
+    toastClosing,
     setToast,
     isRuleModalOpen,
     setIsRuleModalOpen,
@@ -1147,6 +1167,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
     stats,
     loading,
     toast,
+    toastClosing,
     isRuleModalOpen,
     setIsRuleModalOpen,
     ruleModalRule,
@@ -1290,7 +1311,9 @@ export function App({ me }: { me?: MeInfo } = {}) {
       {/* One always-mounted live region: a message that appears later is still
           announced, and the region is never a surprise insertion. */}
       <div className="toast-region" role="status" aria-live="polite">
-        {toast ? <Toast message={toast} tone="success" lang={lang} /> : null}
+        {toast ? (
+          <Toast message={toast} tone="success" closing={toastClosing} lang={lang} />
+        ) : null}
       </div>
 
       {/* Header Bar */}

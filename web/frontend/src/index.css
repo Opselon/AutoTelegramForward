@@ -199,16 +199,6 @@ body {
   box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
 }
 
-/* Animations */
-@keyframes pulse-glow {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(1.02); }
-}
-
-.glow-active {
-  animation: pulse-glow 3s infinite ease-in-out;
-}
-
 /* ------------------------------------------------------------------ */
 /* Responsive layout — mobile-first.                                  */
 /* Breakpoints: <480px small phones, <640px phones, <768px tablets, >=1024 desk */
@@ -4238,4 +4228,74 @@ input[type='radio']:disabled {
 }
 .tom-input--wl.tom-input--edit {
   border-color: rgba(16, 185, 129, 0.55);
+}
+
+/* ------------------------------------------------------ motion round 3 ---
+ * Design-motion pass (SaaS-dashboard weighting: restraint primary, production
+ * polish secondary). Decisions:
+ *   - Enter = the materializing recipe (opacity + translateY + blur), 200ms,
+ *     the shared custom ease-out. Driven by @starting-style — zero JS; a
+ *     browser without support renders the previous pop-in, identical to today.
+ *   - Exit = subtler than enter (no blur, smaller travel, 170ms), driven by
+ *     the shell's closing state so the unmount waits for the transition.
+ *   - Frequency gate: tab switches, hovers, and list mutations keep their
+ *     existing minimal motion; nothing here loops except existing functional
+ *     spinners. The dead `pulse-glow` indicator loop (an unused 3s infinite
+ *     scale/opacity pulse) is deleted at its legacy definition.
+ *   - Only transform/opacity/filter animate; reduced-motion renders both the
+ *     enter and the exit instantly (global guard) and the shell skips the
+ *     exit beat entirely (see Modal.tsx).
+ * ---------------------------------------------------------------------- */
+
+:root {
+  --ease-out-soft: cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+/* Modal enter */
+.modal-overlay {
+  opacity: 1;
+  transition: opacity var(--motion-base) var(--ease-out);
+}
+
+@starting-style {
+  .modal-overlay {
+    opacity: 0;
+  }
+}
+
+.modal-sheet {
+  transition:
+    opacity var(--motion-base) var(--ease-out),
+    transform var(--motion-base) var(--ease-out),
+    filter var(--motion-base) var(--ease-out);
+}
+
+@starting-style {
+  .modal-sheet {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+    filter: blur(4px);
+  }
+}
+
+/* Modal exit — subtler than the enter (no blur, smaller travel). */
+.modal-overlay--closing {
+  opacity: 0;
+}
+
+.modal-sheet--closing {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+/* Toast exit — same subtler-than-enter rule; enter keeps toast-in. */
+.toast {
+  transition:
+    opacity var(--motion-fast) var(--ease-out-soft),
+    transform var(--motion-fast) var(--ease-out-soft);
+}
+
+.toast--closing {
+  opacity: 0;
+  transform: translateY(-6px);
 }
