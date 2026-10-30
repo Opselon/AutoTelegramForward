@@ -400,13 +400,15 @@ def test_a_broken_claim_is_reported_once_not_every_poll(caplog):
         _repo = _Repo()
 
     # poll_interval has a 0.2s floor (a busy loop is not a poll loop), so this
-    # runs a handful of iterations in under a second.
+    # runs a few iterations in just over a second. 1.5s covers three polls even
+    # when the loop's first wait is delayed by a loaded CI worker; the claim is
+    # only that the loop keeps going, not that it hits a specific rate.
     worker = UserTaskWorker(_BrokenTasks(), {"dlq.purge": None},
                             poll_interval=0.01)
 
     async def scenario():
         handle = asyncio.create_task(worker.run_forever())
-        await asyncio.sleep(0.7)
+        await asyncio.sleep(1.5)
         worker.stop()
         handle.cancel()
         try:
