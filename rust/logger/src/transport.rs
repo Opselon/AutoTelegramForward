@@ -821,12 +821,7 @@ impl LogControl {
         let omitted = crate::ingest::CANONICAL_LEVELS
             .iter()
             .copied()
-            .filter(|level| {
-                !self
-                    .policy
-                    .enabled_levels()
-                    .iter().any(|on| on == level)
-            })
+            .filter(|level| !self.policy.enabled_levels().iter().any(|on| on == level))
             .map(str::to_string)
             .collect::<Vec<_>>();
         let filtered_by_level = {
@@ -1320,20 +1315,28 @@ mod tests {
             .unwrap()
             .into_inner();
 
-        let admission = stats.admission.expect("LogStats carries the admission report");
+        let admission = stats
+            .admission
+            .expect("LogStats carries the admission report");
         // The contract default: WARN/ERROR/CRITICAL collected, INFO refused.
         assert!(admission.collect_levels.iter().any(|l| l == "WARN"));
         assert!(admission.omitted_levels.iter().any(|l| l == "INFO"));
         assert_eq!(admission.configured_by, "ATF_LOGGER_COLLECT_LEVELS");
         assert!(admission.filtered_total >= 1);
         assert!(
-            admission.filtered_by_level.get("INFO").copied().unwrap_or(0) >= 1,
+            admission
+                .filtered_by_level
+                .get("INFO")
+                .copied()
+                .unwrap_or(0)
+                >= 1,
             "the INFO refusal must be visible per level: {:?}",
             admission.filtered_by_level
         );
         assert!(!admission.collect_unknown);
     }
 
+    #[test]
     fn log_stats_reports_totals_groups_and_window() {
         let harness = harness(Config::default());
         let runtime = runtime();
