@@ -114,6 +114,9 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(state));
+    // The localizations delegate loads asynchronously: without this pump the
+    // first frame has no localized text and the dialog entry is invisible.
+    await tester.pumpAndSettle();
     final t = AppMessages(const Locale('en'));
 
     await _openDialog(tester);
@@ -150,6 +153,9 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(await _state(_transport(log))));
+    // The localizations delegate loads asynchronously: without this pump the
+    // first frame has no localized text and the dialog entry is invisible.
+    await tester.pumpAndSettle();
     final t = AppMessages(const Locale('en'));
 
     await _openDialog(tester);
@@ -169,6 +175,9 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(await _state(_transport(log))));
+    // The localizations delegate loads asynchronously: without this pump the
+    // first frame has no localized text and the dialog entry is invisible.
+    await tester.pumpAndSettle();
     final t = AppMessages(const Locale('en'));
 
     await _openDialog(tester);
@@ -190,6 +199,9 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await tester.pumpWidget(_host(await _state(_transport(log, ok: false))));
+    // The localizations delegate loads asynchronously: without this pump the
+    // first frame has no localized text and the dialog entry is invisible.
+    await tester.pumpAndSettle();
     final t = AppMessages(const Locale('en'));
 
     await _openDialog(tester);
