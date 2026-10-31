@@ -885,6 +885,36 @@ message DeliveryStatsResponse {
   int64 retry_total = 8;
   repeated RuleLiveStat rules = 9;
   repeated RecentError errors = 10;
+  // v32 (additive — reconciliation): the delivery-health aggregates and the
+  // findings the reconciler surfaced. Older clients ignore unknown fields, so
+  // nothing below is a breaking change; every field is populated by Core from
+  // the queue tables it already owns, with no new event history.
+  int64 pending_total = 11;
+  int64 delivered_total = 12;
+  int64 retrying_total = 13;
+  double success_rate = 14;            // delivered / (delivered + failed), or 0
+  int64 oldest_pending_age_seconds = 15;
+  int64 flagged_findings = 16;         // total findings from the checks below
+  repeated DeliveryFinding findings = 17;
+  map<string, double> failure_rate_by_destination = 18;
+  map<string, double> failure_rate_by_source = 19;
+}
+
+message DeliveryFinding {
+  // One delivery that fell through the cracks, with the identifiers an
+  // operator needs to find it. Never carries message text.
+  string kind = 1;                     // orphan_mapping | stuck_pending | ...
+  string rule_id = 2;
+  string source_chat_id = 3;
+  int64 source_message_id = 4;
+  string destination_chat_id = 5;
+  string delivery_job_id = 6;
+  string worker_id = 7;
+  int32 attempt_number = 8;
+  string error_category = 9;
+  string error_detail = 10;
+  bool retryable = 11;
+  int64 timestamp = 12;
 }
 
 message RuleLiveStat {
