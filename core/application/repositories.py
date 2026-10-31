@@ -1037,6 +1037,60 @@ class IIngestionGapRepository(ABC):
         ...
 
 
+class IDiagnosticEventRepository(ABC):
+    """Persisted, queryable history of structured diagnostic events.
+
+    The failure-intelligence store (schema v32). Write is append-only: one
+    event per attempt, so a retried delivery keeps every intermediate failure
+    and a successful fallback keeps the original one. Read is facet-filtered
+    (time range, category, stage, severity, task, source, target, trace,
+    message) and **owner-scoped** — one tenant never sees another's events.
+
+    Data minimization is structural: the contract carries identifiers and
+    counts only, never message text or secrets, so this table cannot leak
+    content even if it is read by the wrong party.
+    """
+
+    @abstractmethod
+    async def record_event(self, event) -> bool:
+        """Append one structured event. Returns whether the row was written."""
+        ...
+
+    @abstractmethod
+    async def record_events(self, events) -> int:
+        """Append a batch; returns how many were written."""
+        ...
+
+    @abstractmethod
+    async def query_events(self, *, owner_id: Optional[int] = None,
+                           since_ts: float = 0, until_ts: float = 0,
+                           category: str = "", stage: str = "", severity: str = "",
+                           task_id: str = "", source_peer_id: str = "",
+                           source_message_id: Optional[int] = None,
+                           target_peer_id: str = "", trace_id: str = "",
+                           reason: str = "", limit: int = 100,
+                           offset: int = 0) -> List[dict]:
+        ...
+
+    @abstractmethod
+    async def message_timeline(self, source_peer_id: str, source_message_id: int,
+                               owner_id: Optional[int] = None) -> List[dict]:
+        """One message's whole diagnostic history, oldest first."""
+        ...
+
+    @abstractmethod
+    async def facet_counts(self, *, owner_id: Optional[int] = None,
+                           since_ts: float = 0, until_ts: float = 0,
+                           facet: str = "category", limit: int = 50) -> List[dict]:
+        """Aggregate counts by one facet (category / stage / severity / reason)."""
+        ...
+
+    @abstractmethod
+    async def retention_delete_before(self, before_ts: float, limit: int = 5000) -> int:
+        """Bounded retention sweep; returns how many rows were removed."""
+        ...
+
+
 def kind_filter_sql(kinds: Optional[Sequence[str]], placeholder: str = "?") -> Tuple[str, tuple]:
     """Build the ``AND kind IN (…)`` clause for a task claim query.
 
