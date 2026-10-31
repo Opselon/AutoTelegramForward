@@ -1801,13 +1801,18 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
     """Live delivery stats, dead-letter queue inspection and replay."""
 
     def __init__(
-        self, db, rule_repo, pipeline=None, queue_repo=None, message_map_repo=None
+        self, db, rule_repo, pipeline=None, queue_repo=None, message_map_repo=None,
+        reconciler=None,
     ) -> None:
         self._db = db
         self._rules = rule_repo
         self._pipeline = pipeline
         self._queue_repo = queue_repo
         self._message_map_repo = message_map_repo
+        # Optional (v32): the delivery reconciler. Older constructors keep
+        # working; the additive fields are simply zero-valued then, which is
+        # exactly what a pre-upgrade client expects.
+        self._reconciler = reconciler
 
     def _q(self, sql: str, params: tuple = ()):
         try:
@@ -1932,11 +1937,66 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
             list(scope) if scope is not None else None
         )
 
+        # v32 (reconciliation): the health aggregates and findings come from
+        # the reconciler, which reads the queue tables it already owns. The
+        # call is bounded and best-effort: a reconciler hiccup must not turn
+        # the stats screen into an error, so the additive fields degrade to
+        # their zero values instead of failing the response.
+        pending_total = delivered_total = retrying_total = 0
+        oldest_pending_age = 0
+        flagged = 0
+        findings: list = []
+        rate_by_dest: dict = {}
+        rate_by_source: dict = {}
+        success_rate = 0.0
+        if self._reconciler is not None:
+            try:
+                owner = int(request.owner_user_id or 0) or None
+                metrics = await self._reconciler.health_metrics(owner)
+                pending_total = int(metrics.get("pending") or 0)
+                delivered_total = int(metrics.get("delivered") or 0)
+                retrying_total = int(metrics.get("retrying") or 0)
+                success_rate = float(metrics.get("success_rate") or 0.0)
+                age = metrics.get("oldest_pending_age_seconds")
+                oldest_pending_age = int(age) if age else 0
+                rate_by_dest = {
+                    str(k): float(v) for k, v in (metrics.get("failure_rate_by_destination") or {}).items()
+                }
+                rate_by_source = {
+                    str(k): float(v) for k, v in (metrics.get("failure_rate_by_source") or {}).items()
+                }
+                report = await self._reconciler.reconcile(owner)
+                flagged = int(report["totals"]["flagged"])
+                for findings_list in report["checks"].values():
+                    for f in findings_list:
+                        findings.append(pb.DeliveryFinding(
+                            kind=str(f.get("kind") or ""),
+                            rule_id=str(f.get("rule_id") or "")[:64],
+                            source_chat_id=str(f.get("source_chat_id") or ""),
+                            source_message_id=int(f.get("source_message_id") or 0),
+                            destination_chat_id=str(f.get("destination_chat_id") or ""),
+                            delivery_job_id=str(f.get("delivery_job_id") or ""),
+                            worker_id=str(f.get("worker_id") or ""),
+                            attempt_number=int(f.get("attempt_number") or 0),
+                            error_category=str(f.get("error_category") or ""),
+                            error_detail=str(f.get("error_detail") or "")[:500],
+                            retryable=bool(f.get("retryable")),
+                            timestamp=int(f.get("timestamp") or 0),
+                        ))
+            except Exception as exc:
+                logger.warning("[PIPELINE:RECONCILE_REPORT_FAILED] %s", exc)
+
         return pb.DeliveryStatsResponse(
             processed_total=processed, forwarded_total=forwarded, failed_total=failed,
             dedup_skipped_total=dedup, filtered_total=filtered, in_queue=in_queue,
             dead_lettered_total=dlq_total, retry_total=retries,
             rules=rules, errors=errors,
+            pending_total=pending_total, delivered_total=delivered_total,
+            retrying_total=retrying_total, success_rate=success_rate,
+            oldest_pending_age_seconds=oldest_pending_age,
+            flagged_findings=flagged, findings=findings,
+            failure_rate_by_destination=rate_by_dest,
+            failure_rate_by_source=rate_by_source,
         )
 
     async def ListDeadLetter(self, request, context):

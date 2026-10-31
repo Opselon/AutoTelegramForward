@@ -2054,6 +2054,32 @@ func (h *Handlers) DeliveryStats(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// v32 (reconciliation): forward the delivery-health aggregates and the
+	// reconciler's findings. The client already had the legacy counters; these
+	// are additive and are simply absent (zero) on a pre-v32 Core, so the
+	// dashboard can render them without a version gate.
+	findings := resp.Findings
+	if findings == nil {
+		findings = []*pb.DeliveryFinding{}
+	}
+	findingsOut := make([]map[string]any, 0, len(findings))
+	for _, f := range findings {
+		findingsOut = append(findingsOut, map[string]any{
+			"kind":                f.Kind,
+			"rule_id":             f.RuleId,
+			"source_chat_id":      f.SourceChatId,
+			"source_message_id":   f.SourceMessageId,
+			"destination_chat_id": f.DestinationChatId,
+			"delivery_job_id":     f.DeliveryJobId,
+			"worker_id":           f.WorkerId,
+			"attempt_number":      f.AttemptNumber,
+			"error_category":      f.ErrorCategory,
+			"error_detail":        f.ErrorDetail,
+			"retryable":           f.Retryable,
+			"timestamp":           f.Timestamp,
+		})
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"processed_total":     resp.ProcessedTotal,
 		"forwarded_total":     resp.ForwardedTotal,
@@ -2065,6 +2091,16 @@ func (h *Handlers) DeliveryStats(w http.ResponseWriter, r *http.Request) {
 		"retry_total":         resp.RetryTotal,
 		"rules":               rulesOut,
 		"errors":              errsOut,
+		// v32: delivery health and reconciliation findings.
+		"pending_total":               resp.PendingTotal,
+		"delivered_total":             resp.DeliveredTotal,
+		"retrying_total":              resp.RetryingTotal,
+		"success_rate":                resp.SuccessRate,
+		"oldest_pending_age_seconds":  resp.OldestPendingAgeSeconds,
+		"flagged_findings":            resp.FlaggedFindings,
+		"findings":                    findingsOut,
+		"failure_rate_by_destination": resp.FailureRateByDestination,
+		"failure_rate_by_source":      resp.FailureRateBySource,
 	})
 }
 
@@ -2187,20 +2223,20 @@ func filterJSON(f *pb.FilterRule) map[string]any {
 		enabled = *f.IsEnabled
 	}
 	return map[string]any{
-		"id":                     f.Id,
-		"name":                   f.Name,
-		"whitelist_keywords":     f.WhitelistKeywords,
-		"blacklist_keywords":     f.BlacklistKeywords,
-		"regex_patterns":         f.RegexPatterns,
-		"regex_block":            f.RegexBlock,
-		"regex_require":          f.RegexRequire,
-		"allowed_media_types":    f.AllowedMediaTypes,
-		"blocked_media_types":    f.BlockedMediaTypes,
-		"drop_service_messages":  f.DropServiceMessages,
-		"min_message_length":     f.MinMessageLength,
-		"max_message_length":     f.MaxMessageLength,
-		"owner_user_id":          f.OwnerUserId,
-		"is_enabled":             enabled,
+		"id":                    f.Id,
+		"name":                  f.Name,
+		"whitelist_keywords":    f.WhitelistKeywords,
+		"blacklist_keywords":    f.BlacklistKeywords,
+		"regex_patterns":        f.RegexPatterns,
+		"regex_block":           f.RegexBlock,
+		"regex_require":         f.RegexRequire,
+		"allowed_media_types":   f.AllowedMediaTypes,
+		"blocked_media_types":   f.BlockedMediaTypes,
+		"drop_service_messages": f.DropServiceMessages,
+		"min_message_length":    f.MinMessageLength,
+		"max_message_length":    f.MaxMessageLength,
+		"owner_user_id":         f.OwnerUserId,
+		"is_enabled":            enabled,
 	}
 }
 
@@ -3195,12 +3231,12 @@ func admissionPayload(a *pb.AdmissionPolicy) map[string]any {
 		return nil
 	}
 	return map[string]any{
-		"collect_levels":     a.CollectLevels,
-		"omitted_levels":     a.OmittedLevels,
-		"configured_by":      a.ConfiguredBy,
-		"filtered_total":     a.FilteredTotal,
-		"filtered_by_level":  a.FilteredByLevel,
-		"collect_unknown":    a.CollectUnknown,
+		"collect_levels":    a.CollectLevels,
+		"omitted_levels":    a.OmittedLevels,
+		"configured_by":     a.ConfiguredBy,
+		"filtered_total":    a.FilteredTotal,
+		"filtered_by_level": a.FilteredByLevel,
+		"collect_unknown":   a.CollectUnknown,
 	}
 }
 

@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from core.config import Config  # noqa: E402
 from core.application.log_policy import LogPolicy  # noqa: E402
+from core.application.delivery_reconciler import DeliveryReconciler  # noqa: E402
 from core.application.use_cases import (  # noqa: E402
     AIConfigUseCases,
     FilterRuleUseCases,
@@ -476,6 +477,12 @@ def build_container(cfg: Config) -> dict:
         "msg_map": msg_map_repo,
         "audit_repo": audit_repo,
         "queue_repo": queue_repo,
+        # v32: the idempotency fence repository, exposed so the reconciler can
+        # inspect in-flight claims without a second lookup path.
+        "attempts_repo": attempts_repo,
+        # v32: the same gap repository the polling service owns, so the
+        # reconciler reports on the same recovery work the poller performs.
+        "gap_repo": gap_repo,
         "task_repo": task_repo,
         "tasks": tasks,
         "queue_manager": queue_manager,
@@ -639,6 +646,18 @@ async def serve_grpc(container: dict, cfg: Config):
             container.get("pipeline"),
             queue_repo=container.get("queue_repo"),
             message_map_repo=container.get("msg_map_repo"),
+            # v32 (reconciliation): the stats screen also reports the findings
+            # and health aggregates, owner-scoped by the same rule ownership
+            # the servicer already enforces. Built from the repos the queue
+            # already owns; nothing new is persisted.
+            reconciler=DeliveryReconciler(
+                container.get("queue_repo"),
+                container.get("msg_map"),
+                container["rules"],
+                attempts_repo=container.get("attempts_repo"),
+                gap_repo=container.get("gap_repo"),
+                lease_seconds=float(container.get("queue_lease_seconds", 30.0) or 30.0),
+            ),
         ),
         server,
     )
