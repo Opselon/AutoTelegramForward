@@ -14,6 +14,7 @@ import {
   Sliders,
 } from 'lucide-react'
 import { api } from '../api'
+import { ConfirmDialog } from './ConfirmDialog'
 import { makeT, type UiLang } from '../locales/engine'
 
 interface Props {
@@ -160,8 +161,14 @@ export function AdminPanel({ lang }: Props) {
     }
   }
 
-  const handleRemoveAdmin = async (uid: number) => {
-    if (!confirm(t('ui_remove_admin_access_for_uid_2', { uid_2: uid }))) return
+  // Revoking admin access gates through the same alertdialog the rest of the
+  // dashboard uses, not a blocking window.confirm.
+  const [pendingRemoveAdmin, setPendingRemoveAdmin] = useState<number | null>(null)
+  const handleRemoveAdmin = (uid: number) => {
+    setPendingRemoveAdmin(uid)
+  }
+
+  const runRemoveAdmin = async (uid: number) => {
     setActionError(null)
     try {
       await api.adminRemoveAdmin(uid)
@@ -694,6 +701,20 @@ export function AdminPanel({ lang }: Props) {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingRemoveAdmin !== null}
+        lang={lang}
+        title={t('ui_remove_admin_access_for_uid_2', { uid_2: pendingRemoveAdmin ?? 0 })}
+        confirmLabel={t('ui_yes')}
+        cancelLabel={t('ui_cancel')}
+        onConfirm={() => {
+          const uid = pendingRemoveAdmin
+          setPendingRemoveAdmin(null)
+          if (uid !== null) void runRemoveAdmin(uid)
+        }}
+        onCancel={() => setPendingRemoveAdmin(null)}
+      />
     </div>
   )
 }
