@@ -255,7 +255,7 @@ function useDashboard(me?: MeInfo) {
   const [copiedLogId, setCopiedLogId] = useState<string | number | null>(null)
   const [servicesHealth, setServicesHealth] = useState<ServicesHealthResponse | null>(null)
   const [loading, setLoading] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string; tone: 'success' | 'danger' } | null>(null)
   const [toastClosing, setToastClosing] = useState(false)
 
   // Rule Modal — the draft lives inside <RuleModal />; the shell only tracks
@@ -307,10 +307,10 @@ function useDashboard(me?: MeInfo) {
   // vanishing. One ref-held timer chain — a toast shown mid-flight of
   // another cancels the older timers instead of being closed early by them.
   const toastTimers = useRef<Array<number>>([])
-  const showToast = useCallback((msg: string) => {
+  const showToast = useCallback((msg: string, tone: 'success' | 'danger' = 'success') => {
     for (const id of toastTimers.current) window.clearTimeout(id)
     toastTimers.current = []
-    setToast(msg)
+    setToast({ message: msg, tone })
     setToastClosing(false)
     toastTimers.current.push(
       window.setTimeout(() => {
@@ -324,6 +324,13 @@ function useDashboard(me?: MeInfo) {
       }, 4000),
     )
   }, [])
+  /** Failures read as failures: every catch path announces with the danger tone. */
+  const showError = useCallback(
+    (msg: string) => {
+      showToast(msg, 'danger')
+    },
+    [showToast],
+  )
 
   const loadData = async () => {
     setLoading(true)
@@ -402,7 +409,7 @@ function useDashboard(me?: MeInfo) {
       }
       setLoadFailures(failures.length ? failures : null)
     } catch (e: any) {
-      showToast(e.message || t('ui_error_loading_dashboard_data'))
+      showError(e.message || t('ui_error_loading_dashboard_data'))
     } finally {
       setLoading(false)
     }
@@ -412,13 +419,19 @@ function useDashboard(me?: MeInfo) {
    * v18 log fetch: one page of history with the real match count. `offset`
    * walks backwards, so the console can reach the oldest record instead of
    * only ever showing the newest 100 rows.
+   *
+   * The poller re-arms on every query change, so two fetches can be in flight
+   * at once; a generation counter makes the older response a no-op instead of
+   * letting a stale page overwrite the newer one.
    */
+  const logFetchGen = useRef(0)
   const fetchLogs = async (
     srv = logFilterService,
     lvl = logFilterLevel,
     srch = logSearch,
     opts?: { rule?: string; order?: 'desc' | 'asc'; offset?: number; limit?: number },
   ) => {
+    const gen = ++logFetchGen.current
     const rule = opts?.rule ?? logFilterRule
     const order = opts?.order ?? logOrder
     const offset = opts?.offset ?? logOffset
@@ -440,6 +453,7 @@ function useDashboard(me?: MeInfo) {
           ...(logScope === 'mine' ? { mine: true } : {}),
         }).catch(() => null),
       ])
+      if (gen !== logFetchGen.current) return
       setLogs(Array.isArray(page?.logs) ? page!.logs : [])
       setLogTotal(page?.total ?? 0)
       setLogHasMore(!!page?.has_more)
@@ -460,7 +474,7 @@ function useDashboard(me?: MeInfo) {
       })
       showToast(t('ui_log_export_downloaded'))
     } catch (e: any) {
-      showToast(e?.message || (t('ui_export_failed')))
+      showError(e?.message || (t('ui_export_failed')))
     } finally {
       setLogExporting(false)
     }
@@ -506,7 +520,7 @@ function useDashboard(me?: MeInfo) {
         showToast(res?.error || t('ui_error_purging_logs'))
       }
     } catch (e: any) {
-      showToast(e.message || t('ui_error_purging_logs'))
+      showError(e.message || t('ui_error_purging_logs'))
     } finally {
       setPurging(false)
     }
@@ -543,7 +557,7 @@ function useDashboard(me?: MeInfo) {
         showToast(res?.error || t('ui_error_creating_backup'))
       }
     } catch (e: any) {
-      showToast(e.message || t('ui_error_creating_backup'))
+      showError(e.message || t('ui_error_creating_backup'))
     } finally {
       setBackupBusy(false)
     }
@@ -590,7 +604,7 @@ function useDashboard(me?: MeInfo) {
         showToast(res?.error || t('ui_error_restoring_backup'))
       }
     } catch (e: any) {
-      showToast(e.message || t('ui_error_restoring_backup'))
+      showError(e.message || t('ui_error_restoring_backup'))
     } finally {
       setBackupBusy(false)
     }
@@ -669,7 +683,7 @@ function useDashboard(me?: MeInfo) {
         setRules((prev) => prev.map((r) => (r.id === id ? updated : r)))
         showToast(t('ui_rule_status_updated'))
       } catch (e: any) {
-        showToast(e.message)
+        showError(e.message)
       }
     },
     [showToast, t],
@@ -684,7 +698,7 @@ function useDashboard(me?: MeInfo) {
         setIsTaskOverviewOpen(false)
         showToast(t('ui_rule_deleted_successfully'))
       } catch (e: any) {
-        showToast(e.message)
+        showError(e.message)
       }
     },
     [showToast, t],
@@ -697,7 +711,7 @@ function useDashboard(me?: MeInfo) {
         setRules((prev) => [cloned, ...prev])
         showToast(t('ui_task_duplicated_successfully'))
       } catch (e: any) {
-        showToast(e.message || (t('ui_failed_to_duplicate_task')))
+        showError(e.message || (t('ui_failed_to_duplicate_task')))
       }
     },
     [showToast, t],
@@ -710,7 +724,7 @@ function useDashboard(me?: MeInfo) {
         setRules((prev) => prev.map((r) => (r.id === res.id ? res : r)))
         showToast(t('ui_task_updated_successfully'))
       } catch (e: any) {
-        showToast(e.message || (t('ui_failed_to_save_task')))
+        showError(e.message || (t('ui_failed_to_save_task')))
       }
     },
     [showToast, t],
@@ -725,7 +739,7 @@ function useDashboard(me?: MeInfo) {
         setRules((prev) => prev.map((r) => (r.id === ruleId ? updated : r)))
         showToast(t('ui_rule_route_switched_successfully'))
       } catch (e: any) {
-        showToast(e.message)
+        showError(e.message)
       }
     },
     [showToast, t],
@@ -738,7 +752,7 @@ function useDashboard(me?: MeInfo) {
         setRules((prev) => prev.map((r) => (r.id === id ? { ...r, is_paused: true } : r)))
         showToast(t('ui_rule_paused'))
       } catch (e: any) {
-        showToast(e.message)
+        showError(e.message)
       }
     },
     [showToast, t],
@@ -751,7 +765,7 @@ function useDashboard(me?: MeInfo) {
         setRules((prev) => prev.map((r) => (r.id === id ? { ...r, is_paused: false } : r)))
         showToast(t('ui_rule_resumed'))
       } catch (e: any) {
-        showToast(e.message)
+        showError(e.message)
       }
     },
     [showToast, t],
@@ -821,7 +835,7 @@ function useDashboard(me?: MeInfo) {
       setPvConfig(saved)
       showToast(t('ui_pv_assistant_config_saved_successfully'))
     } catch (e: any) {
-      showToast(e.message || t('ui_error_saving_pv_config'))
+      showError(e.message || t('ui_error_saving_pv_config'))
     } finally {
       setPvSaving(false)
     }
@@ -860,7 +874,7 @@ function useDashboard(me?: MeInfo) {
       setAiConfigs((prev) => prev.filter((a) => a.id !== id))
       showToast(t('ui_ai_config_deleted'))
     } catch (e: any) {
-      showToast(e.message)
+      showError(e.message)
     }
   }
 
@@ -872,7 +886,7 @@ function useDashboard(me?: MeInfo) {
       setFilterRules((prev) => prev.filter((f) => f.id !== id))
       showToast(t('ui_filter_rule_deleted'))
     } catch (e: any) {
-      showToast(e.message)
+      showError(e.message)
     }
   }
 
@@ -894,7 +908,7 @@ function useDashboard(me?: MeInfo) {
       showToast(t('ui_job_requeued_for_retry'))
       await loadData()
     } catch (e: any) {
-      showToast(e.message)
+      showError(e.message)
     }
   }
 
@@ -917,7 +931,7 @@ function useDashboard(me?: MeInfo) {
       )
       await loadData()
     } catch (e: any) {
-      showToast(e.message)
+      showError(e.message)
     }
   }
 
@@ -940,7 +954,7 @@ function useDashboard(me?: MeInfo) {
         showToast(res.message || (t('ui_backup_failed')))
       }
     } catch (e: any) {
-      showToast(e.message)
+      showError(e.message)
     }
   }
 
@@ -955,7 +969,7 @@ function useDashboard(me?: MeInfo) {
         showToast(res.message || (t('ui_terminate_failed')))
       }
     } catch (e: any) {
-      showToast(e.message)
+      showError(e.message)
     }
   }
 
@@ -974,7 +988,7 @@ function useDashboard(me?: MeInfo) {
       })
       setSimResult(res)
     } catch (e: any) {
-      showToast(e.message || t('ui_simulation_error'))
+      showError(e.message || t('ui_simulation_error'))
     } finally {
       setSimulating(false)
     }
@@ -1129,6 +1143,7 @@ function useDashboard(me?: MeInfo) {
     theme,
     setThemeState,
     showToast,
+    showError,
     loadData,
     fetchLogs,
     handleExportLogs,
@@ -1317,7 +1332,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
           announced, and the region is never a surprise insertion. */}
       <div className="toast-region" role="status" aria-live="polite">
         {toast ? (
-          <Toast message={toast} tone="success" closing={toastClosing} lang={lang} />
+          <Toast message={toast.message} tone={toast.tone} closing={toastClosing} lang={lang} />
         ) : null}
       </div>
 
@@ -1525,26 +1540,36 @@ export function App({ me }: { me?: MeInfo } = {}) {
         )
       }
 
-      {/* TAB 8: ADMIN CONTROL PLANE */}
+      {/* TAB 8: MY JOBS — boundary-wrapped like every other lazy chunk, so a
+          failed panel chunk degrades to the panel error state instead of
+          blanking through the root boundary. */}
       {activeTab === 'jobs' && (
-        <JobsPanel
-          lang={lang}
-          onPendingChange={setJobsPending}
-        />
+        <PanelBoundary lang={lang}>
+          <JobsPanel
+            lang={lang}
+            onPendingChange={setJobsPending}
+          />
+        </PanelBoundary>
       )}
 
       {activeTab === 'audit' && (
-        <AuditEventsPanel lang={lang} />
+        <PanelBoundary lang={lang}>
+          <AuditEventsPanel lang={lang} />
+        </PanelBoundary>
       )}
 
       {/* TAB 9: ADMIN */}
       {activeTab === 'admin' && currentUser?.is_admin && (
-        <AdminPanel lang={lang} />
+        <PanelBoundary lang={lang}>
+          <AdminPanel lang={lang} />
+        </PanelBoundary>
       )}
 
       {/* TAB 9: CLIENT SETTINGS */}
       {activeTab === 'settings' && (
-        <ClientSettings lang={lang} />
+        <PanelBoundary lang={lang}>
+          <ClientSettings lang={lang} />
+        </PanelBoundary>
       )}
 
         </main>

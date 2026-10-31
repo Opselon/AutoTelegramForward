@@ -74,24 +74,6 @@ import { clearSession, getToken } from './session'
 
 const API_BASE = '/api'
 
-// Shared single fetch of /queue so getDeliveryStats/getRuleLiveStats/getRecentErrors
-// don't issue three redundant network calls on every render.
-let _queueCache: { data: any; ts: number } | null = null
-const QUEUE_TTL = 4000
-async function getDeliveryStatsAny(): Promise<any> {
-  const now = Date.now()
-  if (_queueCache && now - _queueCache.ts < QUEUE_TTL) {
-    return _queueCache.data
-  }
-  try {
-    const res = await fetchJson<any>(`${API_BASE}/queue`)
-    _queueCache = { data: res, ts: now }
-    return res
-  } catch {
-    return null
-  }
-}
-
 /** Bearer header for raw fetches (downloads, blobs) outside fetchJson. */
 function authHeaders(): Record<string, string> {
   const token = getToken()
@@ -122,22 +104,58 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
     throw new Error('Authentication required')
   }
   if (!res.ok) {
-    const errText = await res.text()
-    throw new Error(errText || `HTTP ${res.status}`)
+    // Normalize once, at the boundary: every caller's catch — and therefore
+    // every toast — sees the server's own sentence ("{"error":"..."}" /
+    // "{"message":"..."}"), never a raw JSON blob or an HTML error page.
+    throw new Error(await errorMessageOf(res))
   }
   return res.json()
 }
 
-/** Pull the server's own message out of an error body ("{"error":"..."}"). */
-function reasonOf(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err)
+/** Pull the server's own message out of an error response. */
+async function errorMessageOf(res: Response): Promise<string> {
+  const fallback = `HTTP ${res.status}`
+  let raw = ''
   try {
-    const parsed = JSON.parse(raw)
-    if (parsed && typeof parsed === 'object' && typeof parsed.error === 'string') {
-      return parsed.error
+    raw = (await res.text()).trim()
+  } catch {
+    return fallback
+  }
+  if (!raw) return fallback
+  const parsed = safeJsonParse(raw)
+  if (parsed && typeof parsed === 'object') {
+    for (const key of ['error', 'message', 'detail']) {
+      const value = (parsed as Record<string, unknown>)[key]
+      if (typeof value === 'string' && value.trim()) return value
     }
-  } catch {}
-  return raw
+  }
+  // Not JSON (or JSON without a message field): show the body only when it is
+  // short, plain text — never dump a multi-KB HTML page into a toast.
+  if (raw.length <= 200 && !raw.startsWith('<')) return raw
+  return `${fallback}`
+}
+
+function safeJsonParse(raw: string): unknown {
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
+// Shared single fetch of /queue so the shell's loaders (queue jobs, delivery
+// stats, live per-rule counters, recent errors) don't issue several redundant
+// network calls on every refresh cycle. TTL matches the shell's poll cadence.
+let _queueCache: { data: any; ts: number } | null = null
+const QUEUE_TTL = 4000
+async function getQueueRaw(): Promise<any> {
+  const now = Date.now()
+  if (_queueCache && now - _queueCache.ts < QUEUE_TTL) {
+    return _queueCache.data
+  }
+  const res = await fetchJson<any>(`${API_BASE}/queue`)
+  _queueCache = { data: res, ts: Date.now() }
+  return res
 }
 
 export const api = {
@@ -204,28 +222,19 @@ export const api = {
     if (Array.isArray(res?.tokens)) return res.tokens
     return []
   },
+  // Bot-token errors are normalized by fetchJson itself, so the server's own
+  // reason reaches the panel verbatim without a per-call wrapper.
   createBotToken: async (token: string, label = ''): Promise<BotTokenInfo> => {
-    try {
-      const res = await fetchJson<any>(`${API_BASE}/bot-tokens`, {
-        method: 'POST',
-        body: JSON.stringify({ token, label }),
-      })
-      return res?.token ?? res
-    } catch (err) {
-      // The API answers {"error": "...", "code": "..."}: surface the reason, not
-      // the raw body — the panel shows it verbatim to the user.
-      throw new Error(reasonOf(err))
-    }
+    const res = await fetchJson<any>(`${API_BASE}/bot-tokens`, {
+      method: 'POST',
+      body: JSON.stringify({ token, label }),
+    })
+    return res?.token ?? res
   },
-  deleteBotToken: async (id: string): Promise<void> => {
-    try {
-      await fetchJson<any>(`${API_BASE}/bot-tokens/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
-      })
-    } catch (err) {
-      throw new Error(reasonOf(err))
-    }
-  },
+  deleteBotToken: (id: string): Promise<void> =>
+    fetchJson<void>(`${API_BASE}/bot-tokens/${encodeURIComponent(id)}`, {
+      method: 'DELETE',
+    }),
   // Partial update: only the named fields are applied, and a named field is
   // applied even when its value is zero/false — the only way to clear a value.
   patchRule: (id: string, patch: Record<string, any>, updateMask: string[]) =>
@@ -257,14 +266,6 @@ export const api = {
     }),
   duplicateRule: (id: string) =>
     fetchJson<ForwardRule>(`${API_BASE}/rules/${id}/duplicate`, {
-      method: 'POST',
-    }),
-  stopRule: (id: string) =>
-    fetchJson<ForwardRule>(`${API_BASE}/rules/${id}/stop`, {
-      method: 'POST',
-    }),
-  restartRule: (id: string) =>
-    fetchJson<ForwardRule>(`${API_BASE}/rules/${id}/restart`, {
       method: 'POST',
     }),
 
@@ -428,7 +429,7 @@ export const api = {
 
   // Queue & DLQ
   getQueueJobs: async (): Promise<DeliveryJob[]> => {
-    const res = await fetchJson<any>(`${API_BASE}/queue`)
+    const res = await getQueueRaw()
     if (Array.isArray(res)) return res
     if (Array.isArray(res?.jobs)) return res.jobs
     if (Array.isArray(res?.rules)) {
@@ -449,7 +450,7 @@ export const api = {
   },
   getDeliveryStats: async (): Promise<DeliveryStats | null> => {
     try {
-      const res = await fetchJson<any>(`${API_BASE}/queue`)
+      const res = await getQueueRaw()
       if (res && typeof res === 'object' && !Array.isArray(res)) {
         return {
           processed_total: res.processed_total ?? res.forwarded_total ?? 0,
@@ -470,36 +471,46 @@ export const api = {
     }
   },
   getRuleLiveStats: async (): Promise<RuleLiveStat[]> => {
-    const res = await getDeliveryStatsAny()
-    if (Array.isArray(res?.rules)) {
-      return res.rules.map((r: any) => ({
-        rule_id: r.rule_id || r.id || '',
-        rule_name: r.rule_name || r.name || '',
-        is_active: !!r.is_active,
-        is_paused: !!r.is_paused,
-        forwarded: r.forwarded ?? 0,
-        filtered: r.filtered ?? 0,
-        errors: r.errors ?? 0,
-        last_forward_ts: r.last_forward_ts ?? 0,
-        last_error: r.last_error ?? '',
-      }))
+    try {
+      const res = await getQueueRaw()
+      if (Array.isArray(res?.rules)) {
+        return res.rules.map((r: any) => ({
+          rule_id: r.rule_id || r.id || '',
+          rule_name: r.rule_name || r.name || '',
+          is_active: !!r.is_active,
+          is_paused: !!r.is_paused,
+          forwarded: r.forwarded ?? 0,
+          filtered: r.filtered ?? 0,
+          errors: r.errors ?? 0,
+          last_forward_ts: r.last_forward_ts ?? 0,
+          last_error: r.last_error ?? '',
+        }))
+      }
+      return []
+    } catch {
+      // Live counters are decorative next to the rule list; a failed read must
+      // not break the panel that hosts them.
+      return []
     }
-    return []
   },
   getRecentErrors: async (): Promise<RecentError[]> => {
-    const res = await getDeliveryStatsAny()
-    if (Array.isArray(res?.errors)) {
-      return res.errors.map((e: any) => ({
-        ts: e.ts ?? 0,
-        rule_id: e.rule_id ?? '',
-        category: e.category ?? '',
-        error_name: e.error_name ?? e.category ?? '',
-        severity: e.severity ?? 'error',
-        detail: e.detail ?? '',
-        chat_id: e.chat_id ?? '',
-      }))
+    try {
+      const res = await getQueueRaw()
+      if (Array.isArray(res?.errors)) {
+        return res.errors.map((e: any) => ({
+          ts: e.ts ?? 0,
+          rule_id: e.rule_id ?? '',
+          category: e.category ?? '',
+          error_name: e.error_name ?? e.category ?? '',
+          severity: e.severity ?? 'error',
+          detail: e.detail ?? '',
+          chat_id: e.chat_id ?? '',
+        }))
+      }
+      return []
+    } catch {
+      return []
     }
-    return []
   },
   getDLQJobs: async (): Promise<DeadLetterJob[]> => {
     const res = await fetchJson<any>(`${API_BASE}/dlq`)
@@ -658,7 +669,7 @@ export const api = {
     return { events: [], total: 0 }
   },
   getServicesHealth: async (): Promise<ServicesHealthResponse> => {
-    return fetchJson<ServicesHealthResponse>('/api/v1/health/services')
+    return fetchJson<ServicesHealthResponse>(`${API_BASE}/v1/health/services`)
   },
 
   // ------------------------------------------------- Authentication & Identity
@@ -681,11 +692,6 @@ export const api = {
     fetchJson<AuthResponse>(`${API_BASE}/auth/tma`, {
       method: 'POST',
       body: JSON.stringify({ init_data: initData }),
-    }),
-  changePassword: (req: { old_password?: string; new_password: string }) =>
-    fetchJson<{ success: boolean; message: string }>(`${API_BASE}/auth/change-password`, {
-      method: 'PATCH',
-      body: JSON.stringify(req),
     }),
   me: () => fetchJson<{ user_id: number; username: string; is_admin: boolean; now: string }>(`${API_BASE}/auth/me`),
 
