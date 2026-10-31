@@ -142,8 +142,8 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
   const picks = Object.entries(selected).map(([id, title]) => ({ id, title }))
 
   const cardStyle: React.CSSProperties = {
-    backgroundColor: '#0f172a',
-    border: '1px solid #334155',
+    backgroundColor: 'var(--color-surface-inset)',
+    border: '1px solid var(--color-border-strong)',
     borderRadius: '10px',
     padding: '8px 10px',
     marginBottom: '6px',
@@ -157,7 +157,7 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
       style={{
         position: 'fixed',
         inset: 0,
-        backgroundColor: 'rgba(0,0,0,0.75)',
+        backgroundColor: 'var(--color-scrim)',
         backdropFilter: 'blur(6px)',
         zIndex: 10000,
         display: 'flex',
@@ -174,11 +174,11 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
           width: '100%',
           maxWidth: '560px',
           maxHeight: '88vh',
-          backgroundColor: '#111827',
-          color: '#f9fafb',
+          backgroundColor: 'var(--color-surface)',
+          color: 'var(--color-text)',
           borderRadius: '18px',
-          border: '1px solid #1f2937',
-          boxShadow: '0 25px 50px -12px rgba(0,0,0,0.6)',
+          border: '1px solid var(--color-border)',
+          boxShadow: 'var(--shadow-3)',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
@@ -187,16 +187,16 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
         <div
           style={{
             padding: '14px 16px',
-            borderBottom: '1px solid #1f2937',
-            backgroundColor: '#131b2e',
+            borderBottom: '1px solid var(--color-border)',
+            backgroundColor: 'var(--color-surface-2)',
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
           }}
         >
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '14px', fontWeight: 700 }}>{t('ui_chat_picker_title')}</div>
-            <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '2px' }}>
+            <div style={{ fontSize: 'var(--type-base)', fontWeight: 700 }}>{t('ui_chat_picker_title')}</div>
+            <div style={{ fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }}>
               {t('ui_chat_picker_subtitle', { total: String(total) })}
             </div>
           </div>
@@ -204,7 +204,7 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
             type="button"
             onClick={onClose}
             aria-label={t('ui_close')}
-            style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
+            style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer' }}
           >
             <X size={18} />
           </button>
@@ -216,13 +216,13 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
               display: 'flex',
               alignItems: 'center',
               gap: '8px',
-              backgroundColor: '#0f172a',
-              border: '1px solid #334155',
+              backgroundColor: 'var(--color-surface-inset)',
+              border: '1px solid var(--color-border-strong)',
               borderRadius: '10px',
               padding: '8px 10px',
             }}
           >
-            <Search size={14} color="#94a3b8" />
+            <Search size={14} color="var(--color-text-muted)" />
             <input
               autoFocus
               value={query}
@@ -233,11 +233,11 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
                 background: 'transparent',
                 border: 'none',
                 outline: 'none',
-                color: '#f1f5f9',
-                fontSize: '12px',
+                color: 'var(--color-text)',
+                fontSize: 'var(--type-xs)',
               }}
             />
-            {loading && <Loader2 size={14} className="spin" color="#93c5fd" />}
+            {loading && <Loader2 size={14} className="spin" color="var(--color-info)" />}
           </div>
           {error && (
             <div
@@ -245,7 +245,7 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
                 display: 'flex',
                 gap: '6px',
                 alignItems: 'center',
-                color: '#fca5a5',
+                color: 'var(--color-danger-text)',
                 fontSize: '11px',
                 marginTop: '8px',
               }}
@@ -258,7 +258,7 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
           {!loading && !error && ordered.length === 0 && (
-            <div style={{ fontSize: '12px', color: '#94a3b8' }}>{t('ui_chat_picker_no_matches')}</div>
+            <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>{t('ui_chat_picker_no_matches')}</div>
           )}
           {ordered.map((chat) => {
             const isTaken = taken.has(chat.chat_id)
@@ -278,8 +278,8 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
                   textAlign: isRtl ? 'right' : 'left',
                   cursor: isTaken ? 'default' : 'pointer',
                   opacity: isTaken ? 0.55 : 1,
-                  borderColor: isSelected ? '#2563eb' : '#334155',
-                  backgroundColor: isSelected ? '#172554' : '#0f172a',
+                  borderColor: isSelected ? 'var(--color-primary)' : 'var(--color-border-strong)',
+                  backgroundColor: isSelected ? 'var(--color-primary-soft)' : 'var(--color-surface-inset)',
                 }}
               >
                 <span
@@ -287,24 +287,24 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
                     width: '16px',
                     height: '16px',
                     borderRadius: '4px',
-                    border: `1px solid ${isSelected ? '#3b82f6' : 'var(--color-border-strong)'}`,
-                    backgroundColor: isSelected ? '#2563eb' : 'transparent',
+                    border: `1px solid ${isSelected ? 'var(--color-primary)' : 'var(--color-border-strong)'}`,
+                    backgroundColor: isSelected ? 'var(--color-primary)' : 'transparent',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexShrink: 0,
                   }}
                 >
-                  {isSelected && <Check size={12} color="#fff" />}
+                  {isSelected && <Check size={12} color="var(--color-on-accent)" />}
                 </span>
                 <span style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {chat.pinned && <Pin size={12} color="#fbbf24" />}
+                    {chat.pinned && <Pin size={12} color="var(--color-warning)" />}
                     <span
                       style={{
-                        fontSize: '12px',
+                        fontSize: 'var(--type-xs)',
                         fontWeight: 600,
-                        color: '#e2e8f0',
+                        color: 'var(--color-text)',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
@@ -313,7 +313,7 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
                       {labelOf(chat)}
                     </span>
                   </span>
-                  <span style={{ fontSize: '10px', color: '#94a3b8' }}>
+                  <span style={{ fontSize: '10px', color: 'var(--color-text-muted)' }}>
                     {[
                       chat.chat_type || '',
                       chat.username ? `@${chat.username}` : '',
@@ -324,7 +324,7 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
                   </span>
                 </span>
                 {isTaken && (
-                  <span style={{ fontSize: '10px', color: '#4ade80' }}>
+                  <span style={{ fontSize: '10px', color: 'var(--color-success)' }}>
                     {t('ui_chat_picker_already_added')}
                   </span>
                 )}
@@ -337,12 +337,12 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
               onClick={() => void load(chats.length, true)}
               style={{
                 width: '100%',
-                backgroundColor: '#1e293b',
-                border: '1px solid #334155',
+                backgroundColor: 'var(--color-surface-2)',
+                border: '1px solid var(--color-border-strong)',
                 borderRadius: '10px',
-                color: '#e2e8f0',
+                color: 'var(--color-text)',
                 padding: '8px',
-                fontSize: '12px',
+                fontSize: 'var(--type-xs)',
                 cursor: 'pointer',
               }}
             >
@@ -357,14 +357,14 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
         <div
           style={{
             padding: '12px 16px',
-            borderTop: '1px solid #1f2937',
-            backgroundColor: '#131b2e',
+            borderTop: '1px solid var(--color-border)',
+            backgroundColor: 'var(--color-surface-2)',
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
           }}
         >
-          <span style={{ fontSize: '11px', color: '#94a3b8', flex: 1 }}>
+          <span style={{ fontSize: '11px', color: 'var(--color-text-muted)', flex: 1 }}>
             {picks.length
               ? t('ui_chat_picker_selected_count', { n: String(picks.length) })
               : t('ui_chat_picker_none_selected')}
@@ -374,11 +374,11 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
             onClick={onClose}
             style={{
               background: 'none',
-              border: '1px solid #334155',
+              border: '1px solid var(--color-border-strong)',
               borderRadius: '8px',
-              color: '#e2e8f0',
+              color: 'var(--color-text)',
               padding: '8px 12px',
-              fontSize: '12px',
+              fontSize: 'var(--type-xs)',
               cursor: 'pointer',
             }}
           >
@@ -392,12 +392,12 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
               onClose()
             }}
             style={{
-              backgroundColor: picks.length ? '#2563eb' : '#1e293b',
-              color: picks.length ? '#fff' : 'var(--color-text-muted)',
-              border: '1px solid #334155',
+              backgroundColor: picks.length ? 'var(--color-primary)' : 'var(--color-surface-2)',
+              color: picks.length ? 'var(--color-on-accent)' : 'var(--color-text-muted)',
+              border: '1px solid var(--color-border-strong)',
               borderRadius: '8px',
               padding: '8px 12px',
-              fontSize: '12px',
+              fontSize: 'var(--type-xs)',
               fontWeight: 600,
               cursor: picks.length ? 'pointer' : 'not-allowed',
               whiteSpace: 'nowrap',

@@ -159,7 +159,7 @@ export default function FiltersPanel({ d }: { d: DashboardCtx }) {
     lang,
     openFilterModal,
     t,
-    showToast,
+    showError,
     setFilterRules,
     handleDeleteFilter,
   } = d
@@ -180,12 +180,12 @@ export default function FiltersPanel({ d }: { d: DashboardCtx }) {
         setFilterRules((prev) => prev.map((f) => (f.id === filter.id ? saved : f)))
       } catch (e: any) {
         setFilterRules((prev) => prev.map((f) => (f.id === filter.id ? { ...f, is_enabled: filter.is_enabled } : f)))
-        showToast(e?.message || t('ui_error'))
+        showError(e?.message || t('ui_error'))
       } finally {
         setTogglingId(null)
       }
     },
-    [setFilterRules, showToast, t],
+    [setFilterRules, showError, t],
   )
 
   const confirmDelete = async () => {

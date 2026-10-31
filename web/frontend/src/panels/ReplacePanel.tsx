@@ -65,9 +65,9 @@ const toolbarStyle: React.CSSProperties = {
 const chipStyle = (active: boolean): React.CSSProperties => ({
   padding: '6px 12px',
   borderRadius: 999,
-  border: `1px solid ${active ? 'rgba(56, 189, 248, 0.55)' : 'rgba(148, 163, 184, 0.25)'}`,
-  background: active ? 'rgba(56, 189, 248, 0.14)' : 'transparent',
-  color: active ? '#7dd3fc' : '#cbd5e1',
+  border: `1px solid ${active ? 'var(--color-info)' : 'var(--color-border)'}`,
+  background: active ? 'var(--color-info-soft)' : 'transparent',
+  color: active ? 'var(--color-info)' : 'var(--color-text)',
   fontSize: '0.78rem',
   fontWeight: 600,
   cursor: 'pointer',
@@ -76,9 +76,9 @@ const chipStyle = (active: boolean): React.CSSProperties => ({
 const patternStyle: React.CSSProperties = {
   fontFamily: "'JetBrains Mono', Consolas, monospace",
   fontSize: '0.76rem',
-  color: '#e2e8f0',
-  background: 'rgba(15, 23, 42, 0.6)',
-  border: '1px solid rgba(148, 163, 184, 0.18)',
+  color: 'var(--color-text)',
+  background: 'var(--color-surface-inset)',
+  border: '1px solid var(--color-border)',
   borderRadius: 8,
   padding: '2px 6px',
   wordBreak: 'break-all',
@@ -123,7 +123,7 @@ const emptyDraft = (): ReplaceRuleInput => ({
 })
 
 export default function ReplacePanel({ d }: { d: DashboardCtx }) {
-  const { t, isRtl, showToast } = d
+  const { t, isRtl, showToast, showError } = d
 
   const [page, setPage] = useState<ReplaceRulePage | null>(null)
   const [query, setQuery] = useState('')
@@ -245,7 +245,7 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
       showToast(rule.enabled ? t('ui_rp_disabled_toast') : t('ui_rp_enabled_toast'))
       await load()
     } catch (e: any) {
-      showToast(e?.message || t('ui_rp_toggle_failed'))
+      showError(e?.message || t('ui_rp_toggle_failed'))
     } finally {
       setBusy(false)
     }
@@ -258,7 +258,7 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
       showToast(t('ui_rp_duplicated'))
       await load()
     } catch (e: any) {
-      showToast(e?.message || t('ui_rp_dup_failed'))
+      showError(e?.message || t('ui_rp_dup_failed'))
     } finally {
       setBusy(false)
     }
@@ -274,7 +274,7 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
       const lastPage = rules.length === 1 && pageNo > 1
       await load({ page: lastPage ? pageNo - 1 : pageNo })
     } catch (e: any) {
-      showToast(e?.message || t('ui_rp_delete_failed'))
+      showError(e?.message || t('ui_rp_delete_failed'))
     } finally {
       setBusy(false)
     }
@@ -347,7 +347,7 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
       >
         <div style={{ minWidth: 220 }}>
           <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{t('ui_rp_title')}</h2>
-          <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: 4, maxWidth: 620 }}>
+          <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginTop: 4, maxWidth: 620 }}>
             {t('ui_rp_subtitle')}
           </p>
         </div>
@@ -380,7 +380,7 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
               insetInlineStart: 10,
               top: '50%',
               transform: 'translateY(-50%)',
-              color: '#94a3b8',
+              color: 'var(--color-text-muted)',
             }}
           />
           <input
@@ -481,7 +481,7 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
             <Card key={rule.id}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                  <span aria-hidden="true" style={{ fontSize: '0.9rem', marginTop: 1 }}>
+                  <span aria-hidden="true" style={{ fontSize: 'var(--type-md)', marginTop: 1 }}>
                     {rule.enabled ? '🟢' : '🔴'}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -505,12 +505,12 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
                 {/* source → replacement, the pair the rule actually applies */}
                 <div dir="ltr" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <code style={patternStyle}>{rule.badge || rule.source}</code>
-                  <code style={{ ...patternStyle, color: rule.to ? '#6ee7b7' : '#fca5a5' }}>
+                  <code style={{ ...patternStyle, color: rule.to ? 'var(--color-success)' : 'var(--color-danger-text)' }}>
                     {rule.to || t('ui_rp_removed_match')}
                   </code>
                 </div>
 
-                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>
                   {rule.task_names.length
                     ? t('ui_rp_runs_on', { n: rule.task_ids.length, names: rule.task_names.join(', ') })
                     : t('ui_rp_no_tasks')}
@@ -591,7 +591,7 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
           >
             {isRtl ? <ChevronRight size={15} aria-hidden="true" /> : <ChevronLeft size={15} aria-hidden="true" />}
           </Button>
-          <span style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
+          <span style={{ fontSize: 'var(--type-sm)', color: 'var(--color-text)' }}>
             {t('ui_rp_page_of', { page: pageNo, pages })}
           </span>
           <Button
@@ -613,7 +613,7 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
+            background: 'var(--color-scrim)',
             backdropFilter: 'blur(8px)',
             zIndex: 999,
             display: 'flex',
@@ -742,7 +742,7 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
 
               <Field label={t('ui_rp_tasks_label')} hint={t('ui_rp_tasks_hint')}>
                 {tasks.length === 0 ? (
-                  <p style={{ fontSize: '0.8rem', color: '#fca5a5' }}>{t('ui_rp_tasks_none')}</p>
+                  <p style={{ fontSize: 'var(--type-sm)', color: 'var(--color-danger-text)' }}>{t('ui_rp_tasks_none')}</p>
                 ) : (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {tasks.map((task) => {
@@ -757,7 +757,7 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
                             fontSize: '0.82rem',
                             padding: '6px 8px',
                             borderRadius: 8,
-                            background: checked ? 'rgba(16, 185, 129, 0.10)' : 'transparent',
+                            background: checked ? 'var(--color-success-soft)' : 'transparent',
                           }}
                         >
                           <input
@@ -786,7 +786,7 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
               </Field>
 
               {formError && (
-                <p role="alert" style={{ fontSize: '0.8rem', color: '#fca5a5' }}>
+                <p role="alert" style={{ fontSize: 'var(--type-sm)', color: 'var(--color-danger-text)' }}>
                   {formError}
                 </p>
               )}
@@ -814,7 +814,7 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
+            background: 'var(--color-scrim)',
             backdropFilter: 'blur(8px)',
             zIndex: 999,
             display: 'flex',
@@ -827,8 +827,8 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
           aria-label={t('ui_rp_delete_title')}
         >
           <div className="glass-panel modal-sheet" style={{ width: '100%', maxWidth: 460, padding: 24 }}>
-            <h3 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: 8 }}>{t('ui_rp_delete_title')}</h3>
-            <p style={{ fontSize: '0.84rem', color: '#cbd5e1', lineHeight: 1.5 }}>
+            <h3 style={{ fontSize: 'var(--type-md)', fontWeight: 800, marginBottom: 8 }}>{t('ui_rp_delete_title')}</h3>
+            <p style={{ fontSize: '0.84rem', color: 'var(--color-text)', lineHeight: 1.5 }}>
               {t('ui_rp_delete_body', {
                 name: ruleTitle(confirming),
                 n: confirming.task_ids.length,
@@ -856,7 +856,7 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
+            background: 'var(--color-scrim)',
             backdropFilter: 'blur(8px)',
             zIndex: 999,
             display: 'flex',
@@ -895,7 +895,7 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }} className="modal-sheet-body">
               <div dir="ltr" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <code style={patternStyle}>{testing.badge || testing.source}</code>
-                <code style={{ ...patternStyle, color: testing.to ? '#6ee7b7' : '#fca5a5' }}>
+                <code style={{ ...patternStyle, color: testing.to ? 'var(--color-success)' : 'var(--color-danger-text)' }}>
                   {testing.to || t('ui_rp_removed_match')}
                 </code>
               </div>
@@ -919,14 +919,14 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
                       : t('ui_rp_test_unchanged')}
                   </Badge>
                   <div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: 4 }}>
+                    <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', marginBottom: 4 }}>
                       {t('ui_rp_test_input')}
                     </div>
                     <pre
                       dir="auto"
                       style={{
                         ...monoStyle,
-                        background: 'rgba(15, 23, 42, 0.6)',
+                        background: 'var(--color-surface-inset)',
                         borderRadius: 8,
                         padding: 10,
                         margin: 0,
@@ -936,19 +936,19 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
                     </pre>
                   </div>
                   <div>
-                    <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginBottom: 4 }}>
+                    <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', marginBottom: 4 }}>
                       {t('ui_rp_test_output')}
                     </div>
                     <pre
                       dir="auto"
                       style={{
                         ...monoStyle,
-                        background: 'rgba(16, 185, 129, 0.08)',
-                        border: '1px solid rgba(16, 185, 129, 0.25)',
+                        background: 'var(--color-success-soft)',
+                        border: '1px solid color-mix(in oklab, var(--color-success) 40%, transparent)',
                         borderRadius: 8,
                         padding: 10,
                         margin: 0,
-                        color: '#a7f3d0',
+                        color: 'var(--color-success)',
                       }}
                     >
                       {result.output}
@@ -958,7 +958,7 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
               )}
 
               {formError && (
-                <p role="alert" style={{ fontSize: '0.8rem', color: '#fca5a5' }}>
+                <p role="alert" style={{ fontSize: 'var(--type-sm)', color: 'var(--color-danger-text)' }}>
                   {formError}
                 </p>
               )}

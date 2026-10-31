@@ -25,8 +25,8 @@ import { makeT, type UiLang } from '../locales/engine'
  *   features   what this build implements
  *   next_steps what to do when it is not ready
  *
- * Localisation follows the dashboard's convention: every string is a `t('key')`
- * catalog lookup, defined in all ten locales, with English as the fallback.
+ * Localisation follows the dashboard's convention: every string resolves
+ * through the catalog (all ten locales), with English as the fallback.
  *
  * An older server without this endpoint answers 404: the panel then says so
  * instead of rendering an error the operator cannot act on.

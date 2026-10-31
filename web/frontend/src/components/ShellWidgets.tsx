@@ -132,12 +132,12 @@ export function ProviderKeyCheck({
             : t('ui_check_key_endpoint')}
         </span>
       </button>
-      {failure && <span style={{ fontSize: '0.75rem', color: '#f87171' }}>{failure}</span>}
+      {failure && <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-danger)' }}>{failure}</span>}
       {view.text && (
         <span
           style={{
-            fontSize: '0.75rem',
-            color: view.ok ? '#34d399' : '#f87171',
+            fontSize: 'var(--type-xs)',
+            color: view.ok ? 'var(--color-success)' : 'var(--color-danger)',
             display: 'flex',
             gap: 6,
             flexWrap: 'wrap',
@@ -146,7 +146,7 @@ export function ProviderKeyCheck({
           <span>
             {view.ok ? '✓' : '✕'} {view.text}
           </span>
-          {view.detail && <span style={{ color: '#94a3b8', overflowWrap: 'anywhere' }}>{view.detail}</span>}
+          {view.detail && <span style={{ color: 'var(--color-text-muted)', overflowWrap: 'anywhere' }}>{view.detail}</span>}
         </span>
       )}
     </div>
@@ -228,10 +228,10 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
     <div className="glass-panel" style={{ padding: 24 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <h2 style={{ fontSize: 'var(--type-xl)', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
             ✍️ {t('ui_rewrite_prompt_editor')}
           </h2>
-          <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
+          <p style={{ fontSize: 'var(--type-sm)', color: 'var(--color-text-muted)', marginTop: 4 }}>
             {t('ui_reusable_rewrite_prompts_for_forward_rules_system_prompts_read_o')}
           </p>
         </div>
@@ -244,13 +244,13 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12, marginBottom: 20 }}>
         {(Array.isArray(prompts) ? prompts : []).map((p) => (
           <div key={p.id} style={{
-            background: 'rgba(15, 23, 42, 0.6)', border: selected?.id === p.id ? '1px solid rgba(168,85,247,0.6)' : '1px solid rgba(255,255,255,0.06)',
+            background: 'var(--color-surface-2)', border: selected?.id === p.id ? '1px solid var(--color-accent-violet)' : '1px solid var(--color-border)',
             borderRadius: 10, padding: 14, cursor: 'pointer',
           }} onClick={() => openEditor(p)}>
-            <div style={{ fontWeight: 700, fontSize: '0.85rem', marginBottom: 4 }}>
+            <div style={{ fontWeight: 700, fontSize: 'var(--type-sm)', marginBottom: 4 }}>
               {p.is_system ? '⭐' : '👤'} {p.name} <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>v{p.current_version}</span>
             </div>
-            <div style={{ fontSize: 'var(--type-xs)', color: '#94a3b8', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+            <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
               {p.description || p.system_prompt.slice(0, 100)}
             </div>
             {!p.is_system && (
@@ -267,18 +267,18 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
       </div>
 
       {/* Editor form */}
-      {form && (selected === null || selected !== null) && form.system_prompt !== undefined && (
-        <div style={{ borderTop: '1px solid rgba(255,255,255,0.06)', paddingTop: 18 }}>
+      {form && form.system_prompt !== undefined && (
+        <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 18 }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+              <label style={{ display: 'block', fontSize: 'var(--type-xs)', color: 'var(--color-text)', marginBottom: 4 }}>
                 {t('ui_name')} *
               </label>
               <input className="input-field" style={{ width: '100%' }} value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('ui_e_g_formal_rewrite')} />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+              <label style={{ display: 'block', fontSize: 'var(--type-xs)', color: 'var(--color-text)', marginBottom: 4 }}>
                 {t('ui_output_language')}
               </label>
               <select className="input-field" style={{ width: '100%' }} value={form.target_language}
@@ -291,16 +291,16 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
             </div>
           </div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+            <label style={{ display: 'block', fontSize: 'var(--type-xs)', color: 'var(--color-text)', marginBottom: 4 }}>
               {t('ui_description')}
             </label>
             <input className="input-field" style={{ width: '100%' }} value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })} />
           </div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+            <label style={{ display: 'block', fontSize: 'var(--type-xs)', color: 'var(--color-text)', marginBottom: 4 }}>
               {t('ui_system_prompt')} *
-              {selected?.is_system && <span style={{ color: '#f59e0b' }}> — {t('ui_system_read_only')}</span>}
+              {selected?.is_system && <span style={{ color: 'var(--color-warning)' }}> — {t('ui_system_read_only')}</span>}
             </label>
             <textarea
               className="input-field"
@@ -312,7 +312,7 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
             />
           </div>
           <div style={{ marginBottom: 12 }}>
-            <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+            <label style={{ display: 'block', fontSize: 'var(--type-xs)', color: 'var(--color-text)', marginBottom: 4 }}>
               {t('ui_user_prompt_template')}
             </label>
             <input className="input-field" style={{ width: '100%', fontFamily: 'monospace', fontSize: '0.78rem' }}
@@ -324,8 +324,8 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
           </div>
 
           {/* Test panel */}
-          <div style={{ background: 'rgba(15, 23, 42, 0.6)', borderRadius: 10, padding: 14, border: '1px solid rgba(255,255,255,0.06)' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#a5b4fc', marginBottom: 8 }}>
+          <div style={{ background: 'var(--color-surface-2)', borderRadius: 10, padding: 14, border: '1px solid var(--color-border)' }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-primary-strong)', marginBottom: 8 }}>
               🧪 {t('ui_prompt_test_no_message_sent')}
             </div>
             <textarea className="input-field" style={{ width: '100%', minHeight: 60, marginBottom: 8, fontSize: '0.78rem' }}
@@ -338,7 +338,7 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
               >
                 {testing ? '⏳' : '▶'} {t('ui_run_ai_test')}
               </button>
-              {!aiConfigs.length && <span style={{ fontSize: 'var(--type-xs)', color: '#f87171' }}>
+              {!aiConfigs.length && <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-danger)' }}>
                 {t('ui_create_an_ai_config_first')}
               </span>}
             </div>
@@ -349,12 +349,12 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
                     <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', marginBottom: 4 }}>
                       ✅ {testResult.model_used} | {testResult.execution_duration_ms.toFixed(0)}ms | v{testResult.prompt_version_used}
                     </div>
-                    <div style={{ background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 8, padding: 10, fontSize: '0.8rem', whiteSpace: 'pre-wrap' }}>
+                    <div style={{ background: 'var(--color-success-soft)', border: '1px solid color-mix(in oklab, var(--color-success) 40%, transparent)', borderRadius: 8, padding: 10, fontSize: 'var(--type-sm)', whiteSpace: 'pre-wrap' }}>
                       {testResult.transformed_text}
                     </div>
                   </div>
                 ) : (
-                  <div style={{ color: '#f87171', fontSize: '0.78rem' }}>
+                  <div style={{ color: 'var(--color-danger)', fontSize: '0.78rem' }}>
                     ❌ {testResult.error_code}: {testResult.error_message}
                   </div>
                 )}
