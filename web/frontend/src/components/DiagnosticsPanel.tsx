@@ -51,16 +51,23 @@ export function DiagnosticsPanel({
               />
             )}
             <span>{t('ui_system_preflight')}</span>
-            {report && <span className="preflight-score">· {report.score}/100</span>}
+            {report && <span className="preflight-score">· {report.score ?? '–'}/100</span>}
           </div>
           <div className="preflight-meta">
             {report
-              ? t('ui_report_4_errors_report_5_warnings_report_6_info', { report_4: report.counts.error, report_5: report.counts.warning, report_6: report.counts.info })
+              ? t('ui_report_4_errors_report_5_warnings_report_6_info', {
+                  report_4: report.counts?.error ?? 0,
+                  report_5: report.counts?.warning ?? 0,
+                  report_6: report.counts?.info ?? 0,
+                })
               : t('ui_scanning')}
             {report?.scanned ? (
               <>
                 {' — '}
-                {t('ui_checked_report_3_tasks_report_4_ai_configs', { report_3: report.scanned.rules, report_4: report.scanned.ai_configs })}
+                {t('ui_checked_report_3_tasks_report_4_ai_configs', {
+                  report_3: report.scanned.rules ?? 0,
+                  report_4: report.scanned.ai_configs ?? 0,
+                })}
               </>
             ) : null}
           </div>
@@ -69,7 +76,7 @@ export function DiagnosticsPanel({
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className="btn btn-secondary"
+          className="btn btn--ghost btn--sm"
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: '0.78rem' }}
         >
           <RefreshCw size={14} className={loading ? 'spin' : undefined} />

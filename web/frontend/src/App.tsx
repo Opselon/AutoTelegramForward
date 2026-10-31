@@ -10,7 +10,6 @@ import {
   Filter,
   Server,
   Activity,
-  X,
   Check,
   ListTodo,
   ShieldAlert,
@@ -35,6 +34,7 @@ import { ProviderKeyCheck, UserBar } from './components/ShellWidgets'
 import { Toast } from './components/ui/Primitives'
 import { ConfirmDialog } from './components/ConfirmDialog'
 import { HealthChips } from './components/HealthChips'
+import { AlertBanner, type PipelineAlert } from './components/AlertBanner'
 import { ModalShell } from './components/ui/Modal'
 import { Field } from './components/ui/Primitives'
 
@@ -198,7 +198,7 @@ function useDashboard(me?: MeInfo) {
       setDiagLoading(false)
     }
   }
-  const [errorBanner, setErrorBanner] = useState<string | null>(null)
+  const [errorBanner, setErrorBanner] = useState<PipelineAlert | null>(null)
   // Feeds that failed to load on the last pass, surfaced in the error banner
   // with a Retry (the pipeline-error banner below reuses the same surface).
   const [loadFailures, setLoadFailures] = useState<string[] | null>(null)
@@ -432,7 +432,17 @@ function useDashboard(me?: MeInfo) {
           const errKey = `${worst.ts || 0}_${name}_${detail}`
           const sliced = text.slice(0, 220)
           if (dismissedErrors.has(errKey) || dismissedErrors.has(text) || dismissedErrors.has(sliced)) return null
-          return sliced || null
+          if (!text) return null
+          // The banner is structured now: severity variant, FloodWait
+          // explanation with countdown, and the untouched diagnostic detail.
+          // All three historical dismissal keys stay honoured.
+          return {
+            kind: (worst.severity || '').toLowerCase() === 'error' ? 'error' : 'warning',
+            name,
+            detail: detail || name,
+            ts: worst.ts || 0,
+            dismissKeys: [errKey, text, sliced],
+          } as PipelineAlert
         })())
       }
       if (r.length > 0 && !simSelectedRuleId) {
@@ -1339,8 +1349,6 @@ export function App({ me }: { me?: MeInfo } = {}) {
       <a className="skip-link" href="#main-content">
         {t('ui_skip_to_content')}
       </a>
-      {/* User bar */}
-      <UserBar lang={lang} />
       {/* Load-failure banner — which feeds did not load, with a Retry that
           re-runs the loader. Failures used to be swallowed with `.catch(() => [])`,
           so a dead endpoint looked like an empty account. */}
@@ -1362,33 +1370,24 @@ export function App({ me }: { me?: MeInfo } = {}) {
           </button>
         </div>
       )}
-      {/* Proactive Error Banner — newest ERROR/WARN from the delivery pipeline */}
+      {/* Proactive notification — newest ERROR/WARN from the delivery pipeline,
+          explained (FloodWait gets a countdown) with the diagnostic preserved. */}
       {errorBanner && (
-        <div className="alert-banner" role="alert">
-          <span className="alert-banner__icon" aria-hidden="true">⚠️</span>
-          <span dir="ltr" className="alert-banner__text">
-            {errorBanner}
-          </span>
-          <button
-            onClick={() => {
-              if (errorBanner) {
-                setDismissedErrors((prev) => {
-                  const next = new Set(prev).add(errorBanner)
-                  try {
-                    sessionStorage.setItem('atf_dismissed_errors', JSON.stringify([...next]))
-                  } catch {}
-                  return next
-                })
-              }
-              setErrorBanner(null)
-            }}
-            className="alert-banner__close"
-            aria-label={t('ui_dismiss')}
-            title={t('ui_dismiss')}
-          >
-            <X size={14} aria-hidden="true" />
-          </button>
-        </div>
+        <AlertBanner
+          alert={errorBanner}
+          lang={lang}
+          onDismiss={() => {
+            setDismissedErrors((prev) => {
+              const next = new Set(prev)
+              for (const key of errorBanner.dismissKeys) next.add(key)
+              try {
+                sessionStorage.setItem('atf_dismissed_errors', JSON.stringify([...next]))
+              } catch {}
+              return next
+            })
+            setErrorBanner(null)
+          }}
+        />
       )}
       {/* One always-mounted live region: a message that appears later is still
           announced, and the region is never a surprise insertion. */}
@@ -1414,67 +1413,78 @@ export function App({ me }: { me?: MeInfo } = {}) {
 
       {/* Header Bar */}
       <header className="glass-panel app-header header-container">
-        {/* Drawer trigger: CSS hides it from --bp-md up, where the rail is docked. */}
-        <NavTrigger
-          open={navOpen}
-          onOpenChange={setNavOpen}
-          lang={lang}
-        />
-        <div className="header-title-wrap">
-          <div className="brand-mark" aria-hidden="true">
-            <Radio size={22} />
-          </div>
-          <div>
-            <div className="header-title-row">
-              <h1 className="header-title">
-                AutoTelegramForward <span className="header-title__accent">PRO GATEWAY</span>
-              </h1>
-              <span className="badge badge-vip header-version">
-                {gatewayInfo?.version ? `v${gatewayInfo.version} RELEASE` : t('ui_version_probing')}
-              </span>
+        {/* Row 1: drawer trigger + product identity + the signed-in identity.
+            One row on every viewport — the trigger never floats alone above
+            the brand, and the user bar is not a separate card above it. */}
+        <div className="header-top">
+          {/* Drawer trigger: CSS hides it from --bp-md up, where the rail is docked. */}
+          <NavTrigger
+            open={navOpen}
+            onOpenChange={setNavOpen}
+            lang={lang}
+          />
+          <div className="header-title-wrap">
+            <div className="brand-mark" aria-hidden="true">
+              <Radio size={22} />
             </div>
-            <p className="text-balance header-subtitle">
-              {t('ui_unified_smart_telegram_forwarding_gateway_microservice_platform')}
-            </p>
+            <div className="header-titles">
+              <div className="header-title-row">
+                <h1 className="header-title">
+                  AutoTelegramForward <span className="header-title__accent">PRO GATEWAY</span>
+                </h1>
+                <span className="badge badge-vip header-version">
+                  {gatewayInfo?.version ? `v${gatewayInfo.version} RELEASE` : t('ui_version_probing')}
+                </span>
+              </div>
+              <p className="text-balance header-subtitle">
+                {t('ui_unified_smart_telegram_forwarding_gateway_microservice_platform')}
+              </p>
+            </div>
           </div>
+          <UserBar lang={lang} user={currentUser} />
         </div>
 
-        {/* Microservice Health Indicators — the same shared component the home
-            hero renders: one probe answer per service, verdict as text, and
+        {/* Row 2: service health (one scrollable strip) + workspace tools.
             `undefined` means "not probed yet", never painted as an outage. */}
         <div className="header-actions">
-          <HealthChips
-            lang={lang}
-            core={stats?.atf_core_online}
-            logger={stats?.atf_logger_online}
-            web={gatewayInfo?.atf_web_online}
-          />
+          <div className="header-chips" role="status">
+            <HealthChips
+              lang={lang}
+              core={stats?.atf_core_online}
+              logger={stats?.atf_logger_online}
+              web={gatewayInfo?.atf_web_online}
+            />
+          </div>
 
-          {/* Language picker: all ten catalogs, by endonym */}
-          <LanguagePicker lang={lang} onChange={setLang} compact />
+          <div className="header-tools">
+            {/* Language picker: all ten catalogs, by endonym */}
+            <LanguagePicker lang={lang} onChange={setLang} compact />
 
-          {/* Theme: the surface the operator works on, not a preference buried
-              in settings. Dark is the product's identity; light is first-class
-              (token swap on <html data-theme>, no per-panel code). */}
-          <button
-            type="button"
-            onClick={() => setThemeState((prev) => toggleTheme(prev))}
-            className="btn btn--ghost btn--icon btn--sm theme-toggle"
-            aria-label={theme === 'dark' ? t('ui_theme_switch_to_light') : t('ui_theme_switch_to_dark')}
-            title={theme === 'dark' ? t('ui_theme_switch_to_light') : t('ui_theme_switch_to_dark')}
-          >
-            {theme === 'dark' ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
-          </button>
+            {/* Theme: the surface the operator works on, not a preference buried
+                in settings. Dark is the product's identity; light is first-class
+                (token swap on <html data-theme>, no per-panel code). */}
+            <button
+              type="button"
+              onClick={() => setThemeState((prev) => toggleTheme(prev))}
+              className="btn btn--ghost btn--icon btn--sm theme-toggle"
+              aria-label={theme === 'dark' ? t('ui_theme_switch_to_light') : t('ui_theme_switch_to_dark')}
+              title={theme === 'dark' ? t('ui_theme_switch_to_light') : t('ui_theme_switch_to_dark')}
+            >
+              {theme === 'dark' ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+            </button>
 
-          {/* Reload Button */}
-          <button
-            onClick={loadData}
-            disabled={loading}
-            className="btn btn-secondary btn--sm"
-            title={t('ui_refresh')}
-          >
-            <RotateCcw size={13} aria-hidden="true" />
-          </button>
+            {/* Reload: refreshes every panel feed. */}
+            <button
+              type="button"
+              onClick={loadData}
+              disabled={loading}
+              className="btn btn--ghost btn--icon btn--sm"
+              aria-label={t('ui_refresh')}
+              title={t('ui_refresh')}
+            >
+              <RotateCcw size={14} aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </header>
 

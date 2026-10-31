@@ -5,8 +5,8 @@
  * The AI panel needs two of them; a lazy chunk importing the shell would be a
  * cycle, so they live in their own module. Moved verbatim from `App.tsx`.
  */
-import { useEffect, useState } from 'react'
-import { HeartPulse } from 'lucide-react'
+import { useState } from 'react'
+import { HeartPulse, LogOut } from 'lucide-react'
 import { api } from '../api'
 import { clearSession } from '../session'
 import { describeKeyCheck } from '../providerKey'
@@ -26,13 +26,21 @@ export function extraSourceCount(rule: any): number {
   return names.length > 1 ? names.length - 1 : 0
 }
 
-export function UserBar({ lang }: { lang: UiLang }) {
+/**
+ * The signed-in identity, rendered inline in the header's top row (it used to
+ * be a separate card above the header — a whole extra row of chrome on a
+ * phone, and a second /api/auth/me call for data the shell already had).
+ * The identity comes from the shell's verified session; only logout lives here.
+ */
+export function UserBar({
+  lang,
+  user,
+}: {
+  lang: UiLang
+  /** The shell's verified identity; null until /api/auth/me resolves. */
+  user: { username: string; is_admin: boolean } | null
+}) {
   const t = makeT(lang)
-  const [user, setUser] = useState<{ username: string; is_admin: boolean } | null>(null)
-
-  useEffect(() => {
-    api.me().then(setUser).catch(() => {})
-  }, [])
 
   const handleLogout = () => {
     api.logout()
@@ -45,9 +53,8 @@ export function UserBar({ lang }: { lang: UiLang }) {
 
   if (!user) return null
   return (
-    // Styling lives in the `.userbar` classes (index.css, Control-Room layer):
-    // inline dark literals here were the reason the bar stayed midnight in the
-    // light theme while everything around it moved to paper.
+    // Styling lives in the `.userbar` classes (index.css): an inline identity,
+    // not a card — the header already provides the surface.
     <div className="userbar">
       <div className="userbar__id">
         <span className="userbar__dot" aria-hidden="true" />
@@ -57,8 +64,15 @@ export function UserBar({ lang }: { lang: UiLang }) {
         </span>
         {user.is_admin && <span className="userbar__role">{t('ui_role_admin')}</span>}
       </div>
-      <button onClick={handleLogout} className="btn btn--danger btn--sm userbar__logout">
-        {t('ui_logout')}
+      <button
+        type="button"
+        onClick={handleLogout}
+        className="btn btn--danger btn--sm userbar__logout"
+        aria-label={t('ui_logout')}
+        title={t('ui_logout')}
+      >
+        <LogOut size={14} aria-hidden="true" />
+        <span className="userbar__logout-label">{t('ui_logout')}</span>
       </button>
     </div>
   )
