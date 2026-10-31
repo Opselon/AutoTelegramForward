@@ -462,8 +462,78 @@ def build_diagnostic_event(
     )
 
 
+
+# --------------------------------------------------------------------------- #
+# The Rust-logger bridge.
+#
+# The mission's §10 contract says the Rust monitoring system must *consume and
+# display* the canonical events — not run a second store of them. So this
+# projects one DiagnosticEvent onto the existing LogClient record (service,
+# category, message, detail, rule_id, user_id, correlation_id, trace_id), which
+# is the transport the Rust logger already owns. The authoritative per-attempt
+# record stays in diagnostic_events; this is the operational stream the dashboards
+# already read, so a failure is visible in both places without duplicating the
+# business state.
+# --------------------------------------------------------------------------- #
+
+
+def log_diagnostic_event(log_client: Any, event: "DiagnosticEvent") -> None:
+    """Fan one canonical event out to the Rust logger, best effort.
+
+    The logger is bounded and counts what it drops, so an outage degrades to a
+    missing stream entry — never to a missed delivery or a lost diagnostic row
+    (that row lives in ``diagnostic_events`` independently).
+    """
+    if log_client is None:
+        return
+    try:
+        level = {
+            "INFO": "info", "WARN": "warn", "ERROR": "error",
+            "CRITICAL": "error",
+        }.get(str(event.severity or "INFO").upper(), "info")
+        detail = {
+            "event_name": event.event_name,
+            "stage": event.stage,
+            "strategy": event.strategy,
+            "attempt": event.attempt,
+            "error_origin": event.error_origin,
+            "category": event.category,
+            "reason": event.reason,
+            "retryable": bool(event.retryable),
+            "fallback_eligible": bool(event.fallback_eligible),
+            # The raw layer, verbatim: an operator grepping the Rust stream sees
+            # Telegram's own answer, not a paraphrase.
+            "raw_exception_class": event.raw_exception_class,
+            "raw_rpc_code": event.raw_rpc_code,
+            "raw_rpc_id": event.raw_rpc_id,
+            "raw_retry_after": event.raw_retry_after,
+            "raw_method": event.raw_method,
+            "source_peer_id": event.source_peer_id,
+            "source_message_id": event.source_message_id,
+            "target_peer_id": event.target_peer_id,
+            "job_id": event.job_id,
+            "worker_id": event.worker_id,
+            # The v19 structured-context column the Rust logger stores.
+            "trace_id": str(event.trace_id or ""),
+            "explanation": event.explanation,
+        }
+        getattr(log_client, level, log_client.info)(
+            "diagnostics", str(event.category or "UNKNOWN"),
+            str(event.event_name or "diagnostic.event"),
+            detail,
+            rule_id=str(event.task_id or ""),
+            user_id=int(event.owner_id or 0),
+            correlation_id=str(event.correlation_id or event.trace_id or ""),
+        )
+    except Exception:
+        # Best effort by construction: the diagnostic row is the source of
+        # truth, and a logger hiccup must never break the delivery path.
+        pass
+
+
 __all__ = [
     "DiagnosticEvent", "build_diagnostic_event", "reason_for", "library_label",
+    "log_diagnostic_event",
     "STAGES", "CATEGORIES", "ST_INGEST", "ST_PARSE", "ST_MEDIA", "ST_ROUTE",
     "ST_ENQUEUE", "ST_CLAIM", "ST_SEND", "ST_FALLBACK", "ST_SYNC", "ST_RECONCILE",
     "C_TELEGRAM_API", "C_PARSING", "C_MEDIA", "C_DELIVERY", "C_PIPELINE",

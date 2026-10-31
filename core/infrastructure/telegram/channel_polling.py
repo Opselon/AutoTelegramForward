@@ -949,9 +949,31 @@ class ChannelPollingService:
                 self._diagnostics_record(event_code, level, message, detail)
             except Exception:
                 pass
+        # And mirror the canonical event to the Rust logger when both are
+        # wired, so the operational dashboards see the same gap cause.
+        if self._diagnostics is not None and self._log_client is not None:
+            try:
+                from .diagnostics_contract import log_diagnostic_event
+                event = self._build_gap_diagnostic(event_code, level, message, detail)
+                if event is not None:
+                    log_diagnostic_event(self._log_client, event)
+            except Exception:
+                pass
 
     def _diagnostics_record(self, event_code: str, level: str, message: str,
                             detail: dict) -> None:
+        """Persist the canonical event for one ingestion-gap event."""
+        event = self._build_gap_diagnostic(event_code, level, message, detail)
+        if event is None:
+            return
+        try:
+            loop = asyncio.get_event_loop()
+            loop.create_task(self._diagnostics.record_event(event))
+        except Exception:
+            pass
+
+    def _build_gap_diagnostic(self, event_code: str, level: str, message: str,
+                              detail: dict):
         """Build the canonical DiagnosticEvent for one ingestion-gap event.
 
         The *cause* of a gap is the mission's §7 requirement: not "missing
@@ -991,11 +1013,7 @@ class ChannelPollingService:
         # error id; keep it verbatim on the raw layer.
         if raw:
             event.raw_rpc_id = str(raw)[:96]
-        try:
-            loop = asyncio.get_event_loop()
-            loop.create_task(self._diagnostics.record_event(event))
-        except Exception:
-            pass
+        return event
 
     async def _open_gaps_below(self, session_id: str, chat_id: str, below: int) -> List[int]:
         """Ids in this channel that are still unaccounted for, at or below ``below``.

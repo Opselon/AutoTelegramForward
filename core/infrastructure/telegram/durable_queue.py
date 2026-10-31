@@ -34,7 +34,8 @@ from .errors import is_restricted_source_error, is_timeout_error, tg_detail, tg_
 from .diagnostics_contract import (
     C_DELIVERY, C_PIPELINE, C_TELEGRAM_API, R_DELIVERY_OUTCOME_UNKNOWN,
     R_TELEGRAM_FLOOD_WAIT, S_COPY, S_NATIVE_FORWARD, S_REUPLOAD,
-    S_TEXT_RECONSTRUCT, strategy_of, strategy_rpc_method,
+    S_TEXT_RECONSTRUCT, log_diagnostic_event, strategy_of,
+    strategy_rpc_method,
 )
 from .failure_policy import classify_failure, error_code, rate_limit_seconds
 from .bot_transport import BotRouteAdapter, BotTransportCache, BotTransportUnsupported
@@ -461,8 +462,16 @@ class DurableQueueManager:
         a fire-and-forget task, and any failure is logged once and swallowed —
         the delivery's own state transition is the authoritative record, this
         is the forensic layer on top of it.
+
+        The event also fans out to the Rust logger (§10): that stream is what
+        the operational dashboards already read, so a failure is visible in
+        both places — the persisted per-attempt row and the live log — without
+        duplicating the business state.
         """
-        if self._diagnostics is None or event is None:
+        if event is None:
+            return
+        log_diagnostic_event(self._log_client, event)
+        if self._diagnostics is None:
             return
         try:
             await self._diagnostics.record_event(event)
