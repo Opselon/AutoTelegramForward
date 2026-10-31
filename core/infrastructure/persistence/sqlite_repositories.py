@@ -2883,6 +2883,13 @@ class SqliteIngestionGapRepository(IIngestionGapRepository):
 
     async def record_gaps(self, session_id: str, source_chat_id: str,
                           message_ids: Sequence[int]) -> int:
+        """Record missing ids as recovery work; return how many were **new**.
+
+        ``INSERT OR IGNORE`` means an id already known (or already terminal)
+        is not rewritten — without returning the genuinely-new count the
+        poller cannot tell "I just found a gap" from "I keep noticing the
+        same one", and logs the same truncation warning every sweep.
+        """
         if not message_ids:
             return 0
         now = int(time.time())
@@ -2892,7 +2899,8 @@ class SqliteIngestionGapRepository(IIngestionGapRepository):
             for mid in message_ids
         ]
         with self._db._lock:
-            self._db._conn.executemany(
+            cur = self._db._conn.cursor()
+            cur.executemany(
                 """
                 INSERT OR IGNORE INTO ingestion_gaps (
                     id, session_id, source_chat_id, source_message_id,
@@ -2902,8 +2910,9 @@ class SqliteIngestionGapRepository(IIngestionGapRepository):
                 """,
                 rows,
             )
+            inserted = int(cur.rowcount or 0)
             self._db._conn.commit()
-        return len(rows)
+        return inserted
 
     async def resolve_gap(self, session_id: str, source_chat_id: str,
                           message_id: int) -> bool:
@@ -2947,6 +2956,28 @@ class SqliteIngestionGapRepository(IIngestionGapRepository):
             """,
             (str(session_id), str(source_chat_id), max(int(limit), 1)),
         )
+        return [dict(r) for r in rows or []]
+
+    async def open_gaps(self, session_id: str, source_chat_id: str,
+                        below: int = 0, limit: int = 100) -> List[dict]:
+        """Still-open recovery work for one channel.
+
+        ``RESOLVED`` and ``FAILED`` are terminal — the post was delivered, or
+        the budget was spent on a post that does not exist — so they no
+        longer count as outstanding and must not hold the poller's cursor.
+        """
+        sql = (
+            "SELECT source_message_id, state, attempts, last_error, created_at "
+            "FROM ingestion_gaps "
+            "WHERE session_id = ? AND source_chat_id = ? AND state IN ('PENDING','RETRYING')"
+        )
+        params: tuple = (str(session_id), str(source_chat_id))
+        if below:
+            sql += " AND source_message_id <= ?"
+            params = params + (int(below),)
+        sql += " ORDER BY source_message_id ASC LIMIT ?"
+        params = params + (max(int(limit), 1),)
+        rows = self._db.query_all(sql, params)
         return [dict(r) for r in rows or []]
 
     async def due_gaps(self, now: float, limit: int = 100) -> List[dict]:

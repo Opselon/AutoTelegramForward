@@ -1015,6 +1015,19 @@ class IIngestionGapRepository(ABC):
         ...
 
     @abstractmethod
+    async def open_gaps(self, session_id: str, source_chat_id: str,
+                        below: int = 0, limit: int = 100) -> List[dict]:
+        """Still-open recovery work for one channel, optionally below an id.
+
+        Terminal states (``RESOLVED`` — the post was delivered, and ``FAILED``
+        — the budget was spent, which means the post is gone and no delivery
+        is owed) are *accounted for*: they must never block the poller's
+        cursor again, or a channel whose gaps are all exhausted spins forever
+        re-requesting ids Telegram will never return.
+        """
+        ...
+
+    @abstractmethod
     async def due_gaps(self, now: float, limit: int = 100) -> List[dict]:
         ...
 

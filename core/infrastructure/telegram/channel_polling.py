@@ -257,6 +257,7 @@ class ChannelPollingService:
         interval: float = POLL_INTERVAL_SECONDS,
         lease_coordinator=None,
         gap_repo=None,
+        log_client=None,
     ) -> None:
         self._pool = pool
         self._rules = rules
@@ -279,6 +280,11 @@ class ChannelPollingService:
         # pre-existing behaviour for every embedding that does not wire it
         # (the cursor still only advances over what the pipeline accepted).
         self._gaps = gap_repo
+        # Central structured logger (optional). Every gap, recovery and poll
+        # failure emits a structured event through it — with the raw Telegram
+        # error attached — so a future operator can answer "why was this gap
+        # created?" end to end instead of grepping stdout.
+        self._log_client = log_client
         # Ordered replay lanes, keyed by (session_id, chat_id). One live lane per
         # polled channel is what guarantees a burst leaves in source order.
         self._lanes: Dict[Tuple[str, str], _OrderedReplayLane] = {}
@@ -415,6 +421,13 @@ class ChannelPollingService:
                         "[POLL GAP] recovered post id=%s from %s — dispatching through the pipeline",
                         mid, chat_id,
                     )
+                    self._emit("info", "INGESTION_GAP_RECOVERED", (
+                        f"channel {chat_id}: gap id={mid} recovered — dispatching through the pipeline"
+                    ), {
+                        "chat_id": str(chat_id), "session_id": str(session_id),
+                        "source_message_id": mid, "raw_error": "",
+                        "retryable": False,
+                    })
                     self._replay_one(client, session_id, raw, users, chats, chat_id=chat_id)
                 # The row is left to the pipeline observer to resolve: only the
                 # pipeline seeing the id proves it was not lost.
@@ -433,6 +446,16 @@ class ChannelPollingService:
                     "marked FAILED (the post is most likely deleted; no delivery is owed)",
                     chat_id, mid, GAP_MAX_ATTEMPTS,
                 )
+                self._emit("error", "INGESTION_GAP_EXHAUSTED", (
+                    f"channel {chat_id}: id={mid} not returned after {GAP_MAX_ATTEMPTS} "
+                    f"attempt(s) — marked FAILED (deleted or service post; no delivery owed)"
+                ), {
+                    "chat_id": str(chat_id), "session_id": str(session_id),
+                    "source_message_id": mid, "attempts": GAP_MAX_ATTEMPTS,
+                    "raw_error": "ID_NOT_RETURNED",
+                    "error_detail": "GetChannelDifference returned no message at this id",
+                    "retryable": False,
+                })
             return 1
         except PollFailure as exc:
             transient = bool(getattr(exc, "transient", False))
@@ -448,6 +471,28 @@ class ChannelPollingService:
                     "[POLL GAP] source %s id=%s permanently unrecoverable after %d attempt(s): %s",
                     chat_id, mid, GAP_MAX_ATTEMPTS, exc,
                 )
+                # Attach the raw API error: an operator reading the central log
+                # sees the Telegram-level cause (the RPC and its message), not
+                # a paraphrase of it.
+                from .errors import extract as _extract_error
+                try:
+                    event = _extract_error(exc, method="updates.GetChannelDifference",
+                                           operation="gap_recovery", chat_id=chat_id,
+                                           session_id=session_id, attempt=attempts)
+                    raw = str(getattr(event, "error_type", "") or "")
+                    raw_msg = str(getattr(event, "error_message", "") or "")[:300]
+                except Exception:
+                    raw, raw_msg = type(exc).__name__, str(exc)[:300]
+                self._emit("error", "INGESTION_GAP_PERMANENT_FAILURE", (
+                    f"channel {chat_id}: id={mid} permanently unrecoverable after "
+                    f"{GAP_MAX_ATTEMPTS} attempt(s): {raw_msg}"
+                ), {
+                    "chat_id": str(chat_id), "session_id": str(session_id),
+                    "source_message_id": mid, "attempts": attempts,
+                    "raw_error": raw or type(exc).__name__,
+                    "error_detail": raw_msg,
+                    "retryable": False,
+                })
             return 1
         except Exception as exc:
             logger.warning("poll: gap recovery for %s id=%s failed: %s", chat_id, mid, exc)
@@ -682,23 +727,48 @@ class ChannelPollingService:
         # cursor itself advances only to the highest id the pipeline accepted.
         missing = self._missing_ids(lo, hi, returned_ids)
         if missing and self._gaps is not None:
+            newly_recorded = 0
             try:
-                recorded = await self._gaps.record_gaps(session_id, chat_id, missing)
+                newly_recorded = await self._gaps.record_gaps(session_id, chat_id, missing)
             except Exception as exc:
-                recorded = 0
                 logger.warning(
                     "[POLL GAP] channel=%s (%s): could not record %d missing id(s) "
                     "as recovery work: %s",
                     chat_name or chat_id, chat_id, len(missing), exc,
                 )
-            else:
+            if newly_recorded > 0:
+                # Only *newly discovered* truncation is a warning. Re-noticing
+                # the same ids every sweep is not news — the gap sweep already
+                # owns them, and logging it again only hides real signal.
                 logger.warning(
                     "[POLL GAP] channel=%s (%s): difference returned %d of the %d id(s) "
-                    "requested [%d..%d]; %d id(s) missing (%s) recorded as durable "
-                    "recovery work — the cursor will not advance past them",
+                    "requested [%d..%d]; %d new id(s) missing (%s) recorded as durable "
+                    "recovery work",
                     chat_name or chat_id, chat_id, len(returned_ids),
-                    hi - lo + 1, lo, hi, len(missing),
+                    hi - lo + 1, lo, hi, newly_recorded,
                     self._describe_missing(missing),
+                )
+                self._emit("warn", "INGESTION_GAP_CREATED", (
+                    f"channel {chat_id}: GetChannelDifference returned {len(returned_ids)} "
+                    f"of {hi - lo + 1} requested id(s) [{lo}..{hi}]; "
+                    f"{newly_recorded} recorded as durable recovery work"
+                ), {
+                    "chat_id": str(chat_id), "chat_name": str(chat_name or ""),
+                    "session_id": str(session_id),
+                    "requested_range": f"{lo}..{hi}",
+                    "returned_count": int(len(returned_ids)),
+                    "missing_ids": [int(i) for i in missing[:20]],
+                    "missing_count": int(newly_recorded),
+                    "raw_error": "DIFFERENCE_TRUNCATED",
+                    "retryable": True,
+                })
+            elif missing:
+                # Known gaps: trace-level, not a warning, so the poller is
+                # quiet while the sweep works.
+                logger.info(
+                    "[POLL GAP] channel=%s (%s): %d missing id(s) already recorded as "
+                    "recovery work; leaving them to the gap sweep",
+                    chat_name or chat_id, chat_id, len(missing),
                 )
         elif missing:
             # No gap store wired: report the truncation loudly rather than
@@ -714,10 +784,31 @@ class ChannelPollingService:
         if not messages:
             # Nothing was returned. Keep the cursor moving so an empty
             # difference does not refetch — but never past ids we have not
-            # accounted for: if gaps are pending for this channel, hold the
-            # cursor at the oldest unresolved gap so the sweep keeps retrying.
+            # accounted for. A gap that is still *open* (PENDING/RETRYING)
+            # owns the id: hold the cursor at the oldest open one so the sweep
+            # keeps retrying. A *terminal* gap (RESOLVED — the post was
+            # delivered; FAILED — the budget was spent, so the post is gone
+            # and no delivery is owed) is accounted for: advancing over it is
+            # correct, and refusing to is what made a channel with exhausted
+            # gaps re-request the same ids forever.
             if missing and self._gaps is not None:
-                pass  # do not advance; the gap sweep owns these ids now
+                open_below = await self._open_gaps_below(session_id, chat_id, hi)
+                if open_below:
+                    # Do not advance past the oldest still-open gap; the sweep
+                    # owns it. Log it once at the *recovery* end, not here, so
+                    # the poller is quiet while the sweep works.
+                    logger.info(
+                        "[POLL GAP] channel=%s (%s): %d of %d missing id(s) still open, "
+                        "holding the cursor at %s for the gap sweep",
+                        chat_name or chat_id, chat_id, len(open_below), len(missing),
+                        open_below[0],
+                    )
+                else:
+                    # Every missing id is terminal (RESOLVED or FAILED): the
+                    # work is done, and the cursor must move on or this poll
+                    # re-asks for the same ids every sweep forever.
+                    self._state[chat_id] = top
+                    await self._persist_cursors()
             else:
                 self._state[chat_id] = top
                 await self._persist_cursors()
@@ -832,6 +923,47 @@ class ChannelPollingService:
     # ------------------------------------------------------------------ #
     # Truncated-difference detection (audit finding #1)
     # ------------------------------------------------------------------ #
+    def _emit(self, level: str, event_code: str, message: str, detail: dict) -> None:
+        """Send one structured event to the central logger, best effort.
+
+        Diagnostics must never break the poller: a logger outage turns into a
+        dropped record (the ``LogClient`` itself is bounded and counts what it
+        drops), never into a missed source message.
+        """
+        if self._log_client is None:
+            return
+        try:
+            getattr(self._log_client, level, self._log_client.info)(
+                "ingestion", "poll", message, {**detail, "event_code": event_code},
+            )
+        except Exception:
+            pass
+
+    async def _open_gaps_below(self, session_id: str, chat_id: str, below: int) -> List[int]:
+        """Ids in this channel that are still unaccounted for, at or below ``below``.
+
+        Terminal gap states are excluded on purpose: a ``RESOLVED`` row means
+        the pipeline delivered the post and a ``FAILED`` row means the
+        recovery budget was spent on a post that does not exist (deleted or
+        service). Both are *accounted for*, so neither may hold the cursor —
+        otherwise a channel whose gaps are all exhausted polls the same
+        range every sweep and logs the same warning forever.
+        """
+        if self._gaps is None:
+            return []
+        try:
+            rows = await self._gaps.open_gaps(session_id, chat_id, below=int(below))
+        except Exception as exc:
+            logger.warning(
+                "[POLL GAP] channel=%s (%s): could not read open gaps (%s); "
+                "holding the cursor so no id is skipped",
+                chat_id, chat_id, exc,
+            )
+            # Fail closed: if the read is impossible, do not advance past ids
+            # we cannot account for.
+            return [-1]
+        return [int(r.get("source_message_id") or 0) for r in rows or ()]
+
     @staticmethod
     def _missing_ids(lo: int, hi: int, returned_ids: List[int]) -> List[int]:
         """Ids the sweep asked for but the difference did not return.

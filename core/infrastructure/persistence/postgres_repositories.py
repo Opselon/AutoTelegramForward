@@ -1690,8 +1690,11 @@ class PostgresIngestionGapRepository(IIngestionGapRepository):
         ]
         # One statement per row keeps the ON CONFLICT semantics identical to the
         # SQLite helper; the batch is small (one poll sweep's worth of ids).
+        # Return the genuinely-new count, so the poller can tell a *new* gap
+        # from one it keeps re-noticing and only warn about the former.
+        inserted = 0
         for r in rows:
-            await _execute_db(
+            res = await _execute_db(
                 self._db,
                 """
                 INSERT INTO ingestion_gaps (
@@ -1703,7 +1706,16 @@ class PostgresIngestionGapRepository(IIngestionGapRepository):
                 """,
                 r,
             )
-        return len(rows)
+            count = getattr(res, "rowcount", None)
+            if isinstance(count, int) and count > 0:
+                inserted += count
+            elif isinstance(res, str) and res.startswith("INSERT"):
+                # The asyncpg-style "INSERT 0 1" text form also carries it.
+                try:
+                    inserted += int(res.split()[-1])
+                except Exception:
+                    pass
+        return inserted
 
     async def resolve_gap(self, session_id: str, source_chat_id: str,
                           message_id: int) -> bool:
@@ -1744,6 +1756,31 @@ class PostgresIngestionGapRepository(IIngestionGapRepository):
             """,
             (str(session_id), str(source_chat_id), max(int(limit), 1)),
         )
+        return [dict(r) if hasattr(r, "keys") else dict(zip(
+            ("source_message_id", "state", "attempts", "last_error", "created_at"), r
+        )) for r in rows or []]
+
+    async def open_gaps(self, session_id: str, source_chat_id: str,
+                        below: int = 0, limit: int = 100) -> List[dict]:
+        """Still-open recovery work for one channel.
+
+        Mirror of the SQLite repository: terminal states (``RESOLVED``,
+        ``FAILED``) are accounted for and therefore excluded, so an exhausted
+        gap cannot hold the poller's cursor forever.
+        """
+        sql = (
+            "SELECT source_message_id, state, attempts, last_error, created_at "
+            "FROM ingestion_gaps "
+            "WHERE session_id = %s AND source_chat_id = %s "
+            "AND state IN ('PENDING','RETRYING')"
+        )
+        params: tuple = (str(session_id), str(source_chat_id))
+        if below:
+            sql += " AND source_message_id <= %s"
+            params = params + (int(below),)
+        sql += " ORDER BY source_message_id ASC LIMIT %s"
+        params = params + (max(int(limit), 1),)
+        rows = await _fetch_all_db(self._db, sql, params)
         return [dict(r) if hasattr(r, "keys") else dict(zip(
             ("source_message_id", "state", "attempts", "last_error", "created_at"), r
         )) for r in rows or []]

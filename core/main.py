@@ -949,6 +949,9 @@ async def main() -> None:
             # Audit finding #1: unreturned ids become durable recovery work
             # that this poller re-fetches with bounded backoff.
             gap_repo=container["gap_repo"],
+            # Structured emission of every gap/recovery event (with the raw
+            # Telegram error attached) into the central log.
+            log_client=container.get("log_client"),
         )
         await poller.start()
         container["channel_poller"] = poller
