@@ -1173,4 +1173,6 @@ export const fa: Catalog = {
   "ui_filter_verdict_dropped": "حذف شد",
   "ui_filter_matched_entries": "تطبیق‌ها: {list}",
   "ui_filter_missing_entries": "یافت‌نشده: {list}",
+  "ui_theme_switch_to_light": "تغییر به تم روشن",
+  "ui_theme_switch_to_dark": "تغییر به تم تاریک",
 }

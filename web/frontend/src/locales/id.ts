@@ -1173,4 +1173,6 @@ export const id: Catalog = {
   "ui_filter_verdict_dropped": "DIBUANG",
   "ui_filter_matched_entries": "Cocok: {list}",
   "ui_filter_missing_entries": "Tidak ada: {list}",
+  "ui_theme_switch_to_light": "Beralih ke tema terang",
+  "ui_theme_switch_to_dark": "Beralih ke tema gelap",
 }

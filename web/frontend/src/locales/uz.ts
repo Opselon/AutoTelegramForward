@@ -1173,4 +1173,6 @@ export const uz: Catalog = {
   "ui_filter_verdict_dropped": "TASHLAB KETILGAN",
   "ui_filter_matched_entries": "Moslar: {list}",
   "ui_filter_missing_entries": "Yetishmayapti: {list}",
+  "ui_theme_switch_to_light": "Yorugʻ mavzuga oʻtish",
+  "ui_theme_switch_to_dark": "Tungi mavzuga oʻtish",
 }

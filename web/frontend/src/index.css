@@ -2,26 +2,12 @@
 
 
 :root {
-  --bg-main: #0b0f19;
-  --bg-card: rgba(18, 24, 38, 0.75);
-  --bg-card-hover: rgba(24, 32, 52, 0.85);
-  --bg-input: #0f172a;
-  --border-color: rgba(255, 255, 255, 0.08);
-  --border-glow: rgba(99, 102, 241, 0.3);
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --vip-gold: #f59e0b;
-  --vip-glow: rgba(245, 158, 11, 0.35);
-  --direct-blue: #3b82f6;
-  --native-green: #10b981;
-  --danger: #ef4444;
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
+  /* Palette, spacing and elevation all live in the design-system token
+     block further down; this early block only carries what that block does
+     not define (the font stacks) plus the same legacy aliases the first
+     paint needs before the async sheet below finishes applying. */
   --font-sans: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', monospace;
 }
 
 * {
@@ -31,15 +17,21 @@
 }
 
 body {
-  background-color: var(--bg-main);
-  background-image: 
-    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.12) 0px, transparent 50%),
-    radial-gradient(at 100% 100%, rgba(245, 158, 11, 0.08) 0px, transparent 50%);
-  color: var(--text-main);
+  background-color: var(--color-bg);
+  /* Control-room ambience: one cool indigo bloom up top, a violet one at the
+     far corner, both token-driven so the light theme can quiet them down. */
+  background-image: var(--bg-ambient);
+  color: var(--color-text);
   font-family: var(--font-sans);
   min-height: 100vh;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--color-primary) 38%, transparent);
+  color: var(--color-text);
 }
 
 #root {
@@ -51,7 +43,7 @@ body {
   flex-direction: column;
 }
 
-/* Glassmorphism containers */
+/* Glassmorphism containers — the Card primitive's pre-primitive spelling. */
 .glass-panel {
   background: var(--bg-card);
   backdrop-filter: blur(16px);
@@ -62,7 +54,7 @@ body {
 }
 
 .glass-panel:hover {
-  border-color: rgba(255, 255, 255, 0.15);
+  border-color: color-mix(in oklab, var(--color-text) 16%, transparent);
 }
 
 /* Custom scrollbars */
@@ -71,14 +63,14 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bg-main);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: var(--color-scrollbar);
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: color-mix(in oklab, var(--color-text-muted) 55%, transparent);
 }
 
 /* RTL Helpers */
@@ -102,28 +94,28 @@ body {
 }
 
 .badge-vip {
-  background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.4);
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+  border: 1px solid color-mix(in oklab, var(--color-warning) 40%, transparent);
   box-shadow: 0 0 12px var(--vip-glow);
 }
 
 .badge-direct {
-  background: rgba(59, 130, 246, 0.15);
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.4);
+  background: var(--color-info-soft);
+  color: var(--color-info);
+  border: 1px solid color-mix(in oklab, var(--color-info) 40%, transparent);
 }
 
 .badge-native {
-  background: rgba(16, 185, 129, 0.15);
-  color: #34d399;
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  background: var(--color-success-soft);
+  color: var(--color-success);
+  border: 1px solid color-mix(in oklab, var(--color-success) 40%, transparent);
 }
 
 .badge-gray {
-  background: rgba(148, 163, 184, 0.1);
-  color: #cbd5e1;
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: var(--color-neutral-soft);
+  color: var(--color-text-subtle);
+  border: 1px solid var(--color-border);
 }
 
 /* Buttons */
@@ -144,8 +136,8 @@ body {
 
 .btn-primary {
   background: var(--primary);
-  color: #ffffff;
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  color: var(--color-on-accent);
+  box-shadow: var(--shadow-glow-primary);
 }
 .btn-primary:hover {
   background: var(--primary-hover);
@@ -153,32 +145,32 @@ body {
 }
 
 .btn-secondary {
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--color-neutral-soft);
   color: var(--text-main);
   border-color: var(--border-color);
 }
 .btn-secondary:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--color-hover-wash);
+  border-color: var(--color-border-strong);
 }
 
 .btn-vip {
-  background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.5);
+  background: color-mix(in oklab, var(--color-warning) 18%, transparent);
+  color: var(--color-warning);
+  border: 1px solid color-mix(in oklab, var(--color-warning) 50%, transparent);
 }
 .btn-vip:hover {
-  background: rgba(245, 158, 11, 0.3);
-  box-shadow: 0 0 16px rgba(245, 158, 11, 0.3);
+  background: color-mix(in oklab, var(--color-warning) 28%, transparent);
+  box-shadow: 0 0 16px var(--vip-glow);
 }
 
 .btn-danger {
-  background: rgba(239, 68, 68, 0.15);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+  border: 1px solid color-mix(in oklab, var(--color-danger) 30%, transparent);
 }
 .btn-danger:hover {
-  background: rgba(239, 68, 68, 0.25);
+  background: color-mix(in oklab, var(--color-danger) 25%, transparent);
 }
 
 .input-field {
@@ -196,7 +188,7 @@ body {
 
 .input-field:focus {
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--color-primary) 20%, transparent);
 }
 
 /* ------------------------------------------------------------------ */
@@ -431,7 +423,7 @@ textarea {
     justify-content: space-between !important;
     gap: 8px !important;
     text-align: left !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-top: 1px solid var(--color-border) !important;
   }
 
   /* Route switch: 3 equal buttons, labels never truncate */
@@ -512,8 +504,8 @@ textarea {
     padding-top: 12px !important;
     display: flex !important;
     gap: 8px !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-    background: rgba(11, 15, 25, 0.9) !important;
+    border-top: 1px solid var(--color-border) !important;
+    background: color-mix(in srgb, var(--color-bg) 92%, transparent) !important;
   }
   .modal-sheet-actions .btn {
     flex: 1 !important;
@@ -648,10 +640,10 @@ textarea {
   --dur-fast: 120ms;
   --dur-base: 200ms;
   --dur-slow: 320ms;
-  --focus-ring: 0 0 0 3px rgba(99, 102, 241, 0.45);
-  --success: #10b981;
-  --warning: #f59e0b;
-  --critical: #ef4444;
+  --focus-ring: 0 0 0 3px var(--color-focus);
+  --success: var(--color-success);
+  --warning: var(--color-warning);
+  --critical: var(--color-danger);
 }
 
 /* Keyboard users need a visible ring; mouse users should not see one. */
@@ -662,7 +654,7 @@ textarea {
 }
 
 ::selection {
-  background: rgba(99, 102, 241, 0.35);
+  background: color-mix(in oklab, var(--color-primary) 35%, transparent);
   color: #fff;
 }
 
@@ -700,7 +692,7 @@ textarea {
 
 /* Brand gradient text for headings / KPI numbers. */
 .text-gradient {
-  background: linear-gradient(135deg, #6366f1, #06b6d4);
+  background: var(--gradient-brand);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -710,7 +702,7 @@ textarea {
 .skeleton {
   position: relative;
   overflow: hidden;
-  background: rgba(148, 163, 184, 0.12);
+  background: var(--color-neutral-soft);
   border-radius: var(--radius-sm);
 }
 
@@ -722,7 +714,7 @@ textarea {
   background: linear-gradient(
     90deg,
     transparent,
-    rgba(255, 255, 255, 0.08),
+    color-mix(in oklab, var(--color-text) 8%, transparent),
     transparent
   );
   animation: shimmer 1.4s infinite;
@@ -756,13 +748,13 @@ textarea {
 }
 
 .preflight--healthy {
-  border-color: rgba(16, 185, 129, 0.4);
+  border-color: color-mix(in oklab, var(--color-success) 40%, transparent);
 }
 .preflight--warning {
-  border-color: rgba(245, 158, 11, 0.4);
+  border-color: color-mix(in oklab, var(--color-warning) 40%, transparent);
 }
 .preflight--critical {
-  border-color: rgba(239, 68, 68, 0.45);
+  border-color: color-mix(in oklab, var(--color-danger) 45%, transparent);
 }
 
 .preflight-head {
@@ -806,15 +798,15 @@ textarea {
 }
 
 .preflight-chip--up {
-  background: rgba(16, 185, 129, 0.14);
+  background: var(--color-success-soft);
   color: var(--success);
-  border-color: rgba(16, 185, 129, 0.3);
+  border-color: color-mix(in oklab, var(--color-success) 30%, transparent);
 }
 
 .preflight-chip--down {
-  background: rgba(239, 68, 68, 0.14);
+  background: var(--color-danger-soft);
   color: var(--critical);
-  border-color: rgba(239, 68, 68, 0.35);
+  border-color: color-mix(in oklab, var(--color-danger) 35%, transparent);
 }
 
 .preflight-findings {
@@ -825,7 +817,7 @@ textarea {
 
 .finding {
   border-left: 3px solid var(--border-color);
-  background: rgba(2, 6, 23, 0.5);
+  background: var(--color-surface-inset);
   border-radius: var(--radius-sm);
   padding: 9px 12px;
 }
@@ -956,13 +948,13 @@ textarea {
   opacity: 0.85;
   padding: 2px 8px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
+  background: var(--color-neutral-soft);
 }
 .syspanel-hero-sub {
   margin-top: var(--space-sm);
   font-size: 0.82rem;
   max-width: 60ch;
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--color-text-subtle);
 }
 .syspanel-hero-stats {
   display: flex;
@@ -975,16 +967,16 @@ textarea {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--color-text-subtle);
 }
 .syspanel-hero-stats strong {
   font-variant-numeric: tabular-nums;
 }
 .syspanel-refresh {
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: var(--color-neutral-soft);
+  color: var(--color-text);
+  border: 1px solid var(--color-border-strong);
 }
 .syspanel-warning,
 .syspanel-empty {
@@ -996,8 +988,8 @@ textarea {
   font-size: 0.82rem;
 }
 .syspanel-warning {
-  background: rgba(245, 158, 11, 0.12);
-  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: var(--color-warning-soft);
+  border: 1px solid color-mix(in oklab, var(--color-warning) 35%, transparent);
   color: var(--warning);
 }
 .syspanel-empty {
@@ -1079,9 +1071,9 @@ textarea {
   font-size: var(--type-xs);
   padding: 3px 10px;
   border-radius: 999px;
-  background: rgba(99, 102, 241, 0.14);
-  border: 1px solid rgba(99, 102, 241, 0.35);
-  color: #a5b4fc;
+  background: var(--color-primary-soft);
+  border: 1px solid color-mix(in oklab, var(--color-primary) 35%, transparent);
+  color: var(--color-primary-strong);
 }
 .syspanel-contract {
   display: flex;
@@ -1095,11 +1087,11 @@ textarea {
 }
 .syspanel-check.is-set {
   border-inline-start-color: var(--success);
-  background: rgba(16, 185, 129, 0.05);
+  background: color-mix(in oklab, var(--color-success) 5%, transparent);
 }
 .syspanel-check.is-unset {
   border-inline-start-color: var(--warning);
-  background: rgba(245, 158, 11, 0.06);
+  background: color-mix(in oklab, var(--color-warning) 6%, transparent);
 }
 .syspanel-check-head {
   display: flex;
@@ -1167,33 +1159,52 @@ textarea {
 /* ==================================================================== */
 
 :root {
-  /* ---- colour, by role (never by hex in a component) ---- */
-  --color-bg: #0b0f19;
-  --color-surface: #121826;
-  --color-surface-2: rgba(18, 24, 38, 0.75);
-  --color-surface-3: rgba(24, 32, 52, 0.85);
-  --color-surface-inset: #0f172a;
-  --color-border: rgba(255, 255, 255, 0.08);
-  --color-border-strong: rgba(255, 255, 255, 0.18);
-  --color-text: #f8fafc;
-  --color-text-muted: #94a3b8;
-  --color-text-subtle: #cbd5e1;
-  --color-primary: #6366f1;
-  --color-primary-hover: #4f46e5;
-  --color-primary-soft: rgba(99, 102, 241, 0.15);
-  --color-success: #10b981;
-  --color-success-soft: rgba(16, 185, 129, 0.15);
-  --color-warning: #f59e0b;
-  --color-warning-soft: rgba(245, 158, 11, 0.15);
-  --color-danger: #ef4444;
-  --color-danger-soft: rgba(239, 68, 68, 0.15);
+  /* ---- colour, by role (never by hex in a component) ----
+     "Ops Control-Room" (2026-10 refresh): deeper ink, a brighter indigo that
+     survives on dark surfaces, one violet partner for the brand gradient, and
+     status hues tuned per theme for contrast instead of shared between both.
+     Accent *borders/glows* are never stored: components derive them with
+     color-mix() so a theme change restyles every derived shade at once. */
+  color-scheme: dark;
+  --color-bg: #070b15;
+  --color-surface: #0e1424;
+  --color-surface-2: rgba(15, 21, 37, 0.84);
+  --color-surface-3: rgba(27, 36, 57, 0.92);
+  --color-surface-inset: #0a101f;
+  --color-border: rgba(139, 152, 175, 0.15);
+  --color-border-strong: rgba(139, 152, 175, 0.32);
+  --color-text: #edf2fb;
+  --color-text-muted: #8b99af;
+  --color-text-subtle: #c4cedc;
+  --color-primary: #6e7bff;
+  --color-primary-hover: #5a67f3;
+  /* The legible-on-dark shade for text/icons sitting on a primary-soft wash. */
+  --color-primary-strong: #98a2ff;
+  --color-primary-soft: rgba(110, 123, 255, 0.14);
+  --color-accent-violet: #b26bff;
+  --color-success: #34d399;
+  --color-success-soft: rgba(52, 211, 153, 0.13);
+  --color-warning: #f5b841;
+  --color-warning-soft: rgba(245, 184, 65, 0.14);
+  --color-danger: #f87171;
+  --color-danger-soft: rgba(248, 113, 113, 0.13);
   --color-danger-text: #fca5a5;
   --color-on-accent: #ffffff;
-  --color-info: #38bdf8;
-  --color-info-soft: rgba(56, 189, 248, 0.15);
-  --color-neutral-soft: rgba(148, 163, 184, 0.12);
-  --color-focus: rgba(99, 102, 241, 0.45);
-  --color-scrim: rgba(3, 7, 18, 0.66);
+  --color-info: #59c2f0;
+  --color-info-soft: rgba(89, 194, 240, 0.13);
+  --color-neutral-soft: rgba(139, 152, 175, 0.12);
+  --color-hover-wash: rgba(139, 152, 175, 0.09);
+  --color-focus: rgba(110, 123, 255, 0.55);
+  --color-scrim: rgba(4, 8, 18, 0.7);
+  --color-scrollbar: rgba(139, 152, 175, 0.35);
+
+  /* ---- brand surfaces ---- */
+  --gradient-brand: linear-gradient(135deg, var(--color-primary) 0%, var(--color-accent-violet) 100%);
+  --bg-ambient:
+    radial-gradient(1100px 520px at 6% -10%, rgba(110, 123, 255, 0.13), transparent 56%),
+    radial-gradient(950px 500px at 104% 110%, rgba(178, 107, 255, 0.09), transparent 56%),
+    radial-gradient(720px 420px at 55% -18%, rgba(89, 194, 240, 0.05), transparent 60%);
+  --hairline-top: linear-gradient(90deg, transparent, color-mix(in oklab, var(--color-primary) 55%, transparent), transparent);
 
   /* ---- spacing: one 4px-based scale, space-1..6 ---- */
   --space-1: 4px;
@@ -1218,10 +1229,11 @@ textarea {
   --type-xl: 24px;
   --type-2xl: 32px;
 
-  /* ---- elevation ---- */
-  --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.28);
-  --shadow-2: 0 8px 24px rgba(0, 0, 0, 0.34);
-  --shadow-3: 0 24px 64px rgba(0, 0, 0, 0.46);
+  /* ---- elevation: deeper than v1, tinted towards the bg instead of black ---- */
+  --shadow-1: 0 1px 2px rgba(3, 7, 15, 0.4), 0 1px 3px rgba(3, 7, 15, 0.22);
+  --shadow-2: 0 10px 28px rgba(3, 7, 15, 0.44), 0 2px 8px rgba(3, 7, 15, 0.28);
+  --shadow-3: 0 28px 72px rgba(3, 7, 15, 0.55), 0 8px 20px rgba(3, 7, 15, 0.35);
+  --shadow-glow-primary: 0 4px 18px rgba(110, 123, 255, 0.28);
 
   /* ---- motion ---- */
   --motion-fast: 120ms;
@@ -1254,11 +1266,11 @@ textarea {
   --bg-card-hover: var(--color-surface-3);
   --bg-input: var(--color-surface-inset);
   --border-color: var(--color-border);
-  --border-glow: rgba(99, 102, 241, 0.3);
+  --border-glow: color-mix(in oklab, var(--color-primary) 45%, transparent);
   --primary: var(--color-primary);
   --primary-hover: var(--color-primary-hover);
   --vip-gold: var(--color-warning);
-  --vip-glow: rgba(245, 158, 11, 0.35);
+  --vip-glow: color-mix(in oklab, var(--color-warning) 35%, transparent);
   --direct-blue: #3b82f6;
   --native-green: var(--color-success);
   --danger: var(--color-danger);
@@ -1275,6 +1287,55 @@ textarea {
   --dur-fast: var(--motion-fast);
   --dur-base: var(--motion-base);
   --dur-slow: var(--motion-slow);
+}
+
+/* ---------------------------------------------------------------- light ---
+   The operator's theme, not a compromise: same roles, same structure, only
+   the values move. Surfaces go engineering-paper, accents darken until body
+   text set in them clears 4.5:1 on their soft washes, and the ambience quiets
+   down to a hint so the data, not the décor, carries the contrast. */
+[data-theme='light'] {
+  color-scheme: light;
+  --color-bg: #f2f4f9;
+  --color-surface: #ffffff;
+  --color-surface-2: rgba(255, 255, 255, 0.9);
+  --color-surface-3: #f6f8fc;
+  --color-surface-inset: #ebeef6;
+  --color-border: rgba(23, 32, 54, 0.14);
+  --color-border-strong: rgba(23, 32, 54, 0.3);
+  --color-text: #172033;
+  --color-text-muted: #5d6b84;
+  --color-text-subtle: #3b475e;
+  --color-primary: #4c5ae8;
+  --color-primary-hover: #3d49d8;
+  --color-primary-strong: #3d49d8;
+  --color-primary-soft: rgba(76, 90, 232, 0.1);
+  --color-accent-violet: #9a4df2;
+  --color-success: #0e9f6e;
+  --color-success-soft: rgba(14, 159, 110, 0.12);
+  --color-warning: #b45309;
+  --color-warning-soft: rgba(217, 119, 6, 0.13);
+  --color-danger: #dc2626;
+  --color-danger-soft: rgba(220, 38, 38, 0.1);
+  --color-danger-text: #b91c1c;
+  --color-info: #0369a1;
+  --color-info-soft: rgba(2, 132, 199, 0.1);
+  --color-neutral-soft: rgba(23, 32, 54, 0.07);
+  --color-hover-wash: rgba(23, 32, 54, 0.05);
+  --color-focus: rgba(76, 90, 232, 0.5);
+  --color-scrim: rgba(15, 23, 42, 0.42);
+  --color-scrollbar: rgba(23, 32, 54, 0.26);
+
+  --gradient-brand: linear-gradient(135deg, #4c5ae8 0%, #9a4df2 100%);
+  --bg-ambient:
+    radial-gradient(1100px 520px at 6% -10%, rgba(76, 90, 232, 0.07), transparent 56%),
+    radial-gradient(950px 500px at 104% 110%, rgba(154, 77, 242, 0.05), transparent 56%);
+  --hairline-top: linear-gradient(90deg, transparent, color-mix(in oklab, var(--color-primary) 40%, transparent), transparent);
+
+  --shadow-1: 0 1px 2px rgba(23, 32, 54, 0.06), 0 1px 3px rgba(23, 32, 54, 0.05);
+  --shadow-2: 0 10px 28px rgba(23, 32, 54, 0.12), 0 2px 8px rgba(23, 32, 54, 0.06);
+  --shadow-3: 0 28px 72px rgba(23, 32, 54, 0.18), 0 8px 20px rgba(23, 32, 54, 0.08);
+  --shadow-glow-primary: 0 4px 16px rgba(76, 90, 232, 0.2);
 }
 
 /* ------------------------------------------------------------- base ---- */
@@ -1450,7 +1511,7 @@ p {
 
 .nav-item.is-active {
   background: var(--color-primary-soft);
-  border-color: rgba(99, 102, 241, 0.4);
+  border-color: color-mix(in oklab, var(--color-primary) 40%, transparent);
   color: var(--color-text);
 }
 
@@ -1567,7 +1628,7 @@ p {
 .btn--primary {
   background: var(--color-primary);
   color: var(--color-on-accent);
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.2);
+  box-shadow: 0 4px 14px color-mix(in oklab, var(--color-primary) 20%, transparent);
 }
 .btn--primary:hover:not(:disabled) {
   background: var(--color-primary-hover);
@@ -1579,17 +1640,17 @@ p {
   border-color: var(--color-border);
 }
 .btn--ghost:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.14);
+  background: color-mix(in oklab, var(--color-text) 10%, transparent);
   border-color: var(--color-border-strong);
 }
 
 .btn--danger {
   background: var(--color-danger-soft);
   color: var(--color-danger-text);
-  border-color: rgba(239, 68, 68, 0.4);
+  border-color: color-mix(in oklab, var(--color-danger) 40%, transparent);
 }
 .btn--danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.28);
+  background: color-mix(in oklab, var(--color-danger) 28%, transparent);
 }
 
 .btn--link {
@@ -1637,28 +1698,28 @@ p {
 }
 
 .field--invalid .input-field {
-  border-color: rgba(239, 68, 68, 0.6);
+  border-color: color-mix(in oklab, var(--color-danger) 60%, transparent);
 }
 
 .badge--success {
   background: var(--color-success-soft);
   color: var(--color-success);
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  border: 1px solid color-mix(in oklab, var(--color-success) 40%, transparent);
 }
 .badge--warning {
   background: var(--color-warning-soft);
   color: var(--color-warning);
-  border: 1px solid rgba(245, 158, 11, 0.4);
+  border: 1px solid color-mix(in oklab, var(--color-warning) 40%, transparent);
 }
 .badge--danger {
   background: var(--color-danger-soft);
   color: var(--color-danger-text);
-  border: 1px solid rgba(239, 68, 68, 0.4);
+  border: 1px solid color-mix(in oklab, var(--color-danger) 40%, transparent);
 }
 .badge--info {
   background: var(--color-info-soft);
   color: var(--color-info);
-  border: 1px solid rgba(56, 189, 248, 0.4);
+  border: 1px solid color-mix(in oklab, var(--color-info) 40%, transparent);
 }
 .badge--neutral {
   background: var(--color-neutral-soft);
@@ -1761,7 +1822,7 @@ p {
   gap: var(--space-2);
   padding: var(--space-3) var(--space-4);
   background: var(--color-surface-3);
-  border: 1px solid rgba(99, 102, 241, 0.5);
+  border: 1px solid color-mix(in oklab, var(--color-primary) 50%, transparent);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-2);
   color: var(--color-text);
@@ -2092,7 +2153,7 @@ input[type='radio']:disabled {
   margin-block-end: var(--space-4);
   border-radius: var(--radius-md);
   background: var(--color-danger-soft);
-  border: 1px solid rgba(239, 68, 68, 0.35);
+  border: 1px solid color-mix(in oklab, var(--color-danger) 35%, transparent);
   font-size: var(--type-sm);
   color: var(--color-danger-text);
 }
@@ -2117,13 +2178,13 @@ input[type='radio']:disabled {
   block-size: 7px;
   border-radius: var(--radius-full);
   background: var(--color-danger);
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+  box-shadow: 0 0 8px color-mix(in oklab, var(--color-danger) 60%, transparent);
   flex-shrink: 0;
 }
 
 .header-chip__dot.is-online {
   background: var(--color-success);
-  box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+  box-shadow: 0 0 8px color-mix(in oklab, var(--color-success) 60%, transparent);
 }
 
 /* "Not probed yet" is not "down": a grey dot, no glow, so a first paint
@@ -2255,7 +2316,7 @@ input[type='radio']:disabled {
   align-items: center;
   gap: var(--space-2);
   background: var(--color-danger-soft);
-  border: 1px solid rgba(239, 68, 68, 0.5);
+  border: 1px solid color-mix(in oklab, var(--color-danger) 50%, transparent);
   color: var(--color-danger-text);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
@@ -2270,7 +2331,7 @@ input[type='radio']:disabled {
   cursor: pointer;
   font-size: var(--type-sm);
   color: var(--color-text-subtle);
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in oklab, var(--color-text) 4%, transparent);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
@@ -2280,7 +2341,7 @@ input[type='radio']:disabled {
   margin-block-start: var(--space-2);
   padding: var(--space-2) var(--space-3);
   background: var(--color-warning-soft);
-  border: 1px dashed rgba(245, 158, 11, 0.35);
+  border: 1px dashed color-mix(in oklab, var(--color-warning) 35%, transparent);
   border-radius: var(--radius-sm);
   font-size: var(--type-xs);
   color: var(--color-warning);
@@ -2355,7 +2416,7 @@ input[type='radio']:disabled {
 
 .filter-media-chip.is-on {
   background: var(--color-primary-soft);
-  border-color: rgba(99, 102, 241, 0.5);
+  border-color: color-mix(in oklab, var(--color-primary) 50%, transparent);
   color: var(--color-text);
 }
 
@@ -2372,12 +2433,12 @@ input[type='radio']:disabled {
 }
 
 .filter-verdict--allowed {
-  border-color: rgba(16, 185, 129, 0.45);
+  border-color: color-mix(in oklab, var(--color-success) 45%, transparent);
   background: var(--color-success-soft);
 }
 
 .filter-verdict--dropped {
-  border-color: rgba(239, 68, 68, 0.45);
+  border-color: color-mix(in oklab, var(--color-danger) 45%, transparent);
   background: var(--color-danger-soft);
 }
 
@@ -2465,7 +2526,7 @@ input[type='radio']:disabled {
 /* Slim scrollbars in token colours (Firefox + WebKit). */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+  scrollbar-color: color-mix(in oklab, var(--color-text-muted) 40%, transparent) transparent;
 }
 ::-webkit-scrollbar {
   inline-size: 8px;
@@ -2475,11 +2536,11 @@ input[type='radio']:disabled {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.35);
+  background: color-mix(in oklab, var(--color-text-muted) 35%, transparent);
   border-radius: var(--radius-full);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.55);
+  background: color-mix(in oklab, var(--color-text-muted) 55%, transparent);
 }
 
 /* Press feedback: every button and pressed card dips slightly. */
@@ -2515,20 +2576,20 @@ input[type='radio']:disabled {
 
 /* Toast severity accents: left edge + dot take the severity colour. */
 .toast--success {
-  border-color: rgba(16, 185, 129, 0.5);
+  border-color: color-mix(in oklab, var(--color-success) 50%, transparent);
   border-inline-start: 3px solid var(--color-success);
 }
 .toast--danger {
-  border-color: rgba(239, 68, 68, 0.5);
+  border-color: color-mix(in oklab, var(--color-danger) 50%, transparent);
   border-inline-start: 3px solid var(--color-danger);
 }
 .toast--info {
-  border-color: rgba(56, 189, 248, 0.5);
+  border-color: color-mix(in oklab, var(--color-info) 50%, transparent);
   border-inline-start: 3px solid var(--color-info);
 }
 .toast--warn,
 .toast--warning {
-  border-color: rgba(245, 158, 11, 0.5);
+  border-color: color-mix(in oklab, var(--color-warning) 50%, transparent);
   border-inline-start: 3px solid var(--color-warning);
 }
 .toast--info .toast__dot {
@@ -2624,9 +2685,9 @@ input[type='radio']:disabled {
   inline-size: 44px;
   block-size: 44px;
   border-radius: var(--radius-md);
-  background: var(--color-primary);
+  background: var(--gradient-brand);
   color: var(--color-on-accent);
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  box-shadow: var(--shadow-glow-primary), inset 0 1px 0 color-mix(in oklab, var(--color-on-accent) 28%, transparent);
   flex-shrink: 0;
 }
 
@@ -2636,6 +2697,10 @@ input[type='radio']:disabled {
   font-weight: 800;
   letter-spacing: -0.02em;
   overflow-wrap: anywhere;
+  background: var(--gradient-brand);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .home-hero__meta {
@@ -2698,7 +2763,7 @@ input[type='radio']:disabled {
 }
 
 .home-quick__tile--primary {
-  border-color: rgba(99, 102, 241, 0.5);
+  border-color: color-mix(in oklab, var(--color-primary) 50%, transparent);
 }
 
 .home-quick__tile--primary .home-quick__icon {
@@ -2866,7 +2931,7 @@ input[type='radio']:disabled {
   border-radius: var(--radius-md);
   background: var(--color-primary);
   color: var(--color-on-accent);
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 4px 14px color-mix(in oklab, var(--color-primary) 35%, transparent);
   flex-shrink: 0;
 }
 
@@ -2962,7 +3027,7 @@ input[type='radio']:disabled {
 
 .auth-hint {
   padding: var(--space-2) var(--space-3);
-  border: 1px solid rgba(99, 102, 241, 0.25);
+  border: 1px solid color-mix(in oklab, var(--color-primary) 25%, transparent);
   border-radius: var(--radius-sm);
   background: var(--color-primary-soft);
   font-size: var(--type-xs);
@@ -2972,7 +3037,7 @@ input[type='radio']:disabled {
 
 .auth-error {
   padding: var(--space-2) var(--space-3);
-  border: 1px solid rgba(239, 68, 68, 0.35);
+  border: 1px solid color-mix(in oklab, var(--color-danger) 35%, transparent);
   border-radius: var(--radius-sm);
   background: var(--color-danger-soft);
   color: var(--color-danger-text);
@@ -3037,7 +3102,7 @@ input[type='radio']:disabled {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     background:
-      radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.18) 0px, transparent 55%),
+      radial-gradient(at 0% 0%, color-mix(in oklab, var(--color-primary) 18%, transparent) 0px, transparent 55%),
       var(--color-surface-2);
   }
   .auth-brand-mini {
@@ -3337,7 +3402,7 @@ input[type='radio']:disabled {
 
 .tom-tabbar__btn.is-active {
   background: var(--color-primary-soft);
-  border-color: rgba(99, 102, 241, 0.4);
+  border-color: color-mix(in oklab, var(--color-primary) 40%, transparent);
   color: var(--color-text);
 }
 
@@ -3660,15 +3725,15 @@ input[type='radio']:disabled {
 }
 
 .tom-master.is-on {
-  border-color: rgba(148, 163, 184, 0.35);
+  border-color: color-mix(in oklab, var(--color-text-muted) 35%, transparent);
 }
 
 .tom-master--bl.is-on {
-  border-color: rgba(239, 68, 68, 0.4);
+  border-color: color-mix(in oklab, var(--color-danger) 40%, transparent);
 }
 
 .tom-master--wl.is-on {
-  border-color: rgba(16, 185, 129, 0.4);
+  border-color: color-mix(in oklab, var(--color-success) 40%, transparent);
 }
 
 .tom-route {
@@ -3745,7 +3810,7 @@ input[type='radio']:disabled {
 }
 
 .tom-input--invalid {
-  border-color: rgba(239, 68, 68, 0.6);
+  border-color: color-mix(in oklab, var(--color-danger) 60%, transparent);
 }
 
 .tom-input--edit {
@@ -3912,7 +3977,7 @@ input[type='radio']:disabled {
 
 .tom-chipbtn.is-on {
   background: var(--color-primary-soft);
-  border-color: rgba(99, 102, 241, 0.5);
+  border-color: color-mix(in oklab, var(--color-primary) 50%, transparent);
   color: var(--color-text);
 }
 
@@ -3921,7 +3986,7 @@ input[type='radio']:disabled {
 }
 
 .tom-chipbtn--ok {
-  border-color: rgba(16, 185, 129, 0.5);
+  border-color: color-mix(in oklab, var(--color-success) 50%, transparent);
   color: var(--color-success);
 }
 
@@ -4012,7 +4077,7 @@ input[type='radio']:disabled {
 
 .tom-cleanopt.is-on {
   background: var(--color-success-soft);
-  border-color: rgba(16, 185, 129, 0.45);
+  border-color: color-mix(in oklab, var(--color-success) 45%, transparent);
   color: var(--color-success);
 }
 
@@ -4049,7 +4114,7 @@ input[type='radio']:disabled {
 }
 
 .tom-opt.is-on {
-  border-color: rgba(56, 189, 248, 0.55);
+  border-color: color-mix(in oklab, var(--color-info) 55%, transparent);
 }
 
 .tom-opt__head {
@@ -4141,13 +4206,13 @@ input[type='radio']:disabled {
 
 .tom-entry__value--bl {
   background: var(--color-danger-soft);
-  border: 1px solid rgba(239, 68, 68, 0.4);
+  border: 1px solid color-mix(in oklab, var(--color-danger) 40%, transparent);
   color: var(--color-danger-text);
 }
 
 .tom-entry__value--wl {
   background: var(--color-success-soft);
-  border: 1px solid rgba(16, 185, 129, 0.4);
+  border: 1px solid color-mix(in oklab, var(--color-success) 40%, transparent);
   color: var(--color-success);
 }
 
@@ -4157,7 +4222,7 @@ input[type='radio']:disabled {
 
 .tom-errbox {
   background: var(--color-danger-soft);
-  border: 1px solid rgba(239, 68, 68, 0.4);
+  border: 1px solid color-mix(in oklab, var(--color-danger) 40%, transparent);
   border-radius: var(--radius-sm);
   padding: var(--space-2) var(--space-3);
   font-size: var(--type-xs);
@@ -4246,10 +4311,10 @@ input[type='radio']:disabled {
 
 /* Inline-edit input accent, per managed list. */
 .tom-input--bl.tom-input--edit {
-  border-color: rgba(239, 68, 68, 0.55);
+  border-color: color-mix(in oklab, var(--color-danger) 55%, transparent);
 }
 .tom-input--wl.tom-input--edit {
-  border-color: rgba(16, 185, 129, 0.55);
+  border-color: color-mix(in oklab, var(--color-success) 55%, transparent);
 }
 
 /* ------------------------------------------------------ motion round 3 ---
@@ -4320,4 +4385,346 @@ input[type='radio']:disabled {
 .toast--closing {
   opacity: 0;
   transform: translateY(-6px);
+}
+
+/* ==================================================================== */
+/* Control-Room refresh (2026-10): shell identity, theme plumbing,       */
+/* nav indicator, banner system. Tokens only; both themes first-class.   */
+/* ==================================================================== */
+
+/* Brand tile: the single gradient object in the shell. The header mark and
+   the home hero mark are the same component at two sizes; highlight is
+   derived from --color-on-accent so it reads identically in both themes. */
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 42px;
+  block-size: 42px;
+  border-radius: var(--radius-md);
+  background: var(--gradient-brand);
+  color: var(--color-on-accent);
+  box-shadow: var(--shadow-glow-primary), inset 0 1px 0 color-mix(in oklab, var(--color-on-accent) 28%, transparent);
+  flex-shrink: 0;
+}
+
+/* Header paddings moved here from App.tsx inline styles: the responsive
+   rules below (and any future tweak) need one place to own them. */
+.header-container {
+  padding: var(--space-3) var(--space-4);
+  margin-block-end: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  /* Sticky bar reads over scrolling content: lift + a whisper of the
+     ambient indigo so the chrome sits "above" the glass cards. */
+  box-shadow: var(--shadow-1), 0 12px 40px color-mix(in oklab, var(--color-primary) 7%, transparent);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.header-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-inline-size: 0;
+}
+
+/* Alert banner (pipeline ERROR/WARN surfacing): token-driven replacement for
+   the former inline-styled copy. Dismiss is a real 44px control. */
+.alert-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  margin-block-end: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  border: 1px solid color-mix(in oklab, var(--color-danger) 35%, transparent);
+  font-size: var(--type-sm);
+  color: var(--color-danger-text);
+}
+
+.alert-banner__icon {
+  flex-shrink: 0;
+  line-height: 1.4;
+}
+
+.alert-banner__text {
+  flex: 1;
+  min-inline-size: 0;
+  word-break: break-word;
+  font-family: var(--font-mono);
+  font-size: var(--type-xs);
+  direction: ltr;
+  text-align: start;
+}
+
+.alert-banner__close {
+  background: none;
+  border: none;
+  color: var(--color-danger-text);
+  cursor: pointer;
+  padding: var(--space-2);
+  margin: calc(-1 * var(--space-1));
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 32px;
+  block-size: 32px;
+}
+
+.alert-banner__close:hover {
+  background: color-mix(in oklab, var(--color-danger) 18%, transparent);
+}
+
+/* Rail active state: a direction-aware accent bar (inset-inline-start flips
+   with dir=rtl) plus the soft wash. Physical box-shadows would point the
+   wrong way for Persian readers. */
+.nav-item {
+  position: relative;
+}
+
+.nav-item.is-active::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block: 8px;
+  inline-size: 3px;
+  border-radius: var(--radius-full);
+  background: var(--gradient-brand);
+}
+
+/* Theme swaps: the repaint-relevant properties join the existing hover
+   transitions instead of replacing them (a later `transition` shorthand
+   would clobber the round-2 hover contract). Reduced-motion users get none:
+   the global guard above zeroes every transition. */
+body {
+  transition: background-color var(--motion-base) var(--ease-out), color var(--motion-base) var(--ease-out);
+}
+
+.card,
+.glass-panel {
+  transition:
+    box-shadow var(--motion-base) var(--ease-out),
+    border-color var(--motion-base) var(--ease-out),
+    background-color var(--motion-base) var(--ease-out),
+    color var(--motion-base) var(--ease-out);
+}
+
+/* Header identity: title row, accent wordmark, version pill, tagline.
+   Moved out of App.tsx inline styles so the responsive rules own the wrap. */
+.header-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.header-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.header-title__accent {
+  color: var(--color-primary-strong);
+  font-weight: 600;
+}
+
+.header-version {
+  font-size: var(--type-xs);
+  padding: 2px 8px;
+}
+
+.header-subtitle {
+  font-size: var(--type-sm);
+  color: var(--color-text-muted);
+  margin: 2px 0 0;
+}
+
+/* The theme toggle reads as a header control, not a hero action. */
+.theme-toggle.btn--sm.btn--icon {
+  inline-size: 36px;
+  block-size: 36px;
+}
+
+@media (max-width: 640px) {
+  .header-title {
+    font-size: 1.05rem;
+  }
+  .theme-toggle.btn--sm.btn--icon {
+    inline-size: 44px;
+    block-size: 44px;
+  }
+}
+
+/* AI configuration form: the first Field-primitive modal body. Grid stays
+   two columns from 640px (provider + model pair), one column below. */
+.ai-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.ai-form__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+@media (min-width: 640px) {
+  .ai-form__grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.ai-form__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+
+/* Boot screens (error boundary / code exchange): token-driven so a crash
+   still paints in the operator's chosen surface. */
+.boot-screen {
+  min-block-size: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-4);
+  text-align: center;
+  background: var(--color-bg);
+  background-image: var(--bg-ambient);
+  color: var(--color-text);
+}
+
+.boot-screen--quiet {
+  font-size: 0.95rem;
+  color: var(--color-text-muted);
+}
+
+.boot-screen__title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0 0 var(--space-2);
+}
+
+.boot-screen__title--error {
+  color: var(--color-danger-text);
+}
+
+.boot-screen__body {
+  font-size: 0.875rem;
+  color: var(--color-text-muted);
+  max-inline-size: 400px;
+  margin: 0 0 var(--space-5);
+}
+
+.boot-alert {
+  background: var(--color-danger-soft);
+  color: var(--color-danger-text);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--type-sm);
+  text-align: center;
+  border-block-end: 1px solid color-mix(in oklab, var(--color-danger) 35%, transparent);
+}
+
+/* Auth polish (Control-Room refresh): the brand mark shares the header's
+   gradient tile, and the lang/theme row spaces its two controls. */
+.auth-lang-row {
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.auth-brand__mark {
+  background: var(--gradient-brand);
+  box-shadow: var(--shadow-glow-primary), inset 0 1px 0 color-mix(in oklab, var(--color-on-accent) 28%, transparent);
+}
+
+.auth-brand__name em {
+  color: var(--color-primary-strong);
+}
+
+/* UserBar + LanguagePicker: promoted from inline dark literals to token
+   classes so both follow the theme (they were the two widgets that stayed
+   midnight in the light surface). */
+.userbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  margin-block-end: var(--space-4);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  font-size: var(--type-sm);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.userbar__id {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.userbar__dot {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-success);
+  box-shadow: 0 0 8px color-mix(in oklab, var(--color-success) 80%, transparent);
+  flex-shrink: 0;
+}
+
+.userbar__name {
+  color: var(--color-text);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.userbar__role {
+  font-size: var(--type-xs);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-strong);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.lang-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  color: var(--color-text-subtle);
+  font-size: var(--type-sm);
+}
+
+.lang-trigger--compact {
+  padding: 4px 8px;
+  font-size: var(--type-xs);
 }

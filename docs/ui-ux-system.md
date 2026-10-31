@@ -21,6 +21,14 @@ Colour is referenced by **role**, never by hex in a component: `surface`, `surfa
 `text`, `text-muted`, `primary`, `primary-hover`, `success`, `warning`, `danger`, `info`, plus `*-soft` for
 tinted backgrounds. A new hex literal inside a component is a review failure.
 
+**Themes (web, 2026-10):** the dashboard ships two first-class themes — dark
+(default, the product identity) and light. A theme is exactly one attribute
+(`<html data-theme>`) plus a role-token override block in `index.css`; components
+never read the theme. Derived accent shades (borders, glows) are computed with
+`color-mix(in oklab, var(--color-x) NN%, transparent)` instead of stored rgba
+literals, so both themes inherit them. `tests/responsive.contract.test.mjs`
+asserts the token contract and 4.5:1 text contrast **in both themes**.
+
 ## 2. Breakpoints
 
 | Surface | Compact | Medium | Expanded |
