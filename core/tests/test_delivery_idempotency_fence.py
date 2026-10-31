@@ -121,8 +121,8 @@ async def test_expired_claims_become_unknown_and_require_explicit_resolution(att
     have been accepted by Telegram and never recorded. It becomes UNKNOWN, and
     only an audited ``resolve_unknown`` reopens it."""
     key = DeliveryAttemptKey("rule-1", SOURCE, 3, TARGET)
-    await attempts.claim_or_check(key, "w1", lease_until=time.time() + 0.1)
-    await asyncio.sleep(0.5)
+    # A claim already in the past: deterministic on any runner, no sleep race.
+    await attempts.claim_or_check(key, "w1", lease_until=time.time() - 1.0)
 
     # Another worker cannot take it while it is still CLAIMED.
     outcome, _ = await attempts.claim_or_check(key, "w2", lease_until=time.time() + 60)
