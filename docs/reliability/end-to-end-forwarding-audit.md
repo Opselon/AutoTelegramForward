@@ -325,14 +325,25 @@ of one-off patches.
 
 ## 5. Defect index
 
-| ID | defect | severity | reproduction |
-|---|---|---|---|
-| E2E-1 | 7 media types invisible to the replay normalizer | High | `test_repro_mediatypes.py` |
-| E2E-2 | live vs replay normalization disagree | High | `test_repro_normalizer_split.py` |
-| E2E-3 | edit during pending delivery silently dropped | High | `test_repro_editpending.py` |
-| E2E-4 | failed edits never retried | Medium | code path (no retry exists) |
-| E2E-5 | split-album partial failure duplicates items | High | `test_repro_albumpartial.py` |
-| E2E-6 | jobs read live task config at dispatch | Medium | code inspection (4 call sites) |
-| E2E-7 | `web_page` classified as `OTHER` in production | Medium | live logs + `MEDIA_TYPE_MAP` |
+| ID | defect | severity | reproduction | status |
+|---|---|---|---|---|
+| E2E-1 | 7 media types invisible to the replay normalizer | High | `test_repro_mediatypes.py` | **Fixed** — `core/domain/media_kind.py`, one resolver for both paths; `test_media_classification.py` (64 cases) |
+| E2E-2 | live vs replay normalization disagree | High | `test_repro_normalizer_split.py` | **Fixed** — both paths now agree on all 15 kinds |
+| E2E-3 | edit during pending delivery silently dropped | High | `test_repro_editpending.py` | **Fixed** — edit folded into the pending job; `test_edit_sync_recovery.py` (9 cases) |
+| E2E-4 | failed edits never retried | Medium | code path (no retry exists) | **Fixed** — bounded in-call retry, transient/permanent classification |
+| E2E-5 | split-album partial failure duplicates items | High | `test_repro_albumpartial.py` | **Fixed** — per-item confirmations in the job payload; `test_album_split_resume.py` (3 cases) |
+| E2E-6 | jobs read live task config at dispatch | Medium | code inspection (4 call sites) | **Pinned** — all delivery parameters are already snapshotted at enqueue; the live read is a guard only. `test_job_config_snapshot.py` (3 cases) locks the contract |
+| E2E-7 | `web_page` classified as `OTHER` in production | Medium | live logs + `MEDIA_TYPE_MAP` | **Fixed** — a link preview resolves to TEXT, so a media gate cannot drop a text post |
 
 The five PR #274 findings remain fixed and are not re-listed here.
+
+Two further loop short-circuits were found while testing the fix, both
+pre-existing and both silent count corruptors:
+
+* `handle_reply` returned `0` on an already-delivered reply, discarding the
+  accumulated `replied_count` and un-claiming the event — so the dispatcher
+  forwarded the reply again (a duplicate). Pinned by
+  `test_a_redispatched_reply_is_not_posted_twice`.
+* `_delete_mapped` returned `0` on a foreign-rule mapping, discarding an
+  already-counted delete. Pinned by
+  `test_delete_never_crosses_to_another_rules_target`.
