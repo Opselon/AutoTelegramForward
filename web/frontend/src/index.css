@@ -465,14 +465,16 @@ textarea {
     height: 16px !important;
   }
 
-  /* Header: title row then full-width health/actions row */
+  /* Header: title row then full-width health/actions row. The title truncates
+     with an ellipsis (v2 header block) instead of wrapping mid-word — the old
+     `white-space: normal !important` here fought that truncation and produced
+     a one-letter-per-line column on narrow screens. */
   .header-title-wrap {
     min-width: 0 !important;
     flex: 1 !important;
   }
   .header-title-wrap h1 {
     font-size: 1rem !important;
-    white-space: normal !important;
     line-height: 1.3 !important;
   }
 
@@ -2703,6 +2705,15 @@ input[type='radio']:disabled {
   -webkit-text-fill-color: transparent;
 }
 
+/* Account identity rides under the greeting: present, but secondary — a raw
+   technical id used to be the page's biggest text. */
+.home-hero__identity {
+  margin: var(--space-1) 0 0;
+  font-size: var(--type-sm);
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
 .home-hero__meta {
   display: flex;
   align-items: center;
@@ -2777,10 +2788,19 @@ input[type='radio']:disabled {
 }
 
 /* KPI grid: 1 / 2 / 4 columns across the breakpoints. */
+/* KPI tiles: two per row even on a phone (the mission calls single-column
+   stacking of four stat tiles "excessive vertical stacking"); 4-up on desktop.
+   Tiles keep a uniform composition: fixed icon box, prominent tabular value. */
 .home-kpi-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+@media (max-width: 480px) {
+  .home-kpi-grid .overview-card {
+    padding: var(--space-2) var(--space-3);
+  }
 }
 
 .home-cols {
@@ -4535,6 +4555,114 @@ input[type='radio']:disabled {
   align-items: center;
   gap: var(--space-2);
   flex-wrap: wrap;
+  justify-content: space-between;
+  min-inline-size: 0;
+  inline-size: 100%;
+}
+
+/* Row 1 of the header: drawer trigger + product identity + signed-in identity,
+   all on one line at every viewport. The trigger used to be a flex sibling of
+   the whole stacked header, which stranded it on its own row on a phone. */
+.header-top {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  inline-size: 100%;
+}
+
+.header-titles {
+  min-inline-size: 0;
+}
+
+/* Service-health strip: one no-wrap, scrollable line instead of a wrapping
+   stack that pushed the workspace controls three rows down on a phone. */
+.header-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-block: 2px;
+}
+
+.header-chips::-webkit-scrollbar {
+  display: none;
+}
+
+/* Workspace tools (language, theme, refresh) keep their own compact cluster
+   so a shrinking chips strip can never squeeze them below the 44px target. */
+.header-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.header-tools .btn--icon.btn--sm {
+  inline-size: 40px;
+  block-size: 40px;
+}
+
+/* Compact header: identity on one unwrappable row, brand aligned to the
+   title's first line, tagline clamped to one line. */
+@media (max-width: 640px) {
+  .header-top {
+    flex-wrap: nowrap;
+  }
+
+  .header-title-wrap {
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  .brand-mark {
+    inline-size: 36px;
+    block-size: 36px;
+  }
+
+  .header-title {
+    font-size: 1rem;
+    /* Truncate as a word, never per-character: a squeezed title must stay
+       readable ("AutoTelegramForw…"), not stack one letter per line. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    overflow-wrap: normal;
+    flex: 0 1 auto;
+    min-inline-size: 0;
+  }
+
+  .header-subtitle {
+    font-size: var(--type-xs);
+    display: -webkit-box;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .header-tools .btn--icon.btn--sm {
+    inline-size: 44px;
+    block-size: 44px;
+  }
+}
+
+/* On a very narrow phone the identity (dot + name + role) leaves the header
+   row — the hero's greeting names the operator one scroll-inch below, and the
+   row keeps [menu | brand + title | logout] with real room for the title.
+   (Specificity is bumped so the rule wins over the base `.userbar__id`
+   definition regardless of source order.) */
+@media (max-width: 480px) {
+  .userbar .userbar__id {
+    display: none;
+  }
+
+  .header-title .header-title__accent {
+    display: none;
+  }
 }
 
 .header-title-wrap {
@@ -4542,6 +4670,7 @@ input[type='radio']:disabled {
   align-items: center;
   gap: var(--space-3);
   min-inline-size: 0;
+  flex: 1 1 auto;
 }
 
 /* Alert banner (pipeline ERROR/WARN surfacing): token-driven replacement for
@@ -4559,19 +4688,60 @@ input[type='radio']:disabled {
   color: var(--color-danger-text);
 }
 
+/* A warning (and a FloodWait, which is a target-side rate limit, not an
+   internal failure) reads as caution, not as a dead service. */
+.alert-banner--warning,
+.alert-banner--flood {
+  background: var(--color-warning-soft);
+  border-color: color-mix(in oklab, var(--color-warning) 35%, transparent);
+  color: var(--color-text);
+}
+
 .alert-banner__icon {
   flex-shrink: 0;
   line-height: 1.4;
 }
 
-.alert-banner__text {
+.alert-banner__body {
   flex: 1;
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.alert-banner__headline {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.alert-banner__countdown {
+  display: inline-flex;
+  align-items: center;
+  margin-inline-start: var(--space-2);
+  padding: 1px 8px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--color-warning) 18%, transparent);
+  border: 1px solid color-mix(in oklab, var(--color-warning) 40%, transparent);
+  color: var(--color-warning);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: var(--type-xs);
+}
+
+.alert-banner__text {
   min-inline-size: 0;
   word-break: break-word;
   font-family: var(--font-mono);
   font-size: var(--type-xs);
   direction: ltr;
   text-align: start;
+  color: var(--color-text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .alert-banner__close {
@@ -4591,7 +4761,7 @@ input[type='radio']:disabled {
 }
 
 .alert-banner__close:hover {
-  background: color-mix(in oklab, var(--color-danger) 18%, transparent);
+  background: color-mix(in oklab, currentColor 12%, transparent);
 }
 
 /* Rail active state: a direction-aware accent bar (inset-inline-start flips
@@ -4767,22 +4937,17 @@ body {
   color: var(--color-primary-strong);
 }
 
-/* UserBar + LanguagePicker: promoted from inline dark literals to token
-   classes so both follow the theme (they were the two widgets that stayed
-   midnight in the light surface). */
+/* UserBar: inline header identity, not a card. It used to render as its own
+   full-width bar above the header — a whole extra chrome row on a phone and a
+   second /api/auth/me call for identity the shell already verified. */
 .userbar {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-2) var(--space-4);
-  margin-block-end: var(--space-4);
-  background: var(--color-surface-2);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  gap: var(--space-2);
+  margin-inline-start: auto;
   font-size: var(--type-sm);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  flex-shrink: 0;
+  min-inline-size: 0;
 }
 
 .userbar__id {
@@ -4790,6 +4955,8 @@ body {
   align-items: center;
   gap: var(--space-2);
   min-inline-size: 0;
+  padding-inline-end: var(--space-2);
+  border-inline-end: 1px solid var(--color-border);
 }
 
 .userbar__dot {
@@ -4807,6 +4974,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-inline-size: 22ch;
 }
 
 .userbar__role {
@@ -4817,6 +4985,41 @@ body {
   color: var(--color-primary-strong);
   font-weight: 700;
   flex-shrink: 0;
+}
+
+/* Logout: labelled button on wide screens, icon-only 44px target on phones
+   (the accessible name stays on the button either way). */
+.userbar__logout .userbar__logout-label {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .userbar__logout .userbar__logout-label {
+    display: inline;
+  }
+
+  .userbar__logout {
+    gap: var(--space-1);
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+@media (max-width: 639px) {
+  .userbar__logout {
+    inline-size: 44px;
+    block-size: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .userbar__name {
+    max-inline-size: 12ch;
+  }
+
+  .userbar__role {
+    display: none;
+  }
 }
 
 .lang-trigger {

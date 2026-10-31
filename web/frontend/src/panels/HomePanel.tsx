@@ -27,7 +27,6 @@ import {
   Layers,
   ListTodo,
   Plus,
-  Radio,
   Send,
   Server,
   Users,
@@ -36,7 +35,6 @@ import {
 import { api } from '../api'
 import type { LogItem, SetupReport } from '../types'
 import { Skeleton, SkeletonRows } from '../components/ui/Primitives'
-import { HealthChips } from '../components/HealthChips'
 import type { DashboardCtx } from '../App'
 
 // The full readiness dump stays a chunk of its own: it is only downloaded when
@@ -51,6 +49,7 @@ export function HomePanel({ d }: { d: DashboardCtx }) {
     lang,
     currentUser,
     sessions,
+    rules,
     stats,
     gatewayInfo,
     dlqJobs,
@@ -112,18 +111,21 @@ export function HomePanel({ d }: { d: DashboardCtx }) {
   }, [])
 
   // The four KPIs, moved verbatim from the shell (same sources, same tones).
+  // Totals come from the lists the shell already fetched: /api/stats carries
+  // only the *active* counts, so the old `x / 0` pairs divided by a field the
+  // server never sends.
   const kpis = [
     {
       icon: <Layers size={20} aria-hidden="true" />,
       label: t('ui_active_rules'),
       value: stats
-        ? `${(stats.active_rules ?? 0).toLocaleString()} / ${(stats.total_rules ?? 0).toLocaleString()}`
+        ? `${(stats.active_rules ?? 0).toLocaleString()} / ${rules.length.toLocaleString()}`
         : null,
       tone: 'primary',
     },
     {
       icon: <Send size={20} aria-hidden="true" />,
-      label: t('ui_forwarded_24h'),
+      label: t('ui_forwarded'),
       value: stats ? (stats.total_forwarded_24h ?? 0).toLocaleString() : null,
       tone: 'warning',
     },
@@ -131,7 +133,7 @@ export function HomePanel({ d }: { d: DashboardCtx }) {
       icon: <Users size={20} aria-hidden="true" />,
       label: t('ui_connected_sessions'),
       value: stats
-        ? `${(stats.active_sessions ?? 0).toLocaleString()} / ${(stats.total_sessions ?? 0).toLocaleString()}`
+        ? `${(stats.active_sessions ?? 0).toLocaleString()} / ${sessions.length.toLocaleString()}`
         : null,
       tone: 'success',
     },
@@ -170,33 +172,38 @@ export function HomePanel({ d }: { d: DashboardCtx }) {
     },
   ] as const
 
+  // Hero status: one summary pill instead of re-rendering the header's three
+  // service chips (the brand mark, version and tagline live in the header too,
+  // so repeating them here was a wall of duplication on a phone).
+  const servicesUp = [stats?.atf_core_online, stats?.atf_logger_online, gatewayInfo?.atf_web_online]
+  const servicesProbed = servicesUp.filter((v) => v !== undefined).length
+  const servicesOnline = servicesUp.filter((v) => v === true).length
+  const allServicesOnline = servicesProbed === 3 && servicesOnline === 3
+
   return (
     <div className="home-panel">
-      {/* Hero: greeting, product version, the real service-health dots. */}
+      {/* Hero: a real greeting with the account identity as secondary info —
+          a raw technical id used to be the primary heading. */}
       <section className="glass-panel home-hero" aria-live="polite">
         <div className="home-hero__id">
-          <span className="home-hero__mark" aria-hidden="true">
-            <Radio size={20} />
-          </span>
           <div className="home-hero__text">
-            <h2 className="home-hero__greeting">{t('ui_home_greeting', { name })}</h2>
-            <div className="home-hero__meta">
-              <span className="badge badge--info">
-                {gatewayInfo?.version ? `v${gatewayInfo.version}` : t('ui_version_probing')}
-              </span>
-              <span className="home-hero__tagline">
-                {t('ui_unified_smart_telegram_forwarding_gateway_microservice_platform')}
-              </span>
-            </div>
+            <h2 className="home-hero__greeting">{t('ui_welcome_back')}</h2>
+            <p className="home-hero__identity">
+              {currentUser?.is_admin ? '👑 ' : '👤 '}
+              {name}
+            </p>
           </div>
         </div>
         <div className="home-hero__health" role="status">
-          <HealthChips
-            lang={lang}
-            core={stats?.atf_core_online}
-            logger={stats?.atf_logger_online}
-            web={gatewayInfo?.atf_web_online}
-          />
+          {servicesProbed < 3 ? (
+            <span className="badge badge--neutral">{t('ui_probing')}</span>
+          ) : (
+            <span className={`badge ${allServicesOnline ? 'badge--success' : 'badge--warning'}`}>
+              {allServicesOnline
+                ? t('ui_all_services_online')
+                : t('ui_services_online_summary', { up: servicesOnline, total: 3 })}
+            </span>
+          )}
         </div>
       </section>
 
