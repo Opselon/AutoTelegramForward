@@ -2057,6 +2057,48 @@ paths:
             application/json:
               schema: { type: object }
         "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/diagnostic-events:
+    get:
+      tags: [diagnostics]
+      summary: 'Query the persisted failure-intelligence events (owner scope resolved server-side from the caller identity)'
+      operationId: getApiDiagnosticEvents
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/diagnostic-events/timeline:
+    get:
+      tags: [diagnostics]
+      summary: 'One source message''s full processing history, oldest first, with the raw Telegram error preserved per attempt'
+      operationId: getApiDiagnosticEventsTimeline
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+  /api/diagnostic-events/facets:
+    get:
+      tags: [diagnostics]
+      summary: 'Event counts grouped by one whitelisted dimension (category, stage, severity, reason, strategy, error_origin)'
+      operationId: getApiDiagnosticEventsFacets
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: user
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "401": { $ref: '#/components/responses/Unauthorized' }
   /api/logs/export:
     get:
       tags: [logs]
