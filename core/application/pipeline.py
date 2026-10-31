@@ -203,24 +203,22 @@ class Normalizer:
         is_service = bool(getattr(raw, "service", False) or (raw.get("is_service", False) if isinstance(raw, dict) else False))
         is_edit = bool(getattr(raw, "edit_date", None) is not None or (raw.get("is_edit", False) if isinstance(raw, dict) else False))
 
-        # Media identification
-        has_media = False
-        m_type = MediaType.TEXT
+        # Media identification. One shared resolver (core.domain.media_kind),
+        # the same one the live path (payload_from_pyrogram) uses — audit
+        # findings E2E-1/E2E-2: this attribute scan used to cover 7 of 14
+        # kinds, so video_note/poll/contact/location/venue/dice/game were
+        # classified as TEXT with has_media=False whenever a message arrived
+        # through catch-up or replay, and the media gate then decided from a
+        # lie.
+        from ..domain.media_kind import resolve_media_type
 
-        for attr, enum_val in [
-            ("photo", MediaType.PHOTO),
-            ("video", MediaType.VIDEO),
-            ("document", MediaType.DOCUMENT),
-            ("audio", MediaType.AUDIO),
-            ("voice", MediaType.VOICE),
-            ("sticker", MediaType.STICKER),
-            ("animation", MediaType.ANIMATION),
-        ]:
-            val = getattr(raw, attr, None) if not isinstance(raw, dict) else raw.get(attr)
-            if val is not None:
-                has_media = True
-                m_type = enum_val
-                break
+        if isinstance(raw, dict):
+            # The resolver reads attributes; a dict-shaped input is adapted so
+            # it sees the same fields the object path does.
+            from types import SimpleNamespace
+            raw = SimpleNamespace(**{k: v for k, v in raw.items() if isinstance(k, str)})
+        media_type = resolve_media_type(raw)
+        has_media = media_type != MediaType.TEXT
 
         payload = MessagePayload(
             chat_id=chat_id,
@@ -229,7 +227,7 @@ class Normalizer:
             text=Normalizer._sanitize_str(text),
             caption=Normalizer._sanitize_str(caption),
             has_media=has_media,
-            media_type=m_type,
+            media_type=media_type,
             media_group_id=str(media_group_id) if media_group_id else None,
             is_service=is_service,
             is_edit=is_edit,

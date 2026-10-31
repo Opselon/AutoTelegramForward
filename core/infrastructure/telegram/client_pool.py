@@ -494,18 +494,18 @@ def payload_from_pyrogram(message) -> MessagePayload:
 
     Handles all chat types (channel / supergroup / group / private / bot),
     service messages, edits, forwards and albums.
+
+    Media classification goes through the one shared resolver
+    (:mod:`core.domain.media_kind`) so the live path and the replay path
+    (``Normalizer.normalize``) cannot drift apart again — audit findings
+    E2E-1 and E2E-2.
     """
     chat = message.chat
     chat_type = getattr(chat, "type", None)
     type_name = chat_type.name.lower() if chat_type is not None else "unknown"
-    media_name = (
-        message.media.name.lower()
-        if getattr(message, "media", None) is not None
-        else "text"
-    )
-    media_type = MEDIA_TYPE_MAP.get(
-        media_name, MediaType.OTHER if media_name != "text" else MediaType.TEXT
-    )
+    from ...domain.media_kind import resolve_media_type
+
+    media_type = resolve_media_type(message)
     sender = getattr(message, "from_user", None)
     sender_chat = getattr(message, "sender_chat", None)
 

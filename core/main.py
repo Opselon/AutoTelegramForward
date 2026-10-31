@@ -288,7 +288,12 @@ def build_container(cfg: Config) -> dict:
         pool.hydrate_limits()
     except Exception as exc:
         logger.warning("Could not restore account limits: %s", exc)
-    sync_engine = SyncEngine(msg_map_repo, rule_repo, pool, filter_repo=filter_repo)
+    sync_engine = SyncEngine(
+        msg_map_repo, rule_repo, pool, filter_repo=filter_repo,
+        # E2E-3: an edit arriving while the delivery job has not run is folded
+        # into that job so the first post carries the new text.
+        jobs_repo=queue_repo,
+    )
 
     # ---- AI private-message auto-reply (v27) --------------------------------
     # Queue + engine + service, all tenant-scoped in SQLite. Construction is
