@@ -22,7 +22,11 @@ import time
 import sqlite3
 from typing import Any, Callable, Dict, List, Optional
 
-from ...application.repositories import IDeliveryQueueRepository, IMessageMapRepository
+from ...application.repositories import (
+    DeliveryAttemptKey,
+    IDeliveryQueueRepository,
+    IMessageMapRepository,
+)
 from ...domain.entities import DeliveryJob, DeliveryStatus, ForwardMode, MessageMapping, MessagePayload
 from ...domain.services import AdvancedSettingsEngine
 from ...domain.value_objects import ContentMode
@@ -80,6 +84,7 @@ class DurableQueueManager:
         bot_route: Optional[BotTransportCache] = None,
         lease_coordinator: Any = None,
         owner_notifier: Optional[Callable[..., Any]] = None,
+        attempts_repo: Any = None,
     ) -> None:
         self._queue = queue_repo
         self._map = message_map_repo
@@ -104,6 +109,12 @@ class DurableQueueManager:
         # lost while it is held, so it can never be what makes delivery
         # idempotent.
         self._lease = lease_coordinator
+
+        # Send-side idempotency fence (audit finding #5). Optional: ``None``
+        # keeps every existing embedding and unit test working unchanged; when
+        # absent the worker falls back to the pre-fence behaviour (lease-only),
+        # which is exactly the behaviour this store was introduced to close.
+        self._attempts = attempts_repo
 
         # Tells a task's owner that the engine had to pause it (dead source or
         # target) or that their account cannot send. Wired in main.py to the
@@ -463,25 +474,41 @@ class DurableQueueManager:
         # deliverable — a replay of the event could flip a SENT forward back to
         # PENDING and make the source look undelivered.
         if job_kind == "forward":
-            conn.execute(
-                """
-                INSERT INTO message_map (
-                    id, rule_id, source_chat_id, source_message_id, target_chat_id,
-                    target_message_id, media_group_id, delivery_status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(rule_id, source_chat_id, source_message_id, target_chat_id) DO UPDATE SET
-                    target_message_id = COALESCE(excluded.target_message_id, message_map.target_message_id),
-                    media_group_id = COALESCE(excluded.media_group_id, message_map.media_group_id),
-                    delivery_status = excluded.delivery_status,
-                    updated_at = excluded.updated_at
-                """,
-                (
-                    mapping.id, mapping.rule_id,
-                    str(mapping.source_chat_id), int(mapping.source_message_id),
-                    str(mapping.target_chat_id), mapping.target_message_id,
-                    mapping.media_group_id or "", status_str, mapping.created_at, now,
-                ),
-            )
+            # Audit finding #3: a replay of an already-processed event must
+            # never regress the mapping. The job insert below is INSERT OR
+            # IGNORE, so when the job already exists the enqueue reports
+            # "not newly created" — but the upsert above already ran and would
+            # flip a SENT row back to PENDING with no job to drive it. The
+            # mapping is therefore only written when the job row does not
+            # exist yet, and only ever *promoted*: a replay that finds an
+            # existing non-terminal row refreshes its bookkeeping, while a
+            # terminal ( SENT / FAILED / DEAD_LETTER ) row is left alone.
+            exists = conn.execute(
+                "SELECT 1 FROM delivery_jobs WHERE id = ?", (job.id,)
+            ).fetchone()
+            if exists is None:
+                conn.execute(
+                    """
+                    INSERT INTO message_map (
+                        id, rule_id, source_chat_id, source_message_id, target_chat_id,
+                        target_message_id, media_group_id, delivery_status, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(rule_id, source_chat_id, source_message_id, target_chat_id) DO UPDATE SET
+                        target_message_id = COALESCE(excluded.target_message_id, message_map.target_message_id),
+                        media_group_id = COALESCE(excluded.media_group_id, message_map.media_group_id),
+                        delivery_status = CASE
+                            WHEN message_map.delivery_status IN ('SENT') THEN message_map.delivery_status
+                            ELSE excluded.delivery_status
+                        END,
+                        updated_at = excluded.updated_at
+                    """,
+                    (
+                        mapping.id, mapping.rule_id,
+                        str(mapping.source_chat_id), int(mapping.source_message_id),
+                        str(mapping.target_chat_id), mapping.target_message_id,
+                        mapping.media_group_id or "", status_str, mapping.created_at, now,
+                    ),
+                )
         payload_str = _dumps(job.payload_data)
         job_status = getattr(job.status, "value", str(job.status))
         try:
@@ -812,6 +839,26 @@ class DurableQueueManager:
         )
         await self._queue.mark_retry(job.id, reason, backoff_seconds=backoff)
 
+    def _attempt_key(self, job: DeliveryJob) -> Optional[DeliveryAttemptKey]:
+        """The deterministic fence key for one job, or ``None`` when unknown.
+
+        Derived purely from identifiers the job already carries, so the worker,
+        the legacy direct path and a replay all generate the *same* key without
+        needing to read anything else. ``None`` (a job whose payload lacks the
+        routing fields) means the fence cannot be keyed and is skipped for that
+        job rather than blocking delivery on a shape it cannot express.
+        """
+        try:
+            return DeliveryAttemptKey(
+                rule_id=str(job.rule_id),
+                source_chat_id=str(job.source_chat_id),
+                source_message_id=int(job.source_message_id),
+                target_chat_id=str(job.target_chat_id),
+                job_kind=str(getattr(job, "job_kind", "forward") or "forward"),
+            )
+        except (TypeError, ValueError):
+            return None
+
     async def _process_job(self, worker_id: str, job: DeliveryJob) -> Optional[tuple]:
         """Process a single delivery job with rate limiting, error classification, and mapping confirmation.
 
@@ -959,6 +1006,65 @@ class DurableQueueManager:
                 "[PIPELINE:NO_CLIENT] session %s is live again; retry backoff cleared",
                 str(session_id)[:8],
             )
+
+        # --- Send-side idempotency fence (audit finding #5) ----------------- #
+        # Telegram has no idempotency key for ordinary sends, so the only way to
+        # stop ourselves double-dispatching one logical delivery (a lease
+        # expiring mid-dispatch, a crash between Telegram accepting the send and
+        # the batch commit, the legacy and worker paths racing) is to claim the
+        # logical send here, atomically, *before* any Telegram call. The fence
+        # is keyed on the deterministic business key, so the legacy direct path
+        # and a replay resolve to the same row.
+        fence = self._attempt_key(job)
+        if fence is not None and self._attempts is not None:
+            try:
+                outcome, row = await self._attempts.claim_or_check(
+                    fence, worker_id, time.time() + max(self._lease_duration * 2, 60.0)
+                )
+            except Exception as exc:
+                # A fence-store hiccup must never silently disable the fence:
+                # the send is refused loudly rather than dispatched unprotected.
+                logger.error(
+                    "[PIPELINE:DELIVERY_FENCE] [%s] idempotency fence unavailable for job %s "
+                    "(rule=%s src=%s:%s tgt=%s): %s — refusing to dispatch unprotected",
+                    worker_id, job.id, job.rule_id[:8], job.source_chat_id,
+                    job.source_message_id, target, exc,
+                    extra={"event_code": "DELIVERY_FENCE_UNAVAILABLE"},
+                )
+                _bump_target("retried")
+                await self._defer_job(job, "idempotency fence unavailable", 5.0)
+                return None
+            if outcome == "already_sent":
+                # A previous attempt recorded a confirmed success. Telegram has
+                # the copy; re-dispatching would duplicate it. Close the job as
+                # SENT with the recorded target id rather than re-sending.
+                prior_id = (row or {}).get("target_message_id") or 0
+                logger.warning(
+                    "[PIPELINE:DELIVERY_FENCE] [%s] job %s already has a confirmed send "
+                    "(target_message_id=%s) — marking SENT without re-dispatching",
+                    worker_id, job.id, prior_id,
+                    extra={"event_code": "DELIVERY_FENCE_ALREADY_SENT"},
+                )
+                _bump_target("sent")
+                await self._note_mapping(job, DeliveryStatus.SENT, prior_id or None)
+                await self._queue.mark_sent(job.id, prior_id or None)
+                return None
+            if outcome in ("in_flight", "stale", "unknown"):
+                # Another worker holds a live claim, or an earlier send's
+                # outcome was never recorded. Re-dispatching here is exactly
+                # the duplicate the fence exists to prevent, so defer the job
+                # for the watchdog/reconciliation to resolve.
+                logger.warning(
+                    "[PIPELINE:DELIVERY_FENCE] [%s] job %s not dispatchable now (outcome=%s, "
+                    "rule=%s src=%s:%s tgt=%s) — deferring for reconciliation",
+                    worker_id, job.id, outcome, job.rule_id[:8], job.source_chat_id,
+                    job.source_message_id, target,
+                    extra={"event_code": "DELIVERY_FENCE_BLOCKED"},
+                )
+                _bump_target("retried")
+                await self._defer_job(job, f"delivery fence: {outcome}", 15.0)
+                return None
+
         t0 = time.monotonic()
         logger.info(
             "[PIPELINE:DISPATCH] [%s] Dispatching rule=%s src=%s:%s -> tgt=%s (session=%s, attempt=%d)",
@@ -991,6 +1097,19 @@ class DurableQueueManager:
             # Delivery confirmed!
             await self._note_mapping(job, DeliveryStatus.SENT, target_msg_id)
             self.stats["sent"] += 1
+            # Record the confirmed outcome in the idempotency fence BEFORE the
+            # deferred batch commit: if the process dies between the Telegram
+            # response and mark_sent_batch, the fence is what stops the
+            # watchdog's reclaim from re-dispatching (audit finding #5).
+            if fence is not None and self._attempts is not None:
+                try:
+                    await self._attempts.record_sent(fence, worker_id, int(target_msg_id or 0))
+                except Exception as exc:
+                    logger.warning(
+                        "[PIPELINE:DELIVERY_FENCE] [%s] could not record the confirmed send "
+                        "for job %s (a duplicate on recovery is now possible): %s",
+                        worker_id, job.id, exc,
+                    )
             logger.info(
                 "[PIPELINE:DELIVERED] [%s] Sent rule=%s src=%s:%s -> tgt=%s msg_id=%s (took %.2fs)",
                 worker_id,
@@ -1037,13 +1156,22 @@ class DurableQueueManager:
             send_duration = time.monotonic() - t0
             self.total_dispatch_duration_ms += send_duration * 1000
             self.total_dispatches += 1
-            key, sev, recoverable = tg_error(exc)
+            key_, sev, recoverable = tg_error(exc)
             err_msg = tg_detail(exc)
             # Log attribution: the owner this delivery belongs to, resolved
             # from the loaded rule with the enqueue-time snapshot as fallback.
             owner_id = int(getattr(rule_obj, "owner_user_id", 0) or 0) or int(
                 (job.payload_data or {}).get("owner_user_id") or 0
             )
+
+            # The Telegram call failed *before* any ambiguity: no copy is in
+            # the target, so the fence is released for a retry. (Timeouts are
+            # handled below as UNKNOWN, where the ambiguity is real.)
+            if fence is not None and self._attempts is not None and not is_timeout_error(exc):
+                try:
+                    await self._attempts.record_outcome(fence, worker_id, "FAILED", err_msg or str(exc))
+                except Exception:
+                    logger.debug("delivery fence failed to record failure for %s", job.id)
 
             # 0. Everything was tried and *nothing* was sent. Reporting this as
             # SENT (the old behavior: the bypass returned 0) manufactured a
@@ -1105,6 +1233,15 @@ class DurableQueueManager:
                         pass
                 await self._queue.mark_unknown(job.id, f"Telegram timeout: {err_msg}")
                 await self._note_mapping(job, DeliveryStatus.UNKNOWN)
+                # The fence mirrors the ambiguity: the send may be sitting in
+                # the target right now, so the outcome is UNKNOWN (never FAILED
+                # — that would invite a blind re-dispatch) and only an explicit
+                # reconciliation may reopen it.
+                if fence is not None and self._attempts is not None:
+                    try:
+                        await self._attempts.record_outcome(fence, worker_id, "UNKNOWN", f"timeout: {err_msg}")
+                    except Exception:
+                        logger.debug("delivery fence failed to record unknown outcome for %s", job.id)
                 return None
 
             # 2. FloodWait / recoverable retry. Only a *real* rate-limit error

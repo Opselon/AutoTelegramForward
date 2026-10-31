@@ -937,6 +937,74 @@ MIGRATIONS = {
         is_enabled INTEGER NOT NULL DEFAULT 1
     );
     """,
+    31: """
+    -- v31: forwarding reliability — send-side idempotency + ingestion gaps.
+    --
+    -- Two compact, state-only tables. Neither stores message payloads: the
+    -- queue already keeps payload_json on delivery_jobs and the gap store only
+    -- records *which* source ids still need to be fetched, never their text.
+    --
+    -- delivery_attempts: the send-side idempotency fence (audit finding #5).
+    -- Telegram has no idempotency key for ordinary sends, so the only way to
+    -- stop our own workers double-dispatching one logical delivery (a lease
+    -- expiring mid-dispatch, or a crash between Telegram accepting the send
+    -- and the batch commit) is to claim the logical send ourselves, atomically,
+    -- before any Telegram call. One row per logical delivery, keyed by the
+    -- deterministic business key (rule/source/target/kind), NOT a random
+    -- per-attempt id, so every claim, claim-after-crash and duplicate check
+    -- resolves to the same row. The `status` machine is
+    -- CLAIMED -> SENT | FAILED | UNKNOWN, mirroring delivery_jobs so an
+    -- outcome that never reached the job row is still recoverable.
+    CREATE TABLE IF NOT EXISTS delivery_attempts (
+        id TEXT PRIMARY KEY,
+        rule_id TEXT NOT NULL,
+        source_chat_id TEXT NOT NULL,
+        source_message_id INTEGER NOT NULL,
+        target_chat_id TEXT NOT NULL,
+        job_kind TEXT NOT NULL DEFAULT 'forward',
+        status TEXT NOT NULL DEFAULT 'CLAIMED',
+        worker_id TEXT NOT NULL DEFAULT '',
+        target_message_id INTEGER,
+        lease_until REAL NOT NULL DEFAULT 0,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE(rule_id, source_chat_id, source_message_id, target_chat_id, job_kind)
+    );
+    -- The claim path: an idle worker looks for work it may fence out.
+    CREATE INDEX IF NOT EXISTS idx_delivery_attempts_fence
+        ON delivery_attempts(status, lease_until);
+    -- `status` is one of a handful of literals; SQLite keeps it TEXT either way
+    -- and the planner uses the fence index above, so no extra index on
+    -- (rule_id, source_message_id) is needed for the claim path.
+
+    -- ingestion_gaps: source ids the poller/catch-up asked for but Telegram did
+    -- NOT return (audit finding #1). A numeric gap in channel message ids is
+    -- NOT proof of a missing message (deleted and service posts leave gaps too),
+    -- so this table is *recovery work to attempt*, never a loss record: the
+    -- row is resolved (deleted) only when the id is actually seen by the
+    -- pipeline, and an id that is permanently absent in Telegram is failed
+    -- with a reason after the bounded retry policy is exhausted — visibly,
+    -- never silently. One row per source id, nothing else.
+    CREATE TABLE IF NOT EXISTS ingestion_gaps (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL,
+        source_chat_id TEXT NOT NULL,
+        source_message_id INTEGER NOT NULL,
+        state TEXT NOT NULL DEFAULT 'PENDING',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        next_retry_at REAL NOT NULL DEFAULT 0,
+        last_error TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE(session_id, source_chat_id, source_message_id)
+    );
+    -- The recovery sweep reads by (state, next_retry_at); resolved rows are
+    -- deleted, so this index covers both the sweep and the existence check.
+    CREATE INDEX IF NOT EXISTS idx_ingestion_gaps_sweep
+        ON ingestion_gaps(state, next_retry_at);
+    """,
 }
 
 

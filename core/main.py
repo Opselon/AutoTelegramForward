@@ -200,6 +200,33 @@ def build_container(cfg: Config) -> dict:
     else:
         msg_map_repo = SqliteMessageMapRepository(db)
         queue_repo = SqliteDeliveryQueueRepository(db)
+    # Audit findings #1/#5 (forwarding reliability): the send-side idempotency
+    # fence and the ingestion-gap recovery store. Both are state-only (no
+    # message payloads) and live beside the queue they protect, on whichever
+    # engine the deployment uses.
+    from core.infrastructure.persistence.sqlite_repositories import (  # noqa: E402
+        SqliteDeliveryAttemptRepository,
+        SqliteIngestionGapRepository,
+    )
+    # Audit findings #1/#5 (forwarding reliability): the send-side idempotency
+    # fence and the ingestion-gap recovery store. Both are state-only (no
+    # message payloads) and live beside the queue they protect, on whichever
+    # engine the deployment uses.
+    from core.infrastructure.persistence.postgres_repositories import (  # noqa: E402
+        PostgresDeliveryAttemptRepository,
+        PostgresIngestionGapRepository,
+    )
+    if pg_pool is not None:
+        gap_repo = PostgresIngestionGapRepository(pg_pool)
+        attempts_repo = PostgresDeliveryAttemptRepository(pg_pool)
+    else:
+        gap_repo = SqliteIngestionGapRepository(db)
+        attempts_repo = SqliteDeliveryAttemptRepository(db)
+    # Same deferred-pool rebinding rule as the other pg repos above.
+    if asyncio.iscoroutine(gap_repo._db):
+        gap_repo._db = pg_pool
+    if asyncio.iscoroutine(attempts_repo._db):
+        attempts_repo._db = pg_pool
     # Per-user task lifecycle (API-first phase 2): the authoritative state
     # machine lives beside every other tenant resource, whichever engine is in
     # use. Same deferred-pool rebinding rules as the other pg repos.
@@ -340,6 +367,10 @@ def build_container(cfg: Config) -> dict:
         metrics_repo=metrics_repo,
         bot_route=bot_route,
         lease_coordinator=lease_coordinator,
+        # Audit finding #5: the send-side idempotency fence — stops a lease
+        # expiring mid-dispatch, a crash before the batch commit, or the legacy
+        # direct path from double-dispatching one logical delivery.
+        attempts_repo=attempts_repo,
     )
     from core.application.pipeline import DurableMessagePipeline  # noqa: E402
     durable_pipeline = DurableMessagePipeline(
@@ -359,6 +390,10 @@ def build_container(cfg: Config) -> dict:
         # effective settings.
         bot_tokens=token_repo,
         counters=counter_repo,
+        # Audit finding #1: resolves an ingestion gap row the moment the
+        # pipeline actually sees the source id — the only proof the post was
+        # not lost.
+        gap_repo=gap_repo,
     )
     from core.infrastructure.telegram.pv_responder import AIPVResponder  # noqa: E402
     pv_responder = AIPVResponder(ai_repo=ai_repo, ai_factory=factory, db=db)
@@ -374,6 +409,9 @@ def build_container(cfg: Config) -> dict:
         autoreply_engine=autoreply_engine,
         autoreply_worker=autoreply_worker,
         owner_lookup=_owner_for_session,
+        # Audit finding #5: the legacy direct send path shares the worker's
+        # idempotency fence — same key derivation, same store.
+        attempts_repo=attempts_repo,
     )
     # The branding hop (A -> C -> B) needs a live client and the transform-aware
     # posting routine, both of which live on the dispatcher; the pipeline decides
@@ -884,6 +922,9 @@ async def main() -> None:
             state_store=cursor_repo,
             interval=getattr(cfg, "channel_poll_interval", 15.0),
             lease_coordinator=container["lease_coordinator"],
+            # Audit finding #1: unreturned ids become durable recovery work
+            # that this poller re-fetches with bounded backoff.
+            gap_repo=container["gap_repo"],
         )
         await poller.start()
         container["channel_poller"] = poller

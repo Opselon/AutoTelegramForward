@@ -11,7 +11,7 @@ import sqlite3
 import threading
 import time
 import uuid
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from .coercion import enum_str
 
@@ -21,14 +21,17 @@ logger = logging.getLogger(__name__)
 from ...application.repositories import (
     ApiCredential,
     BotToken,
+    DeliveryAttemptKey,
     IAIConfigRepository,
     IApiCredentialRepository,
     IAuthFlowRepository,
     IBotTokenRepository,
+    IDeliveryAttemptRepository,
     IDeliveryQueueRepository,
     IErrorLogRepository,
     IFilterRuleRepository,
     IForwardRuleRepository,
+    IIngestionGapRepository,
     IMessageMapRepository,
     IMetricsRepository,
     ITaskRepository,
@@ -818,6 +821,11 @@ class SqliteForwardRuleRepository(IForwardRuleRepository):
         # bypass the rule the owner just removed. The FK semantics live in
         # autoreply_rules, but the generic table sweep cannot know that.
         "autoreply_jobs",
+        # Send-side idempotency fence rows key on rule_id (audit finding #5):
+        # a fence for a deleted task has nothing left to protect, and leaving
+        # it would keep a permanent SENT record that could suppress a
+        # re-created task's delivery of the same message.
+        "delivery_attempts",
     )
 
     async def delete(self, rule_id: str) -> bool:
@@ -1720,8 +1728,20 @@ class SqliteMessageMapRepository(IMessageMapRepository):
             updated_at = excluded.updated_at
         """
         status_str = getattr(mapping.delivery_status, "value", str(mapping.delivery_status))
+        # Audit finding #3: an upsert must never regress a terminal mapping. A
+        # replay of an already-processed event rewrites this row; without the
+        # guard it flips a SENT mapping back to PENDING while no delivery job
+        # exists to drive it — the target has the message but the store says it
+        # does not (and edit/delete sync then reads a lie).
+        guarded = sql.replace(
+            "delivery_status = excluded.delivery_status,",
+            "delivery_status = CASE\n"
+            "                WHEN message_map.delivery_status IN ('SENT') THEN message_map.delivery_status\n"
+            "                ELSE excluded.delivery_status\n"
+            "            END,",
+        )
         if conn is None:
-            self._db.execute(sql, (
+            self._db.execute(guarded, (
                 mapping.id,
                 mapping.rule_id,
                 str(mapping.source_chat_id),
@@ -1735,7 +1755,7 @@ class SqliteMessageMapRepository(IMessageMapRepository):
             ),
         )
         else:
-            conn.execute(sql, (
+            conn.execute(guarded, (
                 mapping.id,
                 mapping.rule_id,
                 str(mapping.source_chat_id),
@@ -2593,6 +2613,281 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
         # refuse every enqueue after a restart.
         self._refresh_pending_count()
         return cur.rowcount
+
+
+class SqliteDeliveryAttemptRepository(IDeliveryAttemptRepository):
+    """SQLite implementation of the send-side idempotency fence.
+
+    The claim must be atomic under concurrent workers, which SQLite's shared
+    connection plus ``_lock`` gives us; the logical atomicity comes from
+    ``INSERT ... ON CONFLICT``: a conflicting row is either a live claim by
+    somebody else (in flight), a recorded SENT (never re-dispatch), or an
+    exhausted/unknown fence. There is no read-then-write window anywhere.
+    """
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def claim_or_check(self, key: DeliveryAttemptKey, worker_id: str,
+                             lease_until: float) -> Tuple[str, Optional[dict]]:
+        """Atomically check-and-claim one logical send.
+
+        Outcomes, and the rule each enforces:
+
+        * ``dispatch`` — the caller owns this send and may dispatch it. Only a
+          row that does not exist yet, or one whose last outcome was FAILED
+          (a replay), can be claimed. **CLAIMED/SENDING rows are never taken
+          from their holder**, live or expired.
+        * ``in_flight`` — another worker holds a live claim; must not dispatch.
+        * ``already_sent`` — a previous attempt recorded SENT; never dispatch.
+        * ``unknown`` / ``stale`` — an earlier send's outcome was never
+          recorded (the crash window, or an expired claim nobody resolved).
+          The caller must NOT dispatch; it reconciles and then reopens the
+          fence through ``resolve_unknown``. This is the difference between
+          at-least-once and at-most-once-by-accident.
+        """
+        now = int(time.time())
+        with self._db._lock:
+            # The WHERE clause is the whole contract: a CLAIMED/SENDING row is
+            # never stolen, and an UNKNOWN row (a send whose outcome was lost)
+            # is never silently reopened. Only an absent row or a FAILED one
+            # (the delivery is being replayed, e.g. from the dead-letter queue)
+            # can be claimed.
+            self._db._conn.execute(
+                """
+                INSERT INTO delivery_attempts (
+                    id, rule_id, source_chat_id, source_message_id, target_chat_id,
+                    job_kind, status, worker_id, lease_until, attempts,
+                    last_error, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 'CLAIMED', ?, ?, 0, '', ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    status = 'CLAIMED',
+                    worker_id = excluded.worker_id,
+                    lease_until = excluded.lease_until,
+                    attempts = delivery_attempts.attempts + 1,
+                    last_error = '',
+                    updated_at = excluded.updated_at
+                WHERE delivery_attempts.status = 'FAILED'
+                """,
+                (
+                    key.id, key.rule_id, str(key.source_chat_id),
+                    int(key.source_message_id), str(key.target_chat_id),
+                    str(key.job_kind or "forward"), worker_id, float(lease_until),
+                    now, now,
+                ),
+            )
+            self._db._conn.commit()
+            row = self._db._conn.execute(
+                "SELECT status, worker_id, lease_until, target_message_id, last_error, attempts "
+                "FROM delivery_attempts WHERE id = ?",
+                (key.id,),
+            ).fetchone()
+        if row is None:
+            return ("dispatch", None)
+        status = str(row["status"])
+        holder = str(row["worker_id"] or "")
+        lease = float(row["lease_until"] or 0)
+        # SENT is terminal: a recorded success is never re-dispatched.
+        if status == "SENT":
+            return ("already_sent", dict(row))
+        # UNKNOWN: an earlier send may be sitting in the target right now.
+        if status == "UNKNOWN":
+            return ("unknown", dict(row))
+        # FAILED is retryable: the UPSERT above re-claimed it for this caller.
+        if status == "FAILED":
+            return ("dispatch", dict(row))
+        # CLAIMED/SENDING: only the holder dispatches, and only while its lease
+        # is live.
+        if holder == worker_id:
+            return ("dispatch", dict(row))
+        if lease > 0 and lease >= now:
+            return ("in_flight", dict(row))
+        # An expired claim held by somebody else: the previous send may have
+        # been accepted by Telegram. The watchdog will move it to UNKNOWN; the
+        # caller must not dispatch it in the meantime.
+        return ("stale", dict(row))
+
+    async def record_sent(self, key: DeliveryAttemptKey, worker_id: str,
+                          target_message_id: int) -> bool:
+        now = int(time.time())
+        cur = self._db.execute(
+            """
+            UPDATE delivery_attempts
+            SET status = 'SENT', target_message_id = ?, lease_until = 0,
+                last_error = '', updated_at = ?
+            WHERE id = ? AND status != 'SENT'
+            """,
+            (int(target_message_id), now, key.id),
+        )
+        return cur.rowcount > 0
+
+    async def record_outcome(self, key: DeliveryAttemptKey, worker_id: str,
+                             status: str, error: str = "") -> bool:
+        if status not in ("FAILED", "UNKNOWN"):
+            raise ValueError(f"delivery_attempts: cannot record status {status!r}")
+        now = int(time.time())
+        cur = self._db.execute(
+            """
+            UPDATE delivery_attempts
+            SET status = ?, last_error = ?, lease_until = 0, updated_at = ?
+            WHERE id = ? AND status NOT IN ('SENT')
+            """,
+            (status, str(error)[:4096], now, key.id),
+        )
+        return cur.rowcount > 0
+
+    async def expire_stale_claims(self, now: float) -> int:
+        """A CLAIMED fence whose lease passed becomes UNKNOWN, never 'free'.
+
+        The previous send may have been accepted by Telegram and simply never
+        recorded (the crash window). Marking the row UNKNOWN — instead of
+        silently reopening it for dispatch — is what keeps the fence honest:
+        an operator sees the ambiguity instead of the target receiving a
+        second copy.
+        """
+        cur = self._db.execute(
+            """
+            UPDATE delivery_attempts
+            SET status = 'UNKNOWN',
+                last_error = COALESCE(NULLIF(last_error, ''), 'claim expired before outcome was recorded'),
+                lease_until = 0, updated_at = ?
+            WHERE status IN ('CLAIMED', 'SENDING') AND lease_until > 0 AND lease_until < ?
+            """,
+            (int(now), float(now)),
+        )
+        return cur.rowcount
+
+    async def resolve_unknown(self, key: DeliveryAttemptKey, worker_id: str,
+                              resolution_reason: str) -> bool:
+        """Reopen an UNKNOWN fence with a recorded reason.
+
+        This is the *only* sanctioned transition out of UNKNOWN. The caller
+        must have verified (a Telegram-side read, or a bounded recovery
+        decision after the retry policy elapsed) that no earlier copy is in
+        the target. The reason is kept so an operator can audit why a
+        possibly-already-sent delivery was re-dispatched; a bare reopen would
+        make this decision invisible.
+        """
+        now = int(time.time())
+        cur = self._db.execute(
+            """
+            UPDATE delivery_attempts
+            SET status = 'FAILED', lease_until = 0,
+                last_error = COALESCE(?, last_error), updated_at = ?
+            WHERE id = ? AND status = 'UNKNOWN'
+            """,
+            (f"REOPENED: {str(resolution_reason)[:380]}"[:4096], now, key.id),
+        )
+        return cur.rowcount > 0
+
+
+class SqliteIngestionGapRepository(IIngestionGapRepository):
+    """SQLite implementation of the ingestion-gap recovery store.
+
+    Rows are created when the ingest path (poller or catch-up) asked for a
+    range of source ids and Telegram did not return part of it, and deleted
+    when the pipeline actually *sees* that id — the only proof the message
+    exists and was not lost.
+    """
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    async def record_gaps(self, session_id: str, source_chat_id: str,
+                          message_ids: Sequence[int]) -> int:
+        if not message_ids:
+            return 0
+        now = int(time.time())
+        rows = [
+            (f"gap:{session_id}:{source_chat_id}:{int(mid)}", str(session_id),
+             str(source_chat_id), int(mid), now, now)
+            for mid in message_ids
+        ]
+        with self._db._lock:
+            self._db._conn.executemany(
+                """
+                INSERT OR IGNORE INTO ingestion_gaps (
+                    id, session_id, source_chat_id, source_message_id,
+                    state, attempts, next_retry_at, last_error,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, 'PENDING', 0, 0, '', ?, ?)
+                """,
+                rows,
+            )
+            self._db._conn.commit()
+        return len(rows)
+
+    async def resolve_gap(self, session_id: str, source_chat_id: str,
+                          message_id: int) -> bool:
+        cur = self._db.execute(
+            """
+            DELETE FROM ingestion_gaps
+            WHERE session_id = ? AND source_chat_id = ? AND source_message_id = ?
+              AND state IN ('PENDING', 'RETRYING')
+            """,
+            (str(session_id), str(source_chat_id), int(message_id)),
+        )
+        return cur.rowcount > 0
+
+    async def resolve_gap_for_source(self, source_chat_id: str, message_id: int) -> bool:
+        """Resolve every non-terminal gap row for one source message.
+
+        The pipeline does not know which session carried the post (live updates
+        and poller replays share one handler), so the resolution deletes by
+        source chat + id; the UNIQUE(session, chat, id) key means one row per
+        watcher anyway. FAILED rows (retry budget spent) are deliberately kept:
+        resolving them would erase the actionable record of an unrecoverable id.
+        """
+        cur = self._db.execute(
+            """
+            DELETE FROM ingestion_gaps
+            WHERE source_chat_id = ? AND source_message_id = ?
+              AND state IN ('PENDING', 'RETRYING')
+            """,
+            (str(source_chat_id), int(message_id)),
+        )
+        return cur.rowcount > 0
+
+    async def pending_gaps(self, session_id: str, source_chat_id: str,
+                           limit: int = 100) -> List[dict]:
+        rows = self._db.query_all(
+            """
+            SELECT source_message_id, state, attempts, last_error, created_at
+            FROM ingestion_gaps
+            WHERE session_id = ? AND source_chat_id = ?
+            ORDER BY source_message_id ASC LIMIT ?
+            """,
+            (str(session_id), str(source_chat_id), max(int(limit), 1)),
+        )
+        return [dict(r) for r in rows or []]
+
+    async def due_gaps(self, now: float, limit: int = 100) -> List[dict]:
+        rows = self._db.query_all(
+            """
+            SELECT id, session_id, source_chat_id, source_message_id,
+                   state, attempts, next_retry_at, last_error
+            FROM ingestion_gaps
+            WHERE state IN ('PENDING', 'RETRYING') AND next_retry_at <= ?
+            ORDER BY next_retry_at ASC, source_message_id ASC LIMIT ?
+            """,
+            (float(now), max(int(limit), 1)),
+        )
+        return [dict(r) for r in rows or []]
+
+    async def mark_gap_attempt(self, gap_id: str, error: str,
+                               next_retry_at: float, exhausted: bool = False) -> bool:
+        now = int(time.time())
+        state = "FAILED" if exhausted else "RETRYING"
+        cur = self._db.execute(
+            """
+            UPDATE ingestion_gaps
+            SET state = ?, attempts = attempts + 1, last_error = ?,
+                next_retry_at = ?, updated_at = ?
+            WHERE id = ? AND state IN ('PENDING', 'RETRYING')
+            """,
+            (state, str(error)[:4096], float(next_retry_at), now, str(gap_id)),
+        )
+        return cur.rowcount > 0
 
 
 class SqlitePromptRepository(IPromptRepository):

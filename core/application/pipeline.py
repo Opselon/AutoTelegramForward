@@ -97,6 +97,11 @@ class PipelineContext:
     # yet earned by a delivery. Consumed when the message is accepted for
     # delivery, released otherwise (see DurableMessagePipeline._release_content_claim).
     content_claims: Dict[str, str] = field(default_factory=dict)
+    # Audit finding #4: targets whose enqueue was refused (backpressure, a
+    # refused insert). The replay-protection marker has no target dimension, so
+    # it may only be written once the *whole* fan-out is durable — otherwise a
+    # replay that could repair the missing target is dropped instead.
+    enqueue_failures: List[str] = field(default_factory=list)
 
     def record_stage(self, stage: PipelineStage, success: bool, reason: str = "", duration_ms: float = 0.0, data: Any = None, error: Optional[str] = None) -> None:
         self.stage_results.append(StageResult(
@@ -301,6 +306,7 @@ class DurableMessagePipeline:
         branding_hop: Optional[Any] = None,
         bot_tokens: Optional[Any] = None,
         counters: Optional[Any] = None,
+        gap_repo: Optional[Any] = None,
     ) -> None:
         self._rules = rule_repo
         self._filters = filter_repo
@@ -331,6 +337,12 @@ class DurableMessagePipeline:
         # so a bare pipeline still works — without it the setting is inert and
         # every message is forwarded, which is the pre-feature behaviour.
         self._counters = counters
+        # Audit finding #1: ingestion-gap resolution. When the poller asks for
+        # a range and a truncated GetChannelDifference returns only part of it,
+        # the missing ids are recorded as recovery work; the *only* proof that
+        # such an id exists and was not lost is the pipeline actually seeing
+        # it. This is that proof, which closes the loop.
+        self._gaps = gap_repo
         self.metrics = PipelineMetrics()
         # Which lifecycle events may leave this process, and how often. The
         # Logger has no server-side filter yet, so the documented severity
@@ -436,6 +448,32 @@ class DurableMessagePipeline:
             )
         return plan
 
+    async def _resolve_ingestion_gap(self, payload: "MessagePayload") -> None:
+        """Mark any recorded ingestion gap for this source message resolved.
+
+        The pipeline seeing the id is the *only* proof the post exists and was
+        not lost, so this runs before any rule matching or filtering — a gap
+        row must never survive an id the pipeline actually received. The
+        session dimension is not known here (updates arrive on a client, the
+        poller replays them over the same handler), so the resolution is keyed
+        on the source chat and id, which is what the gap row stores.
+
+        Best-effort by design: the store is one of two witnesses (the other is
+        the gap sweep), and a hiccup here must not fail a healthy message.
+        """
+        if self._gaps is None:
+            return
+        try:
+            await self._gaps.resolve_gap_for_source(str(payload.chat_id), int(payload.message_id))
+        except AttributeError:
+            # An older/in-memory gap adapter without the source-scoped call:
+            # fall back to nothing rather than failing the message. The sweep's
+            # own eventual-resolution already covers this; upgrading the
+            # adapter is the fix, not a pipeline change.
+            return
+        except Exception:
+            logger.debug("ingestion gap resolution failed for %s:%s", payload.chat_id, payload.message_id)
+
     async def process(self, raw_message: Any, trigger: str = "NEW_MESSAGE") -> PipelineContext:
         ctx = PipelineContext(trigger=trigger, raw_message=raw_message)
         t_start = time.monotonic()
@@ -456,6 +494,14 @@ class DurableMessagePipeline:
             ctx.payload = payload
             ctx.record_stage(PipelineStage.NORMALIZE, True, reason="normalized", duration_ms=(time.monotonic() - t0) * 1000)
             self.metrics.normalized_total += 1
+            # Audit finding #1: close the ingestion-gap loop. A source id that
+            # a truncated channel difference omitted was recorded as recovery
+            # work; the pipeline *seeing* it is the only proof it was not lost,
+            # so resolve it here, before any filtering can hide it. Failures
+            # are best-effort: a gap store that cannot be reached must never
+            # block or fail an otherwise-healthy message.
+            if self._gaps is not None:
+                await self._resolve_ingestion_gap(payload)
             logger.info(
                 "[PIPELINE:INGEST] [%s] Ingested message id=%s chat=%s (%s) media=%s text_len=%d trigger=%s",
                 ctx.correlation_id[:8], payload.message_id, payload.chat_id,
@@ -1055,6 +1101,10 @@ class DurableMessagePipeline:
                     )
                 else:
                     self.metrics.backpressure_drops += 1
+                    # Audit finding #4: record *which* target was refused so the
+                    # replay-protection marker is only written when the whole
+                    # fan-out is durable (see the mark_processed gate below).
+                    ctx.enqueue_failures.append(str(target))
                     await self._audit(ctx, "forward.enqueue_failed", "FAILED",
                                       severity="ERROR", reason_code="QUEUE_ENQUEUE_FAILED",
                                       rule_id=rule.id, message_id=str(payload.message_id),
@@ -1124,25 +1174,44 @@ class DurableMessagePipeline:
             duration_ms=(time.monotonic() - t0) * 1000,
         )
 
-        # Mark processed in processed_repo for event-level replay protection
-        if enqueued_any and self._processed is not None:
-            try:
-                await self._processed.mark_processed(
-                    rule.id, payload.chat_id, payload.message_id, payload.media_group_id or ""
-                )
-            except Exception:
-                # v12.3 (ACID observability): this marker IS the replay-protection
-                # guarantee. Failing to write it does not lose this message
-                # (it is already enqueued), but it silently disables idempotency
-                # for the replay — a subsequent delivery could be duplicated with
-                # no signal anywhere. Log it with the correlation id instead of
-                # swallowing it; do not re-raise, as the enqueue already succeeded
-                # and must not be rolled back.
-                logger.exception(
-                    "%s replay-marker write failed — idempotency degraded for "
-                    "rule=%s src=%s:%s; duplicate delivery possible on replay",
-                    getattr(ctx, "correlation_id", "?"),
-                    rule.id[:8], payload.chat_id, payload.message_id,
+        # Mark processed in processed_repo for event-level replay protection.
+        #
+        # Audit finding #4: the marker has NO target dimension, so it can only
+        # protect an event whose *whole* fan-out succeeded. Writing it when one
+        # target's enqueue was refused (backpressure) permanently hides that
+        # target's missing copy: a later replay of the event is dropped by
+        # was_processed() before it can repair it. Gate it on every target
+        # having been accepted — a partial fan-out must stay replayable, and a
+        # replay is safe precisely because the job insert is INSERT OR IGNORE:
+        # the already-queued targets are no-ops, the missing one is created.
+        # (see the comment above the block for why the gate is "all targets".)
+        if self._processed is not None:
+            failures = getattr(ctx, "enqueue_failures", []) or []
+            if enqueued_any and not failures:
+                try:
+                    await self._processed.mark_processed(
+                        rule.id, payload.chat_id, payload.message_id, payload.media_group_id or ""
+                    )
+                except Exception:
+                    # v12.3 (ACID observability): this marker IS the replay-protection
+                    # guarantee. Failing to write it does not lose this message
+                    # (it is already enqueued), but it silently disables idempotency
+                    # for the replay — a subsequent delivery could be duplicated with
+                    # no signal anywhere. Log it with the correlation id instead of
+                    # swallowing it; do not re-raise, as the enqueue already succeeded
+                    # and must not be rolled back.
+                    logger.exception(
+                        "%s replay-marker write failed — idempotency degraded for "
+                        "rule=%s src=%s:%s; duplicate delivery possible on replay",
+                        getattr(ctx, "correlation_id", "?"),
+                        rule.id[:8], payload.chat_id, payload.message_id,
+                    )
+            elif failures:
+                logger.warning(
+                    "[PIPELINE:ENQUEUE] [%s] Rule %s msg %s: %d target(s) refused by the queue "
+                    "(%s) — the event is NOT marked processed, so a replay can repair it",
+                    ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+                    len(failures), ",".join(failures),
                 )
 
         # The message reached the delivery queue, so the content fingerprint is

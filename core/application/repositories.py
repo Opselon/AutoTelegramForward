@@ -15,6 +15,7 @@ from ..domain.entities import (
     PromptVersion,
     TelegramSession,
 )
+from ..domain.value_objects import DeliveryAttemptKey
 
 
 class ConcurrencyError(Exception):
@@ -863,6 +864,130 @@ class ISettingsRepository(ABC):
 
     @abstractmethod
     async def set(self, key: str, value: str) -> None:
+        ...
+
+
+class IDeliveryAttemptRepository(ABC):
+    """Send-side idempotency fence for one logical delivery (audit finding #5).
+
+    Telegram has no idempotency key for ordinary message sends, so the only
+    way to stop this application double-dispatching one logical delivery — a
+    lease expiring mid-dispatch, a crash between Telegram accepting the send
+    and the batch commit, the legacy and worker paths racing — is to claim the
+    logical send ourselves, atomically, **before any Telegram call**.
+
+    The key is *deterministic and business-derived* (rule, source chat,
+    source message, target, deliverable kind): not a random per-attempt id,
+    so every claim, claim-after-crash and duplicate check anywhere in the
+    system resolves to the same row. The state machine is
+    ``CLAIMED -> SENT | FAILED | UNKNOWN``, mirroring ``delivery_jobs`` so an
+    outcome that never reached the job row is still recoverable.
+
+    Contract (see the implementations for the exact SQL):
+
+    * ``claim_or_check`` — atomic check-and-claim. Returns a ``(outcome,
+      row)`` pair where outcome is ``"dispatch"`` (the caller owns this send
+      and must dispatch it), ``"already_sent"`` (a previous attempt is
+      recorded as SENT — never dispatch again), ``"in_flight"`` (another
+      worker holds a live claim — must not dispatch concurrently),
+      ``"stale"`` (a claim expired without a recorded outcome) or
+      ``"unknown"`` (an earlier send's outcome was lost).
+    * ``record_sent`` — stamp a confirmed Telegram result (never before the
+      response is persisted as far as this store is concerned, the caller
+      still owns the job-row write).
+    * ``record_outcome`` — FAILED / UNKNOWN with the reason.
+    * ``expire_stale_claims`` — a CLAIMED row whose lease passed must move to
+      UNKNOWN, not back to dispatch-by-default: the previous send *may* have
+      succeeded and we must not blindly resend.
+    * ``resolve_unknown`` — the only sanctioned way to reopen an UNKNOWN
+      fence: the caller has *checked* (by an explicit Telegram-side read or a
+      bounded recovery decision) that no earlier copy is in the target. The
+      resolution is recorded (``resolution_reason``) so an operator can audit
+      why a possibly-already-sent delivery was re-dispatched.
+
+    This store cannot provide exactly-once delivery. If Telegram accepted a
+    send and the process died before ``record_sent`` persisted, the row stays
+    CLAIMED and is expired to UNKNOWN — deliberately *not* re-dispatched
+    automatically. That ambiguity is irreducible without a Telegram-side key.
+    """
+
+    @abstractmethod
+    async def claim_or_check(self, key: "DeliveryAttemptKey", worker_id: str,
+                             lease_until: float) -> Tuple[str, Optional[dict]]:
+        ...
+
+    @abstractmethod
+    async def record_sent(self, key: "DeliveryAttemptKey", worker_id: str,
+                          target_message_id: int) -> bool:
+        ...
+
+    @abstractmethod
+    async def record_outcome(self, key: "DeliveryAttemptKey", worker_id: str,
+                             status: str, error: str = "") -> bool:
+        ...
+
+    @abstractmethod
+    async def expire_stale_claims(self, now: float) -> int:
+        ...
+
+    @abstractmethod
+    async def resolve_unknown(self, key: "DeliveryAttemptKey", worker_id: str,
+                              resolution_reason: str) -> bool:
+        ...
+
+
+class IIngestionGapRepository(ABC):
+    """Durable recovery work for source messages the ingest path missed.
+
+    Audit finding #1: a truncated ``GetChannelDifference`` left the poller's
+    cursor past ids Telegram never returned, so those posts were never
+    re-requested and never delivered — permanently and silently. This store
+    turns such a gap into *durable recovery work*: the ids the pipeline asked
+    for but did not receive are recorded here and retried with bounded
+    exponential backoff until the pipeline actually sees them.
+
+    A numeric gap in channel message ids is **not** proof of a missing message
+    (deleted and service posts leave legitimate gaps), so a row here is
+    recovery work to *attempt*, never a loss record: it is resolved (deleted)
+    only when the id is actually seen by the pipeline, and an id that stays
+    absent after the bounded retry policy is exhausted is marked FAILED with
+    an actionable reason — visibly, never silently.
+    """
+
+    @abstractmethod
+    async def record_gaps(self, session_id: str, source_chat_id: str,
+                          message_ids: Sequence[int]) -> int:
+        ...
+
+    @abstractmethod
+    async def resolve_gap(self, session_id: str, source_chat_id: str,
+                          message_id: int) -> bool:
+        ...
+
+    async def resolve_gap_for_source(self, source_chat_id: str, message_id: int) -> bool:
+        """Resolve a gap knowing only the source, not the session.
+
+        The pipeline sees a message but not the session it arrived on (live
+        updates and poller replays share the same handler), so this is the
+        resolution the ingest path can actually call. Both entry points delete
+        the same rows — a source chat is watched by one session in practice —
+        and the delete is scoped to non-terminal states, so a FAILED gap
+        (budget spent) is never silently revived.
+        """
+        return False
+
+    @abstractmethod
+    async def pending_gaps(self, session_id: str, source_chat_id: str,
+                           limit: int = 100) -> List[dict]:
+        ...
+
+    @abstractmethod
+    async def due_gaps(self, now: float, limit: int = 100) -> List[dict]:
+        ...
+
+    @abstractmethod
+    async def mark_gap_attempt(self, gap_id: str, error: str,
+                               next_retry_at: float, exhausted: bool = False) -> bool:
         ...
 
 

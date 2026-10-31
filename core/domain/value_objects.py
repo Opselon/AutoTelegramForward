@@ -110,6 +110,44 @@ class DeliveryStatus(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+@dataclass(frozen=True)
+class DeliveryAttemptKey:
+    """The deterministic business identity of one logical delivery.
+
+    The send-side idempotency fence is keyed on *this*, never on a random
+    per-attempt id: a claim, a claim-after-crash and a duplicate check must
+    all resolve to the same row no matter which path generates them (durable
+    worker, legacy direct dispatch, replay). Every field is a stable
+    identifier that already exists on the job, so the key is reproducible by
+    any caller from the data it already holds.
+
+    ``job_kind`` separates the primary forward from its secondary
+    deliverables (the keyword reply), exactly as ``delivery_jobs``' own
+    UNIQUE key does — without it the reply's claim would collide with the
+    forward's and one of the two would be silently refused.
+    """
+
+    rule_id: str
+    source_chat_id: str
+    source_message_id: int
+    target_chat_id: str
+    job_kind: str = "forward"
+
+    @property
+    def id(self) -> str:
+        """The storage id — identical to the delivery job's own id.
+
+        Keeping the fence row's id equal to the job id means a DBA joining
+        ``delivery_attempts`` to ``delivery_jobs`` needs no lookup table, and
+        a crash between the two writes leaves exactly one obvious orphan.
+        """
+        suffix = "" if self.job_kind == "forward" else f":{self.job_kind}"
+        return (
+            f"{self.rule_id}:{self.source_chat_id}:"
+            f"{self.source_message_id}:{self.target_chat_id}{suffix}"
+        )
+
+
 class LinkPolicy(str, Enum):
     PRESERVE_ALL = "PRESERVE_ALL"
     REMOVE_ALL_URLS = "REMOVE_ALL_URLS"
