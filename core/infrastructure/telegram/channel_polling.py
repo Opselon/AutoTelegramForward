@@ -45,6 +45,22 @@ MAX_POSTS_PER_SWEEP = 100
 # pipeline's dedup layer drops the ones already accepted.
 REPLAY_DRAIN_TIMEOUT_SECONDS = 120.0
 
+# --- Ingestion gap recovery (audit finding #1) ------------------------------- #
+# A source id the poller asked for but a truncated GetChannelDifference did not
+# return becomes durable recovery work: it is re-fetched with a narrow
+# min_id=max_id range until either the pipeline sees it (resolved) or the
+# bounded budget below is spent (marked FAILED, visibly). A numeric gap in
+# channel ids is not proof of a missing message — deleted and service posts
+# leave gaps — so the budget is what turns "we kept trying" into an actionable
+# terminal state instead of an infinite retry loop.
+GAP_MAX_ATTEMPTS = 5
+
+
+def _gap_backoff(attempt: int) -> float:
+    """Bounded exponential backoff with jitter for gap recovery attempts."""
+    import random
+    return float(min(3600.0, (2.0 ** max(1, attempt)) + random.uniform(1.0, 5.0)))
+
 # A channel the session cannot resolve (`PEER_ID_INVALID`) or that is not a
 # channel at all (`CHANNEL_INVALID`) fails on every sweep. Retrying it every
 # 15s produced thousands of identical WARN lines and kept hammering Telegram
@@ -158,6 +174,11 @@ class _OrderedReplayLane:
 
     One consumer per channel keeps the order exact (submit order is message-id
     order) while leaving the sweep loop free to keep polling other channels.
+
+    ``accepted_ids`` (audit finding #2) records the ids the pipeline actually
+    *took*: the cursor may only advance over those. A post whose dispatch
+    raised, or that the lane worker could not parse, stays outside the
+    watermark and is retried by the gap sweep instead of being skipped.
     """
 
     def __init__(self, key: Tuple[str, str], worker) -> None:
@@ -168,6 +189,9 @@ class _OrderedReplayLane:
         self.submitted = 0
         self.completed = 0
         self.failed = 0
+        # Set of source message ids the pipeline accepted (handed to the
+        # registered handler without raising). Populated by _drain.
+        self.accepted_ids: set = set()
 
     def submit(self, item) -> None:
         self._queue.put_nowait(item)
@@ -178,9 +202,15 @@ class _OrderedReplayLane:
     async def _drain(self) -> None:
         while True:
             item = await self._queue.get()
+            # The source id is what the cursor keys on, so the lane records it
+            # for every item it hands over: success adds it to accepted_ids,
+            # failure does not, and the poller advances only over the accepted.
+            mid = int(getattr(item[2], "id", 0) or 0) if len(item) > 2 else 0
             try:
                 await self._worker(item)
                 self.completed += 1
+                if mid:
+                    self.accepted_ids.add(mid)
             except Exception:
                 # One bad post must never kill the lane: the posts behind it are
                 # still ordered work that has to go out.
@@ -226,6 +256,7 @@ class ChannelPollingService:
         state_store=None,
         interval: float = POLL_INTERVAL_SECONDS,
         lease_coordinator=None,
+        gap_repo=None,
     ) -> None:
         self._pool = pool
         self._rules = rules
@@ -243,6 +274,11 @@ class ChannelPollingService:
         # one, a single replica sweeps at a time; without one (or when Redis is
         # unreachable) every replica sweeps, as before.
         self._lease = lease_coordinator
+        # Audit finding #1: durable recovery work for the ids a truncated
+        # channel difference did not return. ``None`` keeps the poller's
+        # pre-existing behaviour for every embedding that does not wire it
+        # (the cursor still only advances over what the pipeline accepted).
+        self._gaps = gap_repo
         # Ordered replay lanes, keyed by (session_id, chat_id). One live lane per
         # polled channel is what guarantees a burst leaves in source order.
         self._lanes: Dict[Tuple[str, str], _OrderedReplayLane] = {}
@@ -280,6 +316,12 @@ class ChannelPollingService:
             try:
                 if await self._may_sweep():
                     await self.sweep_all()
+                # Audit finding #1: replay the ids a truncated difference did
+                # not return. This is the second half of the fix — detecting
+                # the gap is not enough; the ids must be re-fetched or they
+                # are still lost, just with a row saying so.
+                if self._gaps is not None:
+                    await self._recover_gaps()
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -289,6 +331,127 @@ class ChannelPollingService:
                 await asyncio.wait_for(self._stop.wait(), timeout=self._interval)
             except asyncio.TimeoutError:
                 continue
+
+    async def _recover_gaps(self, limit: int = 50) -> int:
+        """Retry the ingestion gaps whose backoff has elapsed.
+
+        A gap row is recovery work, not a loss record: the id may be a deleted
+        or service post that will never come back, so each attempt that still
+        returns nothing consumes a bounded retry slot, and the row is marked
+        FAILED with an actionable reason once the budget is spent — visibly,
+        never silently. An id that *is* returned is dispatched through the
+        normal lane and the row is resolved (deleted) by the pipeline observer.
+
+        The fetch is a narrow ``MessageRange(min_id=max_id=id)`` request, so
+        one Telegram call answers "does this post exist?" without pulling a
+        whole slice of channel history.
+        """
+        if self._gaps is None:
+            return 0
+        try:
+            due = await self._gaps.due_gaps(time.time(), limit=limit)
+        except Exception as exc:
+            logger.warning("poll: gap sweep could not read due gaps: %s", exc)
+            return 0
+        if not due:
+            return 0
+
+        # Group by (session, chat) so each channel's posts stay ordered and
+        # each client is resolved once.
+        by_channel: Dict[Tuple[str, str], List[dict]] = {}
+        for g in due:
+            by_channel.setdefault((str(g["session_id"]), str(g["source_chat_id"])), []).append(g)
+
+        processed = 0
+        for (session_id, chat_id), rows in by_channel.items():
+            client = self._pool.get(session_id) if self._pool is not None else None
+            if client is None:
+                # The session is offline; leave the rows alone — the backoff
+                # schedule already Defers them and a missing client must not
+                # burn the retry budget.
+                continue
+            for g in rows:
+                processed += await self._recover_one_gap(client, session_id, chat_id, g)
+        return processed
+
+    async def _recover_one_gap(self, client, session_id: str, chat_id: str, gap: dict) -> int:
+        """Fetch one missing source id and dispatch it if it exists.
+
+        Returns 1 when the attempt was made (whether the post exists or not),
+        0 when the attempt could not even be issued.
+        """
+        assert self._gaps is not None
+        gap_id = str(gap.get("id") or "")
+        mid = int(gap.get("source_message_id") or 0)
+        try:
+            from pyrogram.raw.functions.updates import GetChannelDifference
+            from pyrogram.raw.types import ChannelMessagesFilter, MessageRange
+
+            peer = None
+            try:
+                target_peer = int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
+                peer = await client.resolve_peer(target_peer)
+            except Exception as exc:
+                raise PollFailure(f"cannot resolve peer: {exc}", transient=_is_transient(exc)) from exc
+
+            full_pts = 0
+            try:
+                from pyrogram.raw.functions.channels import GetFullChannel
+                full = await client.invoke(GetFullChannel(channel=peer))
+                full_pts = getattr(getattr(full, "full_chat", None), "pts", 0) or 0
+            except Exception:
+                pass  # pts is only a hint for the difference call
+
+            msg_filter = ChannelMessagesFilter(ranges=[MessageRange(min_id=mid, max_id=mid)])
+            diff = await client.invoke(
+                GetChannelDifference(channel=peer, filter=msg_filter, pts=full_pts, limit=1)
+            )
+            raw_messages = getattr(diff, "new_messages", None) or []
+            if raw_messages:
+                users = {u.id: u for u in (getattr(diff, "users", None) or [])}
+                chats = {c.id: c for c in (getattr(diff, "chats", None) or [])}
+                for raw in raw_messages:
+                    logger.info(
+                        "[POLL GAP] recovered post id=%s from %s — dispatching through the pipeline",
+                        mid, chat_id,
+                    )
+                    self._replay_one(client, session_id, raw, users, chats, chat_id=chat_id)
+                # The row is left to the pipeline observer to resolve: only the
+                # pipeline seeing the id proves it was not lost.
+                return 1
+            # Nothing at that id: a deleted/service post, most likely. Consume
+            # a bounded retry slot; exhaustion marks it FAILED, visibly.
+            exhausted = int(gap.get("attempts", 0) or 0) + 1 >= GAP_MAX_ATTEMPTS
+            await self._gaps.mark_gap_attempt(
+                gap_id, "id not returned by Telegram (deleted or service post)",
+                _gap_backoff(int(gap.get("attempts", 0) or 0) + 1),
+                exhausted=exhausted,
+            )
+            if exhausted:
+                logger.error(
+                    "[POLL GAP] source %s id=%s could not be recovered after %d attempt(s) — "
+                    "marked FAILED (the post is most likely deleted; no delivery is owed)",
+                    chat_id, mid, GAP_MAX_ATTEMPTS,
+                )
+            return 1
+        except PollFailure as exc:
+            transient = bool(getattr(exc, "transient", False))
+            attempts = int(gap.get("attempts", 0) or 0) + 1
+            exhausted = attempts >= GAP_MAX_ATTEMPTS
+            await self._gaps.mark_gap_attempt(
+                gap_id, f"recovery failed: {exc}",
+                _gap_backoff(attempts) if transient else self._interval * 4,
+                exhausted=exhausted and not transient,
+            )
+            if exhausted and not transient:
+                logger.error(
+                    "[POLL GAP] source %s id=%s permanently unrecoverable after %d attempt(s): %s",
+                    chat_id, mid, GAP_MAX_ATTEMPTS, exc,
+                )
+            return 1
+        except Exception as exc:
+            logger.warning("poll: gap recovery for %s id=%s failed: %s", chat_id, mid, exc)
+            return 0
 
     async def _may_sweep(self) -> bool:
         """True when this replica is the one sweeping channels.
@@ -503,14 +666,61 @@ class ChannelPollingService:
 
         raw_messages = getattr(diff, "new_messages", None) or []
         messages = sorted(raw_messages, key=lambda m: getattr(m, "id", 0) or 0)
+        returned_ids = [int(getattr(m, "id", 0) or 0) for m in messages]
         logger.info(
             "[POLL TRACE] channel=%s difference returned %d raw message(s)",
             chat_name or chat_id, len(messages),
         )
+
+        # --- Audit finding #1: a truncated difference must not move the
+        # cursor past the ids Telegram did not return. ----------------------- #
+        # `lo..top` is what we ASKED for; `returned_ids` is what we GOT BACK.
+        # A numeric gap is NOT proof of a missing message — deleted and service
+        # posts leave legitimate gaps — so missing ids become durable *recovery
+        # work* (recorded, retried with bounded backoff, resolved only when the
+        # pipeline actually sees the id), never an immediate loss record. The
+        # cursor itself advances only to the highest id the pipeline accepted.
+        missing = self._missing_ids(lo, hi, returned_ids)
+        if missing and self._gaps is not None:
+            try:
+                recorded = await self._gaps.record_gaps(session_id, chat_id, missing)
+            except Exception as exc:
+                recorded = 0
+                logger.warning(
+                    "[POLL GAP] channel=%s (%s): could not record %d missing id(s) "
+                    "as recovery work: %s",
+                    chat_name or chat_id, chat_id, len(missing), exc,
+                )
+            else:
+                logger.warning(
+                    "[POLL GAP] channel=%s (%s): difference returned %d of the %d id(s) "
+                    "requested [%d..%d]; %d id(s) missing (%s) recorded as durable "
+                    "recovery work — the cursor will not advance past them",
+                    chat_name or chat_id, chat_id, len(returned_ids),
+                    hi - lo + 1, lo, hi, len(missing),
+                    self._describe_missing(missing),
+                )
+        elif missing:
+            # No gap store wired: report the truncation loudly rather than
+            # silently advancing past unrecovered ids.
+            logger.warning(
+                "[POLL GAP] channel=%s (%s): difference returned %d of the %d id(s) "
+                "requested [%d..%d]; %d id(s) missing (%s) and no gap store is "
+                "configured — advancing the cursor only over delivered ids",
+                chat_name or chat_id, chat_id, len(returned_ids),
+                hi - lo + 1, lo, hi, len(missing), self._describe_missing(missing),
+            )
+
         if not messages:
-            # Keep the cursor moving so an empty difference does not refetch.
-            self._state[chat_id] = top
-            await self._persist_cursors()
+            # Nothing was returned. Keep the cursor moving so an empty
+            # difference does not refetch — but never past ids we have not
+            # accounted for: if gaps are pending for this channel, hold the
+            # cursor at the oldest unresolved gap so the sweep keeps retrying.
+            if missing and self._gaps is not None:
+                pass  # do not advance; the gap sweep owns these ids now
+            else:
+                self._state[chat_id] = top
+                await self._persist_cursors()
             return 0
 
         users = {u.id: u for u in (getattr(diff, "users", None) or [])}
@@ -531,8 +741,33 @@ class ChannelPollingService:
             # only record of what has been seen.
             lane = self._lane_for(session_id, chat_id)
             if await lane.join():
-                self._state[chat_id] = max(self._state.get(chat_id, 0), messages[-1].id)
-                await self._persist_cursors()
+                # Audit finding #2: a lane that *failed* posts must not let the
+                # cursor advance past them. `completed` is what the pipeline
+                # accepted; `failed` is what it dropped (a parse failure, a
+                # missing handler). Advance to the highest id the pipeline
+                # actually took, and leave the rest for the next sweep / the
+                # gap sweep to retry — never silently past them.
+                accepted = [i for i in returned_ids if i in lane.accepted_ids]
+                new_cursor = max(accepted) if accepted else 0
+                failed = [i for i in returned_ids if i not in lane.accepted_ids]
+                if failed and self._gaps is not None:
+                    try:
+                        await self._gaps.record_gaps(session_id, chat_id, failed)
+                    except Exception as exc:
+                        logger.warning(
+                            "[POLL GAP] channel=%s (%s): could not record %d failed "
+                            "dispatch id(s) as recovery work: %s",
+                            chat_name or chat_id, chat_id, len(failed), exc,
+                        )
+                    logger.warning(
+                        "[POLL GAP] channel=%s (%s): %d post(s) failed ingestion "
+                        "(%s) — recorded as recovery work, cursor held at %s",
+                        chat_name or chat_id, chat_id, len(failed),
+                        self._describe_missing(failed), new_cursor or lo - 1,
+                    )
+                if new_cursor > self._state.get(chat_id, 0):
+                    self._state[chat_id] = new_cursor
+                    await self._persist_cursors()
             else:
                 logger.warning(
                     "poll: not advancing cursor for %s (%s) — %d post(s) still in the replay lane",
@@ -593,6 +828,41 @@ class ChannelPollingService:
         accumulate one lane object per channel ever polled."""
         for key in [k for k, lane in self._lanes.items() if lane.idle()]:
             self._lanes.pop(key, None)
+
+    # ------------------------------------------------------------------ #
+    # Truncated-difference detection (audit finding #1)
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _missing_ids(lo: int, hi: int, returned_ids: List[int]) -> List[int]:
+        """Ids the sweep asked for but the difference did not return.
+
+        Deliberately a *set difference over the requested range*, not a scan
+        for every numeric gap in channel history: a channel's id sequence
+        legitimately skips (deleted posts, service messages), so the only ids
+        that are unaccounted for are the ones inside the range this sweep
+        explicitly requested and Telegram did not serve. Those become recovery
+        work; ids outside what we asked for are none of our business yet.
+        """
+        if hi < lo:
+            return []
+        got = {int(i) for i in returned_ids if i}
+        return [i for i in range(lo, hi + 1) if i not in got]
+
+    @staticmethod
+    def _describe_missing(ids: List[int]) -> str:
+        """Compact, range-compressed description for log lines."""
+        if not ids:
+            return "none"
+        out: List[str] = []
+        start = prev = ids[0]
+        for i in ids[1:]:
+            if i == prev + 1:
+                prev = i
+                continue
+            out.append(f"{start}" if start == prev else f"{start}..{prev}")
+            start = prev = i
+        out.append(f"{start}" if start == prev else f"{start}..{prev}")
+        return ",".join(out)
 
     # ------------------------------------------------------------------ #
     # Dispatch

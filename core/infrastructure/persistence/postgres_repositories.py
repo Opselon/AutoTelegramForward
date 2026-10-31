@@ -12,7 +12,7 @@ import json
 import logging
 import re
 import time
-from typing import Any, Callable, Dict, List, Optional, Protocol, Sequence
+from typing import Any, Callable, Dict, List, Optional, Protocol, Sequence, Tuple
 
 from .coercion import enum_str
 
@@ -20,9 +20,12 @@ logger = logging.getLogger(__name__)
 
 from ...application.repositories import (
     ConcurrencyError,
+    DeliveryAttemptKey,
     ITaskRepository,
+    IDeliveryAttemptRepository,
     IDeliveryQueueRepository,
     IForwardRuleRepository,
+    IIngestionGapRepository,
     IMessageMapRepository,
     IPromptRepository,
     kind_filter_sql,
@@ -578,6 +581,12 @@ class PostgresForwardRuleRepository(IForwardRuleRepository):
                 DELETE FROM rule_stats WHERE rule_id IN (SELECT id FROM deleted)
             ), errors AS (
                 DELETE FROM error_log WHERE rule_id IN (SELECT id FROM deleted)
+            ), fences AS (
+                -- Send-side idempotency rows key on rule_id (audit finding #5):
+                -- a fence for a deleted task protects nothing, and leaving it
+                -- would keep a permanent SENT record that could suppress a
+                -- re-created task's delivery of the same message.
+                DELETE FROM delivery_attempts WHERE rule_id IN (SELECT id FROM deleted)
             )
             SELECT COUNT(*) AS deleted_count FROM deleted
         """
@@ -772,6 +781,11 @@ class PostgresMessageMapRepository(IMessageMapRepository):
     async def add_or_update(self, mapping: MessageMapping) -> MessageMapping:
         now = int(time.time())
         mapping.updated_at = now
+        # Audit finding #3 (Postgres mirror of the SQLite guard): an upsert must
+        # never regress a terminal mapping. A replay of an already-processed
+        # event would otherwise flip a SENT row back to PENDING with no delivery
+        # job to drive it — the target has the message but the store says it
+        # does not, and edit/delete sync then reads a lie.
         query = """
         INSERT INTO message_map (
             id, rule_id, source_chat_id, source_message_id, target_chat_id,
@@ -780,7 +794,10 @@ class PostgresMessageMapRepository(IMessageMapRepository):
         ON CONFLICT(rule_id, source_chat_id, source_message_id, target_chat_id) DO UPDATE SET
             target_message_id = COALESCE(EXCLUDED.target_message_id, message_map.target_message_id),
             media_group_id = COALESCE(EXCLUDED.media_group_id, message_map.media_group_id),
-            delivery_status = EXCLUDED.delivery_status,
+            delivery_status = CASE
+                WHEN message_map.delivery_status = 'SENT' THEN message_map.delivery_status
+                ELSE EXCLUDED.delivery_status
+            END,
             updated_at = EXCLUDED.updated_at
         """
         status_str = getattr(mapping.delivery_status, "value", str(mapping.delivery_status))
@@ -1461,6 +1478,245 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
         return count if count is not None else 0
 
 
+class PostgresDeliveryAttemptRepository(IDeliveryAttemptRepository):
+    """PostgreSQL implementation of the send-side idempotency fence.
+
+    Mirrors the SQLite implementation's contract: the claim is a single
+    ``INSERT ... ON CONFLICT`` whose WHERE clause never steals a live claim
+    from its holder and never silently reopens an UNKNOWN one. ``FOR UPDATE
+    SKIP LOCKED`` is not needed here because the UPSERT's guarded predicate is
+    the whole atomicity guarantee, same as the queue's own claim.
+    """
+
+    def __init__(self, db: PostgresConnection) -> None:
+        self._db = db
+
+    async def claim_or_check(self, key: DeliveryAttemptKey, worker_id: str,
+                             lease_until: float) -> Tuple[str, Optional[dict]]:
+        now = int(time.time())
+        query = """
+        INSERT INTO delivery_attempts (
+            id, rule_id, source_chat_id, source_message_id, target_chat_id,
+            job_kind, status, worker_id, lease_until, attempts,
+            last_error, created_at, updated_at
+        ) VALUES (%s, %s, %s, %s, %s, %s, 'CLAIMED', %s, %s, 0, '', %s, %s)
+        ON CONFLICT (id) DO UPDATE SET
+            status = 'CLAIMED',
+            worker_id = EXCLUDED.worker_id,
+            lease_until = EXCLUDED.lease_until,
+            attempts = delivery_attempts.attempts + 1,
+            last_error = '',
+            updated_at = EXCLUDED.updated_at
+        WHERE delivery_attempts.status = 'FAILED'
+        """
+        await _execute_db(self._db, query, (
+            key.id, key.rule_id, str(key.source_chat_id),
+            int(key.source_message_id), str(key.target_chat_id),
+            str(key.job_kind or "forward"), worker_id, float(lease_until), now, now,
+        ))
+        row = await _fetch_one_db(
+            self._db,
+            "SELECT status, worker_id, lease_until, target_message_id, last_error, attempts "
+            "FROM delivery_attempts WHERE id = %s",
+            (key.id,),
+        )
+        if row is None:
+            return ("dispatch", None)
+        d = dict(row) if hasattr(row, "keys") else dict(zip(
+            ("status", "worker_id", "lease_until", "target_message_id", "last_error", "attempts"),
+            row,
+        ))
+        status = str(d.get("status") or "")
+        holder = str(d.get("worker_id") or "")
+        lease = float(d.get("lease_until") or 0)
+        if status == "SENT":
+            return ("already_sent", d)
+        if status == "UNKNOWN":
+            return ("unknown", d)
+        if status == "FAILED":
+            return ("dispatch", d)
+        if holder == worker_id:
+            return ("dispatch", d)
+        if lease > 0 and lease >= now:
+            return ("in_flight", d)
+        return ("stale", d)
+
+    async def record_sent(self, key: DeliveryAttemptKey, worker_id: str,
+                          target_message_id: int) -> bool:
+        now = int(time.time())
+        res = await _execute_db(
+            self._db,
+            """
+            UPDATE delivery_attempts
+            SET status = 'SENT', target_message_id = %s, lease_until = 0,
+                last_error = '', updated_at = %s
+            WHERE id = %s AND status != 'SENT'
+            """,
+            (int(target_message_id), now, key.id),
+        )
+        count = getattr(res, "rowcount", None)
+        return (count > 0) if count is not None else True
+
+    async def record_outcome(self, key: DeliveryAttemptKey, worker_id: str,
+                             status: str, error: str = "") -> bool:
+        if status not in ("FAILED", "UNKNOWN"):
+            raise ValueError(f"delivery_attempts: cannot record status {status!r}")
+        now = int(time.time())
+        res = await _execute_db(
+            self._db,
+            """
+            UPDATE delivery_attempts
+            SET status = %s, last_error = %s, lease_until = 0, updated_at = %s
+            WHERE id = %s AND status NOT IN ('SENT')
+            """,
+            (status, str(error)[:4096], now, key.id),
+        )
+        count = getattr(res, "rowcount", None)
+        return (count > 0) if count is not None else True
+
+    async def expire_stale_claims(self, now: float) -> int:
+        res = await _execute_db(
+            self._db,
+            """
+            UPDATE delivery_attempts
+            SET status = 'UNKNOWN',
+                last_error = COALESCE(NULLIF(last_error, ''), 'claim expired before outcome was recorded'),
+                lease_until = 0, updated_at = %s
+            WHERE status IN ('CLAIMED', 'SENDING') AND lease_until > 0 AND lease_until < %s
+            """,
+            (int(now), float(now)),
+        )
+        count = getattr(res, "rowcount", None)
+        return int(count or 0)
+
+    async def resolve_unknown(self, key: DeliveryAttemptKey, worker_id: str,
+                              resolution_reason: str) -> bool:
+        now = int(time.time())
+        res = await _execute_db(
+            self._db,
+            """
+            UPDATE delivery_attempts
+            SET status = 'FAILED', lease_until = 0,
+                last_error = COALESCE(%s, last_error), updated_at = %s
+            WHERE id = %s AND status = 'UNKNOWN'
+            """,
+            (f"REOPENED: {str(resolution_reason)[:380]}"[:4096], now, key.id),
+        )
+        count = getattr(res, "rowcount", None)
+        return (count > 0) if count is not None else True
+
+
+class PostgresIngestionGapRepository(IIngestionGapRepository):
+    """PostgreSQL mirror of the ingestion-gap recovery store."""
+
+    def __init__(self, db: PostgresConnection) -> None:
+        self._db = db
+
+    async def record_gaps(self, session_id: str, source_chat_id: str,
+                          message_ids: Sequence[int]) -> int:
+        if not message_ids:
+            return 0
+        now = int(time.time())
+        rows = [
+            (f"gap:{session_id}:{source_chat_id}:{int(mid)}", str(session_id),
+             str(source_chat_id), int(mid), now, now)
+            for mid in message_ids
+        ]
+        # One statement per row keeps the ON CONFLICT semantics identical to the
+        # SQLite helper; the batch is small (one poll sweep's worth of ids).
+        for r in rows:
+            await _execute_db(
+                self._db,
+                """
+                INSERT INTO ingestion_gaps (
+                    id, session_id, source_chat_id, source_message_id,
+                    state, attempts, next_retry_at, last_error,
+                    created_at, updated_at
+                ) VALUES (%s, %s, %s, %s, 'PENDING', 0, 0, '', %s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                r,
+            )
+        return len(rows)
+
+    async def resolve_gap(self, session_id: str, source_chat_id: str,
+                          message_id: int) -> bool:
+        res = await _execute_db(
+            self._db,
+            """
+            DELETE FROM ingestion_gaps
+            WHERE session_id = %s AND source_chat_id = %s AND source_message_id = %s
+              AND state IN ('PENDING', 'RETRYING')
+            """,
+            (str(session_id), str(source_chat_id), int(message_id)),
+        )
+        count = getattr(res, "rowcount", None)
+        return (count > 0) if count is not None else True
+
+    async def resolve_gap_for_source(self, source_chat_id: str, message_id: int) -> bool:
+        res = await _execute_db(
+            self._db,
+            """
+            DELETE FROM ingestion_gaps
+            WHERE source_chat_id = %s AND source_message_id = %s
+              AND state IN ('PENDING', 'RETRYING')
+            """,
+            (str(source_chat_id), int(message_id)),
+        )
+        count = getattr(res, "rowcount", None)
+        return (count > 0) if count is not None else True
+
+    async def pending_gaps(self, session_id: str, source_chat_id: str,
+                           limit: int = 100) -> List[dict]:
+        rows = await _fetch_all_db(
+            self._db,
+            """
+            SELECT source_message_id, state, attempts, last_error, created_at
+            FROM ingestion_gaps
+            WHERE session_id = %s AND source_chat_id = %s
+            ORDER BY source_message_id ASC LIMIT %s
+            """,
+            (str(session_id), str(source_chat_id), max(int(limit), 1)),
+        )
+        return [dict(r) if hasattr(r, "keys") else dict(zip(
+            ("source_message_id", "state", "attempts", "last_error", "created_at"), r
+        )) for r in rows or []]
+
+    async def due_gaps(self, now: float, limit: int = 100) -> List[dict]:
+        rows = await _fetch_all_db(
+            self._db,
+            """
+            SELECT id, session_id, source_chat_id, source_message_id,
+                   state, attempts, next_retry_at, last_error
+            FROM ingestion_gaps
+            WHERE state IN ('PENDING', 'RETRYING') AND next_retry_at <= %s
+            ORDER BY next_retry_at ASC, source_message_id ASC LIMIT %s
+            """,
+            (float(now), max(int(limit), 1)),
+        )
+        return [dict(r) if hasattr(r, "keys") else dict(zip(
+            ("id", "session_id", "source_chat_id", "source_message_id",
+             "state", "attempts", "next_retry_at", "last_error"), r
+        )) for r in rows or []]
+
+    async def mark_gap_attempt(self, gap_id: str, error: str,
+                               next_retry_at: float, exhausted: bool = False) -> bool:
+        state = "FAILED" if exhausted else "RETRYING"
+        now = int(time.time())
+        res = await _execute_db(
+            self._db,
+            """
+            UPDATE ingestion_gaps
+            SET state = %s, attempts = attempts + 1, last_error = %s,
+                next_retry_at = %s, updated_at = %s
+            WHERE id = %s AND state IN ('PENDING', 'RETRYING')
+            """,
+            (state, str(error)[:4096], float(next_retry_at), now, str(gap_id)),
+        )
+        count = getattr(res, "rowcount", None)
+        return (count > 0) if count is not None else True
+
+
 class PostgresPromptRepository(IPromptRepository):
     """Production-grade PostgreSQL repository for prompt templates and historic versions."""
 
@@ -1904,6 +2160,50 @@ async def initialize_postgres_schema(db: Any) -> None:
             -- reversible; only the cost of the sweep changes, never the data.
             CREATE INDEX IF NOT EXISTS idx_user_tasks_finished
                 ON user_tasks(status, finished_at);
+        """,
+        # v31 parity (SQLite migration 31): send-side idempotency fence and
+        # ingestion-gap recovery. Same columns, same names, same UNIQUE keys as
+        # the SQLite tables — one repository implementation writes both engines,
+        # so any drift is a write that silently does nothing on one backend.
+        # Neither table stores payloads.
+        """
+        CREATE TABLE IF NOT EXISTS delivery_attempts (
+            id TEXT PRIMARY KEY,
+            rule_id TEXT NOT NULL,
+            source_chat_id TEXT NOT NULL,
+            source_message_id BIGINT NOT NULL,
+            target_chat_id TEXT NOT NULL,
+            job_kind TEXT NOT NULL DEFAULT 'forward',
+            status TEXT NOT NULL DEFAULT 'CLAIMED',
+            worker_id TEXT NOT NULL DEFAULT '',
+            target_message_id BIGINT,
+            lease_until DOUBLE PRECISION NOT NULL DEFAULT 0,
+            attempts INTEGER NOT NULL DEFAULT 0,
+            last_error TEXT NOT NULL DEFAULT '',
+            created_at BIGINT NOT NULL,
+            updated_at BIGINT NOT NULL,
+            CONSTRAINT delivery_attempts_unique
+                UNIQUE (rule_id, source_chat_id, source_message_id, target_chat_id, job_kind)
+        );
+        CREATE INDEX IF NOT EXISTS idx_delivery_attempts_fence
+            ON delivery_attempts (status, lease_until);
+
+        CREATE TABLE IF NOT EXISTS ingestion_gaps (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            source_chat_id TEXT NOT NULL,
+            source_message_id BIGINT NOT NULL,
+            state TEXT NOT NULL DEFAULT 'PENDING',
+            attempts INTEGER NOT NULL DEFAULT 0,
+            next_retry_at DOUBLE PRECISION NOT NULL DEFAULT 0,
+            last_error TEXT NOT NULL DEFAULT '',
+            created_at BIGINT NOT NULL,
+            updated_at BIGINT NOT NULL,
+            CONSTRAINT ingestion_gaps_unique
+                UNIQUE (session_id, source_chat_id, source_message_id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_ingestion_gaps_sweep
+            ON ingestion_gaps (state, next_retry_at);
         """,
     ]
 

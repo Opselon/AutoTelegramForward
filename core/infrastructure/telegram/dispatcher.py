@@ -23,6 +23,7 @@ from collections import defaultdict, deque
 from typing import Any, Optional
 
 from ...application import branding_hop
+from ...application.repositories import DeliveryAttemptKey
 from ...domain import branding
 from ...domain.entities import MessagePayload, MAX_FORWARD_DELAY_SECONDS
 from ...domain.services import AdvancedSettingsEngine, CaptionManagementEngine, safe_text_preview
@@ -72,7 +73,7 @@ class MessageDispatcher:
         error_log=None, metrics=None, rule_stats=None, log_client=None,
         queue_manager=None, sync_engine=None, durable_pipeline=None,
         pv_responder=None, autoreply_engine=None, owner_lookup=None,
-        autoreply_worker=None,
+        autoreply_worker=None, attempts_repo=None,
     ) -> None:
         self._pool = pool
         self._use_case = use_case
@@ -87,6 +88,10 @@ class MessageDispatcher:
         self._autoreply = autoreply_engine
         self._autoreply_worker = autoreply_worker
         self._owner_lookup = owner_lookup
+        # Send-side idempotency fence (audit finding #5), shared with the
+        # durable worker: same key derivation, same store, so neither path can
+        # re-dispatch a send the other already made.
+        self._attempts = attempts_repo
         # Album aggregation with bounded LRU & TTL
         self._album_aggregator = AlbumAggregator(flush_callback=self._flush_album, ttl_seconds=2.0, max_active_albums=500)
         # send-rate bookkeeping: target -> deque of timestamps
@@ -516,19 +521,85 @@ class MessageDispatcher:
         ok_any = False
         for target in targets:
             await self._throttle(target)
+            # Send-side idempotency fence (audit finding #5): identical to the
+            # worker's, and keyed identically, so a delivery attempted through
+            # this path can never be re-dispatched by the worker (or vice
+            # versa). The legacy direct path is deprecated but still reachable,
+            # and deprecation is not a safety boundary.
+            fence = DeliveryAttemptKey(
+                rule_id=str(getattr(rule, "id", "") or ""),
+                source_chat_id=str(payload.chat_id),
+                source_message_id=int(payload.message_id),
+                target_chat_id=str(target),
+            )
+            if self._attempts is not None:
+                try:
+                    outcome, row = await self._attempts.claim_or_check(
+                        fence, "legacy", time.time() + 120.0
+                    )
+                except Exception as exc:
+                    # Never silently dispatch without the fence: refuse loudly.
+                    logger.error(
+                        "[PIPELINE:DELIVERY_FENCE] legacy path: fence unavailable for "
+                        "rule=%s src=%s:%s tgt=%s: %s — refusing to dispatch unprotected",
+                        getattr(rule, "id", "?")[:8], payload.chat_id, payload.message_id,
+                        target, exc,
+                    )
+                    await self._record_send_error(payload, rule, target, exc, "ERROR")
+                    continue
+                if outcome == "already_sent":
+                    prior_id = (row or {}).get("target_message_id") or 0
+                    logger.warning(
+                        "[PIPELINE:DELIVERY_FENCE] legacy path: rule=%s src=%s:%s tgt=%s "
+                        "already has a confirmed send (target_message_id=%s) — skipping",
+                        getattr(rule, "id", "?")[:8], payload.chat_id, payload.message_id,
+                        target, prior_id,
+                    )
+                    continue
+                if outcome in ("in_flight", "stale", "unknown"):
+                    logger.warning(
+                        "[PIPELINE:DELIVERY_FENCE] legacy path: rule=%s src=%s:%s tgt=%s "
+                        "not dispatchable now (outcome=%s) — skipping",
+                        getattr(rule, "id", "?")[:8], payload.chat_id, payload.message_id,
+                        target, outcome,
+                    )
+                    await self._record_send_error(
+                        payload, rule, target,
+                        RuntimeError(f"delivery fence: {outcome}"), "WARN",
+                    )
+                    continue
             try:
-                if await self._deliver(client, payload, rule, text, target, intermediate_msg_id=hop_msg_id):
+                sent = await self._deliver(client, payload, rule, text, target, intermediate_msg_id=hop_msg_id)
+                if sent:
                     ok_any = True
                     await self._record_success(payload, rule, target)
+                    if self._attempts is not None:
+                        try:
+                            await self._attempts.record_sent(
+                                fence, "legacy", int(getattr(sent, "id", 0) or 0)
+                            )
+                        except Exception as exc:
+                            logger.warning(
+                                "[PIPELINE:DELIVERY_FENCE] legacy path: could not record the "
+                                "confirmed send for src=%s:%s tgt=%s: %s",
+                                payload.chat_id, payload.message_id, target, exc,
+                            )
             except Exception as exc:
                 # Exact Telegram error: keep the exception class + RPC message
                 # in the log so the debug panel shows the real cause.
-                key, sev, recoverable = tg_error(exc)
+                key_, sev, recoverable = tg_error(exc)
                 logger.warning(
                     "send → %s failed: %s (severity=%s recoverable=%s)",
                     target, tg_detail(exc), sev, recoverable,
                 )
                 await self._record_send_error(payload, rule, target, exc, sev)
+                if self._attempts is not None and not is_timeout_error(exc):
+                    try:
+                        await self._attempts.record_outcome(
+                            fence, "legacy", "FAILED", tg_detail(exc) or str(exc)
+                        )
+                    except Exception:
+                        pass
                 # FloodWait is not a rule problem: respect the wait before retry.
                 if recoverable:
                     await asyncio.sleep(min(wait_seconds(exc, default=5) + 1, 300))
