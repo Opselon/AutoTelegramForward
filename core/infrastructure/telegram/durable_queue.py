@@ -32,10 +32,10 @@ from ...domain.services import AdvancedSettingsEngine
 from ...domain.value_objects import ContentMode
 from .errors import is_restricted_source_error, is_timeout_error, tg_detail, tg_error, wait_seconds
 from .diagnostics_contract import (
-    C_DELIVERY, C_PIPELINE, C_TELEGRAM_API, R_DELIVERY_OUTCOME_UNKNOWN,
-    R_TELEGRAM_FLOOD_WAIT, S_COPY, S_NATIVE_FORWARD, S_REUPLOAD,
-    S_TEXT_RECONSTRUCT, log_diagnostic_event, strategy_of,
-    strategy_rpc_method,
+    C_DELIVERY, C_MEDIA, C_PIPELINE, C_TELEGRAM_API, R_DELIVERY_OUTCOME_UNKNOWN,
+    R_TELEGRAM_FLOOD_WAIT, ORIGIN_TELEGRAM, S_COPY, S_NATIVE_FORWARD,
+    S_REUPLOAD, S_TEXT_RECONSTRUCT, build_diagnostic_event,
+    log_diagnostic_event, strategy_of, strategy_rpc_method,
 )
 from .failure_policy import classify_failure, error_code, rate_limit_seconds
 from .bot_transport import BotRouteAdapter, BotTransportCache, BotTransportUnsupported
@@ -1610,6 +1610,7 @@ class DurableQueueManager:
         target: Any,
         caption: Optional[str],
         media_type: str = "",
+        job: Any = None,
     ) -> int:
         """Rebuild and send one protected message.
 
@@ -1626,6 +1627,18 @@ class DurableQueueManager:
         :class:`DeliveryBlockedError`, never a fake ``0`` success.
         """
         temp_path = None
+        # Correlation for the media events: the job is optional only for older
+        # call sites, never for the worker path that always has one.
+        d = job.payload_data if job is not None else {}
+        ctx = dict(
+            task_id=str(job.rule_id if job is not None else ""),
+            trace_id=str(d.get("correlation_id") or ""),
+            correlation_id=str(d.get("correlation_id") or ""),
+            owner_id=int(d.get("owner_user_id") or 0),
+            job_id=str(job.id if job is not None else ""),
+            source_peer_id=str(src_chat), source_message_id=int(src_msg_id),
+            target_peer_id=str(target),
+        )
         try:
             src_msg = None
             if hasattr(client, "get_messages"):
@@ -1636,6 +1649,13 @@ class DurableQueueManager:
                         "[PIPELINE:PROTECTED] get_messages failed while preparing re-upload src=%s msg=%s (%s)",
                         src_chat, src_msg_id, tg_detail(e) or type(e).__name__,
                     )
+                    await self._record_diagnostic(build_diagnostic_event(
+                        event_name="delivery.media.fetch_failed", stage="MEDIA",
+                        category=C_MEDIA, reason="MEDIA_FETCH_FAILED",
+                        error_origin=ORIGIN_TELEGRAM, raw_exception=e,
+                        explanation=f"get_messages failed for {src_chat}:{src_msg_id}",
+                        **ctx,
+                    ))
 
             # Layer 2: media-reference (file-id) send. The worker path lost
             # this layer for months and degraded protected media to a download
@@ -1660,8 +1680,22 @@ class DurableQueueManager:
                         "[PIPELINE:PROTECTED] download failed src=%s msg=%s (%s) — degrading to text if nothing else delivers",
                         src_chat, src_msg_id, tg_detail(dl_err) or type(dl_err).__name__,
                     )
+                    await self._record_diagnostic(build_diagnostic_event(
+                        event_name="delivery.media.download.failed", stage="MEDIA",
+                        category=C_MEDIA, reason="MEDIA_DOWNLOAD_FAILED",
+                        error_origin=ORIGIN_TELEGRAM, raw_exception=dl_err,
+                        explanation=f"media download failed for {src_chat}:{src_msg_id}",
+                        **ctx,
+                    ))
 
             if temp_path and os.path.exists(temp_path):
+                await self._record_diagnostic(build_diagnostic_event(
+                    event_name="delivery.media.upload.started", stage="MEDIA",
+                    category=C_MEDIA, reason="MEDIA_UPLOAD_STARTED",
+                    severity="INFO",
+                    explanation=f"re-uploading protected media for {src_chat}:{src_msg_id}",
+                    **ctx,
+                ))
                 mtype = str(media_type).lower()
                 if mtype == "photo" or getattr(src_msg, "photo", None):
                     res = await client.send_photo(chat_id=target, photo=temp_path, caption=caption)
@@ -1858,7 +1892,7 @@ class DurableQueueManager:
             except Exception:
                 pass
 
-    async def _on_restricted(self, client: Any, err: BaseException, fallback_enabled: bool, context: str) -> bool:
+    async def _on_restricted(self, client: Any, err: BaseException, fallback_enabled: bool, context: str, job: Any = None) -> bool:
         """Decide what a source-restriction error means for this delivery.
 
         Returns ``True`` when the caller must descend the copy/re-upload
@@ -1884,6 +1918,25 @@ class DurableQueueManager:
             "[PIPELINE:PROTECTED] %s blocked by source content protection (%s) — descending bypass chain",
             context, tg_detail(err) or type(err).__name__,
         )
+        # §6.3: every strategy transition produces an event explaining why the
+        # requested strategy was left and what will be attempted instead.
+        await self._record_diagnostic(build_diagnostic_event(
+            event_name="delivery.fallback.selected", stage="FALLBACK",
+            task_id=str(job.rule_id if job is not None else ""),
+            trace_id=str((job.payload_data or {}).get("correlation_id", "") or "")
+            if job is not None else "",
+            correlation_id=str((job.payload_data or {}).get("correlation_id", "") or "")
+            if job is not None else "",
+            owner_id=int((job.payload_data or {}).get("owner_user_id") or 0)
+            if job is not None else 0,
+            job_id=str(job.id if job is not None else ""),
+            source_peer_id=str(job.source_chat_id if job is not None else ""),
+            source_message_id=int(job.source_message_id if job is not None else 0),
+            target_peer_id=str(job.target_chat_id if job is not None else ""),
+            severity="WARN", category=C_DELIVERY, reason="FORWARD_RESTRICTED",
+            error_origin=ORIGIN_TELEGRAM, raw_exception=err,
+            explanation=f"{context}: source restricts forwarding, descending bypass chain",
+        ))
         return True
 
     async def _dispatch_to_telegram(self, client: Any, job: DeliveryJob) -> int:
@@ -2138,7 +2191,7 @@ class DurableQueueManager:
                     return getattr(res, "id", 0)
             except Exception as grp_err:
                 if is_restricted_source_error(grp_err) and await self._on_restricted(
-                    client, grp_err, fallback_enabled, "album group copy",
+                    client, grp_err, fallback_enabled, "album group copy", job=job,
                 ):
                     self._note_fallback(job.id, owner=int(data.get("owner_user_id") or 0), what="album re-upload")
                 else:
@@ -2161,10 +2214,10 @@ class DurableQueueManager:
                     return getattr(res, "id", 0)
                 except Exception as c_err:
                     if is_restricted_source_error(c_err) and await self._on_restricted(
-                        client, c_err, fallback_enabled, "MEDIA_ONLY copy",
+                        client, c_err, fallback_enabled, "MEDIA_ONLY copy", job=job,
                     ):
                         self._note_fallback(job.id, owner=int(data.get("owner_user_id") or 0), what="media re-upload")
-                        return await self._reupload_media(client, src_chat, src_msg_id, target, None, data.get("media_type", ""))
+                        return await self._reupload_media(client, src_chat, src_msg_id, target, None, data.get("media_type", ""), job=job)
                     raise
             return 0
 
@@ -2189,10 +2242,10 @@ class DurableQueueManager:
                     job=job, exc=c_err, strategy=S_COPY, context="copy_message",
                 )
                 if is_restricted_source_error(c_err) and await self._on_restricted(
-                    client, c_err, fallback_enabled, "copy_message",
+                    client, c_err, fallback_enabled, "copy_message", job=job,
                 ):
                     self._note_fallback(job.id, owner=int(data.get("owner_user_id") or 0), what="media re-upload")
-                    return await self._reupload_media(client, src_chat, src_msg_id, target, caption, data.get("media_type", ""))
+                    return await self._reupload_media(client, src_chat, src_msg_id, target, caption, data.get("media_type", ""), job=job)
                 raise
 
         res = await client.send_message(chat_id=target, text=text or "...", **thread_kwargs)
