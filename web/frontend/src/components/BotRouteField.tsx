@@ -104,9 +104,9 @@ export function BotRouteField({
     display: 'flex',
     alignItems: 'center',
     gap: '4px',
-    backgroundColor: '#0f172a',
-    color: '#e2e8f0',
-    border: '1px solid #334155',
+    backgroundColor: 'var(--color-surface-inset)',
+    color: 'var(--color-text)',
+    border: '1px solid var(--color-border-strong)',
     borderRadius: '8px',
     padding: '7px 10px',
     fontSize: '11px',
@@ -139,7 +139,7 @@ export function BotRouteField({
             title={t('ui_remove_this_bot_from_the_account')}
             onClick={() => void remove(selected.id)}
             disabled={busy}
-            style={{ ...smallButton, color: '#fca5a5' }}
+            style={{ ...smallButton, color: 'var(--color-danger-text)' }}
           >
             <Trash2 size={12} />
           </button>
@@ -156,8 +156,8 @@ export function BotRouteField({
             marginTop: '8px',
             padding: '10px',
             borderRadius: '10px',
-            border: '1px solid #334155',
-            backgroundColor: '#0f172a',
+            border: '1px solid var(--color-border-strong)',
+            backgroundColor: 'var(--color-surface-inset)',
           }}
         >
           <div style={hintStyle}>
@@ -191,8 +191,8 @@ export function BotRouteField({
               disabled={busy || !token.trim()}
               style={{
                 ...smallButton,
-                backgroundColor: token.trim() && !busy ? '#2563eb' : '#1e293b',
-                color: token.trim() && !busy ? '#fff' : 'var(--color-text-muted)',
+                backgroundColor: token.trim() && !busy ? 'var(--color-primary)' : 'var(--color-surface-2)',
+                color: token.trim() && !busy ? 'var(--color-on-accent)' : 'var(--color-text-muted)',
                 cursor: token.trim() && !busy ? 'pointer' : 'not-allowed',
               }}
             >
@@ -218,7 +218,7 @@ export function BotRouteField({
             display: 'flex',
             gap: '6px',
             alignItems: 'center',
-            color: '#fca5a5',
+            color: 'var(--color-danger-text)',
             fontSize: '11px',
             marginTop: '6px',
           }}
@@ -228,10 +228,10 @@ export function BotRouteField({
         </div>
       )}
       {notice && !error && (
-        <div style={{ fontSize: '11px', color: '#86efac', marginTop: '6px' }}>{notice}</div>
+        <div style={{ fontSize: '11px', color: 'var(--color-success)', marginTop: '6px' }}>{notice}</div>
       )}
       {botRoute && !bots.length && !open && (
-        <div style={{ ...hintStyle, color: '#fbbf24' }}>
+        <div style={{ ...hintStyle, color: 'var(--color-warning)' }}>
           {t('ui_this_task_is_set_to_deliver_as_a_bot_but_none_is_attached_attach')}
         </div>
       )}

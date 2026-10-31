@@ -39,19 +39,19 @@ const rowStyle: React.CSSProperties = {
   justifyContent: 'space-between',
   gap: 12,
   padding: '10px 0',
-  borderBottom: '1px solid rgba(148, 163, 184, 0.12)',
+  borderBottom: '1px solid var(--color-border)',
 }
 const fieldStyle: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 6 }
-const labelStyle: React.CSSProperties = { fontSize: '0.78rem', fontWeight: 600, color: '#cbd5e1' }
-const hintStyle: React.CSSProperties = { fontSize: '0.75rem', color: '#94a3b8', lineHeight: 1.4 }
+const labelStyle: React.CSSProperties = { fontSize: '0.78rem', fontWeight: 600, color: 'var(--color-text)' }
+const hintStyle: React.CSSProperties = { fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', lineHeight: 1.4 }
 const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '8px 10px',
   borderRadius: 10,
-  border: '1px solid rgba(148, 163, 184, 0.25)',
-  background: 'rgba(15, 23, 42, 0.6)',
-  color: '#e2e8f0',
-  fontSize: '0.85rem',
+  border: '1px solid var(--color-border-strong)',
+  background: 'var(--color-surface-inset)',
+  color: 'var(--color-text)',
+  fontSize: 'var(--type-sm)',
 }
 
 function fmtTime(ts: number): string {
@@ -61,7 +61,7 @@ function fmtTime(ts: number): string {
 }
 
 export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
-  const { t, isRtl, aiConfigs, showToast } = d
+  const { t, isRtl, aiConfigs, showToast, showError } = d
 
   const [section, setSection] = useState<Section>('overview')
   const [settings, setSettings] = useState<AutoReplySettings | null>(null)
@@ -131,7 +131,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
       setSettings(res.settings)
       showToast(t('ui_ar_settings_saved'))
     } catch (e: any) {
-      showToast(e?.message || t('ui_ar_save_failed'))
+      showError(e?.message || t('ui_ar_save_failed'))
     } finally {
       setBusy(false)
     }
@@ -184,7 +184,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
       await load()
       return res
     } catch (e: any) {
-      showToast(e?.message || t('ui_ar_save_failed'))
+      showError(e?.message || t('ui_ar_save_failed'))
     } finally {
       setBusy(false)
     }
@@ -201,7 +201,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
       showToast(t('ui_ar_prompt_duplicated'))
       await load()
     } catch (e: any) {
-      showToast(e?.message || t('ui_ar_save_failed'))
+      showError(e?.message || t('ui_ar_save_failed'))
     } finally {
       setBusy(false)
     }
@@ -214,7 +214,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
       showToast(t('ui_ar_prompt_deleted'))
       await load()
     } catch (e: any) {
-      showToast(e?.message || t('ui_ar_save_failed'))
+      showError(e?.message || t('ui_ar_save_failed'))
     } finally {
       setBusy(false)
     }
@@ -232,7 +232,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
       URL.revokeObjectURL(url)
       showToast(t('ui_ar_prompts_exported'))
     } catch (e: any) {
-      showToast(e?.message || t('ui_ar_save_failed'))
+      showError(e?.message || t('ui_ar_save_failed'))
     }
   }
 
@@ -257,7 +257,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
       setImportText('')
       await load()
     } catch (e: any) {
-      showToast(e?.message || t('ui_ar_save_failed'))
+      showError(e?.message || t('ui_ar_save_failed'))
     } finally {
       setBusy(false)
     }
@@ -303,7 +303,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
       showToast(t('ui_ar_contact_added'))
       await load()
     } catch (e: any) {
-      showToast(e?.message || t('ui_ar_save_failed'))
+      showError(e?.message || t('ui_ar_save_failed'))
     } finally {
       setBusy(false)
     }
@@ -315,7 +315,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
       await api.updateAutoReplyTarget(target.chat_id, { is_enabled: !target.is_enabled })
       await load()
     } catch (e: any) {
-      showToast(e?.message || t('ui_ar_save_failed'))
+      showError(e?.message || t('ui_ar_save_failed'))
     } finally {
       setBusy(false)
     }
@@ -326,7 +326,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
       await api.updateAutoReplyTarget(target.chat_id, { prompt_id: promptId })
       await load()
     } catch (e: any) {
-      showToast(e?.message || t('ui_ar_save_failed'))
+      showError(e?.message || t('ui_ar_save_failed'))
     }
   }
 
@@ -346,7 +346,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
       setSelectedChats([])
       await load()
     } catch (e: any) {
-      showToast(e?.message || t('ui_ar_save_failed'))
+      showError(e?.message || t('ui_ar_save_failed'))
     } finally {
       setBusy(false)
     }
@@ -398,7 +398,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
       showToast(t('ui_ar_rule_saved'))
       await load()
     } catch (e: any) {
-      showToast(e?.message || t('ui_ar_save_failed'))
+      showError(e?.message || t('ui_ar_save_failed'))
     } finally {
       setBusy(false)
     }
@@ -411,7 +411,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
       showToast(t('ui_ar_rule_deleted'))
       await load()
     } catch (e: any) {
-      showToast(e?.message || t('ui_ar_save_failed'))
+      showError(e?.message || t('ui_ar_save_failed'))
     } finally {
       setBusy(false)
     }
@@ -427,7 +427,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
       const res = await api.reorderAutoReplyRules(next.map((r) => r.id))
       setRules(res.rules)
     } catch (e: any) {
-      showToast(e?.message || t('ui_ar_save_failed'))
+      showError(e?.message || t('ui_ar_save_failed'))
       await load()
     }
   }
@@ -439,7 +439,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
       showToast(t('ui_ar_job_retried'))
       await load()
     } catch (e: any) {
-      showToast(e?.message || t('ui_ar_save_failed'))
+      showError(e?.message || t('ui_ar_save_failed'))
     }
   }
 
@@ -449,7 +449,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
       showToast(t('ui_ar_job_cancelled'))
       await load()
     } catch (e: any) {
-      showToast(e?.message || t('ui_ar_save_failed'))
+      showError(e?.message || t('ui_ar_save_failed'))
     }
   }
 
@@ -465,7 +465,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
   if (loading && !settings) {
     return (
       <div className="glass-panel" style={card}>
-        <p style={{ color: '#94a3b8' }}>{t('ui_loading')}</p>
+        <p style={{ color: 'var(--color-text-muted)' }}>{t('ui_loading')}</p>
       </div>
     )
   }
@@ -486,11 +486,11 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
             style={{
               padding: '8px 16px',
               fontWeight: 700,
-              background: settings?.enabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-              color: settings?.enabled ? '#34d399' : '#f87171',
+              background: settings?.enabled ? 'var(--color-success-soft)' : 'var(--color-danger-soft)',
+              color: settings?.enabled ? 'var(--color-success)' : 'var(--color-danger)',
               border: settings?.enabled
-                ? '1px solid rgba(16, 185, 129, 0.4)'
-                : '1px solid rgba(239, 68, 68, 0.4)',
+                ? '1px solid color-mix(in oklab, var(--color-success) 40%, transparent)'
+                : '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)',
             }}
           >
             {settings?.enabled ? t('ui_ar_turn_off') : t('ui_ar_turn_on')}
@@ -516,9 +516,9 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
           <Stat label={t('ui_ar_stat_chats')} value={stats?.chats_enabled ?? 0} />
         </div>
 
-        {error && <p style={{ color: '#f87171', fontSize: '0.8rem', marginTop: 12 }}>{error}</p>}
+        {error && <p style={{ color: 'var(--color-danger)', fontSize: 'var(--type-sm)', marginTop: 12 }}>{error}</p>}
         {!settings?.ai_config_id && (
-          <p style={{ color: '#fbbf24', fontSize: '0.8rem', marginTop: 12 }}>{t('ui_ar_provider_missing')}</p>
+          <p style={{ color: 'var(--color-warning)', fontSize: 'var(--type-sm)', marginTop: 12 }}>{t('ui_ar_provider_missing')}</p>
         )}
       </div>
 
@@ -533,9 +533,9 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
               padding: '7px 14px',
               fontSize: '0.82rem',
               fontWeight: 700,
-              background: section === tab.id ? 'rgba(99, 102, 241, 0.25)' : 'rgba(148, 163, 184, 0.1)',
-              border: section === tab.id ? '1px solid rgba(99, 102, 241, 0.5)' : '1px solid transparent',
-              color: section === tab.id ? '#c7d2fe' : '#cbd5e1',
+              background: section === tab.id ? 'var(--color-primary-soft)' : 'var(--color-hover-wash)',
+              border: section === tab.id ? '1px solid color-mix(in oklab, var(--color-primary) 50%, transparent)' : '1px solid transparent',
+              color: section === tab.id ? 'var(--color-primary-strong)' : 'var(--color-text)',
             }}
           >
             {t(tab.key)}
@@ -798,9 +798,9 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
                       className="btn"
                       style={{
                         padding: '4px 10px',
-                        fontSize: '0.75rem',
-                        background: on ? 'rgba(99, 102, 241, 0.28)' : 'rgba(148, 163, 184, 0.1)',
-                        color: on ? '#c7d2fe' : '#94a3b8',
+                        fontSize: 'var(--type-xs)',
+                        background: on ? 'var(--color-primary-soft)' : 'var(--color-hover-wash)',
+                        color: on ? 'var(--color-primary-strong)' : 'var(--color-text-muted)',
                       }}
                       onClick={() => {
                         const next = on
@@ -883,11 +883,11 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
                   marginTop: 12,
                   padding: 12,
                   borderRadius: 12,
-                  background: 'rgba(15, 23, 42, 0.65)',
-                  border: '1px solid rgba(148, 163, 184, 0.2)',
+                  background: 'var(--color-surface-2)',
+                  border: '1px solid var(--color-border)',
                   whiteSpace: 'pre-wrap',
-                  fontSize: '0.85rem',
-                  color: '#e2e8f0',
+                  fontSize: 'var(--type-sm)',
+                  color: 'var(--color-text)',
                 }}
               >
                 {preview}
@@ -917,8 +917,8 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
                 marginTop: 14,
                 padding: 14,
                 borderRadius: 12,
-                border: '1px solid rgba(99, 102, 241, 0.35)',
-                background: 'rgba(30, 41, 59, 0.45)',
+                border: '1px solid color-mix(in oklab, var(--color-primary) 40%, transparent)',
+                background: 'var(--color-surface-2)',
               }}
             >
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -1018,12 +1018,12 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
                   <div style={{ ...labelStyle, fontSize: '0.88rem' }}>
                     {p.name}
                     {settings?.prompt_id === p.id && (
-                      <span style={{ marginInlineStart: 8, color: '#34d399', fontSize: '0.75rem' }}>
+                      <span style={{ marginInlineStart: 8, color: 'var(--color-success)', fontSize: 'var(--type-xs)' }}>
                         {t('ui_ar_default_badge')}
                       </span>
                     )}
                     {p.is_archived && (
-                      <span style={{ marginInlineStart: 8, color: '#94a3b8', fontSize: '0.75rem' }}>
+                      <span style={{ marginInlineStart: 8, color: 'var(--color-text-muted)', fontSize: 'var(--type-xs)' }}>
                         {t('ui_ar_archived_badge')}
                       </span>
                     )}
@@ -1034,17 +1034,17 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   {settings?.prompt_id !== p.id && (
-                    <button className="btn" style={{ fontSize: '0.75rem' }} onClick={() => makeDefault(p.id)}>
+                    <button className="btn" style={{ fontSize: 'var(--type-xs)' }} onClick={() => makeDefault(p.id)}>
                       {t('ui_ar_make_default')}
                     </button>
                   )}
-                  <button className="btn" style={{ fontSize: '0.75rem' }} onClick={() => setPromptDraft(p)}>
+                  <button className="btn" style={{ fontSize: 'var(--type-xs)' }} onClick={() => setPromptDraft(p)}>
                     {t('ui_edit')}
                   </button>
-                  <button className="btn" style={{ fontSize: '0.75rem' }} onClick={() => duplicatePrompt(p.id)}>
+                  <button className="btn" style={{ fontSize: 'var(--type-xs)' }} onClick={() => duplicatePrompt(p.id)}>
                     {t('ui_ar_duplicate')}
                   </button>
-                  <button className="btn" style={{ fontSize: '0.75rem', color: '#f87171' }} onClick={() => deletePrompt(p.id)}>
+                  <button className="btn" style={{ fontSize: 'var(--type-xs)', color: 'var(--color-danger)' }} onClick={() => deletePrompt(p.id)}>
                     {t('ui_delete')}
                   </button>
                 </div>
@@ -1093,7 +1093,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
               </button>
             )}
           </div>
-          {resolveError && <p style={{ color: '#f87171', fontSize: '0.78rem', marginTop: 8 }}>{resolveError}</p>}
+          {resolveError && <p style={{ color: 'var(--color-danger)', fontSize: '0.78rem', marginTop: 8 }}>{resolveError}</p>}
           {resolved && (
             <p style={{ ...hintStyle, marginTop: 8 }}>
               {resolved.title} · {resolved.chat_id}
@@ -1104,7 +1104,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
             <span style={hintStyle}>{t('ui_ar_selected_count', { count: selectedChats.length })}</span>
             <button
               className="btn"
-              style={{ fontSize: '0.75rem' }}
+              style={{ fontSize: 'var(--type-xs)' }}
               onClick={() =>
                 setSelectedChats(
                   selectedChats.length === visibleTargets.length ? [] : visibleTargets.map((x) => x.chat_id),
@@ -1113,15 +1113,15 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
             >
               {t('ui_ar_select_all')}
             </button>
-            <button className="btn" style={{ fontSize: '0.75rem' }} disabled={!selectedChats.length} onClick={() => bulk('enable')}>
+            <button className="btn" style={{ fontSize: 'var(--type-xs)' }} disabled={!selectedChats.length} onClick={() => bulk('enable')}>
               {t('ui_enabled')}
             </button>
-            <button className="btn" style={{ fontSize: '0.75rem' }} disabled={!selectedChats.length} onClick={() => bulk('disable')}>
+            <button className="btn" style={{ fontSize: 'var(--type-xs)' }} disabled={!selectedChats.length} onClick={() => bulk('disable')}>
               {t('ui_disabled')}
             </button>
             <button
               className="btn"
-              style={{ fontSize: '0.75rem', color: '#f87171' }}
+              style={{ fontSize: 'var(--type-xs)', color: 'var(--color-danger)' }}
               disabled={!selectedChats.length}
               onClick={() => bulk('remove')}
             >
@@ -1169,8 +1169,8 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
                   <button
                     className="btn"
                     style={{
-                      fontSize: '0.75rem',
-                      color: target.is_enabled ? '#34d399' : '#94a3b8',
+                      fontSize: 'var(--type-xs)',
+                      color: target.is_enabled ? 'var(--color-success)' : 'var(--color-text-muted)',
                     }}
                     onClick={() => toggleTarget(target)}
                   >
@@ -1220,8 +1220,8 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
                 marginTop: 14,
                 padding: 14,
                 borderRadius: 12,
-                border: '1px solid rgba(99, 102, 241, 0.35)',
-                background: 'rgba(30, 41, 59, 0.45)',
+                border: '1px solid color-mix(in oklab, var(--color-primary) 40%, transparent)',
+                background: 'var(--color-surface-2)',
               }}
             >
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 12 }}>
@@ -1344,7 +1344,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
                     <span style={{ marginInlineStart: 8, ...hintStyle }}>
                       {t('ui_ar_rule_priority_short', { priority: rule.priority })}
                     </span>
-                    <span style={{ marginInlineStart: 8, color: rule.action === 'SKIP' ? '#fbbf24' : '#34d399', fontSize: '0.75rem' }}>
+                    <span style={{ marginInlineStart: 8, color: rule.action === 'SKIP' ? 'var(--color-warning)' : 'var(--color-success)', fontSize: 'var(--type-xs)' }}>
                       {rule.action}
                     </span>
                   </div>
@@ -1355,17 +1355,17 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button className="btn" style={{ fontSize: '0.75rem' }} onClick={() => moveRule(index, -1)}>↑</button>
-                  <button className="btn" style={{ fontSize: '0.75rem' }} onClick={() => moveRule(index, 1)}>↓</button>
-                  <button className="btn" style={{ fontSize: '0.75rem' }} onClick={() => setRuleDraft(rule)}>{t('ui_edit')}</button>
+                  <button className="btn" style={{ fontSize: 'var(--type-xs)' }} onClick={() => moveRule(index, -1)}>↑</button>
+                  <button className="btn" style={{ fontSize: 'var(--type-xs)' }} onClick={() => moveRule(index, 1)}>↓</button>
+                  <button className="btn" style={{ fontSize: 'var(--type-xs)' }} onClick={() => setRuleDraft(rule)}>{t('ui_edit')}</button>
                   <button
                     className="btn"
-                    style={{ fontSize: '0.75rem' }}
+                    style={{ fontSize: 'var(--type-xs)' }}
                     onClick={() => saveRule({ ...rule, is_enabled: !rule.is_enabled })}
                   >
                     {rule.is_enabled ? t('ui_enabled') : t('ui_disabled')}
                   </button>
-                  <button className="btn" style={{ fontSize: '0.75rem', color: '#f87171' }} onClick={() => deleteRule(rule.id)}>
+                  <button className="btn" style={{ fontSize: 'var(--type-xs)', color: 'var(--color-danger)' }} onClick={() => deleteRule(rule.id)}>
                     {t('ui_delete')}
                   </button>
                 </div>
@@ -1392,9 +1392,9 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
             {jobs.length === 0 ? (
               <p style={hintStyle}>{t('ui_ar_jobs_empty')}</p>
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--type-sm)' }}>
                 <thead>
-                  <tr style={{ textAlign: isRtl ? 'right' : 'left', color: '#94a3b8' }}>
+                  <tr style={{ textAlign: isRtl ? 'right' : 'left', color: 'var(--color-text-muted)' }}>
                     <th style={{ padding: '6px 8px' }}>{t('ui_ar_col_chat')}</th>
                     <th style={{ padding: '6px 8px' }}>{t('ui_status')}</th>
                     <th style={{ padding: '6px 8px' }}>{t('ui_ar_col_attempt')}</th>
@@ -1405,11 +1405,11 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
                 </thead>
                 <tbody>
                   {jobs.map((job) => (
-                    <tr key={job.id} style={{ borderTop: '1px solid rgba(148, 163, 184, 0.12)' }}>
+                    <tr key={job.id} style={{ borderTop: '1px solid var(--color-border)' }}>
                       <td style={{ padding: '8px' }}>
-                        <div style={{ color: '#e2e8f0' }}>{job.chat_title || job.chat_id}</div>
+                        <div style={{ color: 'var(--color-text)' }}>{job.chat_title || job.chat_id}</div>
                         <div style={hintStyle}>{job.inbound_text}</div>
-                        {job.error && <div style={{ color: '#f87171', fontSize: '0.75rem' }}>{job.error}</div>}
+                        {job.error && <div style={{ color: 'var(--color-danger)', fontSize: 'var(--type-xs)' }}>{job.error}</div>}
                       </td>
                       <td style={{ padding: '8px', color: statusColor(job.status), fontWeight: 700 }}>{job.status}</td>
                       <td style={{ padding: '8px' }}>
@@ -1420,12 +1420,12 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
                       <td style={{ padding: '8px' }}>
                         <div style={{ display: 'flex', gap: 6 }}>
                           {(job.status === 'DEAD_LETTER' || job.status === 'FAILED') && (
-                            <button className="btn" style={{ fontSize: '0.75rem' }} onClick={() => retryJob(job.id)}>
+                            <button className="btn" style={{ fontSize: 'var(--type-xs)' }} onClick={() => retryJob(job.id)}>
                               {t('ui_retry')}
                             </button>
                           )}
                           {(job.status === 'PENDING' || job.status === 'RETRY_WAIT') && (
-                            <button className="btn" style={{ fontSize: '0.75rem' }} onClick={() => cancelJob(job.id)}>
+                            <button className="btn" style={{ fontSize: 'var(--type-xs)' }} onClick={() => cancelJob(job.id)}>
                               {t('ui_cancel')}
                             </button>
                           )}
@@ -1444,11 +1444,11 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
 }
 
 function statusColor(status: string): string {
-  if (status === 'SENT') return '#34d399'
-  if (status === 'DEAD_LETTER') return '#f87171'
-  if (status === 'FAILED') return '#fbbf24'
-  if (status === 'RUNNING') return '#818cf8'
-  return '#94a3b8'
+  if (status === 'SENT') return 'var(--color-success)'
+  if (status === 'DEAD_LETTER') return 'var(--color-danger)'
+  if (status === 'FAILED') return 'var(--color-warning)'
+  if (status === 'RUNNING') return 'var(--color-primary-strong)'
+  return 'var(--color-text-muted)'
 }
 
 function Stat({ label, value }: { label: string; value: string | number }) {
@@ -1457,12 +1457,12 @@ function Stat({ label, value }: { label: string; value: string | number }) {
       style={{
         padding: '10px 12px',
         borderRadius: 12,
-        background: 'rgba(15, 23, 42, 0.55)',
-        border: '1px solid rgba(148, 163, 184, 0.16)',
+        background: 'var(--color-surface-2)',
+        border: '1px solid var(--color-border)',
       }}
     >
-      <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{label}</div>
-      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: '#e2e8f0' }}>{value}</div>
+      <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>{label}</div>
+      <div style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--color-text)' }}>{value}</div>
     </div>
   )
 }

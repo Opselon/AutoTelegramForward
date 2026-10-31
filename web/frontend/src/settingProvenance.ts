@@ -69,22 +69,24 @@ const BADGES: Record<
   string,
   { textKey: string; color: string; background: string; titleKey: string }
 > = {
+  // Colours are role tokens, not literals: the badge must read correctly in
+  // both themes, and a hex here is the same review failure as anywhere else.
   task: {
     textKey: 'ui_badge_task',
-    color: '#4ade80',
-    background: 'rgba(34,197,94,0.14)',
+    color: 'var(--color-success)',
+    background: 'var(--color-success-soft)',
     titleKey: 'ui_badge_task_title',
   },
   bot: {
     textKey: 'ui_badge_bot',
-    color: '#c4b5fd',
-    background: 'rgba(139,92,246,0.16)',
+    color: 'var(--color-accent-violet)',
+    background: 'color-mix(in oklab, var(--color-accent-violet) 16%, transparent)',
     titleKey: 'ui_badge_bot_title',
   },
   default: {
     textKey: 'ui_badge_default',
-    color: '#94a3b8',
-    background: 'rgba(148,163,184,0.14)',
+    color: 'var(--color-text-muted)',
+    background: 'color-mix(in oklab, var(--color-text-muted) 14%, transparent)',
     titleKey: 'ui_badge_default_title',
   },
 }

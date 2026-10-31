@@ -404,7 +404,7 @@ export function RuleModal({
         {/* ---------------------------------------------- branding hop C */}
         <section
           className="rule-section"
-          style={{ borderColor: 'rgba(245, 158, 11, 0.3)' }}
+          style={{ borderColor: 'color-mix(in oklab, var(--color-warning) 30%, transparent)' }}
         >
           <label className="field__label" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input
@@ -449,7 +449,7 @@ export function RuleModal({
               </div>
 
               {/* Hop triggers — stored in the rule metadata under branding_hop */}
-              <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px dashed rgba(245, 158, 11, 0.25)' }}>
+              <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px dashed color-mix(in oklab, var(--color-warning) 25%, transparent)' }}>
                 <div className="rule-section__title" style={{ color: 'var(--color-warning)' }}>
                   {t('ui_branding_hop_triggers_optional')}
                 </div>
@@ -593,7 +593,7 @@ export function RuleModal({
         </div>
 
         {/* --------------------------------- bot-parity media toggles (metadata) */}
-        <section className="rule-section" style={{ borderColor: 'rgba(99, 102, 241, 0.25)', marginTop: 14 }}>
+        <section className="rule-section" style={{ borderColor: 'color-mix(in oklab, var(--color-primary) 25%, transparent)', marginTop: 14 }}>
           <div className="rule-section__title" style={{ color: 'var(--color-primary)' }}>
             {t('ui_media_sync_settings_bot_parity')}
           </div>
@@ -603,7 +603,7 @@ export function RuleModal({
                 key={key}
                 className="rule-toggle-chip"
                 style={{
-                  borderColor: meta[key] ? 'rgba(99, 102, 241, 0.5)' : 'var(--color-border)',
+                  borderColor: meta[key] ? 'color-mix(in oklab, var(--color-primary) 50%, transparent)' : 'var(--color-border)',
                 }}
               >
                 <input

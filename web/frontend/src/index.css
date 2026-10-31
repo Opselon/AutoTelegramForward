@@ -3421,6 +3421,113 @@ input[type='radio']:disabled {
   font-weight: 600;
 }
 
+/* ------------------------------------------------------ Panel toolkit -- */
+/* Token-backed building blocks for panels that predate the v2 classes.
+   Namespaced `p-` so they cannot collide with the legacy per-panel
+   sheets; every value resolves to a role token, in both themes. */
+
+.p-label {
+  display: block;
+  font-size: var(--type-xs);
+  color: var(--color-text-muted);
+  margin-block-end: var(--space-1);
+  font-weight: 600;
+}
+
+.p-muted {
+  color: var(--color-text-muted);
+  font-size: var(--type-sm);
+}
+
+.p-subtle {
+  color: var(--color-text-subtle);
+  font-size: var(--type-xs);
+}
+
+.p-inset {
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  overflow-wrap: anywhere;
+  min-inline-size: 0;
+}
+
+.p-inset--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--type-xs);
+}
+
+.p-note {
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  font-size: var(--type-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  min-inline-size: 0;
+}
+
+.p-note--warning {
+  border-color: color-mix(in oklab, var(--color-warning) 35%, transparent);
+  background: var(--color-warning-soft);
+}
+
+.p-note--danger {
+  border-color: color-mix(in oklab, var(--color-danger) 35%, transparent);
+  background: var(--color-danger-soft);
+}
+
+.p-note--success {
+  border-color: color-mix(in oklab, var(--color-success) 35%, transparent);
+  background: var(--color-success-soft);
+}
+
+.p-note--info {
+  border-color: color-mix(in oklab, var(--color-info) 35%, transparent);
+  background: var(--color-info-soft);
+}
+
+.p-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+}
+
+.p-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  min-inline-size: 0;
+}
+
+.p-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.p-grow {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.p-divider {
+  border: 0;
+  border-block-start: 1px solid var(--color-border);
+  margin-block: var(--space-3);
+}
+
+.p-scroll {
+  max-block-size: 320px;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  min-inline-size: 0;
+}
+
 /* Layout utilities (spacing uses the 4px scale). */
 .tom-view {
   display: flex;

@@ -36,6 +36,7 @@ import {
 import { api } from '../api'
 import type { LogItem, SetupReport } from '../types'
 import { Skeleton, SkeletonRows } from '../components/ui/Primitives'
+import { HealthChips } from '../components/HealthChips'
 import type { DashboardCtx } from '../App'
 
 // The full readiness dump stays a chunk of its own: it is only downloaded when
@@ -109,24 +110,6 @@ export function HomePanel({ d }: { d: DashboardCtx }) {
       alive = false
     }
   }, [])
-
-  const healthChips = [
-    { label: 'Core:50051', online: stats?.atf_core_online },
-    { label: 'Logger:50052', online: stats?.atf_logger_online },
-    { label: 'Web:8088', online: gatewayInfo?.atf_web_online },
-  ] as const
-
-  // A chip must say what it means. The dot alone turned "not probed yet"
-  // (undefined on first paint) into the same red as a real outage, and a real
-  // outage named no service — the operator had to open the DevOps panel to
-  // find out which one. Verdict text is the same catalog key the System panel
-  // uses, so all three surfaces agree word for word.
-  const healthVerdict = (online: boolean | undefined) =>
-    online === undefined
-      ? t('ui_probing')
-      : online
-        ? t('ui_system_online')
-        : t('ui_system_offline')
 
   // The four KPIs, moved verbatim from the shell (same sources, same tones).
   const kpis = [
@@ -208,20 +191,12 @@ export function HomePanel({ d }: { d: DashboardCtx }) {
           </div>
         </div>
         <div className="home-hero__health" role="status">
-          {healthChips.map((chip) => (
-            <span
-              key={chip.label}
-              className={`header-chip${chip.online === false ? ' header-chip--down' : ''}`}
-              title={`${chip.label} — ${healthVerdict(chip.online)}`}
-            >
-              <span
-                className={`header-chip__dot${chip.online ? ' is-online' : ''}${chip.online === undefined ? ' is-unknown' : ''}`}
-                aria-hidden="true"
-              />
-              <span>{chip.label}</span>
-              <span className="header-chip__verdict">{healthVerdict(chip.online)}</span>
-            </span>
-          ))}
+          <HealthChips
+            lang={lang}
+            core={stats?.atf_core_online}
+            logger={stats?.atf_logger_online}
+            web={gatewayInfo?.atf_web_online}
+          />
         </div>
       </section>
 

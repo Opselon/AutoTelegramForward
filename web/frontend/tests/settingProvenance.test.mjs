@@ -99,7 +99,8 @@ test('the bot badge names the bot that supplies the value', () => {
 test('a nameless bot still gets a bot badge, not a default one', () => {
   assert.equal(badgeFor(SETTLE(true, 'bot')).textKey, 'ui_badge_bot')
   assert.equal(badgeFor(SETTLE(true, 'bot')).suffix, '')
-  assert.equal(badgeFor(SETTLE(true, 'bot')).color, '#c4b5fd')
+  // Colours are role tokens (both themes must read the badge correctly).
+  assert.equal(badgeFor(SETTLE(true, 'bot')).color, 'var(--color-accent-violet)')
 })
 
 test('an unknown source and an absent one are both shown as the default', () => {

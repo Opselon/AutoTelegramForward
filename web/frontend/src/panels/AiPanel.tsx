@@ -28,7 +28,7 @@ export default function AiPanel({ d }: { d: DashboardCtx }) {
                     <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
                       {t('ui_ai_intelligence_rewriting_engines')}
                     </h2>
-                    <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
+                    <p style={{ fontSize: 'var(--type-sm)', color: 'var(--color-text-muted)', marginTop: 4 }}>
                       {t('ui_configure_llm_models_for_auto_rewriting_signal_parsing_and_trans')}
                     </p>
                   </div>
@@ -66,7 +66,7 @@ export default function AiPanel({ d }: { d: DashboardCtx }) {
                             <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>{ai.name}</h3>
                             <span className="badge badge-vip">{ai.provider}</span>
                           </div>
-                          <div style={{ fontSize: '0.8rem', color: '#818cf8', marginTop: 2, fontFamily: 'monospace' }}>
+                          <div style={{ fontSize: '0.8rem', color: 'var(--color-accent-violet)', marginTop: 2, fontFamily: 'monospace' }}>
                             {ai.model}
                           </div>
                         </div>
@@ -96,27 +96,27 @@ export default function AiPanel({ d }: { d: DashboardCtx }) {
                         </div>
                       </div>
 
-                      <div style={{ fontSize: '0.8rem', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ fontSize: '0.8rem', color: 'var(--color-text)', display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <div>
-                          <span style={{ color: '#94a3b8' }}>{t('ui_api_key')}</span>
+                          <span style={{ color: 'var(--color-text-muted)' }}>{t('ui_api_key')}</span>
                           <code>{ai.api_key_masked || (t('ui_none_environment'))}</code>
                         </div>
                         <div style={{ overflowWrap: 'anywhere' }}>
-                          <span style={{ color: '#94a3b8' }}>
+                          <span style={{ color: 'var(--color-text-muted)' }}>
                             {t('ui_endpoint')}
                           </span>
                           <code dir="ltr">{ai.base_url || (t('ui_provider_default'))}</code>
                         </div>
                         <ProviderKeyCheck aiConfigId={ai.id} lang={lang} compact />
                         <div>
-                          <span style={{ color: '#94a3b8' }}>{t('ui_temperature')}</span>
-                          <span>{ai.temperature}</span> | <span style={{ color: '#94a3b8' }}>{t('ui_lang')}</span>
+                          <span style={{ color: 'var(--color-text-muted)' }}>{t('ui_temperature')}</span>
+                          <span>{ai.temperature}</span> | <span style={{ color: 'var(--color-text-muted)' }}>{t('ui_lang')}</span>
                           <span>{ai.target_language}</span>
                         </div>
                         {ai.system_prompt && (
-                          <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: 8, borderRadius: 6, marginTop: 4 }}>
-                            <span style={{ color: '#94a3b8', fontSize: '0.75rem', display: 'block' }}>{t('ui_system_prompt')}</span>
-                            <span style={{ fontSize: '0.75rem' }}>{ai.system_prompt}</span>
+                          <div style={{ background: 'var(--color-surface-inset)', padding: 8, borderRadius: 6, marginTop: 4 }}>
+                            <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--type-xs)', display: 'block' }}>{t('ui_system_prompt')}</span>
+                            <span style={{ fontSize: 'var(--type-xs)' }}>{ai.system_prompt}</span>
                           </div>
                         )}
                       </div>

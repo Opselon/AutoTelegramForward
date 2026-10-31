@@ -58,7 +58,6 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
     copiedLogId,
     setCopiedLogId,
     servicesHealth,
-    isRtl,
     t,
     fetchLogs,
     handleExportLogs,
@@ -92,11 +91,11 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
               <div>
                 <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
                   <div>
-                    <h2 style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <Terminal size={22} color="#818cf8" />
+                    <h2 style={{ fontSize: 'var(--type-lg)', fontWeight: 800, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <Terminal size={22} color="var(--color-accent-violet)" />
                       <span>{t('ui_pro_active_logger_diagnostics')}</span>
                     </h2>
-                    <p style={{ fontSize: '0.825rem', color: '#94a3b8', marginTop: 4 }}>
+                    <p style={{ fontSize: '0.825rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
                       {t('ui_high_throughput_independent_logger_microservice_on_grpc_6002_wit')}
                     </p>
                   </div>
@@ -107,9 +106,9 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                       style={{
                         padding: '6px 14px',
                         borderRadius: 8,
-                        border: logAutoRefresh ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)',
-                        background: logAutoRefresh ? 'rgba(16, 185, 129, 0.15)' : 'rgba(15, 23, 42, 0.6)',
-                        color: logAutoRefresh ? '#34d399' : '#94a3b8',
+                        border: logAutoRefresh ? '1px solid color-mix(in oklab, var(--color-success) 40%, transparent)' : '1px solid var(--color-border)',
+                        background: logAutoRefresh ? 'var(--color-success-soft)' : 'var(--color-surface-2)',
+                        color: logAutoRefresh ? 'var(--color-success)' : 'var(--color-text-muted)',
                         fontSize: '0.8rem',
                         fontWeight: 600,
                         cursor: 'pointer',
@@ -123,8 +122,8 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                           width: 8,
                           height: 8,
                           borderRadius: '50%',
-                          background: logAutoRefresh ? '#10b981' : 'var(--color-text-muted)',
-                          boxShadow: logAutoRefresh ? '0 0 8px #10b981' : 'none',
+                          background: logAutoRefresh ? 'var(--color-success)' : 'var(--color-text-muted)',
+                          boxShadow: logAutoRefresh ? '0 0 8px var(--color-success)' : 'none',
                         }}
                       />
                       <span>{logAutoRefresh ? (t('ui_live_stream_active_3s')) : (t('ui_live_stream_paused'))}</span>
@@ -151,24 +150,24 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                   // the pre-compose ports, so an operator checking a listener
                   // looked for a port nothing has ever listened on.
                   const nodes = [
-                    { key: 'web', title: t('ui_web_gateway'), sub: 'atf-web · :8088', color: '#f59e0b' },
-                    { key: 'api', title: t('ui_rest_control_plane'), sub: 'atf-api · :8080', color: '#a855f7' },
-                    { key: 'core', title: t('ui_python_core_mtproto'), sub: 'atf-core · gRPC :50051', color: '#38bdf8' },
-                    { key: 'logger', title: t('ui_central_logger'), sub: 'atf-logger · gRPC :50052', color: '#34d399' },
+                    { key: 'web', title: t('ui_web_gateway'), sub: 'atf-web · :8088', color: 'var(--color-warning)' },
+                    { key: 'api', title: t('ui_rest_control_plane'), sub: 'atf-api · :8080', color: 'var(--color-accent-violet)' },
+                    { key: 'core', title: t('ui_python_core_mtproto'), sub: 'atf-core · gRPC :50051', color: 'var(--color-info)' },
+                    { key: 'logger', title: t('ui_central_logger'), sub: 'atf-logger · gRPC :50052', color: 'var(--color-success)' },
                   ]
                   const svc = (k: string) => hmap[k]
                   return (
                     <div className="glass-panel" style={{ padding: 18, marginBottom: 20 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
-                        <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-                          <HeartPulse size={17} color={servicesHealth?.status === 'healthy' ? '#34d399' : '#ef4444'} />
+                        <h3 style={{ fontSize: 'var(--type-md)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <HeartPulse size={17} color={servicesHealth?.status === 'healthy' ? 'var(--color-success)' : 'var(--color-danger)'} />
                           <span>{t('ui_services_topology_live_health')}</span>
                         </h3>
                         <span
                           className="badge"
                           style={{
-                            background: servicesHealth?.status === 'healthy' ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
-                            color: servicesHealth?.status === 'healthy' ? '#34d399' : '#f87171',
+                            background: servicesHealth?.status === 'healthy' ? 'var(--color-success-soft)' : 'var(--color-danger-soft)',
+                            color: servicesHealth?.status === 'healthy' ? 'var(--color-success)' : 'var(--color-danger)',
                             fontSize: 'var(--type-xs)',
                             fontWeight: 700,
                           }}
@@ -190,8 +189,8 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                             <React.Fragment key={n.key}>
                               {i > 0 && (
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '2px 0 2px 22px', height: 26 }} dir="ltr">
-                                  <div style={{ width: 2, height: '100%', minHeight: 18, background: online ? 'rgba(16,185,129,0.5)' : 'rgba(239,68,68,0.4)', borderRadius: 2 }} />
-                                  <Cable size={12} color={online ? '#34d399' : '#ef4444'} />
+                                  <div style={{ width: 2, height: '100%', minHeight: 18, background: online ? 'color-mix(in oklab, var(--color-success) 50%, transparent)' : 'color-mix(in oklab, var(--color-danger) 40%, transparent)', borderRadius: 2 }} />
+                                  <Cable size={12} color={online ? 'var(--color-success)' : 'var(--color-danger)'} />
                                   <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>
                                     {i === 1
                                       ? t('ui_rest_proxy_jwt')
@@ -210,16 +209,16 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                                   gap: 8,
                                   padding: '10px 14px',
                                   borderRadius: 10,
-                                  border: `1px solid ${online ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.35)'}`,
-                                  background: online ? 'rgba(16,185,129,0.05)' : 'rgba(239,68,68,0.07)',
+                                  border: `1px solid ${online ? 'color-mix(in oklab, var(--color-success) 25%, transparent)' : 'color-mix(in oklab, var(--color-danger) 35%, transparent)'}`,
+                                  background: online ? 'var(--color-success-soft)' : 'var(--color-danger-soft)',
                                 }}
                               >
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                                   <span
                                     style={{
                                       width: 10, height: 10, borderRadius: '50%', flexShrink: 0,
-                                      background: online ? '#10b981' : '#ef4444',
-                                      boxShadow: online ? '0 0 10px #10b981' : '0 0 10px #ef4444',
+                                      background: online ? 'var(--color-success)' : 'var(--color-danger)',
+                                      boxShadow: online ? '0 0 10px var(--color-success)' : '0 0 10px var(--color-danger)',
                                       animation: online ? 'none' : 'none',
                                     }}
                                   />
@@ -229,7 +228,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                                   </div>
                                 </div>
                                 <div style={{ textAlign: 'right', minWidth: 0, maxWidth: '100%' }} dir="ltr">
-                                  <div style={{ fontSize: 'var(--type-xs)', fontWeight: 700, color: online ? '#34d399' : '#f87171' }}>
+                                  <div style={{ fontSize: 'var(--type-xs)', fontWeight: 700, color: online ? 'var(--color-success)' : 'var(--color-danger)' }}>
                                     {online ? (t('ui_online')) : (t('ui_down'))}
                                     {s && s.latency_ms > 0 ? ` · ${s.latency_ms}ms` : ''}
                                   </div>
@@ -252,10 +251,10 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                           docker compose, where that command restarts nothing
                           and the operator is left believing they acted. */}
                       {servicesHealth && servicesHealth.status !== 'healthy' && (
-                        <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', fontSize: '0.75rem', color: '#f87171' }}>
+                        <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, background: 'var(--color-danger-soft)', border: '1px solid color-mix(in oklab, var(--color-danger) 35%, transparent)', fontSize: 'var(--type-xs)', color: 'var(--color-danger)' }}>
                           {t('ui_down_services')}
                           {servicesHealth.services.filter((x) => !x.online).map((x) => x.name).join(', ')}
-                          <span style={{ color: '#94a3b8' }}>
+                          <span style={{ color: 'var(--color-text-muted)' }}>
                             {' — '}docker compose restart {servicesHealth.services.filter((x) => !x.online).map((x) => x.name).join(' ')}
                           </span>
                         </div>
@@ -280,7 +279,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                       justifyContent: 'space-between',
                       marginBottom: 16,
                       paddingBottom: 14,
-                      borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+                      borderBottom: '1px solid var(--color-border)',
                     }}
                   >
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
@@ -309,7 +308,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
 
                       {/* Service Filter */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{t('ui_service')}</span>
+                        <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>{t('ui_service')}</span>
                         <select
                           value={logFilterService}
                           onChange={(e) => {
@@ -317,9 +316,9 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                             fetchLogs(e.target.value, logFilterLevel, logSearch)
                           }}
                           style={{
-                            background: 'rgba(15, 23, 42, 0.8)',
-                            border: '1px solid rgba(255, 255, 255, 0.15)',
-                            color: '#e2e8f0',
+                            background: 'var(--color-surface-2)',
+                            border: '1px solid var(--color-border)',
+                            color: 'var(--color-text)',
                             borderRadius: 8,
                             padding: '5px 10px',
                             fontSize: '0.8rem',
@@ -336,7 +335,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
 
                       {/* Level Filter */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{t('ui_level')}</span>
+                        <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>{t('ui_level')}</span>
                         <select
                           value={logFilterLevel}
                           onChange={(e) => {
@@ -344,9 +343,9 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                             fetchLogs(logFilterService, e.target.value, logSearch)
                           }}
                           style={{
-                            background: 'rgba(15, 23, 42, 0.8)',
-                            border: '1px solid rgba(255, 255, 255, 0.15)',
-                            color: '#e2e8f0',
+                            background: 'var(--color-surface-2)',
+                            border: '1px solid var(--color-border)',
+                            color: 'var(--color-text)',
                             borderRadius: 8,
                             padding: '5px 10px',
                             fontSize: '0.8rem',
@@ -364,7 +363,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                           same attribution the per-task Logs tab renders, surfaced
                           where an operator already has the global view open. */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{t('ui_task')}</span>
+                        <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>{t('ui_task')}</span>
                         <select
                           value={logFilterRule}
                           onChange={(e) => {
@@ -373,9 +372,9 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                             fetchLogs(logFilterService, logFilterLevel, logSearch, { rule: e.target.value, offset: 0 })
                           }}
                           style={{
-                            background: 'rgba(15, 23, 42, 0.8)',
-                            border: '1px solid rgba(255, 255, 255, 0.15)',
-                            color: '#e2e8f0',
+                            background: 'var(--color-surface-2)',
+                            border: '1px solid var(--color-border)',
+                            color: 'var(--color-text)',
                             borderRadius: 8,
                             padding: '5px 10px',
                             fontSize: '0.8rem',
@@ -394,7 +393,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                       {/* v18: read direction — newest-first for triage, oldest-first
                           for replaying how a task behaved. */}
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>{t('ui_order')}</span>
+                        <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>{t('ui_order')}</span>
                         <select
                           value={logOrder}
                           onChange={(e) => {
@@ -404,9 +403,9 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                             fetchLogs(logFilterService, logFilterLevel, logSearch, { order, offset: 0 })
                           }}
                           style={{
-                            background: 'rgba(15, 23, 42, 0.8)',
-                            border: '1px solid rgba(255, 255, 255, 0.15)',
-                            color: '#e2e8f0',
+                            background: 'var(--color-surface-2)',
+                            border: '1px solid var(--color-border)',
+                            color: 'var(--color-text)',
                             borderRadius: 8,
                             padding: '5px 10px',
                             fontSize: '0.8rem',
@@ -435,7 +434,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                           style={{
                             background: 'none',
                             border: 'none',
-                            color: '#94a3b8',
+                            color: 'var(--color-text-muted)',
                             cursor: 'pointer',
                             padding: 4,
                           }}
@@ -447,7 +446,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                   </div>
 
                   {/* Quick Metrics Badges */}
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14, fontSize: '0.75rem' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14, fontSize: 'var(--type-xs)' }}>
                     <span className="badge badge-gray">
                       {logTotal === 0
                         ? (t('ui_no_events'))
@@ -461,13 +460,13 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                     ) : null}
                     {logStats && (
                       <>
-                        <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: '#34d399' }}>
+                        <span className="badge" style={{ background: 'var(--color-success-soft)', color: 'var(--color-success)' }}>
                           {t('ui_level_info')}: {logStats.by_level?.INFO ?? 0}
                         </span>
-                        <span className="badge" style={{ background: 'rgba(245, 158, 11, 0.15)', color: '#fbbf24' }}>
+                        <span className="badge" style={{ background: 'var(--color-warning-soft)', color: 'var(--color-warning)' }}>
                           {t('ui_level_warn')}: {logStats.by_level?.WARN ?? 0}
                         </span>
-                        <span className="badge" style={{ background: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}>
+                        <span className="badge" style={{ background: 'var(--color-danger-soft)', color: 'var(--color-danger)' }}>
                           {t('ui_level_error')}: {logStats.by_level?.ERROR ?? 0}
                         </span>
                         <span className="badge badge-vip">
@@ -482,9 +481,9 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                   <div style={{
                     display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
                     marginBottom: 14, padding: '10px 12px',
-                    background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10,
+                    background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 10,
                   }}>
-                    <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>
                       📜 {t('ui_history')}
                     </span>
                     <button
@@ -509,7 +508,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                     >
                       ⬇ {t('ui_older')}
                     </button>
-                    <label style={{ fontSize: 'var(--type-xs)', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <label style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
                       {t('ui_page_size')}
                       <select
                         value={logPageSize}
@@ -519,12 +518,12 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                           setLogOffset(0)
                           fetchLogs(logFilterService, logFilterLevel, logSearch, { limit: size, offset: 0 })
                         }}
-                        style={{ background: '#0b1220', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: '4px 6px', fontSize: 'var(--type-xs)' }}
+                        style={{ background: 'var(--color-surface-inset)', color: 'var(--color-text)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '4px 6px', fontSize: 'var(--type-xs)' }}
                       >
                         {[50, 100, 200, 500].map((n) => <option key={n} value={n}>{n}</option>)}
                       </select>
                     </label>
-                    <span style={{ fontSize: 'var(--type-xs)', color: logHasMore ? '#fbbf24' : '#34d399' }}>
+                    <span style={{ fontSize: 'var(--type-xs)', color: logHasMore ? 'var(--color-warning)' : 'var(--color-success)' }}>
                       {logHasMore
                         ? (t('ui_older_events_exist'))
                         : (t('ui_reached_the_end_of_history'))}
@@ -547,17 +546,17 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                   <div style={{
                     display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center',
                     marginBottom: 14, padding: '10px 12px',
-                    background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10,
+                    background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 10,
                   }}>
-                    <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                    <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>
                       🧹 {t('ui_purge_archive')}
                     </span>
-                    <label style={{ fontSize: 'var(--type-xs)', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <label style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 6 }}>
                       {t('ui_keep_last')}
                       <input
                         type="number" min={0} max={720} step={1} value={purgeWindowH}
                         onChange={(e) => setPurgeWindowH(Math.max(0, Math.min(720, Number(e.target.value) || 0)))}
-                        style={{ width: 64, background: '#0b1220', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 6, padding: '4px 6px', fontSize: 'var(--type-xs)' }}
+                        style={{ width: 64, background: 'var(--color-surface-inset)', color: 'var(--color-text)', border: '1px solid var(--color-border)', borderRadius: 6, padding: '4px 6px', fontSize: 'var(--type-xs)' }}
                       />
                       {t('ui_h')}
                     </label>
@@ -573,7 +572,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                       {purging ? '⏳ ...' : (t('ui_purge_old_logs'))}
                     </button>
                     {purgeResult && (
-                      <span style={{ fontSize: 'var(--type-xs)', color: '#34d399' }}>
+                      <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-success)' }}>
                         ✓ {t('ui_purged')}: {purgeResult.purged} · {t('ui_left')}: {purgeResult.remaining}
                       </span>
                     )}
@@ -581,21 +580,21 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
 
                   {/* Backup & Restore — migrate this install to another server */}
                   <div className="glass-panel" style={{ padding: 18, marginBottom: 20 }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                      <Database size={17} color="#38bdf8" />
+                    <h3 style={{ fontSize: 'var(--type-md)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <Database size={17} color="var(--color-info)" />
                       <span>{t('ui_backup_restore_server_migration')}</span>
                     </h3>
-                    <p style={{ fontSize: '0.76rem', color: '#94a3b8', marginBottom: 14 }}>
+                    <p style={{ fontSize: '0.76rem', color: 'var(--color-text-muted)', marginBottom: 14 }}>
                       {t('ui_every_setting_rule_filter_ai_config_and_telegram_session_is_pack')}
                     </p>
 
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 14 }}>
                       {/* EXPORT */}
-                      <div style={{ background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(56, 189, 248, 0.18)', borderRadius: 10, padding: 14 }}>
-                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#7dd3fc', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ background: 'var(--color-surface-2)', border: '1px solid color-mix(in oklab, var(--color-info) 35%, transparent)', borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-info)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
                           <Download size={14} /> {t('ui_1_back_up_this_server')}
                         </div>
-                        <label style={{ fontSize: 'var(--type-xs)', color: '#94a3b8', display: 'block', marginBottom: 4 }}>
+                        <label style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', display: 'block', marginBottom: 4 }}>
                           {t('ui_file_passphrase_optional_recommended')}
                         </label>
                         <input
@@ -603,47 +602,47 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                           value={backupPassphrase}
                           onChange={(e) => setBackupPassphrase(e.target.value)}
                           placeholder={t('ui_strong_passphrase')}
-                          style={{ width: '100%', boxSizing: 'border-box', background: '#0b1220', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '7px 10px', fontSize: '0.78rem', marginBottom: 10 }}
+                          style={{ width: '100%', boxSizing: 'border-box', background: 'var(--color-surface-inset)', color: 'var(--color-text)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '7px 10px', fontSize: '0.78rem', marginBottom: 10 }}
                         />
                         <button
                           onClick={handleBackupExport} disabled={backupBusy}
-                          className="btn" style={{ width: '100%', justifyContent: 'center', padding: '8px 12px', fontSize: '0.8rem', fontWeight: 700, background: 'rgba(56, 189, 248, 0.15)', border: '1px solid rgba(56, 189, 248, 0.4)', color: '#38bdf8' }}
+                          className="btn" style={{ width: '100%', justifyContent: 'center', padding: '8px 12px', fontSize: '0.8rem', fontWeight: 700, background: 'var(--color-info-soft)', border: '1px solid color-mix(in oklab, var(--color-info) 40%, transparent)', color: 'var(--color-info)' }}
                         >
                           {backupBusy ? '⏳ ...' : (t('ui_download_backup'))}
                         </button>
                         {backupCounts && (
-                          <div style={{ marginTop: 10, fontSize: 'var(--type-xs)', color: '#94a3b8' }}>
+                          <div style={{ marginTop: 10, fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>
                             {backupEncrypted && (
-                              <span className="badge" style={{ background: 'rgba(16,185,129,0.15)', color: '#34d399', fontSize: 'var(--type-xs)', marginRight: 6 }}>🔒 AES-GCM</span>
+                              <span className="badge" style={{ background: 'var(--color-success-soft)', color: 'var(--color-success)', fontSize: 'var(--type-xs)', marginRight: 6 }}>🔒 AES-GCM</span>
                             )}
                             {Object.entries(backupCounts).map(([k, v]) => (
-                              <span key={k} style={{ display: 'inline-block', margin: '2px 4px 0 0', padding: '2px 7px', background: 'rgba(255,255,255,0.05)', borderRadius: 6 }}>
-                                {k}: <b style={{ color: '#e2e8f0' }}>{v}</b>
+                              <span key={k} style={{ display: 'inline-block', margin: '2px 4px 0 0', padding: '2px 7px', background: 'var(--color-hover-wash)', borderRadius: 6 }}>
+                                {k}: <b style={{ color: 'var(--color-text)' }}>{v}</b>
                               </span>
                             ))}
                           </div>
                         )}
                         {!backupEncrypted && backupCounts && (
-                          <div style={{ marginTop: 8, fontSize: 'var(--type-xs)', color: '#fbbf24' }}>
+                          <div style={{ marginTop: 8, fontSize: 'var(--type-xs)', color: 'var(--color-warning)' }}>
                             ⚠️ {t('ui_this_file_is_unencrypted_and_holds_live_credentials')}
                           </div>
                         )}
                       </div>
 
                       {/* IMPORT */}
-                      <div style={{ background: 'rgba(15, 23, 42, 0.5)', border: '1px solid rgba(168, 85, 247, 0.18)', borderRadius: 10, padding: 14 }}>
-                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#c4b5fd', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ background: 'var(--color-surface-2)', border: '1px solid color-mix(in oklab, var(--color-accent-violet) 35%, transparent)', borderRadius: 10, padding: 14 }}>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-accent-violet)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
                           <Upload size={14} /> {t('ui_2_restore_on_this_server')}
                         </div>
-                        <label style={{ fontSize: 'var(--type-xs)', color: '#94a3b8', display: 'block', marginBottom: 4 }}>
+                        <label style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', display: 'block', marginBottom: 4 }}>
                           {t('ui_backup_file')}
                         </label>
                         <input
                           type="file" accept=".json,.enc,application/json"
                           onChange={(e) => onBackupFileChosen(e.target.files?.[0])}
-                          style={{ width: '100%', boxSizing: 'border-box', fontSize: 'var(--type-xs)', color: '#94a3b8', marginBottom: 8 }}
+                          style={{ width: '100%', boxSizing: 'border-box', fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', marginBottom: 8 }}
                         />
-                        <label style={{ fontSize: 'var(--type-xs)', color: '#94a3b8', display: 'block', marginBottom: 4 }}>
+                        <label style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', display: 'block', marginBottom: 4 }}>
                           {t('ui_or_paste_the_bundle')}
                         </label>
                         <textarea
@@ -651,9 +650,9 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                           onChange={(e) => { setImportText(e.target.value); setImportStats(null) }}
                           placeholder={t('ui_bundle_contents')}
                           rows={3}
-                          style={{ width: '100%', boxSizing: 'border-box', background: '#0b1220', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '7px 10px', fontSize: 'var(--type-xs)', fontFamily: 'monospace', resize: 'vertical', marginBottom: 10 }}
+                          style={{ width: '100%', boxSizing: 'border-box', background: 'var(--color-surface-inset)', color: 'var(--color-text)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '7px 10px', fontSize: 'var(--type-xs)', fontFamily: 'monospace', resize: 'vertical', marginBottom: 10 }}
                         />
-                        <label style={{ fontSize: 'var(--type-xs)', color: '#94a3b8', display: 'block', marginBottom: 4 }}>
+                        <label style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', display: 'block', marginBottom: 4 }}>
                           {t('ui_passphrase_if_the_file_is_encrypted')}
                         </label>
                         <input
@@ -661,23 +660,23 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                           value={importPassphrase}
                           onChange={(e) => setImportPassphrase(e.target.value)}
                           placeholder={t('ui_passphrase')}
-                          style={{ width: '100%', boxSizing: 'border-box', background: '#0b1220', color: '#e2e8f0', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, padding: '7px 10px', fontSize: '0.78rem', marginBottom: 10 }}
+                          style={{ width: '100%', boxSizing: 'border-box', background: 'var(--color-surface-inset)', color: 'var(--color-text)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '7px 10px', fontSize: '0.78rem', marginBottom: 10 }}
                         />
-                        <label style={{ fontSize: 'var(--type-xs)', color: '#cbd5e1', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                        <label style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                           <input type="checkbox" checked={importOverwrite} onChange={(e) => setImportOverwrite(e.target.checked)} />
                           {t('ui_full_replace_overwrite_existing_rows')}
                         </label>
                         <button
                           onClick={handleBackupImport} disabled={backupBusy}
-                          className="btn" style={{ width: '100%', justifyContent: 'center', padding: '8px 12px', fontSize: '0.8rem', fontWeight: 700, background: 'rgba(168, 85, 247, 0.15)', border: '1px solid rgba(168, 85, 247, 0.4)', color: '#c4b5fd' }}
+                          className="btn" style={{ width: '100%', justifyContent: 'center', padding: '8px 12px', fontSize: '0.8rem', fontWeight: 700, background: 'var(--color-primary-soft)', border: '1px solid color-mix(in oklab, var(--color-accent-violet) 40%, transparent)', color: 'var(--color-accent-violet)' }}
                         >
                           {backupBusy ? '⏳ ...' : (t('ui_restore_backup'))}
                         </button>
                         {importStats && (
                           <div style={{ marginTop: 10, display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                             {Object.entries(importStats).map(([k, v]) => (
-                              <span key={k} style={{ fontSize: 'var(--type-xs)', padding: '3px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.05)', color: '#94a3b8' }}>
-                                {k}: <b style={{ color: '#34d399' }}>{v.imported}</b>{v.skipped ? <span style={{ color: '#94a3b8' }}>/{v.skipped}</span> : null}{v.failed ? <span style={{ color: '#f87171' }}> ✗{v.failed}</span> : null}
+                              <span key={k} style={{ fontSize: 'var(--type-xs)', padding: '3px 8px', borderRadius: 6, background: 'var(--color-hover-wash)', color: 'var(--color-text-muted)' }}>
+                                {k}: <b style={{ color: 'var(--color-success)' }}>{v.imported}</b>{v.skipped ? <span style={{ color: 'var(--color-text-muted)' }}>/{v.skipped}</span> : null}{v.failed ? <span style={{ color: 'var(--color-danger)' }}> ✗{v.failed}</span> : null}
                               </span>
                             ))}
                           </div>
@@ -689,21 +688,21 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                   {/* Terminal Log Console */}
                   <div
                     style={{
-                      background: '#070b14',
+                      background: 'var(--color-surface-inset)',
                       borderRadius: 12,
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      border: '1px solid var(--color-border)',
                       padding: '12px 14px',
                       fontFamily: "'JetBrains Mono', Consolas, Monaco, monospace",
                       fontSize: '0.8rem',
                       lineHeight: 1.6,
                       maxHeight: 520,
                       overflowY: 'auto',
-                      boxShadow: 'inset 0 2px 10px rgba(0, 0, 0, 0.6)',
+                      boxShadow: 'inset 0 2px 10px var(--color-scrim)',
                     }}
                   >
                     {(!Array.isArray(logs) || logs.length === 0) ? (
                       <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--color-text-muted)' }}>
-                        <div style={{ fontSize: 24, marginBottom: 8 }}>📋</div>
+                        <div style={{ fontSize: 'var(--type-xl)', marginBottom: 8 }}>📋</div>
                         <div>{t('ui_no_log_events_matching_current_filters')}</div>
                       </div>
                     ) : (
@@ -715,14 +714,14 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                           const isDbg = lvl === 'DEBUG'
                           const logId = l.id ?? `${l.ts}-${idx}`
 
-                          const lvlColor = isErr ? '#ef4444' : isWarn ? '#f59e0b' : isDbg ? '#38bdf8' : '#10b981'
+                          const lvlColor = isErr ? 'var(--color-danger)' : isWarn ? 'var(--color-warning)' : isDbg ? 'var(--color-text-subtle)' : 'var(--color-info)'
                           const lvlBg = isErr
-                            ? 'rgba(239, 68, 68, 0.18)'
+                            ? 'var(--color-danger-soft)'
                             : isWarn
-                            ? 'rgba(245, 158, 11, 0.18)'
+                            ? 'var(--color-warning-soft)'
                             : isDbg
-                            ? 'rgba(56, 189, 248, 0.18)'
-                            : 'rgba(16, 185, 129, 0.18)'
+                            ? 'var(--color-hover-wash)'
+                            : 'var(--color-info-soft)'
 
                           const timeStr = l.ts ? new Date(l.ts * 1000).toLocaleTimeString() : '--:--:--'
                           const logLineText = `[${timeStr}] [${lvl}] [${l.service || 'core'}/${l.category || 'sys'}] ${l.message || l.detail || ''}`
@@ -733,9 +732,8 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                               style={{
                                 padding: '6px 10px',
                                 borderRadius: 6,
-                                background: isErr ? 'rgba(239, 68, 68, 0.06)' : 'rgba(255, 255, 255, 0.015)',
-                                borderLeft: isRtl ? 'none' : `3px solid ${lvlColor}`,
-                                borderRight: isRtl ? `3px solid ${lvlColor}` : 'none',
+                                background: isErr ? 'var(--color-danger-soft)' : 'transparent',
+                                borderInlineStart: `3px solid ${lvlColor}`,
                                 display: 'flex',
                                 alignItems: 'flex-start',
                                 justifyContent: 'space-between',
@@ -745,7 +743,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                             >
                               <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, flex: 1 }}>
                                 {/* Time */}
-                                <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem', flexShrink: 0 }}>
+                                <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--type-xs)', flexShrink: 0 }}>
                                   {timeStr}
                                 </span>
 
@@ -767,8 +765,8 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                                 {/* Service & Category */}
                                 <span
                                   style={{
-                                    color: '#818cf8',
-                                    background: 'rgba(99, 102, 241, 0.1)',
+                                    color: 'var(--color-accent-violet)',
+                                    background: 'var(--color-primary-soft)',
                                     padding: '1px 6px',
                                     borderRadius: 4,
                                     fontSize: 'var(--type-xs)',
@@ -792,9 +790,9 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                                     }}
                                     title={t('ui_filter_to_this_task')}
                                     style={{
-                                      color: '#f472b6',
-                                      background: 'rgba(236, 72, 153, 0.14)',
-                                      border: '1px solid rgba(236, 72, 153, 0.35)',
+                                      color: 'var(--color-accent-violet)',
+                                      background: 'var(--color-primary-soft)',
+                                      border: '1px solid color-mix(in oklab, var(--color-accent-violet) 35%, transparent)',
                                       padding: '1px 6px',
                                       borderRadius: 4,
                                       fontSize: 'var(--type-xs)',
@@ -815,9 +813,9 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                                     }}
                                     title={t('ui_trace_this_request_end_to_end')}
                                     style={{
-                                      color: '#38bdf8',
-                                      background: 'rgba(56, 189, 248, 0.12)',
-                                      border: '1px solid rgba(56, 189, 248, 0.3)',
+                                      color: 'var(--color-info)',
+                                      background: 'var(--color-info-soft)',
+                                      border: '1px solid color-mix(in oklab, var(--color-info) 35%, transparent)',
                                       padding: '1px 6px',
                                       borderRadius: 4,
                                       fontSize: 'var(--type-xs)',
@@ -831,7 +829,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                                 )}
 
                                 {/* Message */}
-                                <span style={{ color: isErr ? '#fca5a5' : '#f1f5f9', fontWeight: isErr ? 600 : 400 }}>
+                                <span style={{ color: isErr ? 'var(--color-danger-text)' : 'var(--color-text)', fontWeight: isErr ? 600 : 400 }}>
                                   {l.message || l.detail}
                                 </span>
 
@@ -844,8 +842,8 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                                       marginTop: 4,
                                       padding: '4px 8px',
                                       borderRadius: 4,
-                                      background: 'rgba(0, 0, 0, 0.4)',
-                                      color: '#94a3b8',
+                                      background: 'var(--color-scrim)',
+                                      color: 'var(--color-text-muted)',
                                       fontSize: 'var(--type-xs)',
                                       whiteSpace: 'pre-wrap',
                                       textAlign: 'left',
@@ -867,7 +865,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                                 style={{
                                   background: 'none',
                                   border: 'none',
-                                  color: copiedLogId === logId ? '#34d399' : 'var(--color-text-muted)',
+                                  color: copiedLogId === logId ? 'var(--color-success)' : 'var(--color-text-muted)',
                                   cursor: 'pointer',
                                   padding: '2px 4px',
                                   borderRadius: 4,
@@ -897,8 +895,8 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
 
                   {/* Recent Pipeline Errors — triage queue for things to fix next */}
                   <div className="glass-panel" style={{ padding: 20, marginTop: 20 }}>
-                    <h3 style={{ fontSize: '1rem', fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Activity size={16} color="#ef4444" />
+                    <h3 style={{ fontSize: 'var(--type-md)', fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Activity size={16} color="var(--color-danger)" />
                       <span>{t('ui_recent_pipeline_errors_triage_queue')}</span>
                       {(recentErrors || []).length > 0 && (
                         <span className="badge badge-vip" style={{ fontSize: 'var(--type-xs)' }}>{recentErrors.length}</span>
@@ -921,23 +919,23 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                               dir="ltr"
                               style={{
                                 textAlign: 'left',
-                                background: 'rgba(15, 23, 42, 0.6)',
+                                background: 'var(--color-surface-2)',
                                 padding: '10px 14px',
                                 borderRadius: 8,
                                 fontSize: '0.78rem',
-                                border: `1px solid ${isErr ? 'rgba(239, 68, 68, 0.3)' : 'rgba(245, 158, 11, 0.3)'}`,
+                                border: `1px solid ${isErr ? 'color-mix(in oklab, var(--color-danger) 35%, transparent)' : 'color-mix(in oklab, var(--color-warning) 35%, transparent)'}`,
                                 display: 'flex',
                                 flexDirection: 'column',
                                 gap: 4,
                               }}
                             >
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                                <span style={{ fontWeight: 700, color: isErr ? '#fca5a5' : '#fbbf24' }}>
+                                <span style={{ fontWeight: 700, color: isErr ? 'var(--color-danger-text)' : 'var(--color-warning)' }}>
                                   {err.error_name || err.category}
                                 </span>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                   {err.rule_id && (
-                                    <span style={{ fontSize: 'var(--type-xs)', color: '#818cf8', background: 'rgba(99,102,241,0.1)', padding: '1px 6px', borderRadius: 4 }}>
+                                    <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-accent-violet)', background: 'var(--color-primary-soft)', padding: '1px 6px', borderRadius: 4 }}>
                                       {err.rule_id.substring(0, 8)}
                                     </span>
                                   )}
@@ -947,7 +945,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                                 </div>
                               </div>
                               {err.detail && (
-                                <div style={{ color: '#94a3b8', fontSize: 'var(--type-xs)', fontFamily: "'JetBrains Mono', Consolas, monospace", wordBreak: 'break-word' }}>
+                                <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--type-xs)', fontFamily: "'JetBrains Mono', Consolas, monospace", wordBreak: 'break-word' }}>
                                   {err.detail.slice(0, 260)}
                                 </div>
                               )}

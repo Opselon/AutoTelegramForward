@@ -53,7 +53,8 @@ interface Props {
   filter: FilterRule | null
   onClose: () => void
   onSaved: (saved: FilterRule) => void
-  showToast: (message: string) => void
+  /** The shell's toast; `tone: 'danger'` marks failures. */
+  showToast: (message: string, tone?: 'success' | 'danger') => void
 }
 
 export function FilterModal({ open, lang, filter, onClose, onSaved, showToast }: Props) {
@@ -160,7 +161,7 @@ export function FilterModal({ open, lang, filter, onClose, onSaved, showToast }:
       } as SaveFilterRuleRequest)
       onSaved(saved)
     } catch (e: any) {
-      showToast(e?.message || t('ui_error'))
+      showToast(e?.message || t('ui_error'), 'danger')
     } finally {
       setSaving(false)
     }

@@ -727,7 +727,7 @@ export function TaskOverviewModal({
                       onClick={() => handleToggle('is_active')}
                       className={'tom-pill tom-pill--status' + (isRunning ? ' is-on' : '')}
                     >
-                      {isRunning ? <Play size={10} fill="#fff" /> : <Pause size={10} fill="#fff" />}
+                      {isRunning ? <Play size={10} fill="var(--color-on-accent)" /> : <Pause size={10} fill="var(--color-on-accent)" />}
                       {isRunning ? t('ui_running') : t('ui_paused')}
                     </button>
                   </div>

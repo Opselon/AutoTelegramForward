@@ -22,8 +22,6 @@ const STATUS_ORDER: Record<string, number> = {
 }
 
 // Bounded job kinds the panel exposes as one-click submissions — these are the
-// same kind values the Go API allowlists before the RPC.
-// Bounded job kinds the panel exposes as one-click submissions — these are the
 // same kind values the Go API allowlists before the RPC. The label and its hint
 // are catalog keys, so a submission form is readable in every language.
 const KIND_OPTIONS: { value: TaskKind; labelKey: string; hintKey: string; fields: number }[] = [
@@ -103,12 +101,12 @@ export function JobsPanel({
   }
 
   const statusColor = (s: string) =>
-    s === 'SUCCEEDED' ? '#4ade80'
-    : s === 'FAILED' ? '#f87171'
-    : s === 'CANCELLED' ? '#a78bfa'
-    : s === 'RUNNING' ? '#38bdf8'
-    : s === 'RETRY_WAIT' ? '#fbbf24'
-    : '#94a3b8'
+    s === 'SUCCEEDED' ? 'var(--color-success)'
+    : s === 'FAILED' ? 'var(--color-danger)'
+    : s === 'CANCELLED' ? 'var(--color-accent-violet)'
+    : s === 'RUNNING' ? 'var(--color-info)'
+    : s === 'RETRY_WAIT' ? 'var(--color-warning)'
+    : 'var(--color-text-muted)'
 
   return (
     <div className="panel-container">
@@ -116,12 +114,12 @@ export function JobsPanel({
         <h2 style={{ margin: 0, fontSize: '1.15rem' }}>{t('ui_my_jobs')}</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn" onClick={() => setAutoRefresh((v) => !v)}
-            style={{ background: autoRefresh ? 'rgba(20, 184, 166, 0.2)' : 'transparent', color: autoRefresh ? '#2dd4bf' : '#94a3b8' }}>
+            style={{ background: autoRefresh ? 'var(--color-primary-soft)' : 'transparent', color: autoRefresh ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>
             <RefreshCw size={14} />
             <span>{t('ui_auto_renew')}</span>
           </button>
           <button className="btn" onClick={() => setOpenCreate(true)}
-            style={{ background: 'rgba(20, 184, 166, 0.2)', color: '#2dd4bf', border: '1px solid rgba(20, 184, 166, 0.4)' }}>
+            style={{ background: 'var(--color-primary-soft)', color: 'var(--color-primary)', border: '1px solid color-mix(in oklab, var(--color-primary) 40%, transparent)' }}>
             <Plus size={14} />
             <span>{t('ui_new_job')}</span>
           </button>
@@ -129,22 +127,22 @@ export function JobsPanel({
       </div>
 
       {error && (
-        <div style={{ border: '1px solid rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.1)', color: '#f87171', borderRadius: 8, padding: '8px 12px', marginBottom: 12 }}>
+        <div style={{ border: '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)', background: 'var(--color-danger-soft)', color: 'var(--color-danger)', borderRadius: 8, padding: '8px 12px', marginBottom: 12 }}>
           {error}
         </div>
       )}
 
       {loading ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#94a3b8' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--color-text-muted)' }}>
           <Loader2 size={15} />{t('ui_loading_jobs')}
         </div>
       ) : tasks.length === 0 ? (
-        <div style={{ color: '#94a3b8', textAlign: 'center', padding: '32px 0' }}>
+        <div style={{ color: 'var(--color-text-muted)', textAlign: 'center', padding: '32px 0' }}>
           {t('ui_no_jobs_yet_long_running_operations_session_backups_dlq_replays')}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+          <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>
             {t('ui_showing')} {tasks.length} / {total}
           </div>
           {tasks.map((task) => {
@@ -153,36 +151,36 @@ export function JobsPanel({
             return (
               <div key={task.id}
                 style={{
-                  border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8,
-                  background: 'rgba(255,255,255,0.03)', direction: 'ltr',
+                  border: '1px solid var(--color-border)', borderRadius: 8,
+                  background: 'var(--color-surface-2)', direction: 'ltr',
                   padding: '10px 12px', display: 'grid',
                   gridTemplateColumns: 'auto 1fr auto', gap: '8px 14px', alignItems: 'center',
                 }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: statusColor(task.status), minWidth: 96, textAlign: 'center' }}>
+                <span style={{ fontSize: 'var(--type-xs)', fontWeight: 700, color: statusColor(task.status), minWidth: 96, textAlign: 'center' }}>
                   {task.status}{task.status === 'RETRY_WAIT' ? ` (${task.attempt}/${task.max_attempts})` : ''}
                 </span>
                 <div>
-                  <div style={{ fontVariantLigatures: 'none', fontFamily: 'monospace', fontSize: '0.8rem', color: '#e2e8f0' }}>
+                  <div style={{ fontVariantLigatures: 'none', fontFamily: 'monospace', fontSize: '0.8rem', color: 'var(--color-text)' }}>
                     {task.kind}
                   </div>
                   {task.error && (
-                    <div style={{ fontSize: '0.75rem', color: '#f87171', marginTop: 2 }}>{task.error}</div>
+                    <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-danger)', marginTop: 2 }}>{task.error}</div>
                   )}
-                  <div style={{ fontSize: 'var(--type-xs)', color: '#94a3b8', marginTop: 2 }}>
+                  <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', marginTop: 2 }}>
                     #{task.id.slice(0, 12)} · {fmt(task.created_at)} → {fmt(task.finished_at)}
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexDirection: lang === 'fa' ? 'row-reverse' : 'row' }}>
                   {canCancel && (
                     <button className="btn" onClick={() => act(task, 'cancel')} disabled={busy === task.id + 'cancel'}
-                      style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.4)', padding: '4px 8px' }}>
+                      style={{ background: 'var(--color-danger-soft)', color: 'var(--color-danger)', border: '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)', padding: '4px 8px' }}>
                       {busy === task.id + 'cancel' ? <Loader2 size={13} /> : <Ban size={13} />}
                       <span>{t('ui_cancel')}</span>
                     </button>
                   )}
                   {canRetry && (
                     <button className="btn" onClick={() => act(task, 'retry')} disabled={busy === task.id + 'retry'}
-                      style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid rgba(34,197,94,0.4)', padding: '4px 8px' }}>
+                      style={{ background: 'var(--color-success-soft)', color: 'var(--color-success)', border: '1px solid color-mix(in oklab, var(--color-success) 40%, transparent)', padding: '4px 8px' }}>
                       {busy === task.id + 'retry' ? <Loader2 size={13} /> : <RotateCw size={13} />}
                       <span>{t('ui_retry')}</span>
                     </button>
@@ -231,36 +229,48 @@ function CreateTaskModal({ lang, onClose, onCreated }: { lang: UiLang; onClose: 
   }
 
   return (
-    <div onClick={onClose}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()}
-        style={{ background: '#1e293b', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: 20, width: '100%', maxWidth: 420, direction: 'ltr' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14 }}>
-          <h3 style={{ margin: 0 }}>{t('ui_new_background_job')}</h3>
-          <button className="btn" onClick={onClose} style={{ padding: '4px 8px' }}><X size={15} /></button>
-        </div>
+    <div
+      className="modal-overlay"
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 'var(--z-modal)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: 'var(--color-scrim)', padding: 16,
+      }}
+    >
+      <div
+        className="glass-panel modal-sheet"
+        onClick={(e) => e.stopPropagation()}
+        style={{ padding: 20, width: '100%', maxWidth: 420, direction: 'ltr' }}
+      >
+        <header className="modal-head">
+          <h3 className="modal-title">{t('ui_new_background_job')}</h3>
+          <button className="btn btn--ghost btn--icon" onClick={onClose}><X size={15} /></button>
+        </header>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="modal-sheet-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {KIND_OPTIONS.map((o) => (
-            <label key={o.value} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', cursor: 'pointer' }}>
+            <label key={o.value} className="p-row" style={{ alignItems: 'flex-start', cursor: 'pointer' }}>
               <input type="radio" checked={kind === o.value} onChange={() => { setKind(o.value); setField0('') }} />
               <div>
                 <div style={{ fontSize: '0.9rem' }}>{t(o.labelKey)}</div>
-                <div style={{ fontSize: 'var(--type-xs)', color: '#94a3b8' }}>{t(o.hintKey)}</div>
+                <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>{t(o.hintKey)}</div>
               </div>
             </label>
           ))}
           {opt.fields > 0 && (
-            <input className="input" value={field0} onChange={(e) => setField0(e.target.value)}
-              placeholder={t(opt.hintKey)}
-              style={{ border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: 8, background: 'rgba(0,0,0,0.3)' }} />
+            <div className="field">
+              <input className="input-field" value={field0} onChange={(e) => setField0(e.target.value)}
+                placeholder={t(opt.hintKey)} />
+            </div>
           )}
-          {err && <div style={{ color: '#f87171', fontSize: '0.8rem' }}>{err}</div>}
-          <button className="btn" onClick={submit} disabled={submitting}
-            style={{ background: 'rgba(20, 184, 166, 0.25)', color: '#2dd4bf', justifySelf: 'end' }}>
-            {submitting ? <Loader2 size={14} /> : <Plus size={14} />}
-            <span>{t('ui_submit')}</span>
-          </button>
+          {err && <div className="p-note p-note--danger">{err}</div>}
+          <div className="p-row" style={{ justifyContent: 'flex-end' }}>
+            <button className="btn btn--primary" onClick={submit} disabled={submitting}>
+              {submitting ? <Loader2 size={14} /> : <Plus size={14} />}
+              <span>{t('ui_submit')}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -12,7 +12,6 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
     pvSaving,
     pvPreset,
     setPvPreset,
-    isRtl,
     t,
     handleSavePV,
   } = d
@@ -23,11 +22,11 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
                 <div className="glass-panel" style={{ padding: 24 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                     <div>
-                      <h2 style={{ fontSize: '1.25rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <MessageSquare size={22} color="#ec4899" />
+                      <h2 style={{ fontSize: 'var(--type-xl)', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <MessageSquare size={22} color="var(--color-accent-violet)" />
                         <span>{t('ui_ai_pv_assistant')}</span>
                       </h2>
-                      <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
+                      <p style={{ fontSize: 'var(--type-sm)', color: 'var(--color-text-muted)', marginTop: 4 }}>
                         {t('ui_human_like_conversational_auto_responder_for_telegram_private_me')}
                       </p>
                     </div>
@@ -39,11 +38,11 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
                       className="btn"
                       style={{
                         padding: '8px 16px',
-                        background: pvConfig?.enabled ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
-                        color: pvConfig?.enabled ? '#34d399' : '#f87171',
-                        border: pvConfig?.enabled ? '1px solid rgba(16, 185, 129, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)',
+                        background: pvConfig?.enabled ? 'var(--color-success-soft)' : 'var(--color-danger-soft)',
+                        color: pvConfig?.enabled ? 'var(--color-success)' : 'var(--color-danger)',
+                        border: pvConfig?.enabled ? '1px solid color-mix(in oklab, var(--color-success) 40%, transparent)' : '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)',
                         fontWeight: 700,
-                        fontSize: '0.85rem',
+                        fontSize: 'var(--type-sm)',
                         display: 'inline-flex',
                         alignItems: 'center',
                       }}
@@ -53,11 +52,10 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
                           width: 8,
                           height: 8,
                           borderRadius: '50%',
-                          background: pvConfig?.enabled ? '#10b981' : '#ef4444',
-                          boxShadow: pvConfig?.enabled ? '0 0 8px #10b981' : 'none',
+                          background: pvConfig?.enabled ? 'var(--color-success)' : 'var(--color-danger)',
+                          boxShadow: pvConfig?.enabled ? '0 0 8px var(--color-success)' : 'none',
                           display: 'inline-block',
-                          marginLeft: isRtl ? 8 : 0,
-                          marginRight: isRtl ? 0 : 8,
+                          marginInlineEnd: 8,
                         }}
                       />
                       <span>{pvConfig?.enabled ? (t('ui_enabled')) : (t('ui_disabled'))}</span>
@@ -65,8 +63,8 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
                   </div>
 
                   {/* Persona Preset Buttons */}
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 8, fontWeight: 600 }}>
+                  <div style={{ marginBlockEnd: 'var(--space-4)' }}>
+                    <label style={{ display: 'block', fontSize: 'var(--type-sm)', color: 'var(--color-text)', marginBlockEnd: 'var(--space-2)', fontWeight: 600 }}>
                       {t('ui_persona_tone_presets')}
                     </label>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 8 }}>
@@ -78,9 +76,9 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
                         }}
                         className="btn"
                         style={{
-                          background: pvPreset === 'casual' ? 'rgba(236, 72, 153, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                          color: pvPreset === 'casual' ? '#f472b6' : '#cbd5e1',
-                          border: pvPreset === 'casual' ? '1px solid rgba(236, 72, 153, 0.5)' : '1px solid rgba(255, 255, 255, 0.08)',
+                          background: pvPreset === 'casual' ? 'color-mix(in oklab, var(--color-accent-violet) 20%, transparent)' : 'var(--color-hover-wash)',
+                          color: pvPreset === 'casual' ? 'var(--color-accent-violet)' : 'var(--color-text)',
+                          border: pvPreset === 'casual' ? '1px solid color-mix(in oklab, var(--color-accent-violet) 50%, transparent)' : '1px solid var(--color-border)',
                           fontSize: '0.78rem',
                           padding: '8px 10px',
                           textAlign: 'center',
@@ -96,9 +94,9 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
                         }}
                         className="btn"
                         style={{
-                          background: pvPreset === 'business' ? 'rgba(59, 130, 246, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                          color: pvPreset === 'business' ? '#60a5fa' : '#cbd5e1',
-                          border: pvPreset === 'business' ? '1px solid rgba(59, 130, 246, 0.5)' : '1px solid rgba(255, 255, 255, 0.08)',
+                          background: pvPreset === 'business' ? 'var(--color-info-soft)' : 'var(--color-hover-wash)',
+                          color: pvPreset === 'business' ? 'var(--color-info)' : 'var(--color-text)',
+                          border: pvPreset === 'business' ? '1px solid color-mix(in oklab, var(--color-info) 50%, transparent)' : '1px solid var(--color-border)',
                           fontSize: '0.78rem',
                           padding: '8px 10px',
                           textAlign: 'center',
@@ -114,9 +112,9 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
                         }}
                         className="btn"
                         style={{
-                          background: pvPreset === 'short' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                          color: pvPreset === 'short' ? '#fbbf24' : '#cbd5e1',
-                          border: pvPreset === 'short' ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(255, 255, 255, 0.08)',
+                          background: pvPreset === 'short' ? 'var(--color-warning-soft)' : 'var(--color-hover-wash)',
+                          color: pvPreset === 'short' ? 'var(--color-warning)' : 'var(--color-text)',
+                          border: pvPreset === 'short' ? '1px solid color-mix(in oklab, var(--color-warning) 50%, transparent)' : '1px solid var(--color-border)',
                           fontSize: '0.78rem',
                           padding: '8px 10px',
                           textAlign: 'center',
@@ -128,8 +126,8 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
                   </div>
 
                   {/* Persona Prompt Textarea */}
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 6, fontWeight: 600 }}>
+                  <div style={{ marginBlockEnd: 'var(--space-4)' }}>
+                    <label style={{ display: 'block', fontSize: 'var(--type-sm)', color: 'var(--color-text)', marginBottom: 6, fontWeight: 600 }}>
                       {t('ui_persona_prompt_instructions')}
                     </label>
                     <textarea
@@ -146,8 +144,8 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
                   </div>
 
                   {/* Connect to AI Config */}
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 6 }}>
+                  <div style={{ marginBlockEnd: 'var(--space-4)' }}>
+                    <label style={{ display: 'block', fontSize: 'var(--type-sm)', color: 'var(--color-text)', marginBottom: 6 }}>
                       {t('ui_linked_ai_model_configuration')}
                     </label>
                     <select
@@ -168,7 +166,7 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
                   {/* Tuning Settings Grid */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 18 }}>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                      <label style={{ display: 'block', fontSize: 'var(--type-xs)', color: 'var(--color-text)', marginBlockEnd: 'var(--space-1)' }}>
                         {t('ui_min_typing_delay_s')}
                       </label>
                       <input
@@ -183,7 +181,7 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
                       />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                      <label style={{ display: 'block', fontSize: 'var(--type-xs)', color: 'var(--color-text)', marginBlockEnd: 'var(--space-1)' }}>
                         {t('ui_max_typing_delay_s')}
                       </label>
                       <input
@@ -198,7 +196,7 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
                       />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                      <label style={{ display: 'block', fontSize: 'var(--type-xs)', color: 'var(--color-text)', marginBlockEnd: 'var(--space-1)' }}>
                         {t('ui_cooldown_s')}
                       </label>
                       <input
@@ -212,7 +210,7 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
                       />
                     </div>
                     <div>
-                      <label style={{ display: 'block', fontSize: '0.75rem', color: '#cbd5e1', marginBottom: 4 }}>
+                      <label style={{ display: 'block', fontSize: 'var(--type-xs)', color: 'var(--color-text)', marginBlockEnd: 'var(--space-1)' }}>
                         {t('ui_chat_history_limit')}
                       </label>
                       <input
@@ -228,12 +226,12 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 'var(--type-sm)', color: 'var(--color-text)' }}>
                       <input
                         type="checkbox"
                         checked={pvConfig?.ignore_bots ?? true}
                         onChange={(e) => setPvConfig((prev) => prev ? { ...prev, ignore_bots: e.target.checked } : null)}
-                        style={{ accentColor: '#ec4899' }}
+                        style={{ accentColor: 'var(--color-accent-violet)' }}
                       />
                       <span>{t('ui_ignore_bot_messages')}</span>
                     </label>
@@ -243,7 +241,7 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
                       onClick={() => handleSavePV()}
                       disabled={pvSaving}
                       className="btn btn-primary"
-                      style={{ background: '#ec4899', borderColor: '#db2777' }}
+                      style={{ background: 'var(--color-accent-violet)', borderColor: 'var(--color-accent-violet)' }}
                     >
                       <Check size={16} />
                       <span>{pvSaving ? (t('ui_saving')) : (t('ui_save_pv_config'))}</span>
