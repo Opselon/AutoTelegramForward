@@ -45,8 +45,8 @@ function Levels({
           className="badge"
           style={{
             fontSize: 'var(--type-xs)',
-            background: tone === 'effective' ? 'rgba(56,189,248,0.15)' : 'rgba(148,163,184,0.15)',
-            color: tone === 'effective' ? '#38bdf8' : '#cbd5e1',
+            background: tone === 'effective' ? 'var(--color-info-soft)' : 'var(--color-hover-wash)',
+            color: tone === 'effective' ? 'var(--color-info)' : 'var(--color-text)',
           }}
         >
           {l}
@@ -125,17 +125,17 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
     <div
       key={key}
       style={{
-        border: '1px solid rgba(255,255,255,0.08)',
+        border: '1px solid var(--color-border)',
         borderRadius: 10,
         padding: 12,
-        background: 'rgba(15,23,42,0.5)',
+        background: 'var(--color-surface-2)',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
         {scope?.available ? (
-          <CheckCircle2 size={15} color="#34d399" />
+          <CheckCircle2 size={15} color="var(--color-success)" />
         ) : (
-          <AlertTriangle size={15} color="#f59e0b" />
+          <AlertTriangle size={15} color="var(--color-warning)" />
         )}
         <strong style={{ fontSize: '0.85rem' }}>{scope?.process ?? key}</strong>
         <span className="muted" style={{ fontSize: 'var(--type-xs)' }}>
@@ -143,7 +143,7 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
         </span>
       </div>
       {!scope?.available ? (
-        <div style={{ fontSize: '0.78rem', color: '#fbbf24' }}>
+        <div style={{ fontSize: '0.78rem', color: 'var(--color-warning)' }}>
           {t('ui_unavailable')}
           {scope?.reason || t('ui_no_reason_given')}
         </div>
@@ -164,7 +164,7 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
               : t('ui_unlimited')}
           </div>
           {scope.diagnostic_active && (
-            <div style={{ fontSize: '0.78rem', color: '#fbbf24', marginBottom: 6 }}>
+            <div style={{ fontSize: '0.78rem', color: 'var(--color-warning)', marginBottom: 6 }}>
               {t('ui_diagnostic_window_active')} ·{' '}
               {scope.diagnostic_seconds_remaining
                 ? t('ui_scope_2_s_left', { scope_2: scope.diagnostic_seconds_remaining })
@@ -184,8 +184,8 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
   return (
     <section className="glass-panel" style={{ padding: 18, marginBottom: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
-        <h3 style={{ fontSize: '1rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
-          <Gauge size={17} color="#38bdf8" />
+        <h3 style={{ fontSize: 'var(--type-md)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Gauge size={17} color="var(--color-info)" />
           <span>{t('ui_log_collection_policy_per_service')}</span>
         </h3>
         <button
@@ -219,12 +219,12 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
             borderRadius: 10,
             border:
               scopes.engine.effective_levels && scopes.engine.effective_levels.length > 0
-                ? '1px solid rgba(245, 158, 11, 0.35)'
-                : '1px solid rgba(16, 185, 129, 0.3)',
+                ? '1px solid color-mix(in oklab, var(--color-warning) 35%, transparent)'
+                : '1px solid color-mix(in oklab, var(--color-success) 35%, transparent)',
             background:
               scopes.engine.effective_levels && scopes.engine.effective_levels.length > 0
-                ? 'rgba(245, 158, 11, 0.08)'
-                : 'rgba(16, 185, 129, 0.06)',
+                ? 'var(--color-warning-soft)'
+                : 'var(--color-success-soft)',
             fontSize: '0.78rem',
           }}
         >
@@ -251,12 +251,12 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
       <div
         style={{
           marginTop: 16,
-          borderTop: '1px solid rgba(255,255,255,0.08)',
+          borderTop: '1px solid var(--color-border)',
           paddingTop: 14,
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <ShieldAlert size={15} color="#f59e0b" />
+          <ShieldAlert size={15} color="var(--color-warning)" />
           <strong style={{ fontSize: '0.85rem' }}>
             {t('ui_change_core_policy_atf_core')}
           </strong>
@@ -273,9 +273,9 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
                 style={{
                   cursor: 'pointer',
                   fontSize: 'var(--type-xs)',
-                  border: on ? '1px solid rgba(56,189,248,0.5)' : '1px solid rgba(255,255,255,0.12)',
-                  background: on ? 'rgba(56,189,248,0.18)' : 'rgba(15,23,42,0.6)',
-                  color: on ? '#38bdf8' : '#94a3b8',
+                  border: on ? '1px solid color-mix(in oklab, var(--color-info) 50%, transparent)' : '1px solid var(--color-border)',
+                  background: on ? 'var(--color-info-soft)' : 'var(--color-surface-2)',
+                  color: on ? 'var(--color-info)' : 'var(--color-text-muted)',
                 }}
                 title={t('ui_click_to_toggle')}
               >
@@ -286,7 +286,7 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
         </div>
 
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-end' }}>
-          <label style={{ fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label style={{ fontSize: 'var(--type-xs)', display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span className="muted">{t('ui_rate_ceiling_0_unlimited')}</span>
             <input
               type="number"
@@ -296,7 +296,7 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
               style={{ width: 120 }}
             />
           </label>
-          <label style={{ fontSize: '0.75rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <label style={{ fontSize: 'var(--type-xs)', display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span className="muted">{t('ui_diagnostic_window_seconds')}</span>
             <input
               type="number"
@@ -348,7 +348,7 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
         </div>
 
         {levels.length === 0 && (
-          <div style={{ fontSize: '0.75rem', color: '#fbbf24', marginTop: 8 }}>
+          <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-warning)', marginTop: 8 }}>
             {t('ui_at_least_one_level_must_be_selected')}
           </div>
         )}
@@ -358,9 +358,9 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
             style={{
               marginTop: 10,
               fontSize: '0.78rem',
-              color: '#f87171',
-              background: 'rgba(239,68,68,0.1)',
-              border: '1px solid rgba(239,68,68,0.35)',
+              color: 'var(--color-danger)',
+              background: 'var(--color-danger-soft)',
+              border: '1px solid color-mix(in oklab, var(--color-danger) 35%, transparent)',
               borderRadius: 8,
               padding: '8px 10px',
             }}
@@ -373,9 +373,9 @@ export function LogPolicyPanel({ lang = 'en' }: { lang?: UiLang }) {
             style={{
               marginTop: 10,
               fontSize: '0.78rem',
-              color: '#34d399',
-              background: 'rgba(16,185,129,0.1)',
-              border: '1px solid rgba(16,185,129,0.35)',
+              color: 'var(--color-success)',
+              background: 'var(--color-success-soft)',
+              border: '1px solid color-mix(in oklab, var(--color-success) 35%, transparent)',
               borderRadius: 8,
               padding: '8px 10px',
             }}

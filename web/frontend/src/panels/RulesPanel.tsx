@@ -82,8 +82,8 @@ const RuleCard = memo(function RuleCard({
       style={{
         padding: '16px',
         position: 'relative',
-        border: isVipHop ? '1px solid rgba(245, 158, 11, 0.4)' : '1px solid var(--border-color)',
-        boxShadow: isVipHop ? '0 0 20px rgba(245, 158, 11, 0.08)' : 'none',
+        border: isVipHop ? '1px solid color-mix(in oklab, var(--color-warning) 40%, transparent)' : '1px solid var(--border-color)',
+        boxShadow: isVipHop ? '0 0 20px color-mix(in oklab, var(--color-warning) 8%, transparent)' : 'none',
       }}
     >
       {/* Top Bar of Card */}
@@ -112,9 +112,9 @@ const RuleCard = memo(function RuleCard({
               <span
                 className="badge"
                 style={{
-                  background: 'rgba(239, 68, 68, 0.2)',
+                  background: 'var(--color-danger-soft)',
                   color: 'var(--color-danger-text)',
-                  border: '1px solid rgba(239, 68, 68, 0.5)',
+                  border: '1px solid color-mix(in oklab, var(--color-danger) 50%, transparent)',
                   fontSize: 'var(--type-xs)',
                 }}
               >
@@ -151,9 +151,9 @@ const RuleCard = memo(function RuleCard({
             style={{
               padding: '4px 8px',
               fontSize: 'var(--type-xs)',
-              background: rule.is_active ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+              background: rule.is_active ? 'var(--color-success-soft)' : 'var(--color-danger-soft)',
               color: rule.is_active ? 'var(--color-success)' : 'var(--color-danger-text)',
-              border: rule.is_active ? '1px solid rgba(16, 185, 129, 0.3)' : '1px solid rgba(239, 68, 68, 0.3)',
+              border: rule.is_active ? '1px solid color-mix(in oklab, var(--color-success) 30%, transparent)' : '1px solid color-mix(in oklab, var(--color-danger) 30%, transparent)',
             }}
           >
             {rule.is_active ? (t('ui_active')) : (t('ui_paused'))}
@@ -184,7 +184,7 @@ const RuleCard = memo(function RuleCard({
           <button
             onClick={() => onOverview(rule)}
             className="btn btn-secondary icon-btn"
-            style={{ padding: '5px', background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa', borderColor: 'rgba(59, 130, 246, 0.4)' }}
+            style={{ padding: '5px', background: 'var(--color-info-soft)', color: 'var(--color-info)', borderColor: 'color-mix(in oklab, var(--color-info) 40%, transparent)' }}
             title={t('ui_task_overview_advanced_settings')}
           >
             <SlidersHorizontal size={13} />
@@ -229,7 +229,7 @@ const RuleCard = memo(function RuleCard({
         {rule.custom_header && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
             <span style={{ color: 'var(--color-text-muted)' }}>{t('ui_header')}</span>
-            <code style={{ background: 'rgba(255,255,255,0.06)', padding: '2px 6px', borderRadius: 4, color: 'var(--color-warning)' }}>
+            <code style={{ background: 'var(--color-hover-wash)', padding: '2px 6px', borderRadius: 4, color: 'var(--color-warning)' }}>
               {rule.custom_header}
             </code>
           </div>
@@ -249,7 +249,7 @@ const RuleCard = memo(function RuleCard({
             </span>
           )}
           {rule.fallback_enabled && (
-            <span className="badge badge-gray" style={{ fontSize: 'var(--type-xs)', padding: '2px 6px', color: '#a7f3d0' }}>
+            <span className="badge badge-gray" style={{ fontSize: 'var(--type-xs)', padding: '2px 6px', color: 'var(--color-success)' }}>
               <Shield size={9} /> {t('ui_fallback')} {rule.fallback_mode}
             </span>
           )}
@@ -266,19 +266,19 @@ const RuleCard = memo(function RuleCard({
             marginBottom: 12,
             borderRadius: 8,
             overflow: 'hidden',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
+            border: '1px solid var(--color-border)',
             fontSize: 'var(--type-xs)',
           }}
         >
-          <div className="rule-stat" style={{ flex: 1, padding: '7px 6px', background: 'rgba(16, 185, 129, 0.10)', textAlign: 'center' }}>
+          <div className="rule-stat" style={{ flex: 1, padding: '7px 6px', background: 'var(--color-success-soft)', textAlign: 'center' }}>
             <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--type-xs)', fontWeight: 600 }}>{t('ui_fwd')}</div>
             <div style={{ fontWeight: 800, color: 'var(--color-success)', lineHeight: 1.35 }}>{liveStat.forwarded ?? 0}</div>
           </div>
-          <div className="rule-stat" style={{ flex: 1, padding: '7px 6px', background: 'rgba(59, 130, 246, 0.10)', textAlign: 'center' }}>
+          <div className="rule-stat" style={{ flex: 1, padding: '7px 6px', background: 'var(--color-info-soft)', textAlign: 'center' }}>
             <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--type-xs)', fontWeight: 600 }}>{t('ui_filt')}</div>
-            <div style={{ fontWeight: 800, color: '#60a5fa', lineHeight: 1.35 }}>{liveStat.filtered ?? 0}</div>
+            <div style={{ fontWeight: 800, color: 'var(--color-info)', lineHeight: 1.35 }}>{liveStat.filtered ?? 0}</div>
           </div>
-          <div className="rule-stat" style={{ flex: 1, padding: '7px 6px', background: liveStat.errors > 0 ? 'rgba(239, 68, 68, 0.18)' : 'rgba(239, 68, 68, 0.07)', textAlign: 'center' }}>
+          <div className="rule-stat" style={{ flex: 1, padding: '7px 6px', background: liveStat.errors > 0 ? 'color-mix(in oklab, var(--color-danger) 18%, transparent)' : 'color-mix(in oklab, var(--color-danger) 7%, transparent)', textAlign: 'center' }}>
             <div style={{ color: 'var(--color-text-muted)', fontSize: 'var(--type-xs)', fontWeight: 600 }}>{t('ui_err')}</div>
             <div style={{ fontWeight: 800, color: liveStat.errors > 0 ? 'var(--color-danger-text)' : 'var(--color-text-muted)', lineHeight: 1.35 }}>{liveStat.errors ?? 0}</div>
           </div>
@@ -287,12 +287,12 @@ const RuleCard = memo(function RuleCard({
             style={{
               flex: 1.3,
               padding: '7px 6px',
-              background: 'rgba(99, 102, 241, 0.06)',
+              background: 'color-mix(in oklab, var(--color-primary) 6%, transparent)',
               textAlign: 'center',
             }}
           >
             <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--type-xs)' }}>{t('ui_last')}</span>
-            <span style={{ fontWeight: 700, color: '#818cf8', fontSize: 'var(--type-xs)' }}>
+            <span style={{ fontWeight: 700, color: 'var(--color-accent-violet)', fontSize: 'var(--type-xs)' }}>
               {liveStat.last_forward_ts
                 ? new Date(liveStat.last_forward_ts * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
                 : '—'}
@@ -308,8 +308,8 @@ const RuleCard = memo(function RuleCard({
             marginBottom: 12,
             padding: '6px 10px',
             borderRadius: 6,
-            background: 'rgba(239, 68, 68, 0.07)',
-            border: '1px solid rgba(239, 68, 68, 0.2)',
+            background: 'color-mix(in oklab, var(--color-danger) 7%, transparent)',
+            border: '1px solid color-mix(in oklab, var(--color-danger) 20%, transparent)',
             color: 'var(--color-danger-text)',
             fontSize: 'var(--type-xs)',
             fontFamily: "'JetBrains Mono', Consolas, monospace",
@@ -323,7 +323,7 @@ const RuleCard = memo(function RuleCard({
       {/* 1-Click Route Switch Buttons */}
       <div
         style={{
-          borderTop: '1px solid rgba(255, 255, 255, 0.06)',
+          borderTop: '1px solid var(--color-border)',
           paddingTop: 10,
         }}
       >
@@ -427,7 +427,7 @@ export default function RulesPanel({ d }: { d: DashboardCtx }) {
                     <h2 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>
                       {t('ui_smart_forwarding_routing_rules')}
                     </h2>
-                    <p className="text-balance" style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: 4, margin: 0 }}>
+                    <p className="text-balance" style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginTop: 4, margin: 0 }}>
                       {t('ui_configure_triple_routes_branding_hops_bypass_policies_and_channe')}
                     </p>
                   </div>

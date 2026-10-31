@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { KeyRound, Shield, UserCheck, CheckCircle2, AlertCircle, Save } from 'lucide-react'
 import { api } from '../api'
 import { makeT, type UiLang } from '../locales/engine'
+import { SkeletonRows } from './ui/Primitives'
 
 interface Props {
   lang: UiLang
@@ -71,10 +72,10 @@ export function ClientSettings({ lang }: Props) {
           justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: 20,
-          background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(15, 23, 42, 0.8))',
+          background: 'linear-gradient(135deg, var(--color-primary-soft), var(--color-surface-2))',
           padding: '16px 20px',
           borderRadius: 16,
-          border: '1px solid rgba(99, 102, 241, 0.3)',
+          border: '1px solid color-mix(in oklab, var(--color-primary) 30%, transparent)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -82,17 +83,17 @@ export function ClientSettings({ lang }: Props) {
             style={{
               padding: 10,
               borderRadius: 12,
-              background: 'rgba(99, 102, 241, 0.2)',
-              color: '#818cf8',
+              background: 'var(--color-primary-soft)',
+              color: 'var(--color-accent-violet)',
             }}
           >
             <KeyRound size={28} />
           </div>
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#818cf8' }}>
+            <h2 style={{ margin: 0, fontSize: 'var(--type-xl)', fontWeight: 700, color: 'var(--color-accent-violet)' }}>
               {t('ui_client_settings_credentials')}
             </h2>
-            <p style={{ margin: 0, fontSize: '0.82rem', color: '#94a3b8' }}>
+            <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
               {t('ui_isolated_workspace_credentials_personal_telegram_api_keys_and_ac')}
             </p>
           </div>
@@ -109,68 +110,72 @@ export function ClientSettings({ lang }: Props) {
         {/* Workspace Account Status */}
         <div
           style={{
-            background: 'rgba(15, 23, 42, 0.7)',
+            background: 'var(--color-surface-2)',
             padding: 20,
             borderRadius: 14,
-            border: '1px solid rgba(255,255,255,0.08)',
+            border: '1px solid var(--color-border)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <UserCheck size={20} color="#38bdf8" />
-            <h3 style={{ margin: 0, fontSize: '1rem', color: '#f8fafc' }}>
+            <UserCheck size={20} color="var(--color-info)" />
+            <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--color-text)' }}>
               {t('ui_account_quota_overview')}
             </h3>
           </div>
 
+          {settings ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, fontSize: '0.88rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <span style={{ color: '#94a3b8' }}>{t('ui_numeric_user_id')}</span>
-              <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#f8fafc' }}>{settings?.user_id || '—'}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--color-border)' }}>
+              <span style={{ color: 'var(--color-text-muted)' }}>{t('ui_numeric_user_id')}</span>
+              <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--color-text)' }}>{settings?.user_id || '—'}</span>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <span style={{ color: '#94a3b8' }}>{t('ui_subscription_plan')}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--color-border)' }}>
+              <span style={{ color: 'var(--color-text-muted)' }}>{t('ui_subscription_plan')}</span>
               <span className="badge badge-vip" style={{ textTransform: 'uppercase' }}>{settings?.plan || 'FREE'}</span>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-              <span style={{ color: '#94a3b8' }}>{t('ui_forwarded_messages')}</span>
-              <span style={{ fontWeight: 700, color: '#34d399' }}>{settings?.quota_forwarded ?? 0}</span>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid var(--color-border)' }}>
+              <span style={{ color: 'var(--color-text-muted)' }}>{t('ui_forwarded_messages')}</span>
+              <span style={{ fontWeight: 700, color: 'var(--color-success)' }}>{settings?.quota_forwarded ?? 0}</span>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0' }}>
-              <span style={{ color: '#94a3b8' }}>{t('ui_custom_credentials')}</span>
-              <span style={{ color: settings?.has_custom_credentials ? '#4ade80' : '#fbbf24', fontWeight: 600 }}>
+              <span style={{ color: 'var(--color-text-muted)' }}>{t('ui_custom_credentials')}</span>
+              <span style={{ color: settings?.has_custom_credentials ? 'var(--color-success)' : 'var(--color-warning)', fontWeight: 600 }}>
                 {settings?.has_custom_credentials
                   ? (t('ui_active_encrypted'))
                   : (t('ui_using_system_default'))}
               </span>
             </div>
           </div>
+          ) : (
+            <SkeletonRows lang={lang} />
+          )}
         </div>
 
         {/* Telegram API Credentials Form */}
         <div
           style={{
-            background: 'rgba(15, 23, 42, 0.7)',
+            background: 'var(--color-surface-2)',
             padding: 20,
             borderRadius: 14,
-            border: '1px solid rgba(255,255,255,0.08)',
+            border: '1px solid var(--color-border)',
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-            <Shield size={20} color="#818cf8" />
-            <h3 style={{ margin: 0, fontSize: '1rem', color: '#f8fafc' }}>
+            <Shield size={20} color="var(--color-accent-violet)" />
+            <h3 style={{ margin: 0, fontSize: '1rem', color: 'var(--color-text)' }}>
               {t('ui_custom_telegram_api_credentials')}
             </h3>
           </div>
 
-          <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: '#94a3b8' }}>
+          <p style={{ margin: '0 0 16px', fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
             {t('ui_enter_your_own_api_id_and_api_hash_from_my_telegram_org_to_run_y')}
           </p>
 
           <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontSize: '0.82rem', color: '#cbd5e1', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--color-text)', marginBottom: 6 }}>
               {t('ui_telegram_api_id_numeric')}
             </label>
             <input
@@ -182,16 +187,16 @@ export function ClientSettings({ lang }: Props) {
                 width: '100%',
                 padding: 10,
                 borderRadius: 8,
-                background: 'rgba(30, 41, 59, 0.8)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: '#fff',
-                fontSize: '0.9rem',
+                background: 'var(--color-surface-inset)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+                fontSize: 'var(--type-md)',
               }}
             />
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: '0.82rem', color: '#cbd5e1', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: '0.82rem', color: 'var(--color-text)', marginBottom: 6 }}>
               {t('ui_telegram_api_hash_32_characters')}
             </label>
             <input
@@ -203,10 +208,10 @@ export function ClientSettings({ lang }: Props) {
                 width: '100%',
                 padding: 10,
                 borderRadius: 8,
-                background: 'rgba(30, 41, 59, 0.8)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: '#fff',
-                fontSize: '0.9rem',
+                background: 'var(--color-surface-inset)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
+                fontSize: 'var(--type-md)',
               }}
             />
           </div>
@@ -231,9 +236,9 @@ export function ClientSettings({ lang }: Props) {
                 alignItems: 'center',
                 gap: 8,
                 fontSize: '0.84rem',
-                background: statusMsg.ok ? 'rgba(34,197,94,0.15)' : 'rgba(239,68,68,0.15)',
-                border: statusMsg.ok ? '1px solid rgba(34,197,94,0.3)' : '1px solid rgba(239,68,68,0.3)',
-                color: statusMsg.ok ? '#4ade80' : '#f87171',
+                background: statusMsg.ok ? 'var(--color-success-soft)' : 'var(--color-danger-soft)',
+                border: statusMsg.ok ? '1px solid color-mix(in oklab, var(--color-success) 30%, transparent)' : '1px solid color-mix(in oklab, var(--color-danger) 30%, transparent)',
+                color: statusMsg.ok ? 'var(--color-success)' : 'var(--color-danger)',
               }}
             >
               {statusMsg.ok ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}

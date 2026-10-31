@@ -211,7 +211,7 @@ export default function FiltersPanel({ d }: { d: DashboardCtx }) {
                     <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
                       {t('ui_advanced_content_media_filtering')}
                     </h2>
-                    <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 4 }}>
+                    <p style={{ fontSize: 'var(--type-sm)', color: 'var(--color-text-muted)', marginTop: 4 }}>
                       {t('ui_manage_text_blacklists_whitelists_regex_patterns_and_media_type')}
                     </p>
                   </div>

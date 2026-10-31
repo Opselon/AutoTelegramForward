@@ -293,27 +293,27 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
   }, [schema])
 
   const card: React.CSSProperties = {
-    backgroundColor: '#1e293b',
+    backgroundColor: 'var(--color-surface-2)',
     borderRadius: '16px',
-    padding: '16px',
+    padding: 'var(--space-4)',
     marginBottom: '14px',
-    border: '1px solid #334155',
+    border: '1px solid var(--color-border-strong)',
   }
   const labelStyle: React.CSSProperties = {
-    fontSize: '12px',
+    fontSize: 'var(--type-xs)',
     fontWeight: 600,
-    color: '#e2e8f0',
+    color: 'var(--color-text)',
   }
   const inputStyle: React.CSSProperties = {
     width: '100%',
-    backgroundColor: '#0f172a',
-    border: '1px solid #334155',
-    borderRadius: '8px',
-    color: '#f1f5f9',
+    backgroundColor: 'var(--color-surface-inset)',
+    border: '1px solid var(--color-border-strong)',
+    borderRadius: 'var(--radius-sm)',
+    color: 'var(--color-text)',
     padding: '8px 10px',
-    fontSize: '12px',
+    fontSize: 'var(--type-xs)',
   }
-  const hint: React.CSSProperties = { fontSize: '11px', color: '#94a3b8', marginTop: '2px' }
+  const hint: React.CSSProperties = { fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }
 
   /**
    * Add several chats at once from the browser.
@@ -399,7 +399,7 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
       <div style={card}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ fontSize: '13px', fontWeight: 700, color: '#f8fafc' }}>
+            <div style={{ fontSize: 'var(--type-sm)', fontWeight: 700, color: 'var(--color-text)' }}>
               {t('ui_all_task_settings')}
             </div>
             <div style={hint}>
@@ -408,22 +408,22 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
                 : t('ui_loading_the_settings_schema')}
             </div>
           </div>
-          {loading && <Loader2 size={16} className="spin" color="#93c5fd" />}
+          {loading && <Loader2 size={16} className="spin" color="var(--color-info)" />}
         </div>
 
         {error && (
           <div
             style={{
               display: 'flex',
-              gap: '8px',
+              gap: 'var(--space-2)',
               alignItems: 'flex-start',
-              backgroundColor: '#450a0a',
-              border: '1px solid #7f1d1d',
+              backgroundColor: 'var(--color-danger-soft)',
+              border: '1px solid color-mix(in oklab, var(--color-danger) 35%, transparent)',
               borderRadius: '10px',
               padding: '10px',
               marginTop: '10px',
-              color: '#fecaca',
-              fontSize: '12px',
+              color: 'var(--color-danger-text)',
+              fontSize: 'var(--type-xs)',
             }}
           >
             <AlertCircle size={14} style={{ marginTop: '2px', flexShrink: 0 }} />
@@ -434,15 +434,15 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
           <div
             style={{
               display: 'flex',
-              gap: '8px',
+              gap: 'var(--space-2)',
               alignItems: 'center',
-              backgroundColor: '#052e16',
-              border: '1px solid #166534',
+              backgroundColor: 'var(--color-success-soft)',
+              border: '1px solid color-mix(in oklab, var(--color-success) 35%, transparent)',
               borderRadius: '10px',
               padding: '10px',
               marginTop: '10px',
-              color: '#bbf7d0',
-              fontSize: '12px',
+              color: 'var(--color-success)',
+              fontSize: 'var(--type-xs)',
             }}
           >
             <Check size={14} />
@@ -456,10 +456,10 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
               style={{
                 fontSize: '11px',
                 fontWeight: 700,
-                color: '#93c5fd',
+                color: 'var(--color-info)',
                 textTransform: 'uppercase',
                 letterSpacing: '0.04em',
-                marginBottom: '8px',
+                marginBottom: 'var(--space-2)',
               }}
             >
               {groupLabel(group, lang)}
@@ -500,9 +500,9 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
             display: 'flex',
             alignItems: 'center',
             gap: '10px',
-            marginTop: '16px',
-            borderTop: '1px solid #334155',
-            paddingTop: '12px',
+            marginTop: 'var(--space-4)',
+            borderTop: '1px solid var(--color-border-strong)',
+            paddingTop: 'var(--space-3)',
           }}
         >
           <button
@@ -513,12 +513,12 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              backgroundColor: dirtyKeys.length && !saving ? '#2563eb' : '#1e293b',
-              color: dirtyKeys.length && !saving ? '#fff' : 'var(--color-text-muted)',
+              backgroundColor: dirtyKeys.length && !saving ? 'var(--color-primary)' : 'var(--color-surface-2)',
+              color: dirtyKeys.length && !saving ? 'var(--color-on-accent)' : 'var(--color-text-muted)',
               border: 'none',
               borderRadius: '10px',
               padding: '9px 16px',
-              fontSize: '12px',
+              fontSize: 'var(--type-xs)',
               fontWeight: 600,
               cursor: dirtyKeys.length && !saving ? 'pointer' : 'not-allowed',
             }}
@@ -535,8 +535,8 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
               style={{
                 background: 'none',
                 border: 'none',
-                color: '#94a3b8',
-                fontSize: '12px',
+                color: 'var(--color-text-muted)',
+                fontSize: 'var(--type-xs)',
                 cursor: 'pointer',
               }}
             >
@@ -619,13 +619,13 @@ function ChatListEditor({
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-        <span style={{ fontSize: '13px', fontWeight: 700, color: '#f8fafc' }}>{title}</span>
+        <span style={{ fontSize: 'var(--type-sm)', fontWeight: 700, color: 'var(--color-text)' }}>{title}</span>
         <span
           style={{
             fontSize: '11px',
-            color: '#93c5fd',
-            backgroundColor: '#1e3a8a',
-            borderRadius: '999px',
+            color: 'var(--color-info)',
+            backgroundColor: 'var(--color-info-soft)',
+            borderRadius: 'var(--radius-full)',
             padding: '2px 8px',
           }}
         >
@@ -640,8 +640,8 @@ function ChatListEditor({
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '8px',
-            backgroundColor: '#0f172a',
+            gap: 'var(--space-2)',
+            backgroundColor: 'var(--color-surface-inset)',
             borderRadius: '10px',
             padding: '8px 10px',
             marginBottom: '6px',
@@ -650,8 +650,8 @@ function ChatListEditor({
           <span
             style={{
               fontFamily: 'monospace',
-              fontSize: '12px',
-              color: '#e2e8f0',
+              fontSize: 'var(--type-xs)',
+              color: 'var(--color-text)',
               flex: 1,
               direction: 'ltr',
               textAlign: isRtl ? 'right' : 'left',
@@ -660,7 +660,7 @@ function ChatListEditor({
             {entry}
           </span>
           {idx === 0 && (
-            <span style={{ fontSize: '10px', color: '#4ade80', fontWeight: 600 }}>
+            <span style={{ fontSize: '10px', color: 'var(--color-success)', fontWeight: 600 }}>
               {primaryLabel}
             </span>
           )}
@@ -673,7 +673,7 @@ function ChatListEditor({
               background: 'none',
               border: 'none',
               cursor: canRemove ? 'pointer' : 'not-allowed',
-              color: canRemove ? '#f87171' : 'var(--color-text-muted)',
+              color: canRemove ? 'var(--color-danger)' : 'var(--color-text-muted)',
               display: 'flex',
             }}
           >
@@ -682,7 +682,7 @@ function ChatListEditor({
         </div>
       ))}
 
-      <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
         <input
           style={inputStyle}
           placeholder={placeholder}
@@ -706,12 +706,12 @@ function ChatListEditor({
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
-            backgroundColor: draft.trim() ? '#2563eb' : '#1e293b',
-            color: draft.trim() ? '#fff' : 'var(--color-text-muted)',
-            border: '1px solid #334155',
-            borderRadius: '8px',
+            backgroundColor: draft.trim() ? 'var(--color-primary)' : 'var(--color-surface-2)',
+            color: draft.trim() ? 'var(--color-on-accent)' : 'var(--color-text-muted)',
+            border: '1px solid var(--color-border-strong)',
+            borderRadius: 'var(--radius-sm)',
             padding: '8px 12px',
-            fontSize: '12px',
+            fontSize: 'var(--type-xs)',
             fontWeight: 600,
             cursor: draft.trim() ? 'pointer' : 'not-allowed',
             whiteSpace: 'nowrap',
@@ -726,7 +726,7 @@ function ChatListEditor({
             display: 'flex',
             gap: '6px',
             alignItems: 'center',
-            color: '#fca5a5',
+            color: 'var(--color-danger-text)',
             fontSize: '11px',
             marginTop: '6px',
           }}
@@ -745,14 +745,14 @@ function ChatListEditor({
         type="button"
         onClick={() => setBrowsing(true)}
         style={{
-          marginTop: '8px',
+          marginTop: 'var(--space-2)',
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
           background: 'none',
-          border: '1px dashed #334155',
-          borderRadius: '8px',
-          color: '#93c5fd',
+          border: '1px dashed var(--color-border-strong)',
+          borderRadius: 'var(--radius-sm)',
+          color: 'var(--color-info)',
           padding: '7px 10px',
           fontSize: '11px',
           cursor: 'pointer',
@@ -814,14 +814,13 @@ function SettingRow({
   botRoute = false,
   reloadBots,
 }: RowProps) {
-  const isRtl = isRtlLang(lang)
   const t = makeT(lang)
   const rowStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
     padding: '7px 0',
-    borderBottom: '1px solid #1f2937',
+    borderBottom: '1px solid var(--color-border)',
   }
   const badge = badgeFor(sourceInfo)
   const label = (
@@ -829,17 +828,17 @@ function SettingRow({
       <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
         <span
           style={{
-            fontSize: '12px',
+            fontSize: 'var(--type-xs)',
             // An inherited value is dimmer than one this task chose, so the two
             // never look alike.
-            color: isInherited(sourceInfo) ? '#cbd5e1' : '#e2e8f0',
+            color: isInherited(sourceInfo) ? 'var(--color-text-subtle)' : 'var(--color-text)',
             fontWeight: changed ? 700 : 500,
           }}
         >
           {SETTING_LABELS[spec.key]?.[lang] ?? spec.label}
         </span>
         {changed && (
-          <span style={{ fontSize: '9px', color: '#fbbf24', fontWeight: 700 }}>{t('ui_edited')}</span>
+          <span style={{ fontSize: '9px', color: 'var(--color-warning)', fontWeight: 700 }}>{t('ui_edited')}</span>
         )}
         {badge && !changed && (
           <span
@@ -848,7 +847,9 @@ function SettingRow({
               fontSize: '9px',
               color: badge.color,
               backgroundColor: badge.background,
-              border: `1px solid ${badge.color}33`,
+              // badge.color is a var() token, so the old `${color}33` hex-alpha
+              // suffix is gone; color-mix derives the tinted border instead.
+              border: `1px solid color-mix(in oklab, ${badge.color} 35%, transparent)`,
               borderRadius: '4px',
               padding: '1px 5px',
               fontWeight: 700,
@@ -867,9 +868,9 @@ function SettingRow({
             title={t('ui_use_the_default_for_this_setting')}
             style={{
               fontSize: '9px',
-              color: resetting ? 'var(--color-text-muted)' : '#7dd3fc',
+              color: resetting ? 'var(--color-text-muted)' : 'var(--color-info)',
               background: 'none',
-              border: '1px solid #334155',
+              border: '1px solid var(--color-border-strong)',
               borderRadius: '4px',
               padding: '1px 5px',
               cursor: resetting ? 'default' : 'pointer',
@@ -898,10 +899,10 @@ function SettingRow({
           style={{
             width: '42px',
             height: '22px',
-            borderRadius: '999px',
+            borderRadius: 'var(--radius-full)',
             border: 'none',
             cursor: 'pointer',
-            backgroundColor: value ? '#22c55e' : 'var(--color-text-muted)',
+            backgroundColor: value ? 'var(--color-success)' : 'var(--color-text-muted)',
             position: 'relative',
             flexShrink: 0,
           }}
@@ -910,11 +911,11 @@ function SettingRow({
             style={{
               position: 'absolute',
               top: '3px',
-              [isRtl ? 'right' : 'left']: value ? '23px' : '3px',
+              insetInlineStart: value ? '23px' : '3px',
               width: '16px',
               height: '16px',
               borderRadius: '50%',
-              backgroundColor: '#fff',
+              backgroundColor: 'var(--color-on-accent)',
               transition: 'all 0.15s ease',
             }}
           />
@@ -973,7 +974,7 @@ function SettingRow({
             reloadBots={reloadBots ?? (() => undefined)}
             botRoute={botRoute}
           />
-          {botsError && <div style={{ ...hintStyle, color: '#fca5a5' }}>{botsError}</div>}
+          {botsError && <div style={{ ...hintStyle, color: 'var(--color-danger-text)' }}>{botsError}</div>}
         </div>
       </div>
     )
@@ -1071,12 +1072,12 @@ function ListEditor({ spec, value, lang, inputStyle, hintStyle, onChange }: List
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
-                backgroundColor: '#0f172a',
-                border: '1px solid #334155',
-                borderRadius: '999px',
+                backgroundColor: 'var(--color-surface-inset)',
+                border: '1px solid var(--color-border-strong)',
+                borderRadius: 'var(--radius-full)',
                 padding: '2px 6px 2px 10px',
                 fontSize: '11px',
-                color: '#e2e8f0',
+                color: 'var(--color-text)',
               }}
               dir="ltr"
             >
@@ -1089,7 +1090,7 @@ function ListEditor({ spec, value, lang, inputStyle, hintStyle, onChange }: List
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
-                  color: '#f87171',
+                  color: 'var(--color-danger)',
                   display: 'flex',
                   padding: 0,
                 }}
@@ -1100,7 +1101,7 @@ function ListEditor({ spec, value, lang, inputStyle, hintStyle, onChange }: List
           ))}
         </div>
       )}
-      <div style={{ display: 'flex', gap: '8px' }}>
+      <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
         <input
           style={{ ...inputStyle, direction: 'ltr' }}
           value={draft}
@@ -1126,12 +1127,12 @@ function ListEditor({ spec, value, lang, inputStyle, hintStyle, onChange }: List
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
-            backgroundColor: draft.trim() ? '#2563eb' : '#1e293b',
-            color: draft.trim() ? '#fff' : 'var(--color-text-muted)',
-            border: '1px solid #334155',
-            borderRadius: '8px',
+            backgroundColor: draft.trim() ? 'var(--color-primary)' : 'var(--color-surface-2)',
+            color: draft.trim() ? 'var(--color-on-accent)' : 'var(--color-text-muted)',
+            border: '1px solid var(--color-border-strong)',
+            borderRadius: 'var(--radius-sm)',
             padding: '8px 12px',
-            fontSize: '12px',
+            fontSize: 'var(--type-xs)',
             fontWeight: 600,
             cursor: draft.trim() ? 'pointer' : 'not-allowed',
             whiteSpace: 'nowrap',
@@ -1149,7 +1150,7 @@ function ListEditor({ spec, value, lang, inputStyle, hintStyle, onChange }: List
             display: 'flex',
             gap: '6px',
             alignItems: 'center',
-            color: '#fca5a5',
+            color: 'var(--color-danger-text)',
             fontSize: '11px',
             marginTop: '4px',
           }}
@@ -1188,7 +1189,7 @@ function DictEditor({ spec, value, lang, inputStyle, hintStyle, onChange }: Dict
           minHeight: '64px',
           fontFamily: 'monospace',
           direction: 'ltr',
-          borderColor: invalid ? '#7f1d1d' : '#334155',
+          borderColor: invalid ? 'color-mix(in oklab, var(--color-danger) 60%, transparent)' : 'var(--color-border-strong)',
         }}
         value={text}
         spellCheck={false}
@@ -1205,7 +1206,7 @@ function DictEditor({ spec, value, lang, inputStyle, hintStyle, onChange }: Dict
           }
         }}
       />
-      <div style={{ ...hintStyle, color: invalid ? '#fca5a5' : hintStyle.color }}>
+      <div style={{ ...hintStyle, color: invalid ? 'var(--color-danger-text)' : hintStyle.color }}>
         {invalid
           ? t('ui_not_valid_json_yet_fix_it_before_saving')
           : spec.help

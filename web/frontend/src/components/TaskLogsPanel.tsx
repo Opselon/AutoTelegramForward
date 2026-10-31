@@ -10,11 +10,11 @@ interface Props {
 }
 
 const LEVEL_COLORS: Record<string, { fg: string; bg: string }> = {
-  ERROR: { fg: '#f87171', bg: 'rgba(239, 68, 68, 0.18)' },
-  WARN: { fg: '#fbbf24', bg: 'rgba(245, 158, 11, 0.18)' },
-  WARNING: { fg: '#fbbf24', bg: 'rgba(245, 158, 11, 0.18)' },
-  INFO: { fg: '#34d399', bg: 'rgba(16, 185, 129, 0.18)' },
-  DEBUG: { fg: '#38bdf8', bg: 'rgba(56, 189, 248, 0.18)' },
+  ERROR: { fg: 'var(--color-danger)', bg: 'var(--color-danger-soft)' },
+  WARN: { fg: 'var(--color-warning)', bg: 'var(--color-warning-soft)' },
+  WARNING: { fg: 'var(--color-warning)', bg: 'var(--color-warning-soft)' },
+  INFO: { fg: 'var(--color-success)', bg: 'var(--color-success-soft)' },
+  DEBUG: { fg: 'var(--color-info)', bg: 'var(--color-info-soft)' },
 }
 
 function levelStyle(level?: string) {
@@ -138,13 +138,13 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
         }
         style={{
           padding: '3px 10px',
-          borderRadius: '999px',
+          borderRadius: 'var(--radius-full)',
           fontSize: 'var(--type-xs)',
           fontWeight: 700,
           cursor: 'pointer',
-          border: `1px solid ${on ? style.fg : 'rgba(255,255,255,0.12)'}`,
+          border: `1px solid ${on ? style.fg : 'var(--color-border)'}`,
           background: on ? style.bg : 'transparent',
-          color: on ? style.fg : '#94a3b8',
+          color: on ? style.fg : 'var(--color-text-muted)',
         }}
       >
         {value}
@@ -153,12 +153,12 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
   }
 
   const controls: React.CSSProperties = {
-    background: '#0b1220',
-    border: '1px solid rgba(255,255,255,0.12)',
-    color: '#e2e8f0',
-    borderRadius: 8,
+    background: 'var(--color-surface-inset)',
+    border: '1px solid var(--color-border-strong)',
+    color: 'var(--color-text)',
+    borderRadius: 'var(--radius-sm)',
     padding: '6px 10px',
-    fontSize: '0.75rem',
+    fontSize: 'var(--type-xs)',
   }
 
   return (
@@ -168,16 +168,16 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
         style={{
           display: 'flex',
           flexWrap: 'wrap',
-          gap: 8,
+          gap: 'var(--space-2)',
           alignItems: 'center',
           padding: '10px 12px',
-          background: 'rgba(15, 23, 42, 0.5)',
-          border: '1px solid rgba(255,255,255,0.06)',
+          background: 'var(--color-surface-2)',
+          border: '1px solid var(--color-border)',
           borderRadius: 10,
-          marginBottom: 12,
+          marginBottom: 'var(--space-3)',
         }}
       >
-        <div style={{ display: 'flex', gap: 4 }}>{['ERROR', 'WARN', 'INFO', 'DEBUG'].map(chip)}</div>
+        <div style={{ display: 'flex', gap: 'var(--space-1)' }}>{['ERROR', 'WARN', 'INFO', 'DEBUG'].map(chip)}</div>
         <input
           placeholder={t('ui_search_message_detail')}
           value={search}
@@ -279,21 +279,21 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
         >
           <ChevronDown size={12} style={{ verticalAlign: 'middle' }} /> {t('ui_older')}
         </button>
-        {exporting && <span style={{ color: '#93c5fd' }}>{t('ui_preparing_export')}</span>}
+        {exporting && <span style={{ color: 'var(--color-info)' }}>{t('ui_preparing_export')}</span>}
       </div>
 
       {error && (
         <div
           style={{
             display: 'flex',
-            gap: 8,
+            gap: 'var(--space-2)',
             alignItems: 'flex-start',
-            background: '#450a0a',
-            border: '1px solid #7f1d1d',
+            background: 'var(--color-danger-soft)',
+            border: '1px solid color-mix(in oklab, var(--color-danger) 35%, transparent)',
             borderRadius: 10,
             padding: 10,
-            color: '#fecaca',
-            fontSize: '0.75rem',
+            color: 'var(--color-danger-text)',
+            fontSize: 'var(--type-xs)',
             marginBottom: 10,
           }}
         >
@@ -305,14 +305,14 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
       {/* ------------------------------------------------------------- rows */}
       <div
         style={{
-          background: '#070b14',
-          border: '1px solid rgba(255,255,255,0.08)',
-          borderRadius: 12,
+          background: 'var(--color-surface-inset)',
+          border: '1px solid var(--color-border)',
+          borderRadius: 'var(--radius-md)',
           padding: '8px 10px',
           maxHeight: 440,
           overflowY: 'auto',
           fontFamily: "'JetBrains Mono', Consolas, Monaco, monospace",
-          fontSize: '0.75rem',
+          fontSize: 'var(--type-xs)',
         }}
       >
         {loading && !logs.length ? (
@@ -336,12 +336,11 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
                   padding: '6px 8px',
                   borderRadius: 6,
                   marginBottom: 4,
-                  background: lvl === 'ERROR' ? 'rgba(239, 68, 68, 0.06)' : 'rgba(255,255,255,0.015)',
-                  borderLeft: isRtl ? 'none' : `3px solid ${style.fg}`,
-                  borderRight: isRtl ? `3px solid ${style.fg}` : 'none',
+                  background: lvl === 'ERROR' ? 'color-mix(in oklab, var(--color-danger) 6%, transparent)' : 'color-mix(in oklab, var(--color-text) 1.5%, transparent)',
+                  borderInlineStart: `3px solid ${style.fg}`,
                 }}
               >
-                <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'flex-start' }}>
                   <button
                     type="button"
                     onClick={() => toggle(key)}
@@ -366,16 +365,16 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
                   >
                     {lvl}
                   </span>
-                  <span style={{ color: '#94a3b8', flexShrink: 0, fontSize: 'var(--type-xs)' }}>
+                  <span style={{ color: 'var(--color-text-muted)', flexShrink: 0, fontSize: 'var(--type-xs)' }}>
                     {item.service || 'core'}/{item.category || 'sys'}
                   </span>
-                  <span style={{ color: '#e2e8f0', flex: 1, wordBreak: 'break-word' }}>
+                  <span style={{ color: 'var(--color-text)', flex: 1, wordBreak: 'break-word' }}>
                     {item.message}
                   </span>
                   <button
                     type="button"
                     onClick={() => void copyRow(item, key)}
-                    style={{ background: 'none', border: 'none', color: copied === key ? '#34d399' : 'var(--color-text-muted)', cursor: 'pointer', padding: 0 }}
+                    style={{ background: 'none', border: 'none', color: copied === key ? 'var(--color-success)' : 'var(--color-text-muted)', cursor: 'pointer', padding: 0 }}
                     title={t('ui_copy_row')}
                   >
                     <Copy size={11} />
@@ -385,7 +384,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
                   <div style={{ marginTop: 5, marginInlineStart: 20, fontSize: 'var(--type-xs)' }}>
                     {item.correlation_id && (
                       <div style={{ color: 'var(--color-text-muted)' }}>
-                        {t('ui_corr')} <span style={{ color: '#93c5fd' }}>{item.correlation_id}</span>
+                        {t('ui_corr')} <span style={{ color: 'var(--color-info)' }}>{item.correlation_id}</span>
                       </div>
                     )}
                     {isOpen && item.detail && (
@@ -393,9 +392,9 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
                         style={{
                           margin: '5px 0 2px',
                           padding: '6px 8px',
-                          background: '#0b1220',
+                          background: 'var(--color-surface-inset)',
                           borderRadius: 6,
-                          color: '#cbd5e1',
+                          color: 'var(--color-text)',
                           whiteSpace: 'pre-wrap',
                           wordBreak: 'break-word',
                           maxHeight: 200,
