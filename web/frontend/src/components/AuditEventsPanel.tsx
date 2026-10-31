@@ -20,13 +20,13 @@ interface Props {
 const outcomeIcon = (outcome?: string) => {
   switch ((outcome || '').toUpperCase()) {
     case 'SUCCEEDED':
-      return <CheckCircle2 size={14} color="#34d399" />
+      return <CheckCircle2 size={14} color="var(--color-success)" />
     case 'FAILED':
-      return <XCircle size={14} color="#f87171" />
+      return <XCircle size={14} color="var(--color-danger)" />
     case 'OUTCOME_UNCONFIRMED':
-      return <HelpCircle size={14} color="#fbbf24" />
+      return <HelpCircle size={14} color="var(--color-warning)" />
     default:
-      return <Clock size={14} color="#94a3b8" />
+      return <Clock size={14} color="var(--color-text-subtle)" />
   }
 }
 
@@ -34,11 +34,13 @@ const severityColor = (sev?: string) => {
   switch ((sev || '').toUpperCase()) {
     case 'ERROR':
     case 'FATAL':
-      return '#f87171'
+      return 'var(--color-danger)'
     case 'WARN':
-      return '#fbbf24'
+      return 'var(--color-warning)'
+    case 'DEBUG':
+      return 'var(--color-text-subtle)'
     default:
-      return '#94a3b8'
+      return 'var(--color-info)'
   }
 }
 
@@ -88,11 +90,11 @@ export function AuditEventsPanel({ lang }: Props) {
     <div>
       <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Activity size={22} color="#4ade80" />
+          <h2 style={{ fontSize: 'var(--type-lg)', fontWeight: 800, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Activity size={22} color="var(--color-success)" />
             <span>{t('ui_audit_events_execution_assurance')}</span>
           </h2>
-          <p style={{ fontSize: '0.825rem', color: '#94a3b8', marginTop: 4 }}>
+          <p style={{ fontSize: '0.825rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
             {t('ui_durable_postgresql_audit_events_with_correlation_id_search_actua')}
           </p>
         </div>
@@ -113,15 +115,15 @@ export function AuditEventsPanel({ lang }: Props) {
             onKeyDown={(e) => e.key === 'Enter' && fetchEvents()}
             style={{
               width: '100%', padding: '8px 10px 8px 32px', borderRadius: 8,
-              background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.1)',
-              color: '#e2e8f0', fontSize: '0.825rem', outline: 'none',
+              background: 'var(--color-surface-inset)', border: '1px solid var(--color-border)',
+              color: 'var(--color-text)', fontSize: '0.825rem', outline: 'none',
             }}
           />
         </div>
         <select
           value={fService}
           onChange={(e) => setFService(e.target.value)}
-          style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.1)', color: '#e2e8f0', fontSize: '0.825rem' }}
+          style={{ padding: '8px 10px', borderRadius: 8, background: 'var(--color-surface-inset)', border: '1px solid var(--color-border)', color: 'var(--color-text)', fontSize: '0.825rem' }}
         >
           <option value="">{t('ui_audit_events_all_services')}</option>
           <option value="core">core</option>
@@ -132,7 +134,7 @@ export function AuditEventsPanel({ lang }: Props) {
         <select
           value={fOutcome}
           onChange={(e) => setFOutcome(e.target.value)}
-          style={{ padding: '8px 10px', borderRadius: 8, background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.1)', color: '#e2e8f0', fontSize: '0.825rem' }}
+          style={{ padding: '8px 10px', borderRadius: 8, background: 'var(--color-surface-inset)', border: '1px solid var(--color-border)', color: 'var(--color-text)', fontSize: '0.825rem' }}
         >
           <option value="">{t('ui_all_outcomes')}</option>
           <option value="SUCCEEDED">{t('ui_outcome_succeeded')}</option>
@@ -144,7 +146,7 @@ export function AuditEventsPanel({ lang }: Props) {
       </div>
 
       {error && (
-        <div style={{ padding: '10px 14px', borderRadius: 8, background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', fontSize: '0.825rem', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ padding: '10px 14px', borderRadius: 8, background: 'var(--color-danger-soft)', border: '1px solid color-mix(in oklab, var(--color-danger) 35%, transparent)', color: 'var(--color-danger)', fontSize: '0.825rem', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
           <AlertTriangle size={14} />
           <span>{error}</span>
         </div>
@@ -174,22 +176,22 @@ export function AuditEventsPanel({ lang }: Props) {
               style={{
                 textAlign: 'left', width: '100%', cursor: 'pointer',
                 padding: '10px 14px', borderRadius: 10,
-                background: 'rgba(15, 23, 42, 0.6)', border: '1px solid rgba(255,255,255,0.08)',
+                background: 'var(--color-surface-2)', border: '1px solid var(--color-border)',
                 display: 'flex', alignItems: 'center', gap: 12,
               }}
             >
               {outcomeIcon(evt.outcome)}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.825rem', fontWeight: 600, color: '#e2e8f0', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div style={{ fontSize: '0.825rem', fontWeight: 600, color: 'var(--color-text)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <span>{evt.event_type}</span>
                   {evt.reason_code && (
-                    <span style={{ fontSize: 'var(--type-xs)', padding: '1px 6px', borderRadius: 4, background: 'rgba(239, 68, 68, 0.15)', color: '#f87171' }}>
+                    <span style={{ fontSize: 'var(--type-xs)', padding: '1px 6px', borderRadius: 4, background: 'var(--color-danger-soft)', color: 'var(--color-danger)' }}>
                       {evt.reason_code}
                     </span>
                   )}
                   {evt.rule_id && <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>rule={evt.rule_id.slice(0, 8)}</span>}
                 </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', marginTop: 3, display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   <span>{evt.service}</span>
                   <span>{fmtTs(evt.ts_utc)}</span>
                   {evt.correlation_id && <span style={{ fontFamily: 'monospace' }}>{evt.correlation_id.slice(0, 12)}</span>}
@@ -212,7 +214,7 @@ export function AuditEventsPanel({ lang }: Props) {
         <div
           style={{
             marginTop: 16, padding: 16, borderRadius: 12,
-            background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(34, 197, 94, 0.25)',
+            background: 'var(--color-surface-2)', border: '1px solid color-mix(in oklab, var(--color-success) 35%, transparent)',
           }}
         >
           <div style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -222,9 +224,9 @@ export function AuditEventsPanel({ lang }: Props) {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
             {detailFields(selected).map(([k, v]) => (
               v ? (
-                <div key={k} style={{ fontSize: '0.75rem' }}>
+                <div key={k} style={{ fontSize: 'var(--type-xs)' }}>
                   <div style={{ color: 'var(--color-text-muted)', marginBottom: 2 }}>{k}</div>
-                  <div style={{ color: '#cbd5e1', fontFamily: k.includes('id') ? 'monospace' : 'inherit', wordBreak: 'break-all' }}>
+                  <div style={{ color: 'var(--color-text)', fontFamily: k.includes('id') ? 'monospace' : 'inherit', wordBreak: 'break-all' }}>
                     {v}
                   </div>
                 </div>
@@ -232,9 +234,9 @@ export function AuditEventsPanel({ lang }: Props) {
             ))}
           </div>
           {selected.metadata_json && selected.metadata_json !== '{}' && (
-            <div style={{ marginTop: 12, fontSize: '0.75rem' }}>
+            <div style={{ marginTop: 12, fontSize: 'var(--type-xs)' }}>
               <div style={{ color: 'var(--color-text-muted)', marginBottom: 4 }}>{t('ui_metadata')}</div>
-              <pre style={{ color: '#94a3b8', background: 'rgba(2, 6, 23, 0.6)', padding: 10, borderRadius: 8, overflow: 'auto', margin: 0, fontSize: 'var(--type-xs)' }}>
+              <pre style={{ color: 'var(--color-text-muted)', background: 'var(--color-surface-inset)', padding: 10, borderRadius: 8, overflow: 'auto', margin: 0, fontSize: 'var(--type-xs)' }}>
                 {selected.metadata_json}
               </pre>
             </div>
@@ -248,13 +250,13 @@ export function AuditEventsPanel({ lang }: Props) {
 function outcomeColor(outcome?: string) {
   switch ((outcome || '').toUpperCase()) {
     case 'SUCCEEDED':
-      return '#34d399'
+      return 'var(--color-success)'
     case 'FAILED':
-      return '#f87171'
+      return 'var(--color-danger)'
     case 'OUTCOME_UNCONFIRMED':
-      return '#fbbf24'
+      return 'var(--color-warning)'
     default:
-      return '#94a3b8'
+      return 'var(--color-text-subtle)'
   }
 }
 

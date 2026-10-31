@@ -39,6 +39,7 @@ export function AdminPanel({ lang }: Props) {
   const [regOpen, setRegOpen] = useState(true)
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
   const [extensions, setExtensions] = useState<any[]>([])
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const loadOverview = async () => {
     try {
@@ -98,13 +99,14 @@ export function AdminPanel({ lang }: Props) {
   }, [])
 
   const handleToggleUserStatus = async (uid: number, currentStatus: string) => {
+    setActionError(null)
     const next = currentStatus === 'active' ? 'suspended' : 'active'
     try {
       await api.adminSetUserStatus(uid, next)
       loadUsers()
       loadOverview()
     } catch (e: any) {
-      alert(e?.message || t('ui_error_updating_user_status'))
+      setActionError(e?.message || t('ui_error_updating_user_status'))
     }
   }
 
@@ -112,12 +114,13 @@ export function AdminPanel({ lang }: Props) {
     if (!bcastText.trim()) return
     setBcastSending(true)
     setBcastResult(null)
+    setActionError(null)
     try {
       const res = await api.adminBroadcast(bcastText, bcastTarget)
       setBcastResult(res)
       setBcastText('')
     } catch (e: any) {
-      alert(e?.message || t('ui_broadcast_error'))
+      setActionError(e?.message || t('ui_broadcast_error'))
     } finally {
       setBcastSending(false)
     }
@@ -125,6 +128,7 @@ export function AdminPanel({ lang }: Props) {
 
   const handleSaveSettings = async () => {
     setSaveStatus('saving')
+    setActionError(null)
     try {
       await api.adminSaveSettings({
         force_sub_enabled: fsEnabled,
@@ -135,30 +139,35 @@ export function AdminPanel({ lang }: Props) {
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus(null), 3000)
     } catch (e: any) {
-      alert(e?.message || t('ui_save_error'))
+      setActionError(e?.message || t('ui_save_error'))
       setSaveStatus(null)
     }
   }
 
   const handleAddAdmin = async () => {
     const num = parseInt(newAdminId, 10)
-    if (!num || num <= 0) return alert(t('ui_invalid_user_id'))
+    if (!num || num <= 0) {
+      setActionError(t('ui_invalid_user_id'))
+      return
+    }
+    setActionError(null)
     try {
       await api.adminAddAdmin(num)
       setNewAdminId('')
       loadAdmins()
     } catch (e: any) {
-      alert(e?.message || t('ui_add_admin_error'))
+      setActionError(e?.message || t('ui_add_admin_error'))
     }
   }
 
   const handleRemoveAdmin = async (uid: number) => {
     if (!confirm(t('ui_remove_admin_access_for_uid_2', { uid_2: uid }))) return
+    setActionError(null)
     try {
       await api.adminRemoveAdmin(uid)
       loadAdmins()
     } catch (e: any) {
-      alert(e?.message || t('ui_remove_admin_error'))
+      setActionError(e?.message || t('ui_remove_admin_error'))
     }
   }
 
@@ -171,10 +180,10 @@ export function AdminPanel({ lang }: Props) {
           justifyContent: 'space-between',
           alignItems: 'center',
           marginBottom: 20,
-          background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(15, 23, 42, 0.8))',
+          background: 'var(--color-danger-soft)',
           padding: '16px 20px',
           borderRadius: 16,
-          border: '1px solid rgba(239, 68, 68, 0.3)',
+          border: '1px solid color-mix(in oklab, var(--color-danger) 35%, transparent)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -182,17 +191,17 @@ export function AdminPanel({ lang }: Props) {
             style={{
               padding: 10,
               borderRadius: 12,
-              background: 'rgba(239, 68, 68, 0.2)',
-              color: '#f87171',
+              background: 'var(--color-danger-soft)',
+              color: 'var(--color-danger)',
             }}
           >
             <ShieldAlert size={28} />
           </div>
           <div>
-            <h2 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 700, color: '#f87171' }}>
+            <h2 style={{ margin: 0, fontSize: 'var(--type-lg)', fontWeight: 700, color: 'var(--color-danger)' }}>
               {t('ui_master_administrative_control_plane')}
             </h2>
-            <p style={{ margin: 0, fontSize: '0.82rem', color: '#94a3b8' }}>
+            <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--color-text-muted)' }}>
               {t('ui_real_time_multi_tenant_governance_background_broadcasting_force')}
             </p>
           </div>
@@ -206,7 +215,7 @@ export function AdminPanel({ lang }: Props) {
             loadAdmins()
           }}
           className="btn"
-          style={{ background: 'rgba(255,255,255,0.06)', color: '#cbd5e1' }}
+          style={{ background: 'var(--color-hover-wash)', color: 'var(--color-text)' }}
         >
           <RefreshCw size={15} />
           <span>{t('ui_refresh')}</span>
@@ -219,7 +228,7 @@ export function AdminPanel({ lang }: Props) {
           display: 'flex',
           gap: 8,
           marginBottom: 20,
-          borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+          borderBottom: '1px solid var(--color-border)',
           paddingBottom: 10,
           overflowX: 'auto',
         }}
@@ -228,9 +237,9 @@ export function AdminPanel({ lang }: Props) {
           onClick={() => setActiveSection('overview')}
           className="btn"
           style={{
-            background: activeSection === 'overview' ? 'rgba(239, 68, 68, 0.2)' : 'transparent',
-            color: activeSection === 'overview' ? '#f87171' : '#94a3b8',
-            border: activeSection === 'overview' ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid transparent',
+            background: activeSection === 'overview' ? 'var(--color-danger-soft)' : 'transparent',
+            color: activeSection === 'overview' ? 'var(--color-danger)' : 'var(--color-text-muted)',
+            border: activeSection === 'overview' ? '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)' : '1px solid transparent',
           }}
         >
           <Activity size={16} />
@@ -241,23 +250,23 @@ export function AdminPanel({ lang }: Props) {
           onClick={() => setActiveSection('users')}
           className="btn"
           style={{
-            background: activeSection === 'users' ? 'rgba(239, 68, 68, 0.2)' : 'transparent',
-            color: activeSection === 'users' ? '#f87171' : '#94a3b8',
-            border: activeSection === 'users' ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid transparent',
+            background: activeSection === 'users' ? 'var(--color-danger-soft)' : 'transparent',
+            color: activeSection === 'users' ? 'var(--color-danger)' : 'var(--color-text-muted)',
+            border: activeSection === 'users' ? '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)' : '1px solid transparent',
           }}
         >
           <Users size={16} />
           <span>{t('ui_user_governance')}</span>
-          <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>({totalUsers})</span>
+          <span style={{ fontSize: 'var(--type-xs)', opacity: 0.7 }}>({totalUsers})</span>
         </button>
 
         <button
           onClick={() => setActiveSection('broadcast')}
           className="btn"
           style={{
-            background: activeSection === 'broadcast' ? 'rgba(239, 68, 68, 0.2)' : 'transparent',
-            color: activeSection === 'broadcast' ? '#f87171' : '#94a3b8',
-            border: activeSection === 'broadcast' ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid transparent',
+            background: activeSection === 'broadcast' ? 'var(--color-danger-soft)' : 'transparent',
+            color: activeSection === 'broadcast' ? 'var(--color-danger)' : 'var(--color-text-muted)',
+            border: activeSection === 'broadcast' ? '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)' : '1px solid transparent',
           }}
         >
           <Send size={16} />
@@ -268,9 +277,9 @@ export function AdminPanel({ lang }: Props) {
           onClick={() => setActiveSection('forcesub')}
           className="btn"
           style={{
-            background: activeSection === 'forcesub' ? 'rgba(239, 68, 68, 0.2)' : 'transparent',
-            color: activeSection === 'forcesub' ? '#f87171' : '#94a3b8',
-            border: activeSection === 'forcesub' ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid transparent',
+            background: activeSection === 'forcesub' ? 'var(--color-danger-soft)' : 'transparent',
+            color: activeSection === 'forcesub' ? 'var(--color-danger)' : 'var(--color-text-muted)',
+            border: activeSection === 'forcesub' ? '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)' : '1px solid transparent',
           }}
         >
           <Lock size={16} />
@@ -281,9 +290,9 @@ export function AdminPanel({ lang }: Props) {
           onClick={() => setActiveSection('admins')}
           className="btn"
           style={{
-            background: activeSection === 'admins' ? 'rgba(239, 68, 68, 0.2)' : 'transparent',
-            color: activeSection === 'admins' ? '#f87171' : '#94a3b8',
-            border: activeSection === 'admins' ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid transparent',
+            background: activeSection === 'admins' ? 'var(--color-danger-soft)' : 'transparent',
+            color: activeSection === 'admins' ? 'var(--color-danger)' : 'var(--color-text-muted)',
+            border: activeSection === 'admins' ? '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)' : '1px solid transparent',
           }}
         >
           <ShieldAlert size={16} />
@@ -294,15 +303,21 @@ export function AdminPanel({ lang }: Props) {
           onClick={() => setActiveSection('settings')}
           className="btn"
           style={{
-            background: activeSection === 'settings' ? 'rgba(239, 68, 68, 0.2)' : 'transparent',
-            color: activeSection === 'settings' ? '#f87171' : '#94a3b8',
-            border: activeSection === 'settings' ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid transparent',
+            background: activeSection === 'settings' ? 'var(--color-danger-soft)' : 'transparent',
+            color: activeSection === 'settings' ? 'var(--color-danger)' : 'var(--color-text-muted)',
+            border: activeSection === 'settings' ? '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)' : '1px solid transparent',
           }}
         >
           <Sliders size={16} />
           <span>{t('ui_settings_extensions')}</span>
         </button>
       </div>
+
+      {actionError && (
+        <div className="p-note p-note--danger" style={{ marginBottom: 16 }}>
+          {actionError}
+        </div>
+      )}
 
       {/* SECTION: Overview */}
       {activeSection === 'overview' && (
@@ -315,42 +330,42 @@ export function AdminPanel({ lang }: Props) {
               marginBottom: 24,
             }}
           >
-            <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 18, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '0.85rem' }}>
+            <div style={{ background: 'var(--color-surface-2)', padding: 18, borderRadius: 14, border: '1px solid var(--color-border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
                 <span>{t('ui_total_registered_users')}</span>
-                <Users size={18} color="#60a5fa" />
+                <Users size={18} color="var(--color-info)" />
               </div>
-              <div style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: 8, color: '#f8fafc' }}>
+              <div style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: 8, color: 'var(--color-text)' }}>
                 {overview?.total_users ?? totalUsers}
               </div>
             </div>
 
-            <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 18, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '0.85rem' }}>
+            <div style={{ background: 'var(--color-surface-2)', padding: 18, borderRadius: 14, border: '1px solid var(--color-border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
                 <span>{t('ui_active_rules')}</span>
-                <Radio size={18} color="#34d399" />
+                <Radio size={18} color="var(--color-success)" />
               </div>
-              <div style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: 8, color: '#34d399' }}>
+              <div style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: 8, color: 'var(--color-success)' }}>
                 {overview?.active_rules ?? 0}
               </div>
             </div>
 
-            <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 18, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '0.85rem' }}>
+            <div style={{ background: 'var(--color-surface-2)', padding: 18, borderRadius: 14, border: '1px solid var(--color-border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
                 <span>{t('ui_pending_in_queue')}</span>
-                <Activity size={18} color="#fbbf24" />
+                <Activity size={18} color="var(--color-warning)" />
               </div>
-              <div style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: 8, color: '#fbbf24' }}>
+              <div style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: 8, color: 'var(--color-warning)' }}>
                 {overview?.queue_pending ?? 0}
               </div>
             </div>
 
-            <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 18, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', color: '#94a3b8', fontSize: '0.85rem' }}>
+            <div style={{ background: 'var(--color-surface-2)', padding: 18, borderRadius: 14, border: '1px solid var(--color-border)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
                 <span>{t('ui_core_daemon_status')}</span>
-                <Server size={18} color="#4ade80" />
+                <Server size={18} color="var(--color-success)" />
               </div>
-              <div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: 12, color: '#4ade80', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: 12, color: 'var(--color-success)', display: 'flex', alignItems: 'center', gap: 6 }}>
                 <CheckCircle2 size={18} />
                 <span>{overview?.core_online ? t('ui_online_grpc_50051') : t('ui_standby')}</span>
               </div>
@@ -361,15 +376,15 @@ export function AdminPanel({ lang }: Props) {
 
       {/* SECTION: Users */}
       {activeSection === 'users' && (
-        <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 20, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
-          <h3 style={{ margin: '0 0 16px', fontSize: '1.05rem', color: '#f8fafc' }}>
+        <div style={{ background: 'var(--color-surface-2)', padding: 20, borderRadius: 14, border: '1px solid var(--color-border)' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: '1.05rem', color: 'var(--color-text)' }}>
             {t('ui_registered_tenants_lifecycle_control')}
           </h3>
 
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: isRtl ? 'right' : 'left', fontSize: '0.88rem' }}>
               <thead>
-                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', color: '#94a3b8' }}>
+                <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}>
                   <th style={{ padding: '10px 12px' }}>{t('ui_admin_user_id')}</th>
                   <th style={{ padding: '10px 12px' }}>{t('ui_username')}</th>
                   <th style={{ padding: '10px 12px' }}>{t('ui_plan')}</th>
@@ -381,12 +396,12 @@ export function AdminPanel({ lang }: Props) {
                 {users.map((u) => {
                   const isSuspended = u.status === 'suspended'
                   return (
-                    <tr key={u.user_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                      <td style={{ padding: '12px', fontFamily: 'monospace', color: '#e2e8f0' }}>
+                    <tr key={u.user_id} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                      <td style={{ padding: '12px', fontFamily: 'monospace', color: 'var(--color-text)' }}>
                         {u.user_id} {u.is_admin ? <span className="badge badge-vip">{t('ui_role_admin')}</span> : null}
                       </td>
-                      <td style={{ padding: '12px', color: '#cbd5e1' }}>{u.username ? `@${u.username}` : '—'}</td>
-                      <td style={{ padding: '12px', color: '#94a3b8', textTransform: 'uppercase' }}>{u.plan}</td>
+                      <td style={{ padding: '12px', color: 'var(--color-text)' }}>{u.username ? `@${u.username}` : '—'}</td>
+                      <td style={{ padding: '12px', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>{u.plan}</td>
                       <td style={{ padding: '12px' }}>
                         <span
                           style={{
@@ -395,8 +410,8 @@ export function AdminPanel({ lang }: Props) {
                             borderRadius: 6,
                             fontSize: '0.78rem',
                             fontWeight: 600,
-                            background: isSuspended ? 'rgba(239,68,68,0.2)' : 'rgba(34,197,94,0.2)',
-                            color: isSuspended ? '#f87171' : '#4ade80',
+                            background: isSuspended ? 'var(--color-danger-soft)' : 'var(--color-success-soft)',
+                            color: isSuspended ? 'var(--color-danger)' : 'var(--color-success)',
                           }}
                         >
                           {isSuspended ? (t('ui_suspended')) : (t('ui_active'))}
@@ -410,9 +425,9 @@ export function AdminPanel({ lang }: Props) {
                             style={{
                               padding: '4px 10px',
                               fontSize: '0.78rem',
-                              background: isSuspended ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)',
-                              color: isSuspended ? '#4ade80' : '#f87171',
-                              border: isSuspended ? '1px solid rgba(34,197,94,0.4)' : '1px solid rgba(239,68,68,0.4)',
+                              background: isSuspended ? 'var(--color-success-soft)' : 'var(--color-danger-soft)',
+                              color: isSuspended ? 'var(--color-success)' : 'var(--color-danger)',
+                              border: isSuspended ? '1px solid color-mix(in oklab, var(--color-success) 40%, transparent)' : '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)',
                             }}
                           >
                             {isSuspended ? (t('ui_activate')) : (t('ui_suspend'))}
@@ -430,16 +445,16 @@ export function AdminPanel({ lang }: Props) {
 
       {/* SECTION: Broadcast */}
       {activeSection === 'broadcast' && (
-        <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 20, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#f8fafc' }}>
+        <div style={{ background: 'var(--color-surface-2)', padding: 20, borderRadius: 14, border: '1px solid var(--color-border)' }}>
+          <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: 'var(--color-text)' }}>
             {t('ui_asynchronous_broadcast_dispatcher')}
           </h3>
-          <p style={{ margin: '0 0 16px', fontSize: '0.84rem', color: '#94a3b8' }}>
+          <p style={{ margin: '0 0 16px', fontSize: '0.84rem', color: 'var(--color-text-muted)' }}>
             {t('ui_messages_are_asynchronously_queued_and_dispatched_at_25_msgs_sec')}
           </p>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: '0.85rem', color: '#cbd5e1', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--color-text)', marginBottom: 6 }}>
               {t('ui_broadcast_message_body_markdown_supported')}
             </label>
             <textarea
@@ -451,9 +466,9 @@ export function AdminPanel({ lang }: Props) {
                 width: '100%',
                 padding: 12,
                 borderRadius: 8,
-                background: 'rgba(30, 41, 59, 0.8)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: '#fff',
+                background: 'var(--color-surface-inset)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
                 fontSize: '0.9rem',
                 fontFamily: 'inherit',
               }}
@@ -467,8 +482,8 @@ export function AdminPanel({ lang }: Props) {
               className="btn btn-primary"
               style={{
                 padding: '10px 24px',
-                background: '#ef4444',
-                color: '#fff',
+                background: 'var(--color-danger)',
+                color: 'var(--color-on-accent)',
                 border: 'none',
                 fontWeight: 700,
               }}
@@ -483,14 +498,14 @@ export function AdminPanel({ lang }: Props) {
               style={{
                 padding: 16,
                 borderRadius: 10,
-                background: 'rgba(34, 197, 94, 0.15)',
-                border: '1px solid rgba(34, 197, 94, 0.3)',
-                color: '#4ade80',
+                background: 'var(--color-success-soft)',
+                border: '1px solid color-mix(in oklab, var(--color-success) 35%, transparent)',
+                color: 'var(--color-success)',
                 fontSize: '0.88rem',
               }}
             >
               ✅ {bcastResult.message || t('ui_broadcast_queued_successfully')}
-              <div style={{ marginTop: 6, fontSize: '0.8rem', color: '#86efac' }}>
+              <div style={{ marginTop: 6, fontSize: '0.8rem', color: 'var(--color-success)' }}>
                 {t('ui_broadcast_id')} <code>{bcastResult.broadcast_id}</code> | {t('ui_recipients')} <b>{bcastResult.total_recipients}</b>
               </div>
             </div>
@@ -500,11 +515,11 @@ export function AdminPanel({ lang }: Props) {
 
       {/* SECTION: Force-Subscription */}
       {activeSection === 'forcesub' && (
-        <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 20, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#f8fafc' }}>
+        <div style={{ background: 'var(--color-surface-2)', padding: 20, borderRadius: 14, border: '1px solid var(--color-border)' }}>
+          <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: 'var(--color-text)' }}>
             {t('ui_channel_force_subscription_gate')}
           </h3>
-          <p style={{ margin: '0 0 16px', fontSize: '0.84rem', color: '#94a3b8' }}>
+          <p style={{ margin: '0 0 16px', fontSize: '0.84rem', color: 'var(--color-text-muted)' }}>
             {t('ui_enforce_mandatory_channel_membership_prior_to_granting_access_to')}
           </p>
 
@@ -514,15 +529,15 @@ export function AdminPanel({ lang }: Props) {
               id="fsToggle"
               checked={fsEnabled}
               onChange={(e) => setFsEnabled(e.target.checked)}
-              style={{ width: 18, height: 18, accentColor: '#ef4444' }}
+              style={{ width: 18, height: 18, accentColor: 'var(--color-danger)' }}
             />
-            <label htmlFor="fsToggle" style={{ color: '#f8fafc', fontWeight: 600, fontSize: '0.92rem' }}>
+            <label htmlFor="fsToggle" style={{ color: 'var(--color-text)', fontWeight: 600, fontSize: '0.92rem' }}>
               {t('ui_enable_mandatory_channel_subscription')}
             </label>
           </div>
 
           <div style={{ marginBottom: 20, maxWidth: 450 }}>
-            <label style={{ display: 'block', fontSize: '0.85rem', color: '#cbd5e1', marginBottom: 6 }}>
+            <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--color-text)', marginBottom: 6 }}>
               {t('ui_required_channel_username_or_numeric_id')}
             </label>
             <input
@@ -534,9 +549,9 @@ export function AdminPanel({ lang }: Props) {
                 width: '100%',
                 padding: 10,
                 borderRadius: 8,
-                background: 'rgba(30, 41, 59, 0.8)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: '#fff',
+                background: 'var(--color-surface-inset)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
                 fontSize: '0.9rem',
               }}
             />
@@ -545,14 +560,14 @@ export function AdminPanel({ lang }: Props) {
           <button onClick={handleSaveSettings} className="btn btn-primary" style={{ padding: '8px 20px' }}>
             <span>{saveStatus === 'saving' ? (t('ui_saving')) : (t('ui_save_gate_settings'))}</span>
           </button>
-          {saveStatus === 'saved' && <span style={{ marginLeft: 12, color: '#4ade80', fontSize: '0.85rem' }}>✅ {t('ui_saved')}</span>}
+          {saveStatus === 'saved' && <span style={{ marginLeft: 12, color: 'var(--color-success)', fontSize: '0.85rem' }}>✅ {t('ui_saved')}</span>}
         </div>
       )}
 
       {/* SECTION: Administrators */}
       {activeSection === 'admins' && (
-        <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 20, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
-          <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#f8fafc' }}>
+        <div style={{ background: 'var(--color-surface-2)', padding: 20, borderRadius: 14, border: '1px solid var(--color-border)' }}>
+          <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: 'var(--color-text)' }}>
             {t('ui_authorized_administrators_rbac')}
           </h3>
 
@@ -566,9 +581,9 @@ export function AdminPanel({ lang }: Props) {
                 flex: 1,
                 padding: 10,
                 borderRadius: 8,
-                background: 'rgba(30, 41, 59, 0.8)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                color: '#fff',
+                background: 'var(--color-surface-inset)',
+                border: '1px solid var(--color-border)',
+                color: 'var(--color-text)',
                 fontSize: '0.9rem',
               }}
             />
@@ -588,14 +603,14 @@ export function AdminPanel({ lang }: Props) {
                   alignItems: 'center',
                   padding: '12px 16px',
                   borderRadius: 10,
-                  background: 'rgba(30, 41, 59, 0.5)',
-                  border: '1px solid rgba(255,255,255,0.06)',
+                  background: 'var(--color-surface-inset)',
+                  border: '1px solid var(--color-border)',
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <ShieldAlert size={18} color={a.role === 'owner' ? '#fbbf24' : '#60a5fa'} />
-                  <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#f8fafc' }}>{a.user_id}</span>
-                  <span className="badge" style={{ background: a.role === 'owner' ? '#f59e0b' : '#3b82f6', color: '#fff' }}>
+                  <ShieldAlert size={18} color={a.role === 'owner' ? 'var(--color-warning)' : 'var(--color-info)'} />
+                  <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--color-text)' }}>{a.user_id}</span>
+                  <span className="badge" style={{ background: a.role === 'owner' ? 'var(--color-warning)' : 'var(--color-info)', color: 'var(--color-on-accent)' }}>
                     {a.role.toUpperCase()}
                   </span>
                 </div>
@@ -604,7 +619,7 @@ export function AdminPanel({ lang }: Props) {
                   <button
                     onClick={() => handleRemoveAdmin(a.user_id)}
                     className="btn"
-                    style={{ padding: '4px 8px', color: '#f87171', background: 'rgba(239,68,68,0.1)' }}
+                    style={{ padding: '4px 8px', color: 'var(--color-danger)', background: 'var(--color-danger-soft)' }}
                   >
                     <Trash2 size={14} />
                     <span>{t('ui_remove')}</span>
@@ -619,12 +634,12 @@ export function AdminPanel({ lang }: Props) {
       {/* SECTION: Settings & Extensions */}
       {activeSection === 'settings' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-          <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 20, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#f8fafc' }}>
+          <div style={{ background: 'var(--color-surface-2)', padding: 20, borderRadius: 14, border: '1px solid var(--color-border)' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: 'var(--color-text)' }}>
               {t('ui_public_web_domain_configuration')}
             </h3>
             <div style={{ marginBottom: 16, maxWidth: 500 }}>
-              <label style={{ display: 'block', fontSize: '0.85rem', color: '#cbd5e1', marginBottom: 6 }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', color: 'var(--color-text)', marginBottom: 6 }}>
                 {t('ui_dashboard_public_url')}
               </label>
               <input
@@ -636,9 +651,9 @@ export function AdminPanel({ lang }: Props) {
                   width: '100%',
                   padding: 10,
                   borderRadius: 8,
-                  background: 'rgba(30, 41, 59, 0.8)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  color: '#fff',
+                  background: 'var(--color-surface-inset)',
+                  border: '1px solid var(--color-border)',
+                  color: 'var(--color-text)',
                   fontSize: '0.9rem',
                 }}
               />
@@ -649,8 +664,8 @@ export function AdminPanel({ lang }: Props) {
             </button>
           </div>
 
-          <div style={{ background: 'rgba(15, 23, 42, 0.7)', padding: 20, borderRadius: 14, border: '1px solid rgba(255,255,255,0.08)' }}>
-            <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: '#f8fafc' }}>
+          <div style={{ background: 'var(--color-surface-2)', padding: 20, borderRadius: 14, border: '1px solid var(--color-border)' }}>
+            <h3 style={{ margin: '0 0 12px', fontSize: '1.05rem', color: 'var(--color-text)' }}>
               {t('ui_platform_extensions_core_engines')}
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
@@ -660,17 +675,17 @@ export function AdminPanel({ lang }: Props) {
                   style={{
                     padding: 16,
                     borderRadius: 12,
-                    background: 'rgba(30, 41, 59, 0.6)',
-                    border: '1px solid rgba(255,255,255,0.06)',
+                    background: 'var(--color-surface-2)',
+                    border: '1px solid var(--color-border)',
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <span style={{ fontWeight: 700, color: '#f8fafc', fontSize: '0.92rem' }}>{ext.name}</span>
+                    <span style={{ fontWeight: 700, color: 'var(--color-text)', fontSize: '0.92rem' }}>{ext.name}</span>
                     <span className="badge badge-success" style={{ fontSize: 'var(--type-xs)' }}>v{ext.version}</span>
                   </div>
-                  <p style={{ margin: '0 0 12px', fontSize: '0.8rem', color: '#94a3b8' }}>{ext.description}</p>
+                  <p style={{ margin: '0 0 12px', fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>{ext.description}</p>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '0.75rem', color: '#4ade80' }}>● {ext.status.toUpperCase()}</span>
+                    <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-success)' }}>● {ext.status.toUpperCase()}</span>
                     <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{ext.author}</span>
                   </div>
                 </div>
