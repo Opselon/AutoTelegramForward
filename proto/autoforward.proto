@@ -917,6 +917,91 @@ message DeliveryFinding {
   int64 timestamp = 12;
 }
 
+// v33 (additive — failure intelligence): the persisted diagnostic-event query.
+// One event per delivery attempt, carrying both the raw Telegram error and our
+// normalized classification, so an operator can drill from a metric to the
+// exact Telegram answer that caused it. Never carries message text.
+message DiagnosticEventEntry {
+  string event_id = 1;
+  string event_name = 2;              // delivery.send.failed, ingestion.gap…
+  double timestamp = 3;
+  string severity = 4;                // INFO | WARN | ERROR
+  string stage = 5;                   // INGEST | PARSE | SEND | SYNC | …
+  string strategy = 6;                // NATIVE_FORWARD | COPY_MESSAGE | …
+  int32 attempt = 7;
+  string task_id = 8;
+  int64 owner_id = 9;
+  string job_id = 10;
+  string trace_id = 11;
+  string correlation_id = 12;
+  string source_peer_id = 13;
+  int64 source_message_id = 14;
+  string target_peer_id = 15;
+  // normalized layer
+  string error_origin = 16;           // TELEGRAM | INTERNAL | POLICY | UNKNOWN
+  string category = 17;               // TELEGRAM_API | PARSING | MEDIA | …
+  string reason = 18;                 // stable machine-readable reason
+  bool retryable = 19;
+  bool fallback_eligible = 20;
+  // raw layer — null where the library exposes nothing
+  string raw_exception_class = 21;
+  string raw_rpc_code = 22;
+  string raw_rpc_message = 23;
+  string raw_rpc_id = 24;
+  string raw_method = 25;             // e.g. messages.copyMessage
+  int64 raw_retry_after = 26;         // seconds Telegram demanded, or 0
+  string explanation = 27;            // operator-facing, redacted
+}
+
+message QueryDiagnosticEventsRequest {
+  int64 owner_user_id = 1;            // tenant scope (always enforced)
+  double since_ts = 2;
+  double until_ts = 3;
+  string category = 4;
+  string stage = 5;
+  string severity = 6;
+  string task_id = 7;
+  string source_peer_id = 8;
+  int64 source_message_id = 9;        // the per-message drill-down
+  string trace_id = 10;
+  string reason = 11;
+  int32 limit = 12;                   // server-clamped
+  int32 offset = 13;
+}
+
+message QueryDiagnosticEventsResponse {
+  repeated DiagnosticEventEntry events = 1;
+  int32 total_returned = 2;
+}
+
+message MessageTimelineRequest {
+  int64 owner_user_id = 1;
+  string source_peer_id = 2;
+  int64 source_message_id = 3;
+}
+
+message MessageTimelineResponse {
+  // One message's whole processing history, oldest first: every strategy
+  // attempted, every Telegram answer, every retry and fallback.
+  repeated DiagnosticEventEntry events = 1;
+}
+
+message DiagnosticFacetCountsRequest {
+  int64 owner_user_id = 1;
+  double since_ts = 2;
+  double until_ts = 3;
+  string facet = 4;                   // category | stage | severity | reason
+}
+
+message DiagnosticFacetCount {
+  string facet = 1;
+  int64 count = 2;
+}
+
+message DiagnosticFacetCountsResponse {
+  repeated DiagnosticFacetCount counts = 1;
+}
+
 message RuleLiveStat {
   string rule_id = 1;
   string rule_name = 2;
@@ -989,6 +1074,12 @@ service DeliveryControlService {
   rpc ListDeadLetter(ListDeadLetterRequest) returns (ListDeadLetterResponse);
   rpc ReplayDeadLetter(ReplayDeadLetterRequest) returns (RuleActionResponse);
   rpc PurgeDeadLetter(PurgeDeadLetterRequest) returns (RuleActionResponse);
+  // v33 (additive — failure intelligence): query the persisted diagnostic
+  // events. The owner scope is always enforced; an unauthenticated or
+  // cross-tenant read is impossible by construction.
+  rpc QueryDiagnosticEvents(QueryDiagnosticEventsRequest) returns (QueryDiagnosticEventsResponse);
+  rpc GetMessageTimeline(MessageTimelineRequest) returns (MessageTimelineResponse);
+  rpc GetDiagnosticFacetCounts(DiagnosticFacetCountsRequest) returns (DiagnosticFacetCountsResponse);
 }
 
 service FilterControlService {

@@ -1802,7 +1802,7 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
 
     def __init__(
         self, db, rule_repo, pipeline=None, queue_repo=None, message_map_repo=None,
-        reconciler=None,
+        reconciler=None, diagnostics_repo=None,
     ) -> None:
         self._db = db
         self._rules = rule_repo
@@ -1813,6 +1813,10 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
         # working; the additive fields are simply zero-valued then, which is
         # exactly what a pre-upgrade client expects.
         self._reconciler = reconciler
+        # Optional (v33): the persisted diagnostic-event store. Absent on a
+        # pre-v33 Core — the query RPCs then return empty results rather than
+        # raising, so an older client or a partial rollout never breaks.
+        self._diagnostic_events = diagnostics_repo
 
     def _q(self, sql: str, params: tuple = ()):
         try:
@@ -1998,6 +2002,96 @@ class DeliveryControlServicer(pb_grpc.DeliveryControlServiceServicer):
             failure_rate_by_destination=rate_by_dest,
             failure_rate_by_source=rate_by_source,
         )
+
+    # ------------------------------------------------------------------ #
+    # v33 — failure intelligence: the diagnostic-event query surface.
+    #
+    # Owner scoping is non-negotiable and enforced twice: the request carries
+    # the tenant's id, and the repository adds the predicate structurally, so
+    # a caller that forgets to scope still cannot see another tenant's events.
+    # ------------------------------------------------------------------ #
+
+    def _diagnostics_repo(self):
+        """The event store, or None when this Core predates v33."""
+        return self._diagnostic_events
+
+    def _entry_from_row(self, row: dict) -> Any:
+        """One persisted row → the wire message. Text never appears."""
+        def s(key, default=""):
+            val = row.get(key)
+            return "" if val is None else str(val)
+        def opt_int(key):
+            val = row.get(key)
+            return int(val) if val is not None else 0
+        return pb.DiagnosticEventEntry(
+            event_id=s("id"), event_name=s("event_name"),
+            timestamp=float(row.get("ts") or 0.0), severity=s("severity"),
+            stage=s("stage"), strategy=s("strategy"), attempt=opt_int("attempt"),
+            task_id=s("task_id"), owner_id=opt_int("owner_id"), job_id=s("job_id"),
+            trace_id=s("trace_id"), correlation_id=s("correlation_id"),
+            source_peer_id=s("source_peer_id"), source_message_id=opt_int("source_message_id"),
+            target_peer_id=s("target_peer_id"),
+            error_origin=s("error_origin"), category=s("category"),
+            reason=s("reason"), retryable=bool(row.get("retryable")),
+            fallback_eligible=bool(row.get("fallback_eligible")),
+            raw_exception_class=s("raw_exception_class"),
+            raw_rpc_code=s("raw_rpc_code"), raw_rpc_message=s("raw_rpc_message"),
+            raw_rpc_id=s("raw_rpc_id"), raw_method=s("raw_method"),
+            raw_retry_after=opt_int("raw_retry_after"),
+            explanation=s("explanation"),
+        )
+
+    async def QueryDiagnosticEvents(self, request, context):
+        """Owner-scoped, facet-filtered query of the persisted events."""
+        repo = self._diagnostics_repo()
+        if repo is None:
+            return pb.QueryDiagnosticEventsResponse(events=[])
+        owner = int(request.owner_user_id or 0)
+        rows = await repo.query_events(
+            owner_id=owner if owner else None,
+            since_ts=float(request.since_ts or 0),
+            until_ts=float(request.until_ts or 0),
+            category=str(request.category or ""), stage=str(request.stage or ""),
+            severity=str(request.severity or ""), task_id=str(request.task_id or ""),
+            source_peer_id=str(request.source_peer_id or ""),
+            source_message_id=int(request.source_message_id) if request.source_message_id else None,
+            trace_id=str(request.trace_id or ""), reason=str(request.reason or ""),
+            limit=int(request.limit or 100), offset=int(request.offset or 0),
+        )
+        entries = [self._entry_from_row(r) for r in rows]
+        return pb.QueryDiagnosticEventsResponse(events=entries, total_returned=len(entries))
+
+    async def GetMessageTimeline(self, request, context):
+        """One message's whole processing history, oldest first."""
+        repo = self._diagnostics_repo()
+        if repo is None:
+            return pb.MessageTimelineResponse(events=[])
+        if not request.source_peer_id or not request.source_message_id:
+            return pb.MessageTimelineResponse(events=[])
+        owner = int(request.owner_user_id or 0)
+        rows = await repo.message_timeline(
+            str(request.source_peer_id), int(request.source_message_id),
+            owner_id=owner if owner else None,
+        )
+        return pb.MessageTimelineResponse(
+            events=[self._entry_from_row(r) for r in rows])
+
+    async def GetDiagnosticFacetCounts(self, request, context):
+        """Aggregate counts for the monitoring views: errors by category/stage/etc."""
+        repo = self._diagnostics_repo()
+        if repo is None:
+            return pb.DiagnosticFacetCountsResponse(counts=[])
+        owner = int(request.owner_user_id or 0)
+        rows = await repo.facet_counts(
+            owner_id=owner if owner else None,
+            since_ts=float(request.since_ts or 0),
+            until_ts=float(request.until_ts or 0),
+            facet=str(request.facet or "category"),
+        )
+        return pb.DiagnosticFacetCountsResponse(counts=[
+            pb.DiagnosticFacetCount(facet=str(r.get("facet", "")),
+                                    count=int(r.get("n", 0))) for r in rows
+        ])
 
     async def ListDeadLetter(self, request, context):
         # v14: read through the repository's owner-scoped contract, so this

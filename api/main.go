@@ -233,6 +233,9 @@ func main() {
 
 	dashMux.HandleFunc("GET /queue", h.DeliveryStats)
 	dashMux.HandleFunc("GET /dlq", h.ListDeadLetter)
+	dashMux.HandleFunc("GET /diagnostic-events", h.DiagnosticEvents)
+	dashMux.HandleFunc("GET /diagnostic-events/timeline", h.MessageTimeline)
+	dashMux.HandleFunc("GET /diagnostic-events/facets", h.DiagnosticFacets)
 	dashMux.HandleFunc("POST /dlq/{id}/retry", h.ReplayDeadLetter)
 	dashMux.HandleFunc("DELETE /dlq", h.PurgeDeadLetter)
 	dashMux.HandleFunc("POST /simulate", h.TestRule)

@@ -671,6 +671,11 @@ async def serve_grpc(container: dict, cfg: Config):
                 gap_repo=container.get("gap_repo"),
                 lease_seconds=float(container.get("queue_lease_seconds", 30.0) or 30.0),
             ),
+            # v33 (failure intelligence): the persisted diagnostic-event store.
+            # The query surface (timeline, facets, filters) reads through it,
+            # owner-scoped; absent on a pre-v33 Core, where the new RPCs
+            # return empty results rather than errors.
+            diagnostics_repo=container.get("diagnostics_repo"),
         ),
         server,
     )

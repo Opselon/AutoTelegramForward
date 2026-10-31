@@ -987,6 +987,21 @@ class DeliveryControlServiceStub:
                 request_serializer=autoforward__pb2.PurgeDeadLetterRequest.SerializeToString,
                 response_deserializer=autoforward__pb2.RuleActionResponse.FromString,
                 _registered_method=True)
+        self.QueryDiagnosticEvents = channel.unary_unary(
+                '/autoforward.DeliveryControlService/QueryDiagnosticEvents',
+                request_serializer=autoforward__pb2.QueryDiagnosticEventsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.QueryDiagnosticEventsResponse.FromString,
+                _registered_method=True)
+        self.GetMessageTimeline = channel.unary_unary(
+                '/autoforward.DeliveryControlService/GetMessageTimeline',
+                request_serializer=autoforward__pb2.MessageTimelineRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.MessageTimelineResponse.FromString,
+                _registered_method=True)
+        self.GetDiagnosticFacetCounts = channel.unary_unary(
+                '/autoforward.DeliveryControlService/GetDiagnosticFacetCounts',
+                request_serializer=autoforward__pb2.DiagnosticFacetCountsRequest.SerializeToString,
+                response_deserializer=autoforward__pb2.DiagnosticFacetCountsResponse.FromString,
+                _registered_method=True)
 
 
 class DeliveryControlServiceServicer:
@@ -1016,6 +1031,27 @@ class DeliveryControlServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def QueryDiagnosticEvents(self, request, context):
+        """v33 (additive — failure intelligence): query the persisted diagnostic
+        events. The owner scope is always enforced; an unauthenticated or
+        cross-tenant read is impossible by construction.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetMessageTimeline(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetDiagnosticFacetCounts(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_DeliveryControlServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -1038,6 +1074,21 @@ def add_DeliveryControlServiceServicer_to_server(servicer, server):
                     servicer.PurgeDeadLetter,
                     request_deserializer=autoforward__pb2.PurgeDeadLetterRequest.FromString,
                     response_serializer=autoforward__pb2.RuleActionResponse.SerializeToString,
+            ),
+            'QueryDiagnosticEvents': grpc.unary_unary_rpc_method_handler(
+                    servicer.QueryDiagnosticEvents,
+                    request_deserializer=autoforward__pb2.QueryDiagnosticEventsRequest.FromString,
+                    response_serializer=autoforward__pb2.QueryDiagnosticEventsResponse.SerializeToString,
+            ),
+            'GetMessageTimeline': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetMessageTimeline,
+                    request_deserializer=autoforward__pb2.MessageTimelineRequest.FromString,
+                    response_serializer=autoforward__pb2.MessageTimelineResponse.SerializeToString,
+            ),
+            'GetDiagnosticFacetCounts': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDiagnosticFacetCounts,
+                    request_deserializer=autoforward__pb2.DiagnosticFacetCountsRequest.FromString,
+                    response_serializer=autoforward__pb2.DiagnosticFacetCountsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -1148,6 +1199,87 @@ class DeliveryControlService:
             '/autoforward.DeliveryControlService/PurgeDeadLetter',
             autoforward__pb2.PurgeDeadLetterRequest.SerializeToString,
             autoforward__pb2.RuleActionResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def QueryDiagnosticEvents(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.DeliveryControlService/QueryDiagnosticEvents',
+            autoforward__pb2.QueryDiagnosticEventsRequest.SerializeToString,
+            autoforward__pb2.QueryDiagnosticEventsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetMessageTimeline(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.DeliveryControlService/GetMessageTimeline',
+            autoforward__pb2.MessageTimelineRequest.SerializeToString,
+            autoforward__pb2.MessageTimelineResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetDiagnosticFacetCounts(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/autoforward.DeliveryControlService/GetDiagnosticFacetCounts',
+            autoforward__pb2.DiagnosticFacetCountsRequest.SerializeToString,
+            autoforward__pb2.DiagnosticFacetCountsResponse.FromString,
             options,
             channel_credentials,
             insecure,
