@@ -13,6 +13,28 @@ import time
 import uuid
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+
+def _dumps(value) -> str:
+    """Serialize a job payload the same way the queue does."""
+    from .database import SqliteDatabase
+    return SqliteDatabase.dumps(value)
+
+
+def _payload_dict(raw) -> dict:
+    """Decode a stored job payload, tolerating either row shape."""
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, (bytes, bytearray)):
+        raw = raw.decode("utf-8", "replace")
+    if isinstance(raw, str):
+        try:
+            data = json.loads(raw)
+        except Exception:
+            return {}
+        return data if isinstance(data, dict) else {}
+    return {}
+
+
 from .coercion import enum_str
 
 logger = logging.getLogger(__name__)
@@ -2566,6 +2588,28 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             (str(rule_id),),
         )
         return {str(r["status"]): int(r["cnt"]) for r in rows or ()}
+
+    async def record_album_progress(self, job_id: str, sent_map: Dict[str, int]) -> None:
+        """Merge a split album's per-item confirmations (audit finding E2E-5).
+
+        Additive only: entries the caller did not confirm are untouched, and a
+        terminal (SENT) row is never rewritten — resurrecting a payload on a
+        delivered job would be dead state.
+        """
+        if not sent_map:
+            return
+        row = self._db.query_one("SELECT payload_json FROM delivery_jobs WHERE id = ?", (str(job_id),))
+        if row is None:
+            return
+        payload = row["payload_json"] if isinstance(row, dict) else row[0]
+        data = _payload_dict(payload)
+        existing = dict(data.get("album_sent") or {})
+        existing.update({str(k): int(v) for k, v in sent_map.items()})
+        data["album_sent"] = existing
+        self._db.execute(
+            "UPDATE delivery_jobs SET payload_json = ? WHERE id = ? AND status NOT IN ('SENT')",
+            (_dumps(data), str(job_id)),
+        )
 
     async def recover_expired_leases(self) -> int:
         now = time.time()

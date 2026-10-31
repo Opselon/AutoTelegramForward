@@ -754,6 +754,16 @@ class IDeliveryQueueRepository(ABC):
         """
         return {}
 
+    async def record_album_progress(self, job_id: str, sent_map: Dict[str, int]) -> None:
+        """Merge a split album's per-item confirmations into the job payload.
+
+        Audit finding E2E-5: a retry used to re-send every item of a split
+        album, duplicating the ones Telegram had already accepted. Only the
+        entries the caller actually confirmed are merged, and a terminal
+        (SENT) row is never rewritten.
+        """
+        return
+
     @abstractmethod
     async def recover_expired_leases(self) -> int:
         ...

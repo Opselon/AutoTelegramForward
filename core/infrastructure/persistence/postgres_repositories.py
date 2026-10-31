@@ -1440,6 +1440,28 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
             res[str(d["status"])] = int(d["cnt"])
         return res
 
+    async def record_album_progress(self, job_id: str, sent_map: Dict[str, int]) -> None:
+        """Merge a split album's per-item confirmations (audit finding E2E-5).
+
+        Mirror of the SQLite repository: additive merge, no rewrite of a
+        terminal (SENT) row. Uses JSONB's merge so the update is one statement
+        and cannot lose a concurrent enqueue's payload fields.
+        """
+        if not sent_map:
+            return
+        merge = json.dumps({str(k): int(v) for k, v in sent_map.items()})
+        query = """
+        UPDATE delivery_jobs
+        SET payload_json = CASE
+            WHEN payload_json ? 'album_sent'
+            THEN jsonb_set(payload_json, '{album_sent}',
+                           (payload_json->'album_sent') || %s::jsonb)
+            ELSE jsonb_set(payload_json, '{album_sent}', %s::jsonb)
+        END
+        WHERE id = %s AND status NOT IN ('SENT')
+        """
+        await _execute_db(self._db, query, (merge, merge, str(job_id)))
+
     async def recover_expired_leases(self) -> int:
         now = time.time()
         query = """

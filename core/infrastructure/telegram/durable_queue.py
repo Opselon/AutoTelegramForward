@@ -63,6 +63,22 @@ def _dumps(value) -> str:
     return SqliteDatabase.dumps(value)
 
 
+def _dumps_decode(raw) -> dict:
+    """Decode a stored job payload, tolerating either engine's row shape."""
+    import json as _json
+    if isinstance(raw, dict):
+        return raw
+    if isinstance(raw, (bytes, bytearray)):
+        raw = raw.decode("utf-8", "replace")
+    if isinstance(raw, str):
+        try:
+            data = _json.loads(raw)
+        except Exception:
+            return {}
+        return data if isinstance(data, dict) else {}
+    return {}
+
+
 
 
 class DurableQueueManager:
@@ -838,6 +854,52 @@ class DurableQueueManager:
             job.id, reason,
         )
         await self._queue.mark_retry(job.id, reason, backoff_seconds=backoff)
+
+    async def _record_album_progress(self, job_id: str, sent_map: Dict[str, int]) -> None:
+        """Persist a split album's per-item confirmations into the job payload.
+
+        Audit finding E2E-5: a retry used to re-send every item, duplicating
+        the ones Telegram had already accepted. The payload gains an
+        ``album_sent`` map (source id -> target id); the split loop reads it to
+        resume from the first unconfirmed item.
+
+        The merge is *additive and version-less by construction*: only the
+        entries the caller actually confirmed are written, and a row that is no
+        longer a delivery job (sent, cleaned up) is left alone — updating a
+        terminal row would resurrect its payload for nothing.
+        """
+        if not sent_map:
+            return
+        try:
+            db = getattr(self._queue, "_db", None)
+            if db is None:
+                return
+            row = None
+            if hasattr(db, "query_one"):  # SQLite: sync connection
+                row = db.query_one(
+                    "SELECT payload_json FROM delivery_jobs WHERE id = ?", (job_id,)
+                )
+                if row is None:
+                    return
+                payload = row["payload_json"] if isinstance(row, dict) else row[0]
+                data = _dumps_decode(payload)
+                existing = dict(data.get("album_sent") or {})
+                existing.update({str(k): int(v) for k, v in sent_map.items()})
+                data["album_sent"] = existing
+                db.execute(
+                    "UPDATE delivery_jobs SET payload_json = ? WHERE id = ? AND status NOT IN ('SENT')",
+                    (_dumps(data), job_id),
+                )
+            else:  # PostgreSQL: async pool — record via the repository's port
+                await self._queue.record_album_progress(job_id, sent_map)
+        except Exception as exc:
+            # Progress bookkeeping must never fail a delivery that is otherwise
+            # fine; the cost of missing it is a duplicated item on retry, not a
+            # lost message — and the log says so.
+            logger.warning(
+                "[PIPELINE:ALBUM_SPLIT] could not record per-item progress for job %s: %s",
+                job_id, exc,
+            )
 
     def _attempt_key(self, job: DeliveryJob) -> Optional[DeliveryAttemptKey]:
         """The deterministic fence key for one job, or ``None`` when unknown.
@@ -1867,8 +1929,22 @@ class DurableQueueManager:
                         )
                     logger.info("first-album-item copy failed (%s), falling back to the group", one_err)
             elif album_mode == "split":
+                # Per-item delivery with resume (audit finding E2E-5): the job
+                # payload records which item ids were already confirmed in the
+                # target, so a retry re-sends only the missing ones instead of
+                # duplicating every item that already landed. Without this, one
+                # failed item turned a retry into a wall of duplicates.
+                sent_map = dict(data.get("album_sent") or {})
+                remaining = [i for i in album_ids if str(i) not in sent_map]
+                if remaining and sent_map:
+                    logger.warning(
+                        "[PIPELINE:ALBUM_SPLIT] job %s resuming split delivery: %d of %d item(s) "
+                        "already confirmed, re-sending %d (%s)",
+                        job.id, len(album_ids) - len(remaining), len(album_ids),
+                        len(remaining), ",".join(str(i) for i in remaining),
+                    )
                 last_id = 0
-                for item_id in album_ids:
+                for item_id in remaining:
                     try:
                         res = await client.copy_message(
                             chat_id=target,
@@ -1891,12 +1967,22 @@ class DurableQueueManager:
                                 data.get("media_type", ""),
                             )
                         else:
+                            # Record what got through before raising, so the
+                            # retry resumes rather than duplicates: the items
+                            # before this one are physically in the target now.
+                            await self._record_album_progress(job.id, sent_map)
                             raise
                     # copy_message returns a Message; the bypass returns the
                     # sent id directly. Both carry the id the mapping needs.
                     sent_id = res if isinstance(res, int) else getattr(res, "id", 0)
                     last_id = sent_id or last_id
-                return last_id
+                    if sent_id:
+                        sent_map[str(item_id)] = int(sent_id)
+                # Persist the per-item confirmations for any later retry.
+                await self._record_album_progress(job.id, sent_map)
+                # The mapping's own target id is the *first* item of the group:
+                # edit/delete sync keys on it and the whole group shares it.
+                return sent_map.get(str(album_ids[0])) or last_id
             try:
                 if hasattr(client, "copy_media_group"):
                     res = await client.copy_media_group(
