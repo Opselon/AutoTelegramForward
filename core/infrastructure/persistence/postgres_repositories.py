@@ -1462,6 +1462,50 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
         """
         await _execute_db(self._db, query, (merge, merge, str(job_id)))
 
+    async def fold_edit(
+        self,
+        rule_id: str,
+        source_chat_id: str,
+        source_message_id: int,
+        target_chat_id: str,
+        text: str,
+        caption: str,
+        is_edit: bool,
+        edit_date: int,
+    ) -> bool:
+        """Splice an edit's text into a delivery job that has not run yet (E2E-3).
+
+        Mirror of the SQLite repository. Only content fields change; identity
+        fields are untouched so the fence and the mapping still key on the
+        original event. Only jobs still waiting to run are matched.
+        """
+        query = """
+        UPDATE delivery_jobs
+        SET payload_json = jsonb_set(
+                jsonb_set(
+                    jsonb_set(
+                        jsonb_set(payload_json, '{text}', %s::jsonb),
+                        '{caption}', %s::jsonb),
+                    '{effective_text}', %s::jsonb),
+                '{is_edit_folded}', 'true'),
+            updated_at = %s
+        WHERE rule_id = %s AND source_chat_id = %s AND source_message_id = %s
+          AND target_chat_id = %s
+          AND status IN ('PENDING', 'RETRY_WAIT', 'CLAIMED')
+        """
+        import json as _json
+        res = await _execute_db(self._db, query, (
+            _json.dumps(text), _json.dumps(caption), _json.dumps(text),
+            int(time.time()),
+            str(rule_id), str(source_chat_id), int(source_message_id), str(target_chat_id),
+        ))
+        count = getattr(res, "rowcount", None)
+        if isinstance(count, int):
+            return count > 0
+        if isinstance(res, str) and res.startswith("UPDATE "):
+            return int(res.split()[-1]) > 0
+        return False
+
     async def recover_expired_leases(self) -> int:
         now = time.time()
         query = """

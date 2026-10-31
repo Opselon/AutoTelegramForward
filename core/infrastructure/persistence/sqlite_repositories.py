@@ -2611,6 +2611,50 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
             (_dumps(data), str(job_id)),
         )
 
+    async def fold_edit(
+        self,
+        rule_id: str,
+        source_chat_id: str,
+        source_message_id: int,
+        target_chat_id: str,
+        text: str,
+        caption: str,
+        is_edit: bool,
+        edit_date: int,
+    ) -> bool:
+        """Splice an edit's text into a delivery job that has not run yet (E2E-3).
+
+        Only the job's own content fields change — ``text``/``caption`` plus a
+        marker that the first post is an edit. Identity fields (rule, source,
+        target, job_kind) are untouched so the idempotency fence, the mapping
+        and any retry still key on the original event. A job no longer waiting
+        to run is never touched: SENT is the mapping's business and
+        dead-lettered stays dead-lettered.
+        """
+        rows = self._db.query_all(
+            "SELECT id, payload_json FROM delivery_jobs "
+            "WHERE rule_id = ? AND source_chat_id = ? AND source_message_id = ? "
+            "AND target_chat_id = ? AND status IN ('PENDING', 'RETRY_WAIT', 'CLAIMED')",
+            (str(rule_id), str(source_chat_id), int(source_message_id), str(target_chat_id)),
+        )
+        if not rows:
+            return False
+        updated = False
+        for row in rows:
+            data = _payload_dict(row["payload_json"])
+            data["text"] = text
+            data["caption"] = caption
+            data["effective_text"] = text
+            data["is_edit_folded"] = True
+            data["edit_date"] = int(edit_date or 0)
+            self._db.execute(
+                "UPDATE delivery_jobs SET payload_json = ?, updated_at = ? WHERE id = ? "
+                "AND status IN ('PENDING', 'RETRY_WAIT', 'CLAIMED')",
+                (_dumps(data), int(time.time()), row["id"]),
+            )
+            updated = True
+        return updated
+
     async def recover_expired_leases(self) -> int:
         now = time.time()
         cur = self._db.execute(

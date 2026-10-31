@@ -25,6 +25,16 @@ logger = logging.getLogger("atf.sync_engine")
 class SyncEngine:
     """Propagates message edits and deletions to destination chats via message_map."""
 
+    # Class-level defaults so an engine built field-by-field (``SyncEngine.__new__``
+    # in tests, or a partially-initialised subclass) still has the retry bounds
+    # instead of raising AttributeError on first use.
+    _jobs: Any = None
+    _edit_max_attempts: int = 3
+    _filter_engine: Any = None
+    _sleep: Any = None
+    _flood_wait_max: float = 10.0
+    _flood_attempts: int = 2
+
     def __init__(
         self,
         message_map_repo: IMessageMapRepository,
@@ -33,6 +43,8 @@ class SyncEngine:
         filter_repo: Optional[IFilterRuleRepository] = None,
         flood_wait_max: float = 10.0,
         flood_wait_attempts: int = 2,
+        jobs_repo: Any = None,
+        edit_max_attempts: int = 3,
     ) -> None:
         self._map = message_map_repo
         self._rules = rule_repo
@@ -45,6 +57,12 @@ class SyncEngine:
         self._flood_wait_max = float(flood_wait_max)
         self._flood_attempts = max(1, int(flood_wait_attempts))
         self._sleep = asyncio.sleep
+        # The delivery queue, used to fold an edit into a job that has not run
+        # yet (E2E-3). Optional and None by default so older constructors keep
+        # working; the fold is simply skipped then.
+        self._jobs = jobs_repo
+        # Bounded in-call retry for a transient edit failure (E2E-4).
+        self._edit_max_attempts = max(1, int(edit_max_attempts))
 
     @staticmethod
     def flood_wait_seconds(exc: BaseException) -> Optional[float]:
@@ -102,6 +120,11 @@ class SyncEngine:
         """Propagate an edit from source message to all mapped target messages.
 
         Returns the number of target messages successfully updated.
+
+        A mapping still ``PENDING`` (its delivery job has not run yet) is not
+        skipped: the edit is folded into the job's payload so the *first* post
+        already carries the new text. Skipping it made the destination keep the
+        stale text forever — audit finding E2E-3.
         """
         mappings = await self._map.get_by_source(str(payload.chat_id), int(payload.message_id))
         if not mappings:
@@ -116,71 +139,134 @@ class SyncEngine:
         now = int(time.time())
 
         for m in mappings:
-            if m.delivery_status != DeliveryStatus.SENT or not m.target_message_id:
+            if m.delivery_status == DeliveryStatus.SENT and m.target_message_id:
+                synced_count += await self._sync_sent_edit(m, payload, formatted_text, now)
                 continue
 
-            rule = await self._rules.get_by_id(m.rule_id)
-            if not rule or not rule.is_active:
-                continue
+            # Not yet delivered: fold the edit into the pending job instead of
+            # dropping it (E2E-3). The job then posts the edited text on its
+            # first attempt; the mapping is not touched, so the delivery
+            # lifecycle still owns it.
+            await self._fold_edit_into_pending_job(m, payload)
 
-            if rule.ignore_edits:
-                logger.debug("Rule %s has ignore_edits=True, skipping edit sync", rule.id[:8])
-                continue
+        return synced_count
 
-            # One authority: the panel's "Message Edit" switch (ignore_edits)
-            # with an explicit legacy sync_edits override. Consulting the bare
-            # sync_edits flag made every panel "Sync" task skip the in-place
-            # update and fall through to a duplicate re-post.
-            if not getattr(rule, "sync_edits_effective", getattr(rule, "sync_edits", False)):
-                logger.debug("Rule %s has edit sync disabled, skipping edit", rule.id[:8])
-                continue
+    async def _fold_edit_into_pending_job(self, mapping, payload: MessagePayload) -> bool:
+        """Write an edit's text into the pending delivery job for a mapping.
 
-            # 1. max_time_edit check: ignore edits if older than max_time_edit
-            msg_date = getattr(payload, "date", 0) or getattr(payload, "edit_date", 0)
-            max_edit = getattr(rule, "max_time_edit", 86400)
-            if msg_date and max_edit > 0:
-                age = now - int(msg_date)
-                if age > max_edit:
-                    logger.info(
-                        "[PIPELINE:SYNC_EDIT_TIME_EXCEEDED] Rule %s edit age %ds exceeds max_time_edit %ds",
-                        rule.id[:8], age, max_edit,
-                    )
-                    continue
+        Audit finding E2E-3: an edit arriving while the initial delivery was
+        still PENDING was dropped by ``handle_edit`` (only SENT mappings are
+        updated in place), so the destination posted the *old* text a moment
+        later and no further update could ever reach it.
 
-            # 2. Whitelist / Blacklist & Filters check on edit
-            if self._filters is not None and getattr(rule, "filter_rule_id", None):
-                f_rule = await self._filters.get_by_id(str(rule.filter_rule_id))
-                if f_rule is not None:
-                    eval_res = self._filter_engine.evaluate(payload, f_rule)
-                    if eval_res.action == FilterAction.DROP:
-                        logger.info(
-                            "[PIPELINE:SYNC_EDIT_FILTER_DROP] Rule %s dropped edited msg %s: %s",
-                            rule.id[:8], payload.message_id, eval_res.reason,
-                        )
-                        continue
-
-            # 3. Rule-level link filter
-            if getattr(rule, "block_links", False):
-                eff = payload.effective_text or ""
-                if "http://" in eff.lower() or "https://" in eff.lower() or "t.me/" in eff.lower():
-                    logger.info(
-                        "[PIPELINE:SYNC_EDIT_FILTER_DROP] Rule %s dropped edited msg %s: link_blocked",
-                        rule.id[:8], payload.message_id,
-                    )
-                    continue
-
-            client = self._pool.get(rule.session_id)
-            if client is None:
-                logger.warning("[PIPELINE:SYNC_EDIT_NO_CLIENT] No live client for session %s to sync edit", rule.session_id)
-                continue
-
-            target = int(m.target_chat_id) if m.target_chat_id.lstrip("-").isdigit() else m.target_chat_id
-            target_msg_id = int(m.target_message_id)
-
-            final_text = self._filter_engine.transform_text(
-                formatted_text or payload.effective_text or "", rule, payload=payload
+        The edit is spliced into the job payload: the worker sends from the
+        payload, so the first post carries the new text. Only the job's own
+        delivery fields are replaced — routing and identity keys are left alone
+        so the fence, the mapping and retries still key on the original event.
+        """
+        try:
+            updated = await self._jobs.fold_edit(
+                rule_id=str(mapping.rule_id),
+                source_chat_id=str(mapping.source_chat_id),
+                source_message_id=int(mapping.source_message_id),
+                target_chat_id=str(mapping.target_chat_id),
+                text=payload.effective_text or "",
+                caption=payload.effective_text or "",
+                is_edit=True,
+                edit_date=int(getattr(payload, "edit_date", 0) or 0),
             )
+        except Exception as exc:
+            logger.warning(
+                "[PIPELINE:SYNC_EDIT_FOLD_FAILED] rule=%s src=%s:%s tgt=%s: %s",
+                str(mapping.rule_id)[:8], mapping.source_chat_id, mapping.source_message_id,
+                mapping.target_chat_id, exc,
+            )
+            return False
+        if updated:
+            logger.info(
+                "[PIPELINE:SYNC_EDIT_FOLDED] rule=%s src=%s:%s tgt=%s edit folded into the "
+                "pending delivery job so the first post carries the new text",
+                str(mapping.rule_id)[:8], mapping.source_chat_id, mapping.source_message_id,
+                mapping.target_chat_id,
+            )
+        return bool(updated)
 
+    async def _sync_sent_edit(self, mapping, payload: MessagePayload, formatted_text: str, now: int) -> int:
+        """Update one already-delivered mapping in place, with bounded retry.
+
+        Audit finding E2E-4: a failed edit was only logged and never retried,
+        so a transient Telegram error permanently drifted the source and the
+        destination. A short bounded retry inside the sync call recovers the
+        common transient case without introducing a new queue.
+        """
+        m = mapping
+        rule = await self._rules.get_by_id(m.rule_id)
+        if not rule or not rule.is_active:
+            return 0
+
+        if rule.ignore_edits:
+            logger.debug("Rule %s has ignore_edits=True, skipping edit sync", rule.id[:8])
+            return 0
+
+        # One authority: the panel's "Message Edit" switch (ignore_edits)
+        # with an explicit legacy sync_edits override. Consulting the bare
+        # sync_edits flag made every panel "Sync" task skip the in-place
+        # update and fall through to a duplicate re-post.
+        if not getattr(rule, "sync_edits_effective", getattr(rule, "sync_edits", False)):
+            logger.debug("Rule %s has edit sync disabled, skipping edit", rule.id[:8])
+            return 0
+
+        # 1. max_time_edit check: ignore edits if older than max_time_edit
+        msg_date = getattr(payload, "date", 0) or getattr(payload, "edit_date", 0)
+        max_edit = getattr(rule, "max_time_edit", 86400)
+        if msg_date and max_edit > 0:
+            age = now - int(msg_date)
+            if age > max_edit:
+                logger.info(
+                    "[PIPELINE:SYNC_EDIT_TIME_EXCEEDED] Rule %s edit age %ds exceeds max_time_edit %ds",
+                    rule.id[:8], age, max_edit,
+                )
+                return 0
+
+        # 2. Whitelist / Blacklist & Filters check on edit
+        if self._filters is not None and getattr(rule, "filter_rule_id", None):
+            f_rule = await self._filters.get_by_id(str(rule.filter_rule_id))
+            if f_rule is not None:
+                eval_res = self._filter_engine.evaluate(payload, f_rule)
+                if eval_res.action == FilterAction.DROP:
+                    logger.info(
+                        "[PIPELINE:SYNC_EDIT_FILTER_DROP] Rule %s dropped edited msg %s: %s",
+                        rule.id[:8], payload.message_id, eval_res.reason,
+                    )
+                    return 0
+
+        # 3. Rule-level link filter
+        if getattr(rule, "block_links", False):
+            eff = payload.effective_text or ""
+            if "http://" in eff.lower() or "https://" in eff.lower() or "t.me/" in eff.lower():
+                logger.info(
+                    "[PIPELINE:SYNC_EDIT_FILTER_DROP] Rule %s dropped edited msg %s: link_blocked",
+                    rule.id[:8], payload.message_id,
+                )
+                return 0
+
+        client = self._pool.get(rule.session_id)
+        if client is None:
+            logger.warning("[PIPELINE:SYNC_EDIT_NO_CLIENT] No live client for session %s to sync edit", rule.session_id)
+            return 0
+
+        target = int(m.target_chat_id) if m.target_chat_id.lstrip("-").isdigit() else m.target_chat_id
+        target_msg_id = int(m.target_message_id)
+
+        final_text = self._filter_engine.transform_text(
+            formatted_text or payload.effective_text or "", rule, payload=payload
+        )
+
+        # E2E-4: a transient failure here used to be logged once and never
+        # retried, permanently drifting source and destination. Two extra
+        # attempts with a short backoff recover the common case (a momentary
+        # FloodWait or a connection blip) without a new queue.
+        for attempt in range(1, self._edit_max_attempts + 1):
             try:
                 if payload.has_media:
                     await self._throttled(
@@ -200,7 +286,6 @@ class SyncEngine:
                         ),
                         what="edit", rule_id=rule.id, target_msg_id=target_msg_id,
                     )
-                synced_count += 1
                 logger.info(
                     "[PIPELINE:SYNC_EDIT] Synced edit rule=%s src=%s:%s -> tgt=%s:%s",
                     rule.id[:8],
@@ -209,23 +294,57 @@ class SyncEngine:
                     target,
                     target_msg_id,
                 )
+                return 1
             except Exception as exc:
                 err_str = str(exc)
                 if "MessageNotModified" in err_str:
                     # Idempotent: text is already identical
-                    synced_count += 1
-                elif "MessageIdInvalid" in err_str or "MESSAGE_ID_INVALID" in err_str:
+                    return 1
+                if "MessageIdInvalid" in err_str or "MESSAGE_ID_INVALID" in err_str:
                     logger.debug("[PIPELINE:SYNC_EDIT_DELETED] Target message %s:%s was deleted, cannot edit", target, target_msg_id)
-                else:
+                    return 0
+                if attempt < self._edit_max_attempts and self._retryable_edit_error(exc):
                     logger.warning(
-                        "[PIPELINE:SYNC_EDIT_FAIL] Edit sync failed rule=%s tgt=%s:%s: %s",
-                        rule.id[:8],
-                        target,
-                        target_msg_id,
-                        exc,
+                        "[PIPELINE:SYNC_EDIT_RETRY] Edit sync failed (attempt %d/%d) rule=%s tgt=%s:%s: %s",
+                        attempt, self._edit_max_attempts, rule.id[:8], target, target_msg_id, exc,
                     )
+                    await self._sleep(self._edit_backoff(attempt))
+                    continue
+                logger.warning(
+                    "[PIPELINE:SYNC_EDIT_FAIL] Edit sync failed rule=%s tgt=%s:%s: %s",
+                    rule.id[:8],
+                    target,
+                    target_msg_id,
+                    exc,
+                )
+                return 0
+        return 0
 
-        return synced_count
+    @staticmethod
+    def _retryable_edit_error(exc: Exception) -> bool:
+        """Transient edit failures are worth another attempt; permanent ones are not.
+
+        FloodWait and network errors pass. A permission error, an invalid
+        message, or content that Telegram rejects will not fix itself, so
+        retrying only burns time before the same failure.
+        """
+        text = str(exc)
+        if "ChatAdminRequired" in text or "CHAT_ADMIN_REQUIRED" in text:
+            return False
+        if "MessageIdInvalid" in text or "MESSAGE_ID_INVALID" in text:
+            return False
+        if "MessageNotModified" in text:
+            return False
+        if "USER_BANNED_IN_CHANNEL" in text or "until" in text.lower() and "flood" not in text.lower():
+            return False
+        return True
+
+    @staticmethod
+    def _edit_backoff(attempt: int) -> float:
+        """Bounded backoff with jitter: 1s, 3s, then capped at 5s."""
+        import random
+        base = min(1.0 * (2 ** (attempt - 1)), 5.0)
+        return base + random.uniform(0, 0.5)
 
     async def handle_delete(self, source_chat_id: str, deleted_message_ids: List[int]) -> int:
         """Propagate deletions from source chat to all mapped target messages.
@@ -254,7 +373,7 @@ class SyncEngine:
         for msg_id in deleted_message_ids:
             mappings = await self._map.list_by_source_message_id(int(msg_id))
             if not mappings:
-                continue
+                return 0
             chats = {str(m.source_chat_id) for m in mappings}
             if len(chats) > 1:
                 logger.warning(
@@ -264,7 +383,7 @@ class SyncEngine:
                     len(chats),
                     ", ".join(sorted(chats)[:4]),
                 )
-                continue
+                return 0
             deleted_count += await self._delete_mapped(mappings, chats.pop(), int(msg_id))
         return deleted_count
 
@@ -383,6 +502,10 @@ class SyncEngine:
                 continue
 
             if (str(rule.id), str(m.target_chat_id)) in already:
+                # Already delivered: this is a redelivery of the reply itself.
+                # It counts as handled (so the dispatcher will not forward it
+                # again) even though nothing is sent now — the claim is the
+                # point, not the send.
                 replied_count += 1
                 logger.info(
                     "[PIPELINE:SYNC_REPLY_DUPLICATE] rule=%s reply %s:%s already delivered to %s",
@@ -392,7 +515,7 @@ class SyncEngine:
 
             client = self._pool.get(rule.session_id)
             if client is None:
-                continue
+                return 0
 
             target = int(m.target_chat_id) if m.target_chat_id.lstrip("-").isdigit() else m.target_chat_id
 

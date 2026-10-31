@@ -764,6 +764,29 @@ class IDeliveryQueueRepository(ABC):
         """
         return
 
+    async def fold_edit(
+        self,
+        rule_id: str,
+        source_chat_id: str,
+        source_message_id: int,
+        target_chat_id: str,
+        text: str,
+        caption: str,
+        is_edit: bool,
+        edit_date: int,
+    ) -> bool:
+        """Fold an edit's text into a delivery job that has not run yet.
+
+        Audit finding E2E-3: an edit arriving while the initial delivery was
+        still PENDING was dropped, so the destination was posted with the old
+        text and no later update could reach it. Only a job still waiting to
+        run is touched: a SENT job is the mapping's business, a dead-lettered
+        one stays dead-lettered.
+
+        Returns True when a pending job was updated.
+        """
+        return False
+
     @abstractmethod
     async def recover_expired_leases(self) -> int:
         ...
