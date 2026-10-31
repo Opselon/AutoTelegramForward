@@ -33,6 +33,8 @@ import { PanelBoundary } from './components/PanelBoundary'
 import { Navigation, NavTrigger, type NavItem, type TabId } from './components/Navigation'
 import { ProviderKeyCheck, UserBar } from './components/ShellWidgets'
 import { Toast } from './components/ui/Primitives'
+import { ConfirmDialog } from './components/ConfirmDialog'
+import { HealthChips } from './components/HealthChips'
 import { ModalShell } from './components/ui/Modal'
 import { Field } from './components/ui/Primitives'
 
@@ -332,6 +334,35 @@ function useDashboard(me?: MeInfo) {
     [showToast],
   )
 
+  /** The one destructive-action confirm for shell-level flows: a real
+   * alertdialog instead of window.confirm, which blocks the main thread and
+   * ignores the Escape/focus contract the rest of the dashboard honors. The
+   * caller keeps its flow; only the continuation past the gate moves into
+   * `run`. */
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string
+    body?: string
+    run: () => Promise<void> | void
+  } | null>(null)
+  const [confirmBusy, setConfirmBusy] = useState(false)
+  const requestConfirm = useCallback(
+    (title: string, run: () => Promise<void> | void, body?: string) => {
+      setPendingConfirm({ title, body, run })
+    },
+    [],
+  )
+  const runConfirmed = useCallback(async () => {
+    const action = pendingConfirm
+    if (!action) return
+    setConfirmBusy(true)
+    try {
+      await action.run()
+    } finally {
+      setConfirmBusy(false)
+      setPendingConfirm(null)
+    }
+  }, [pendingConfirm])
+
   const loadData = async () => {
     setLoading(true)
     // Every panel feed is independent, so one failed endpoint must not blank
@@ -502,35 +533,46 @@ function useDashboard(me?: MeInfo) {
     ]
       .filter(Boolean)
       .join(' · ')
-    if (!window.confirm(t('ui_confirm_purge_logs', { scope: scope ? `${scope} · ` : '', window: ageWindow }))) return
-    setPurging(true)
-    setPurgeResult(null)
-    try {
-      const res = await api.purgeLogs({
-        level: logFilterLevel !== 'all' ? logFilterLevel : undefined,
-        service: logFilterService !== 'all' ? logFilterService : undefined,
-        rule_id: purgeRuleId,
-        older_than_hours: keepH,
-      })
-      if (res?.success) {
-        setPurgeResult({ purged: res.purged, remaining: res.remaining })
-        showToast(t('ui_logs_purged', { purged: res.purged, remaining: res.remaining }))
-        await fetchLogs()
-      } else {
-        showToast(res?.error || t('ui_error_purging_logs'))
-      }
-    } catch (e: any) {
-      showError(e.message || t('ui_error_purging_logs'))
-    } finally {
-      setPurging(false)
-    }
+    requestConfirm(
+      t('ui_confirm_purge_logs', { scope: scope ? `${scope} · ` : '', window: ageWindow }),
+      async () => {
+        setPurging(true)
+        setPurgeResult(null)
+        try {
+          const res = await api.purgeLogs({
+            level: logFilterLevel !== 'all' ? logFilterLevel : undefined,
+            service: logFilterService !== 'all' ? logFilterService : undefined,
+            rule_id: purgeRuleId,
+            older_than_hours: keepH,
+          })
+          if (res?.success) {
+            setPurgeResult({ purged: res.purged, remaining: res.remaining })
+            showToast(t('ui_logs_purged', { purged: res.purged, remaining: res.remaining }))
+            await fetchLogs()
+          } else {
+            showToast(res?.error || t('ui_error_purging_logs'))
+          }
+        } catch (e: any) {
+          showError(e.message || t('ui_error_purging_logs'))
+        } finally {
+          setPurging(false)
+        }
+      },
+    )
   }
 
   // Produce a migration bundle of everything this account owns. The bundle
   // contains live credentials; a passphrase encrypts it with AES-GCM.
   const handleBackupExport = async () => {
     if (backupBusy) return
-    if (!backupPassphrase && !window.confirm(t('ui_confirm_backup_without_passphrase'))) return
+    if (!backupPassphrase) {
+      requestConfirm(t('ui_confirm_backup_without_passphrase'), () => runBackupExport())
+      return
+    }
+    await runBackupExport()
+  }
+
+  const runBackupExport = async () => {
     setBackupBusy(true)
     setBackupCounts(null)
     try {
@@ -579,35 +621,36 @@ function useDashboard(me?: MeInfo) {
     const totalRows = importStats ? Object.values(importStats).reduce((s, v) => s + v.imported + v.skipped + v.failed, 0) : 0
     const verb = importOverwrite ? t('ui_replace_all') : t('ui_merge')
     const rowsNote = totalRows ? t('ui_import_rows_note', { rows: totalRows }) : ''
-    if (!window.confirm(t('ui_confirm_backup_restore', { verb, rows: rowsNote }))) return
-    setBackupBusy(true)
-    setImportStats(null)
-    try {
-      const res = await api.backupImport({
-        bundle,
-        passphrase: importPassphrase || undefined,
-        overwrite_existing: importOverwrite,
-      })
-      if (res?.success) {
-        setImportStats(res.stats || {})
-        const imported = Object.values(res.stats || {}).reduce((s, v) => s + v.imported, 0)
-        const failed = Object.values(res.stats || {}).reduce((s, v) => s + v.failed, 0)
-        showToast(
-          t('ui_restore_complete', {
-            rows: imported,
-            failed: failed ? t('ui_restore_failed_note', { count: failed }) : '',
-          }),
-        )
-        // everything the UI shows may have changed underneath it
-        await loadData()
-      } else {
-        showToast(res?.error || t('ui_error_restoring_backup'))
+    requestConfirm(t('ui_confirm_backup_restore', { verb, rows: rowsNote }), async () => {
+      setBackupBusy(true)
+      setImportStats(null)
+      try {
+        const res = await api.backupImport({
+          bundle,
+          passphrase: importPassphrase || undefined,
+          overwrite_existing: importOverwrite,
+        })
+        if (res?.success) {
+          setImportStats(res.stats || {})
+          const imported = Object.values(res.stats || {}).reduce((s, v) => s + v.imported, 0)
+          const failed = Object.values(res.stats || {}).reduce((s, v) => s + v.failed, 0)
+          showToast(
+            t('ui_restore_complete', {
+              rows: imported,
+              failed: failed ? t('ui_restore_failed_note', { count: failed }) : '',
+            }),
+          )
+          // everything the UI shows may have changed underneath it
+          await loadData()
+        } else {
+          showToast(res?.error || t('ui_error_restoring_backup'))
+        }
+      } catch (e: any) {
+        showError(e.message || t('ui_error_restoring_backup'))
+      } finally {
+        setBackupBusy(false)
       }
-    } catch (e: any) {
-      showError(e.message || t('ui_error_restoring_backup'))
-    } finally {
-      setBackupBusy(false)
-    }
+    })
   }
 
   const onBackupFileChosen = (file: File | undefined) => {
@@ -644,9 +687,14 @@ function useDashboard(me?: MeInfo) {
 
     loadData()
     refreshDiagnostics()
+    // The session is already verified at boot (Root); this read only fills in
+    // the admin flag and identity. A failure leaves currentUser null — which
+    // degrades admin-only surfaces — so it is logged, not silently dropped.
     api.me().then((info) => {
       setCurrentUser(info)
-    }).catch(() => {})
+    }).catch((e) => {
+      console.warn('profile load failed', e)
+    })
     const timer = setInterval(() => {
       api.getStats().then(setStats).catch(() => {})
       api.getGatewayInfo().then(setGatewayInfo).catch(() => {})
@@ -868,14 +916,15 @@ function useDashboard(me?: MeInfo) {
   }
 
   const handleDeleteAI = async (id: string) => {
-    if (!confirm(t('ui_delete_this_ai_config'))) return
-    try {
-      await api.deleteAIConfig(id)
-      setAiConfigs((prev) => prev.filter((a) => a.id !== id))
-      showToast(t('ui_ai_config_deleted'))
-    } catch (e: any) {
-      showError(e.message)
-    }
+    requestConfirm(t('ui_delete_this_ai_config'), async () => {
+      try {
+        await api.deleteAIConfig(id)
+        setAiConfigs((prev) => prev.filter((a) => a.id !== id))
+        showToast(t('ui_ai_config_deleted'))
+      } catch (e: any) {
+        showError(e.message)
+      }
+    })
   }
 
   // Filter Handlers — saving lives in <FilterModal />; the shell applies the
@@ -913,26 +962,27 @@ function useDashboard(me?: MeInfo) {
   }
 
   const handlePurgeDLQ = async () => {
-    if (!confirm(t('ui_purge_all_dlq_entries'))) return
-    try {
-      const resp: any = await api.purgeDLQ()
-      if (!isAccepted(resp)) {
-        showToast(`${t('ui_purge_failed')} (${refusalReason(resp, 'purge_failed')})`)
-        return
+    requestConfirm(t('ui_purge_all_dlq_entries'), async () => {
+      try {
+        const resp: any = await api.purgeDLQ()
+        if (!isAccepted(resp)) {
+          showToast(`${t('ui_purge_failed')} (${refusalReason(resp, 'purge_failed')})`)
+          return
+        }
+        setDlqJobs([])
+        // The core answers with the number it removed; showing that number is what
+        // distinguishes a real purge from a purge that matched nothing.
+        const count = purgedCount(resp)
+        showToast(
+          count !== null
+            ? (t('ui_dlq_purged_count_2', { count_2: count }))
+            : (t('ui_dlq_purged')),
+        )
+        await loadData()
+      } catch (e: any) {
+        showError(e.message)
       }
-      setDlqJobs([])
-      // The core answers with the number it removed; showing that number is what
-      // distinguishes a real purge from a purge that matched nothing.
-      const count = purgedCount(resp)
-      showToast(
-        count !== null
-          ? (t('ui_dlq_purged_count_2', { count_2: count }))
-          : (t('ui_dlq_purged')),
-      )
-      await loadData()
-    } catch (e: any) {
-      showError(e.message)
-    }
+    })
   }
 
   // Session backup / terminate (mirrors bot's backup + session control)
@@ -959,18 +1009,22 @@ function useDashboard(me?: MeInfo) {
   }
 
   const handleTerminateSession = async (sess: Session) => {
-    if (!confirm(t('ui_terminate_session_sess_2', { sess_2: sess.first_name || sess.username || sess.id }))) return
-    try {
-      const res = await api.terminateSession(sess.id)
-      if (res.success) {
-        setSessions((prev) => prev.filter((s) => s.id !== sess.id))
-        showToast(t('ui_session_terminated'))
-      } else {
-        showToast(res.message || (t('ui_terminate_failed')))
-      }
-    } catch (e: any) {
-      showError(e.message)
-    }
+    requestConfirm(
+      t('ui_terminate_session_sess_2', { sess_2: sess.first_name || sess.username || sess.id }),
+      async () => {
+        try {
+          const res = await api.terminateSession(sess.id)
+          if (res.success) {
+            setSessions((prev) => prev.filter((s) => s.id !== sess.id))
+            showToast(t('ui_session_terminated'))
+          } else {
+            showToast(res.message || (t('ui_terminate_failed')))
+          }
+        } catch (e: any) {
+          showError(e.message)
+        }
+      },
+    )
   }
 
   // Simulator
@@ -1144,6 +1198,10 @@ function useDashboard(me?: MeInfo) {
     setThemeState,
     showToast,
     showError,
+    pendingConfirm,
+    confirmBusy,
+    runConfirmed,
+    setPendingConfirm,
     loadData,
     fetchLogs,
     handleExportLogs,
@@ -1222,6 +1280,10 @@ export function App({ me }: { me?: MeInfo } = {}) {
     handleSaveTaskOverview,
     handleSaveAI,
     showToast,
+    pendingConfirm,
+    confirmBusy,
+    runConfirmed,
+    setPendingConfirm,
   } = d
 
   // Labels for the load-failure banner, resolved through the catalog so every
@@ -1336,6 +1398,20 @@ export function App({ me }: { me?: MeInfo } = {}) {
         ) : null}
       </div>
 
+      {/* One shell-level destructive-action confirm: every requestConfirm()
+          gate lands here instead of in a blocking window.confirm(). */}
+      <ConfirmDialog
+        open={!!pendingConfirm}
+        lang={lang}
+        title={pendingConfirm?.title || ''}
+        body={pendingConfirm?.body}
+        confirmLabel={t('ui_yes')}
+        cancelLabel={t('ui_cancel')}
+        busy={confirmBusy}
+        onConfirm={runConfirmed}
+        onCancel={() => setPendingConfirm(null)}
+      />
+
       {/* Header Bar */}
       <header className="glass-panel app-header header-container">
         {/* Drawer trigger: CSS hides it from --bp-md up, where the rail is docked. */}
@@ -1363,39 +1439,16 @@ export function App({ me }: { me?: MeInfo } = {}) {
           </div>
         </div>
 
-        {/* Microservice Health Indicators — every dot is a real probe answer
-            from the stats/gateway payloads, including the web process itself.
-            The chip carries the service's own verdict as text too: a bare red
-            dot said "something is down" and left the operator to guess which
-            panel to open. `undefined` means "not probed yet", which is not a
-            failure and must not be painted like one. */}
+        {/* Microservice Health Indicators — the same shared component the home
+            hero renders: one probe answer per service, verdict as text, and
+            `undefined` means "not probed yet", never painted as an outage. */}
         <div className="header-actions">
-          {([
-            { label: 'Core:50051', online: stats?.atf_core_online },
-            { label: 'Logger:50052', online: stats?.atf_logger_online },
-            { label: 'Web:8088', online: gatewayInfo?.atf_web_online },
-          ] as const).map((chip) => {
-            const verdict =
-              chip.online === undefined
-                ? t('ui_probing')
-                : chip.online
-                  ? t('ui_system_online')
-                  : t('ui_system_offline')
-            return (
-              <div
-                key={chip.label}
-                className={`header-chip${chip.online === false ? ' header-chip--down' : ''}`}
-                title={`${chip.label} — ${verdict}`}
-              >
-                <span
-                  className={`header-chip__dot${chip.online ? ' is-online' : ''}${chip.online === undefined ? ' is-unknown' : ''}`}
-                  aria-hidden="true"
-                />
-                <span>{chip.label}</span>
-                <span className="header-chip__verdict">{verdict}</span>
-              </div>
-            )
-          })}
+          <HealthChips
+            lang={lang}
+            core={stats?.atf_core_online}
+            logger={stats?.atf_logger_online}
+            web={gatewayInfo?.atf_web_online}
+          />
 
           {/* Language picker: all ten catalogs, by endonym */}
           <LanguagePicker lang={lang} onChange={setLang} compact />
