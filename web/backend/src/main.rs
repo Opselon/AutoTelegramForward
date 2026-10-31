@@ -26,13 +26,15 @@ mod security;
 mod state;
 mod static_assets;
 
+use std::time::Duration;
+
 use axum::extract::State;
 use axum::http::Method;
 
 use axum::routing::{any, get};
 use axum::Router;
 use state::AppState;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::{error, info, warn};
 
@@ -89,6 +91,7 @@ fn build_router(state: AppState) -> Router {
     // Same-origin by construction: the dashboard is served from this process,
     // so cross-origin API access is the exception, not the rule. An empty
     // allow-list keeps the old permissive behaviour (and says so loudly).
+    // Origins are validated in config, so parse cannot fail here.
     let cors = if state.config.allowed_origins.is_empty() {
         warn!(
             "ATF_WEB_ALLOWED_ORIGINS is not set: /api answers any origin. \
@@ -106,7 +109,7 @@ fn build_router(state: AppState) -> Router {
             .filter_map(|origin| origin.parse().ok())
             .collect::<Vec<_>>();
         CorsLayer::new()
-            .allow_origin(origins)
+            .allow_origin(AllowOrigin::list(origins))
             .allow_methods(allow_all_methods())
             .allow_headers(Any)
     };
@@ -115,9 +118,11 @@ fn build_router(state: AppState) -> Router {
     // scoped to this nested router, not router-wide, so a proxied streaming
     // response is never routed through it.
     let static_router = Router::new()
-        .fallback(get(|State(state): State<AppState>, uri: axum::http::Uri| async move {
-            static_assets::serve(uri, &state.csp)
-        }))
+        .fallback(get(
+            |State(state): State<AppState>, uri: axum::http::Uri| async move {
+                static_assets::serve(uri, &state.csp)
+            },
+        ))
         .layer(static_assets::compression_layer())
         .with_state(state.clone());
 
@@ -156,13 +161,26 @@ fn main() {
     });
     info!("Content-Security-Policy: {csp}");
 
-    let state = state::build_state(config, csp);
-    info!("Configured Upstream Control Plane (Go API): {}", state.config.upstream_api);
+    let state = match state::build_state(config, csp) {
+        Ok(state) => state,
+        Err(e) => {
+            error!("atf-web-backend: {e}");
+            std::process::exit(2);
+        }
+    };
+    info!(
+        "Configured Upstream Control Plane (Go API): {}",
+        state.config.upstream_api
+    );
     info!(
         "Rate limit: {} rps / burst {} per client (ip header: {})",
         state.config.rate_limit_rps,
         state.config.rate_limit_burst,
-        state.config.client_ip_header.as_deref().unwrap_or("<direct peer>")
+        state
+            .config
+            .client_ip_header
+            .as_deref()
+            .unwrap_or("<direct peer>")
     );
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -183,14 +201,27 @@ fn main() {
             state.config.listen_addr
         );
         let svc = router.into_make_service_with_connect_info::<std::net::SocketAddr>();
-        if let Err(e) = axum::serve(listener, svc)
-            .with_graceful_shutdown(shutdown_signal())
-            .await
-        {
-            error!("server error: {e}");
-            std::process::exit(1);
+        let grace = Duration::from_secs(state.config.shutdown_grace_secs);
+        let server = axum::serve(listener, svc).with_graceful_shutdown(shutdown_signal());
+        // Bounded drain: the signal starts the clock, and once the grace
+        // window expires remaining in-flight requests are cut loose instead
+        // of pinning the process until the orchestrator's SIGKILL fallback.
+        tokio::select! {
+            result = server => {
+                if let Err(e) = result {
+                    error!("server error: {e}");
+                    std::process::exit(1);
+                }
+                info!("drained; goodbye");
+            }
+            _ = async {
+                shutdown_signal().await;
+                info!("drain deadline: {}s", grace.as_secs());
+                tokio::time::sleep(grace).await;
+            } => {
+                info!("drain deadline reached; closing remaining connections");
+            }
         }
-        info!("drained; goodbye");
     });
 }
 
@@ -210,6 +241,7 @@ mod tests {
             max_body_bytes: 1024 * 1024,
             upstream_connect_timeout_secs: 2,
             upstream_read_timeout_secs: 5,
+            shutdown_grace_secs: 25,
             allowed_origins: vec![],
             csp: None,
             log_format_json: false,
@@ -245,6 +277,21 @@ mod tests {
                     }))
                 }),
             )
+            .route(
+                "/api/with-headers",
+                any(|| async {
+                    use axum::http::header::{X_FRAME_OPTIONS, X_CONTENT_TYPE_OPTIONS};
+                    let mut resp = axum::http::Response::new("ok".to_string());
+                    resp.headers_mut().insert(X_FRAME_OPTIONS, "SAMEORIGIN".parse().unwrap());
+                    resp.headers_mut()
+                        .insert(X_CONTENT_TYPE_OPTIONS, "nosniff".parse().unwrap());
+                    resp.headers_mut().insert(
+                        axum::http::HeaderName::from_static("access-control-allow-origin"),
+                        "https://evil.example".parse().unwrap(),
+                    );
+                    resp
+                }),
+            )
             .route("/healthz", get(|| async { "ok" }));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -254,10 +301,26 @@ mod tests {
         (format!("http://{addr}"), handle)
     }
 
+    async fn send(
+        app: Router,
+        request: axum::http::Request<axum::body::Body>,
+    ) -> axum::response::Response {
+        tower::ServiceExt::oneshot(app, request).await.unwrap()
+    }
+
+    async fn body_bytes(response: axum::response::Response) -> Vec<u8> {
+        http_body_util::BodyExt::collect(response.into_body())
+            .await
+            .unwrap()
+            .to_bytes()
+            .to_vec()
+    }
+
     #[tokio::test]
     async fn proxy_forwards_and_strips_hop_by_hop() {
         let (upstream, server) = stub_upstream().await;
-        let state = state::build_state(test_config(&upstream), "default-src 'self'".into());
+        let state =
+            state::build_state(test_config(&upstream), "default-src 'self'".into()).unwrap();
         let app = build_router(state);
 
         let request = axum::http::Request::builder()
@@ -270,13 +333,13 @@ mod tests {
             .body(axum::body::Body::from("{\"ping\": \"pong\"}"))
             .unwrap();
 
-        let response = tower::ServiceExt::oneshot(app, request).await.unwrap();
+        let response = send(app, request).await;
         let status = response.status();
-        let body = http_body_util::BodyExt::collect(response.into_body())
-            .await
-            .unwrap()
-            .to_bytes();
-        eprintln!("proxy response status {status}: {}", String::from_utf8_lossy(&body));
+        let body = body_bytes(response).await;
+        eprintln!(
+            "proxy response status {status}: {}",
+            String::from_utf8_lossy(&body)
+        );
         assert_eq!(status, 200);
         let payload: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert_eq!(
@@ -299,17 +362,55 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn proxied_response_echoes_the_correlation_id() {
+        let (upstream, server) = stub_upstream().await;
+        let state =
+            state::build_state(test_config(&upstream), "default-src 'self'".into()).unwrap();
+        let app = build_router(state);
+
+        let request = axum::http::Request::builder()
+            .method("GET")
+            .uri("/api/echo")
+            .header("x-correlation-id", "client-chosen-id-1")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let response = send(app, request).await;
+        assert_eq!(response.status(), 200);
+        assert_eq!(
+            response.headers().get("x-correlation-id").unwrap(),
+            "client-chosen-id-1",
+            "the client's sane id is echoed back for log joining"
+        );
+        server.abort();
+    }
+
+    #[tokio::test]
     async fn proxy_returns_502_when_upstream_is_down() {
         // Nothing listens on the reserved documentation port.
-        let state = state::build_state(test_config("http://127.0.0.1:1"), "default-src 'self'".into());
+        let state = state::build_state(
+            test_config("http://127.0.0.1:1"),
+            "default-src 'self'".into(),
+        )
+        .unwrap();
         let app = build_router(state);
         let request = axum::http::Request::builder()
             .method("GET")
             .uri("/api/anything")
             .body(axum::body::Body::empty())
             .unwrap();
-        let response = tower::ServiceExt::oneshot(app, request).await.unwrap();
+        let response = send(app, request).await;
         assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+        // The failure body is generic: no internal upstream URL on the wire.
+        let body = body_bytes(response).await;
+        let text = String::from_utf8_lossy(&body);
+        assert!(
+            !text.contains("127.0.0.1"),
+            "502 body must not leak the internal upstream address: {text:?}"
+        );
+        assert!(
+            text.contains("correlation_id"),
+            "502 body carries the correlation id"
+        );
     }
 
     #[tokio::test]
@@ -317,7 +418,7 @@ mod tests {
         let (upstream, server) = stub_upstream().await;
         let mut cfg = test_config(&upstream);
         cfg.max_body_bytes = 8;
-        let state = state::build_state(cfg, "default-src 'self'".into());
+        let state = state::build_state(cfg, "default-src 'self'".into()).unwrap();
         let app = build_router(state);
         let request = axum::http::Request::builder()
             .method("POST")
@@ -325,8 +426,32 @@ mod tests {
             .header("content-length", "100")
             .body(axum::body::Body::from("x".repeat(100)))
             .unwrap();
-        let response = tower::ServiceExt::oneshot(app, request).await.unwrap();
+        let response = send(app, request).await;
         assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn oversized_chunked_upload_answers_413() {
+        let (upstream, server) = stub_upstream().await;
+        let mut cfg = test_config(&upstream);
+        cfg.max_body_bytes = 8;
+        let state = state::build_state(cfg, "default-src 'self'".into()).unwrap();
+        let app = build_router(state);
+        // No Content-Length: the request travels chunked, so the size limit
+        // trips mid-stream and must still surface as 413, not 502.
+        let request = axum::http::Request::builder()
+            .method("POST")
+            .uri("/api/echo")
+            .header("transfer-encoding", "chunked")
+            .body(axum::body::Body::from("x".repeat(64)))
+            .unwrap();
+        let response = send(app, request).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::PAYLOAD_TOO_LARGE,
+            "a chunked over-limit upload must be a body-size failure"
+        );
         server.abort();
     }
 
@@ -337,24 +462,95 @@ mod tests {
         cfg.rate_limit_rps = 0.0001;
         cfg.rate_limit_burst = 1;
         cfg.client_ip_header = Some("X-Forwarded-For".to_string());
-        let state = state::build_state(cfg, "default-src 'self'".into());
+        let state = state::build_state(cfg, "default-src 'self'".into()).unwrap();
         let app = build_router(state);
 
         let make = || {
             axum::http::Request::builder()
                 .method("GET")
                 .uri("/api/nope")
-                .header("x-forwarded-for", "203.0.113.7")
+                .header("x-forwarded-for", "203.0.113.7, 198.51.100.4")
                 .body(axum::body::Body::empty())
                 .unwrap()
         };
         // First request consumes the single burst token (its status is the
-        // upstream's business), the second must be rate-limited locally.
-        let first = tower::ServiceExt::oneshot(app.clone(), make()).await.unwrap();
+        // upstream's business), the second must be rate-limited locally. The
+        // key is the rightmost forwarded entry — the trusted hop's view.
+        let first = send(app.clone(), make()).await;
         let _ = first;
-        let second = tower::ServiceExt::oneshot(app, make()).await.unwrap();
+        let second = send(app, make()).await;
         assert_eq!(second.status(), StatusCode::TOO_MANY_REQUESTS);
         assert!(second.headers().get("retry-after").is_some());
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn gateway_owned_response_headers_are_not_duplicated() {
+        let (upstream, server) = stub_upstream().await;
+        let state =
+            state::build_state(test_config(&upstream), "default-src 'self'".into()).unwrap();
+        let app = build_router(state);
+
+        let request = axum::http::Request::builder()
+            .method("GET")
+            .uri("/api/with-headers")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let response = send(app, request).await;
+        assert_eq!(response.status(), 200);
+        let headers = response.headers().clone();
+        let xfo = headers.get_all("x-frame-options").iter().count();
+        assert_eq!(
+            xfo, 1,
+            "exactly one X-Frame-Options, the gateway's: {headers:?}"
+        );
+        assert_eq!(headers.get("x-frame-options").unwrap(), "DENY");
+        let surviving_acao: Vec<String> = headers
+            .get_all("access-control-allow-origin")
+            .iter()
+            .filter_map(|v| v.to_str().ok().map(str::to_string))
+            .collect();
+        assert!(
+            !surviving_acao.contains(&"https://evil.example".to_string()),
+            "the upstream's CORS grant must not survive the gateway; response carries: {surviving_acao:?} \
+             (the permissive gateway layer's own '*' grant is fine)"
+        );
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn cors_allow_list_answers_listed_origins_only() {
+        let (upstream, server) = stub_upstream().await;
+        let mut cfg = test_config(&upstream);
+        cfg.allowed_origins = vec!["https://good.example".to_string()];
+        let state = state::build_state(cfg, "default-src 'self'".into()).unwrap();
+        let app = build_router(state);
+
+        let make = |origin: &str| {
+            axum::http::Request::builder()
+                .method("GET")
+                .uri("/api/echo")
+                .header("origin", origin)
+                .body(axum::body::Body::empty())
+                .unwrap()
+        };
+        let allowed = send(app.clone(), make("https://good.example")).await;
+        assert_eq!(
+            allowed
+                .headers()
+                .get("access-control-allow-origin")
+                .unwrap(),
+            "https://good.example",
+            "a listed origin is echoed"
+        );
+        let denied = send(app, make("https://evil.example")).await;
+        assert!(
+            denied
+                .headers()
+                .get("access-control-allow-origin")
+                .is_none(),
+            "an unlisted origin gets no CORS grant"
+        );
         server.abort();
     }
 
@@ -367,14 +563,15 @@ mod tests {
             return;
         }
         let (upstream, server) = stub_upstream().await;
-        let state = state::build_state(test_config(&upstream), "default-src 'self'".into());
+        let state =
+            state::build_state(test_config(&upstream), "default-src 'self'".into()).unwrap();
         let app = build_router(state);
         let request = axum::http::Request::builder()
             .method("GET")
             .uri("/")
             .body(axum::body::Body::empty())
             .unwrap();
-        let response = tower::ServiceExt::oneshot(app, request).await.unwrap();
+        let response = send(app, request).await;
         assert_eq!(response.status(), 200);
         let headers = response.headers();
         assert!(headers.get("content-security-policy").is_some());
@@ -386,6 +583,34 @@ mod tests {
         assert!(
             headers.get("x-frame-options").is_none(),
             "index.html stays frameable for TMA"
+        );
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn missing_bundle_is_404_not_the_spa_page() {
+        if static_assets::FrontendAssets::get("index.html").is_none() {
+            eprintln!("skipping: frontend dist not built");
+            return;
+        }
+        let (upstream, server) = stub_upstream().await;
+        let state =
+            state::build_state(test_config(&upstream), "default-src 'self'".into()).unwrap();
+        let app = build_router(state);
+        let request = axum::http::Request::builder()
+            .method("GET")
+            .uri("/assets/nope-abc123.js")
+            .body(axum::body::Body::empty())
+            .unwrap();
+        let response = send(app, request).await;
+        assert_eq!(
+            response.status(),
+            StatusCode::NOT_FOUND,
+            "a missing hashed bundle must never masquerade as index.html"
+        );
+        assert_eq!(
+            response.headers().get("x-content-type-options").unwrap(),
+            "nosniff"
         );
         server.abort();
     }

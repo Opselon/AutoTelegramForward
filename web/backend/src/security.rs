@@ -20,7 +20,10 @@ use sha2::{Digest, Sha256};
 pub const STATIC_SECURITY_HEADERS: [(&str, &str); 4] = [
     ("X-Content-Type-Options", "nosniff"),
     ("Referrer-Policy", "strict-origin-when-cross-origin"),
-    ("Permissions-Policy", "camera=(), microphone=(), geolocation=()"),
+    (
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=()",
+    ),
     ("Cross-Origin-Opener-Policy", "same-origin"),
 ];
 
@@ -102,8 +105,16 @@ fn b64(bytes: impl AsRef<[u8]>) -> String {
         let triple = (b0 << 16) | (b1 << 8) | b2;
         out.push(ALPHABET[(triple >> 18) as usize & 63] as char);
         out.push(ALPHABET[(triple >> 12) as usize & 63] as char);
-        out.push(if chunk.len() > 1 { ALPHABET[(triple >> 6) as usize & 63] as char } else { '=' });
-        out.push(if chunk.len() > 2 { ALPHABET[triple as usize & 63] as char } else { '=' });
+        out.push(if chunk.len() > 1 {
+            ALPHABET[(triple >> 6) as usize & 63] as char
+        } else {
+            '='
+        });
+        out.push(if chunk.len() > 2 {
+            ALPHABET[triple as usize & 63] as char
+        } else {
+            '='
+        });
     }
     out
 }
@@ -138,7 +149,9 @@ mod tests {
         assert_eq!(a, b);
         // sha256 → 32 bytes → 44 base64 chars (RFC 4648 padding included),
         // wrapped in 'sha256-…' quotes per RFC 7469.
-        let inner = a[0].strip_prefix("'sha256-").and_then(|s| s.strip_suffix('\''));
+        let inner = a[0]
+            .strip_prefix("'sha256-")
+            .and_then(|s| s.strip_suffix('\''));
         assert_eq!(inner.map(str::len), Some(44));
     }
 
@@ -147,8 +160,13 @@ mod tests {
         let html = "<html><head><script>\n try { var x = 1 } catch (e) {}\n</script></head></html>";
         let csp = default_csp(html);
         assert!(csp.contains("'sha256-"), "policy must pin a hash");
-        assert!(!csp.contains("script-src 'self' 'unsafe-inline'"), "no blanket inline allowance");
-        assert!(csp.contains("frame-ancestors 'self' https://web.telegram.org https://telegram.org"));
+        assert!(
+            !csp.contains("script-src 'self' 'unsafe-inline'"),
+            "no blanket inline allowance"
+        );
+        assert!(
+            csp.contains("frame-ancestors 'self' https://web.telegram.org https://telegram.org")
+        );
     }
 
     #[test]
