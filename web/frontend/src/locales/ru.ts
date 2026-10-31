@@ -1173,4 +1173,6 @@ export const ru: Catalog = {
   "ui_filter_verdict_dropped": "ОТБРОШЕНО",
   "ui_filter_matched_entries": "Совпадения: {list}",
   "ui_filter_missing_entries": "Отсутствуют: {list}",
+  "ui_theme_switch_to_light": "Переключить на светлую тему",
+  "ui_theme_switch_to_dark": "Переключить на тёмную тему",
 }

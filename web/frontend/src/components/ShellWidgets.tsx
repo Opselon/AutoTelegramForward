@@ -45,44 +45,19 @@ export function UserBar({ lang }: { lang: UiLang }) {
 
   if (!user) return null
   return (
-    <div
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '8px 16px',
-        marginBottom: 16,
-        background: 'rgba(15, 23, 42, 0.6)',
-        borderRadius: 12,
-        border: '1px solid rgba(255, 255, 255, 0.08)',
-        fontSize: '0.85rem',
-      }}
-    >
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px #10b981' }} />
-        <span style={{ color: '#e2e8f0', fontWeight: 600 }}>
+    // Styling lives in the `.userbar` classes (index.css, Control-Room layer):
+    // inline dark literals here were the reason the bar stayed midnight in the
+    // light theme while everything around it moved to paper.
+    <div className="userbar">
+      <div className="userbar__id">
+        <span className="userbar__dot" aria-hidden="true" />
+        <span className="userbar__name">
           {user.is_admin ? '👑 ' : '👤 '}
           {user.username}
         </span>
-        {user.is_admin && (
-          <span style={{ fontSize: 'var(--type-xs)', padding: '2px 6px', borderRadius: 4, background: 'rgba(99, 102, 241, 0.2)', color: '#818cf8' }}>
-            {t('ui_role_admin')}
-          </span>
-        )}
+        {user.is_admin && <span className="userbar__role">{t('ui_role_admin')}</span>}
       </div>
-      <button
-        onClick={handleLogout}
-        style={{
-          padding: '4px 12px',
-          borderRadius: 8,
-          border: '1px solid rgba(239, 68, 68, 0.3)',
-          background: 'rgba(239, 68, 68, 0.1)',
-          cursor: 'pointer',
-          fontSize: '0.8rem',
-          color: '#f87171',
-          fontWeight: 600,
-        }}
-      >
+      <button onClick={handleLogout} className="btn btn--danger btn--sm userbar__logout">
         {t('ui_logout')}
       </button>
     </div>

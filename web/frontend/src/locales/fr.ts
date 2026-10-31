@@ -1173,4 +1173,6 @@ export const fr: Catalog = {
   "ui_filter_verdict_dropped": "REJETÉ",
   "ui_filter_matched_entries": "Correspondances : {list}",
   "ui_filter_missing_entries": "Manquants : {list}",
+  "ui_theme_switch_to_light": "Passer au thème clair",
+  "ui_theme_switch_to_dark": "Passer au thème sombre",
 }

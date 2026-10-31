@@ -14,6 +14,7 @@ import {
 } from './session'
 import { appKey, isSessionStorageEvent } from './sessionIdentity'
 import { ensureLangLoaded, isRtlLang, makeT, preferredLang } from './locales/engine'
+import { applyTheme, preferredTheme } from './theme'
 
 // The shell has no component tree to inherit a language from, so it resolves
 // the same preference the panels do (stored choice → browser → English).
@@ -40,25 +41,12 @@ class ErrorBoundary extends React.Component<
   render() {
     if (this.state.hasError) {
       return (
-        <div
-          style={{
-            minHeight: '100vh',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 24,
-            textAlign: 'center',
-            background: '#0b0f19',
-            color: '#f8fafc',
-            fontFamily: 'sans-serif',
-          }}
-        >
-          <div style={{ fontSize: 44, marginBottom: 12 }}>⚠️</div>
-          <h2 style={{ fontSize: '1.25rem', fontWeight: 700, marginBottom: 8, color: '#f87171' }}>
+        <div className="boot-screen">
+          <div style={{ fontSize: 44, marginBottom: 12 }} aria-hidden="true">⚠️</div>
+          <h2 className="boot-screen__title boot-screen__title--error">
             {t('ui_dashboard_failed_to_start')}
           </h2>
-          <p style={{ fontSize: '0.875rem', color: '#94a3b8', maxWidth: 400, marginBottom: 20 }}>
+          <p className="boot-screen__body">
             {this.state.error?.message || t('ui_something_went_wrong_loading')}
           </p>
           <button
@@ -66,15 +54,7 @@ class ErrorBoundary extends React.Component<
               clearSession()
               window.location.href = '/'
             }}
-            style={{
-              padding: '10px 20px',
-              borderRadius: 8,
-              border: 'none',
-              background: '#6366f1',
-              color: '#fff',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
+            className="btn btn-primary"
           >
             {t('ui_retry_and_sign_in_again')}
           </button>
@@ -238,18 +218,7 @@ function Root() {
 
   if (exchanging) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          background: '#0b0f19',
-          color: '#f8fafc',
-          fontFamily: 'sans-serif',
-          fontSize: '0.95rem',
-        }}
-      >
+      <div className="boot-screen boot-screen--quiet">
         {t('ui_signing_in')}
       </div>
     )
@@ -259,16 +228,7 @@ function Root() {
     return (
       <>
         {linkError && (
-          <div
-            role="alert"
-            style={{
-              background: '#7f1d1d',
-              color: '#fee2e2',
-              padding: '10px 14px',
-              fontSize: '0.85rem',
-              textAlign: 'center',
-            }}
-          >
+          <div role="alert" className="boot-alert">
             {linkError}
           </div>
         )}
@@ -301,6 +261,11 @@ function Root() {
 const bootLang = preferredLang()
 document.documentElement.lang = bootLang
 document.documentElement.dir = isRtlLang(bootLang) ? 'rtl' : 'ltr'
+// Re-assert the theme on boot: index.html's pre-paint script normally did it,
+// but a cached document without the script (or a tampered attribute) must not
+// leave the shell on the wrong surface. Preferred choice, then system hint —
+// the same order the pre-paint script uses.
+applyTheme(preferredTheme())
 
 void ensureLangLoaded(bootLang).finally(() => {
   createRoot(document.getElementById('root')!).render(

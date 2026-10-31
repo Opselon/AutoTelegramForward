@@ -18,6 +18,8 @@ import {
   HeartPulse,
   Bot,
   Replace,
+  Sun,
+  Moon,
 } from 'lucide-react'
 import { api } from './api'
 import { isAccepted, purgedCount, refusalReason } from './actionResult'
@@ -26,10 +28,13 @@ import { isRtlLang, makeT, preferredLang, rememberLang, type UiLang } from './lo
 import { LanguagePicker } from './components/LanguagePicker'
 import type { ForwardRule, Session, AIConfig, AIProviderInfo, SaveAIConfigRequest, PromptTemplate, FilterRule, DeliveryJob, DeadLetterJob, DeliveryStats, RuleLiveStat, RecentError, GatewaySystemInfo, SimulateResponse, StatsResponse, LogItem, LogStats, ServicesHealthResponse, PVResponderConfig, DiagnosticsResponse, MeInfo } from './types'
 import { getToken, applySession } from './session'
+import { applyTheme, preferredTheme, toggleTheme, type Theme } from './theme'
 import { PanelBoundary } from './components/PanelBoundary'
 import { Navigation, NavTrigger, type NavItem, type TabId } from './components/Navigation'
 import { ProviderKeyCheck, UserBar } from './components/ShellWidgets'
 import { Toast } from './components/ui/Primitives'
+import { ModalShell } from './components/ui/Modal'
+import { Field } from './components/ui/Primitives'
 
 // Every non-landing tab is a chunk. The shell ships with the landing panel
 // and fetches the rest the first time they are opened.
@@ -288,6 +293,14 @@ function useDashboard(me?: MeInfo) {
   // Memoized on the language so the callbacks below (and the memoized rule
   // cards that receive them) stay stable between renders of the same locale.
   const t = useMemo(() => makeT(lang), [lang])
+
+  // Surface theme. index.html applies the stored value before the first paint;
+  // this state mirrors it so the toggle icon (and its label) track reality, and
+  // the effect re-asserts it for a document whose pre-paint script never ran.
+  const [theme, setThemeState] = useState<Theme>(() => preferredTheme())
+  useEffect(() => {
+    applyTheme(theme)
+  }, [theme])
 
   // Toast lifecycle: visible 4s, then a short exit beat (toast--closing)
   // before the message drops, so it leaves with a transition instead of
@@ -1113,6 +1126,8 @@ function useDashboard(me?: MeInfo) {
     setPvPreset,
     isRtl,
     t,
+    theme,
+    setThemeState,
     showToast,
     loadData,
     fetchLogs,
@@ -1185,6 +1200,8 @@ export function App({ me }: { me?: MeInfo } = {}) {
     handleSavedFilter,
     isRtl,
     t,
+    theme,
+    setThemeState,
     loadData,
     handleDeleteRule,
     handleSaveTaskOverview,
@@ -1270,22 +1287,9 @@ export function App({ me }: { me?: MeInfo } = {}) {
       )}
       {/* Proactive Error Banner — newest ERROR/WARN from the delivery pipeline */}
       {errorBanner && (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: 10,
-            padding: '10px 14px',
-            marginBottom: 16,
-            borderRadius: 10,
-            background: 'rgba(239, 68, 68, 0.10)',
-            border: '1px solid rgba(239, 68, 68, 0.35)',
-            fontSize: '0.82rem',
-            color: '#fca5a5',
-          }}
-        >
-          <span style={{ flexShrink: 0, lineHeight: 1.4 }}>⚠️</span>
-          <span dir="ltr" style={{ flex: 1, textAlign: 'left', wordBreak: 'break-word', fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: '0.76rem' }}>
+        <div className="alert-banner" role="alert">
+          <span className="alert-banner__icon" aria-hidden="true">⚠️</span>
+          <span dir="ltr" className="alert-banner__text">
             {errorBanner}
           </span>
           <button
@@ -1301,10 +1305,11 @@ export function App({ me }: { me?: MeInfo } = {}) {
               }
               setErrorBanner(null)
             }}
-            style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: 2, flexShrink: 0 }}
+            className="alert-banner__close"
+            aria-label={t('ui_dismiss')}
             title={t('ui_dismiss')}
           >
-            <X size={14} />
+            <X size={14} aria-hidden="true" />
           </button>
         </div>
       )}
@@ -1317,50 +1322,27 @@ export function App({ me }: { me?: MeInfo } = {}) {
       </div>
 
       {/* Header Bar */}
-      <header
-        className="glass-panel app-header header-container"
-        style={{
-          padding: '16px 20px',
-          marginBottom: 20,
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 14,
-        }}
-      >
+      <header className="glass-panel app-header header-container">
         {/* Drawer trigger: CSS hides it from --bp-md up, where the rail is docked. */}
         <NavTrigger
           open={navOpen}
           onOpenChange={setNavOpen}
           lang={lang}
         />
-        <div className="header-title-wrap" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 12,
-              background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 4px 15px rgba(99, 102, 241, 0.4)',
-              flexShrink: 0,
-            }}
-          >
-            <Radio size={22} color="#fff" />
+        <div className="header-title-wrap">
+          <div className="brand-mark" aria-hidden="true">
+            <Radio size={22} />
           </div>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <h1 style={{ fontSize: '1.15rem', fontWeight: 800, letterSpacing: '-0.02em', margin: 0 }}>
-                AutoTelegramForward <span style={{ color: '#818cf8', fontWeight: 600 }}>PRO GATEWAY</span>
+            <div className="header-title-row">
+              <h1 className="header-title">
+                AutoTelegramForward <span className="header-title__accent">PRO GATEWAY</span>
               </h1>
-              <span className="badge badge-vip" style={{ fontSize: 'var(--type-xs)', padding: '2px 8px' }}>
+              <span className="badge badge-vip header-version">
                 {gatewayInfo?.version ? `v${gatewayInfo.version} RELEASE` : t('ui_version_probing')}
               </span>
             </div>
-            <p className="text-balance" style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: 2, margin: 0 }}>
+            <p className="text-balance header-subtitle">
               {t('ui_unified_smart_telegram_forwarding_gateway_microservice_platform')}
             </p>
           </div>
@@ -1372,7 +1354,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
             dot said "something is down" and left the operator to guess which
             panel to open. `undefined` means "not probed yet", which is not a
             failure and must not be painted like one. */}
-        <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div className="header-actions">
           {([
             { label: 'Core:50051', online: stats?.atf_core_online },
             { label: 'Logger:50052', online: stats?.atf_logger_online },
@@ -1403,15 +1385,27 @@ export function App({ me }: { me?: MeInfo } = {}) {
           {/* Language picker: all ten catalogs, by endonym */}
           <LanguagePicker lang={lang} onChange={setLang} compact />
 
+          {/* Theme: the surface the operator works on, not a preference buried
+              in settings. Dark is the product's identity; light is first-class
+              (token swap on <html data-theme>, no per-panel code). */}
+          <button
+            type="button"
+            onClick={() => setThemeState((prev) => toggleTheme(prev))}
+            className="btn btn--ghost btn--icon btn--sm theme-toggle"
+            aria-label={theme === 'dark' ? t('ui_theme_switch_to_light') : t('ui_theme_switch_to_dark')}
+            title={theme === 'dark' ? t('ui_theme_switch_to_light') : t('ui_theme_switch_to_dark')}
+          >
+            {theme === 'dark' ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+          </button>
+
           {/* Reload Button */}
           <button
             onClick={loadData}
             disabled={loading}
-            className="btn btn-secondary"
-            style={{ padding: '5px 10px', fontSize: '0.78rem' }}
+            className="btn btn-secondary btn--sm"
             title={t('ui_refresh')}
           >
-            <RotateCcw size={13} />
+            <RotateCcw size={13} aria-hidden="true" />
           </button>
         </div>
       </header>
@@ -1581,7 +1575,8 @@ export function App({ me }: { me?: MeInfo } = {}) {
         />
       </Suspense>
 
-      {/* CREATE / EDIT AI MODAL */}
+      {/* CREATE / EDIT AI MODAL — the shared ModalShell owns overlay, Escape,
+          focus trap and scroll lock; this body is only the form. */}
       {isAiModalOpen && (() => {
         // The catalogue is the core's list; this only reads it. `provider`
         // arrives from the API as the enum name (OPENAI) and the catalogue is
@@ -1591,169 +1586,136 @@ export function App({ me }: { me?: MeInfo } = {}) {
         const endpointHint = providerMeta?.default_base_url || ''
         const modelIdeas = providerMeta?.models || []
         return (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.8)',
-            backdropFilter: 'blur(8px)',
-            zIndex: 999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 20,
-          }}
+        <ModalShell
+          open
+          lang={lang}
+          titleId="ai-config-modal-title"
+          title={t('ui_ai_engine_configuration')}
+          width={580}
+          onClose={() => setIsAiModalOpen(false)}
         >
-          <div
-            className="glass-panel"
-            style={{
-              width: '100%',
-              maxWidth: 580,
-              padding: 28,
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 800 }}>
-                {t('ui_ai_engine_configuration')}
-              </h3>
-              <button onClick={() => setIsAiModalOpen(false)} className="btn btn-secondary" style={{ padding: 6 }}>
-                <X size={16} />
-              </button>
-            </div>
+          <form onSubmit={handleSaveAI} className="ai-form">
+            <Field label={`${t('ui_configuration_name')} *`} htmlFor="ai-config-name">
+              <input
+                id="ai-config-name"
+                type="text"
+                required
+                value={aiFormData.name || ''}
+                onChange={(e) => setAiFormData({ ...aiFormData, name: e.target.value })}
+                className="input-field"
+                placeholder={t('ui_openai_gpt_4o_fast')}
+              />
+            </Field>
 
-            <form onSubmit={handleSaveAI}>
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  {t('ui_configuration_name')} *
-                </label>
+            <div className="ai-form__grid">
+              <Field label={t('ui_provider')} htmlFor="ai-config-provider">
+                <select
+                  id="ai-config-provider"
+                  value={providerId}
+                  onChange={(e) => setAiFormData({ ...aiFormData, provider: e.target.value })}
+                  className="input-field"
+                >
+                  {(aiProviders.length
+                    ? aiProviders
+                    : [
+                        { id: 'openai', label: 'OpenAI', default_base_url: '', models: [] },
+                        { id: 'anthropic', label: 'Anthropic', default_base_url: '', models: [] },
+                        { id: 'custom', label: t('ui_custom_openai_compatible'), default_base_url: '', models: [] },
+                      ]
+                  ).map((prov) => (
+                    <option key={prov.id} value={prov.id}>
+                      {prov.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label={t('ui_model_name')} htmlFor="ai-config-model">
                 <input
+                  id="ai-config-model"
                   type="text"
                   required
-                  value={aiFormData.name || ''}
-                  onChange={(e) => setAiFormData({ ...aiFormData, name: e.target.value })}
+                  list="ai-model-suggestions"
+                  value={aiFormData.model || ''}
+                  onChange={(e) => setAiFormData({ ...aiFormData, model: e.target.value })}
                   className="input-field"
-                  placeholder={t('ui_openai_gpt_4o_fast')}
+                  placeholder={modelIdeas[0] || 'gpt-4o-mini'}
+                />
+                <datalist id="ai-model-suggestions">
+                  {modelIdeas.map((m) => (
+                    <option key={m} value={m} />
+                  ))}
+                </datalist>
+              </Field>
+            </div>
+
+            <Field
+              label={t('ui_provider_endpoint_base_url')}
+              htmlFor="ai-config-base-url"
+              hint={endpointHint
+                ? t('ui_leave_blank_to_use_this_provider_s_default_endpointhint_2', { endpointHint_2: endpointHint })
+                : t('ui_for_a_custom_provider_enter_the_full_address_of_your_own_endpoin')}
+            >
+              <input
+                id="ai-config-base-url"
+                type="text"
+                value={aiFormData.base_url || ''}
+                onChange={(e) => setAiFormData({ ...aiFormData, base_url: e.target.value })}
+                className="input-field"
+                dir="ltr"
+                placeholder={endpointHint || 'https://api.example.com/v1'}
+              />
+            </Field>
+
+            <Field
+              label={t('ui_app_api_key')}
+              htmlFor="ai-config-api-key"
+              hint={aiFormData.id
+                ? t('ui_leave_blank_to_keep_the_stored_key')
+                : t('ui_stored_on_the_server_only_it_is_never_sent_back_to_this_page')}
+            >
+              <input
+                id="ai-config-api-key"
+                type="password"
+                value={aiFormData.api_key || ''}
+                onChange={(e) => setAiFormData({ ...aiFormData, api_key: e.target.value })}
+                className="input-field"
+                dir="ltr"
+                placeholder="sk-..."
+              />
+              <div style={{ marginTop: 8 }}>
+                <ProviderKeyCheck
+                  aiConfigId={aiFormData.id}
+                  provider={providerId}
+                  model={aiFormData.model}
+                  baseUrl={aiFormData.base_url}
+                  apiKey={aiFormData.api_key}
+                  lang={lang}
                 />
               </div>
+            </Field>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {t('ui_provider')}
-                  </label>
-                  <select
-                    value={providerId}
-                    onChange={(e) => setAiFormData({ ...aiFormData, provider: e.target.value })}
-                    className="input-field"
-                  >
-                    {(aiProviders.length
-                      ? aiProviders
-                      : [
-                          { id: 'openai', label: 'OpenAI', default_base_url: '', models: [] },
-                          { id: 'anthropic', label: 'Anthropic', default_base_url: '', models: [] },
-                          { id: 'custom', label: t('ui_custom_openai_compatible'), default_base_url: '', models: [] },
-                        ]
-                    ).map((prov) => (
-                      <option key={prov.id} value={prov.id}>
-                        {prov.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                    {t('ui_model_name')}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    list="ai-model-suggestions"
-                    value={aiFormData.model || ''}
-                    onChange={(e) => setAiFormData({ ...aiFormData, model: e.target.value })}
-                    className="input-field"
-                    placeholder={modelIdeas[0] || 'gpt-4o-mini'}
-                  />
-                  <datalist id="ai-model-suggestions">
-                    {modelIdeas.map((m) => (
-                      <option key={m} value={m} />
-                    ))}
-                  </datalist>
-                </div>
-              </div>
+            <Field label={t('ui_system_prompt')} htmlFor="ai-config-system-prompt">
+              <textarea
+                id="ai-config-system-prompt"
+                rows={3}
+                value={aiFormData.system_prompt || ''}
+                onChange={(e) => setAiFormData({ ...aiFormData, system_prompt: e.target.value })}
+                className="input-field"
+                placeholder={t('ui_you_are_an_expert_forex_signal_translator')}
+              />
+            </Field>
 
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  {t('ui_provider_endpoint_base_url')}
-                </label>
-                <input
-                  type="text"
-                  value={aiFormData.base_url || ''}
-                  onChange={(e) => setAiFormData({ ...aiFormData, base_url: e.target.value })}
-                  className="input-field"
-                  dir="ltr"
-                  placeholder={endpointHint || 'https://api.example.com/v1'}
-                />
-                <span style={{ display: 'block', fontSize: 'var(--type-xs)', color: '#94a3b8', marginTop: 4 }}>
-                  {endpointHint
-                    ? t('ui_leave_blank_to_use_this_provider_s_default_endpointhint_2', { endpointHint_2: endpointHint })
-                    : t('ui_for_a_custom_provider_enter_the_full_address_of_your_own_endpoin')}
-                </span>
-              </div>
-
-              <div style={{ marginBottom: 12 }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  {t('ui_app_api_key')}
-                </label>
-                <input
-                  type="password"
-                  value={aiFormData.api_key || ''}
-                  onChange={(e) => setAiFormData({ ...aiFormData, api_key: e.target.value })}
-                  className="input-field"
-                  dir="ltr"
-                  placeholder="sk-..."
-                />
-                <span style={{ display: 'block', fontSize: 'var(--type-xs)', color: '#94a3b8', marginTop: 4 }}>
-                  {aiFormData.id
-                    ? t('ui_leave_blank_to_keep_the_stored_key')
-                    : t('ui_stored_on_the_server_only_it_is_never_sent_back_to_this_page')}
-                </span>
-                <div style={{ marginTop: 8 }}>
-                  <ProviderKeyCheck
-                    aiConfigId={aiFormData.id}
-                    provider={providerId}
-                    model={aiFormData.model}
-                    baseUrl={aiFormData.base_url}
-                    apiKey={aiFormData.api_key}
-                    lang={lang}
-                  />
-                </div>
-              </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', fontSize: '0.8rem', color: '#cbd5e1', marginBottom: 4 }}>
-                  {t('ui_system_prompt')}
-                </label>
-                <textarea
-                  rows={3}
-                  value={aiFormData.system_prompt || ''}
-                  onChange={(e) => setAiFormData({ ...aiFormData, system_prompt: e.target.value })}
-                  className="input-field"
-                  placeholder={t('ui_you_are_an_expert_forex_signal_translator')}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-                <button type="button" onClick={() => setIsAiModalOpen(false)} className="btn btn-secondary">
-                  {t('ui_cancel')}
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  <Check size={16} />
-                  <span>{t('ui_save')}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+            <div className="ai-form__actions">
+              <button type="button" onClick={() => setIsAiModalOpen(false)} className="btn btn-secondary">
+                {t('ui_cancel')}
+              </button>
+              <button type="submit" className="btn btn-primary">
+                <Check size={16} aria-hidden="true" />
+                <span>{t('ui_save')}</span>
+              </button>
+            </div>
+          </form>
+        </ModalShell>
         )
       })()}
 

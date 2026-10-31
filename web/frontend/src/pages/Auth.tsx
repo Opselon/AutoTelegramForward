@@ -1,10 +1,11 @@
 import React, { useState } from 'react'
-import { ArrowRightLeft, Eye, EyeOff, Filter, Radio, Sparkles } from 'lucide-react'
+import { ArrowRightLeft, Eye, EyeOff, Filter, Moon, Radio, Sparkles, Sun } from 'lucide-react'
 import { api } from '../api'
 import { LanguagePicker } from '../components/LanguagePicker'
 
 import { applySession } from '../session'
 import { isRtlLang, makeT, preferredLang, rememberLang, type UiLang } from '../locales/engine'
+import { preferredTheme, toggleTheme, type Theme } from '../theme'
 
 /**
  * Sign-in / registration screen.
@@ -29,6 +30,10 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  // The theme toggle rides with the language picker: the login screen is where
+  // a light-theme operator first meets the product, and where they can fix a
+  // wrong guess before signing in.
+  const [theme, setTheme] = useState<Theme>(() => preferredTheme())
 
   const isRtl = isRtlLang(lang)
   const t = makeT(lang)
@@ -109,6 +114,15 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
       {/* Form panel. */}
       <main className="auth-main">
         <div className="auth-lang-row">
+          <button
+            type="button"
+            onClick={() => setTheme((prev) => toggleTheme(prev))}
+            className="btn btn--ghost btn--icon btn--sm theme-toggle"
+            aria-label={theme === 'dark' ? t('ui_theme_switch_to_light') : t('ui_theme_switch_to_dark')}
+            title={theme === 'dark' ? t('ui_theme_switch_to_light') : t('ui_theme_switch_to_dark')}
+          >
+            {theme === 'dark' ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+          </button>
           <LanguagePicker
             lang={lang}
             onChange={(next) => {

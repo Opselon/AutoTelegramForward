@@ -41,6 +41,17 @@ ok('design-system layer is present', css.includes(marker))
 const layer = css.slice(css.indexOf(marker))
 const tokenBlock = layer.slice(layer.indexOf(':root {'), layer.indexOf('\n}', layer.indexOf(':root {')))
 
+/* The light theme is a second token *definition* block, not a component: its
+   hex values are the light palette itself. It is exempt from the "no hex in
+   components" rule on the same terms as the dark `:root`, and it is held to
+   the same contrast contract (check 11 reads it below). */
+const LIGHT_SELECTOR = "[data-theme='light']"
+const lightStart = layer.indexOf(LIGHT_SELECTOR)
+const lightBlock = lightStart >= 0
+  ? layer.slice(lightStart, layer.indexOf('\n}', lightStart))
+  : ''
+ok('light theme token block exists', lightBlock.includes(LIGHT_SELECTOR))
+
 /* ---- 1. the token contract from docs/ui-ux-system.md §1 ---- */
 const REQUIRED_TOKENS = [
   '--space-1', '--space-2', '--space-3', '--space-4', '--space-5', '--space-6',
@@ -58,8 +69,8 @@ ok(`all ${REQUIRED_TOKENS.length} required tokens are declared`, missingTokens.l
 /* The smallest type is 12px and it is a token, not a magic number per panel. */
 ok('type floor is a token worth 12px', /--type-xs:\s*12px/.test(tokenBlock))
 
-/* ---- 2. no hex outside the token block ---- */
-const withoutTokens = layer.replace(tokenBlock, '')
+/* ---- 2. no hex outside the token blocks (dark :root + light override) ---- */
+const withoutTokens = layer.replace(tokenBlock, '').replace(lightBlock, '')
 const hexOutside = withoutTokens.match(/#[0-9a-fA-F]{3,8}\b/g) ?? []
 ok('no hex colour outside the token block', hexOutside.length === 0, hexOutside.slice(0, 5).join(' '))
 
@@ -162,11 +173,16 @@ const contrast = (a, b) => {
   return (hi + 0.05) / (lo + 0.05)
 }
 const tokenValue = (name) => (tokenBlock.match(new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})`)) ?? [])[1]
+const lightTokenValue = (name) => (lightBlock.match(new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})`)) ?? [])[1]
 for (const [fg, bg] of [['--color-text', '--color-bg'], ['--color-text', '--color-surface'],
   ['--color-text-muted', '--color-surface'], ['--color-text-subtle', '--color-surface']]) {
   const a = tokenValue(fg)
   const b = tokenValue(bg)
-  ok(`${fg} on ${bg} clears 4.5:1`, a && b && contrast(a, b) >= 4.5, a && b ? `${contrast(a, b).toFixed(2)}:1` : 'token missing')
+  ok(`dark ${fg} on ${bg} clears 4.5:1`, a && b && contrast(a, b) >= 4.5, a && b ? `${contrast(a, b).toFixed(2)}:1` : 'token missing')
+  // Same bar in the light theme: the values differ, the contract does not.
+  const la = lightTokenValue(fg)
+  const lb = lightTokenValue(bg)
+  ok(`light ${fg} on ${bg} clears 4.5:1`, la && lb && contrast(la, lb) >= 4.5, la && lb ? `${contrast(la, lb).toFixed(2)}:1` : 'token missing')
 }
 const dimLiterals = []
 for (const file of tsxFiles) {

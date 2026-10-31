@@ -1173,4 +1173,6 @@ export const zh: Catalog = {
   "ui_filter_verdict_dropped": "丢弃",
   "ui_filter_matched_entries": "匹配：{list}",
   "ui_filter_missing_entries": "未满足：{list}",
+  "ui_theme_switch_to_light": "切换到浅色主题",
+  "ui_theme_switch_to_dark": "切换到深色主题",
 }

@@ -27,19 +27,10 @@ export function LanguagePicker({
     <label
       // The control itself stays LTR: the endonyms are their own scripts and a
       // reversed row reads as a jumble. Only the surrounding layout follows the
-      // page direction.
+      // page direction. Styling lives in the `.lang-trigger` classes so the
+      // control follows the theme tokens like every other shell widget.
       dir="ltr"
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 6,
-        background: 'rgba(15, 23, 42, 0.6)',
-        border: '1px solid rgba(255, 255, 255, 0.12)',
-        borderRadius: 8,
-        padding: compact ? '4px 8px' : '6px 10px',
-        color: '#cbd5e1',
-        fontSize: compact ? '0.75rem' : '0.8rem',
-      }}
+      className={`lang-trigger${compact ? ' lang-trigger--compact' : ''}`}
     >
       <Globe size={13} aria-hidden="true" />
       <select
