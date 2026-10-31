@@ -258,6 +258,7 @@ class ChannelPollingService:
         lease_coordinator=None,
         gap_repo=None,
         log_client=None,
+        diagnostics_repo=None,
     ) -> None:
         self._pool = pool
         self._rules = rules
@@ -285,6 +286,10 @@ class ChannelPollingService:
         # error attached — so a future operator can answer "why was this gap
         # created?" end to end instead of grepping stdout.
         self._log_client = log_client
+        # The persisted diagnostic store (schema v32). When wired, the same
+        # gap events become queryable per source message, so the cause
+        # survives the live log stream.
+        self._diagnostics = diagnostics_repo
         # Ordered replay lanes, keyed by (session_id, chat_id). One live lane per
         # polled channel is what guarantees a burst leaves in source order.
         self._lanes: Dict[Tuple[str, str], _OrderedReplayLane] = {}
@@ -930,12 +935,65 @@ class ChannelPollingService:
         dropped record (the ``LogClient`` itself is bounded and counts what it
         drops), never into a missed source message.
         """
-        if self._log_client is None:
-            return
+        if self._log_client is not None:
+            try:
+                getattr(self._log_client, level, self._log_client.info)(
+                    "ingestion", "poll", message, {**detail, "event_code": event_code},
+                )
+            except Exception:
+                pass
+        # Also persist to the diagnostic store when wired, so a gap's cause is
+        # queryable per message afterwards (not only in the live log stream).
+        if self._diagnostics is not None:
+            try:
+                self._diagnostics_record(event_code, level, message, detail)
+            except Exception:
+                pass
+
+    def _diagnostics_record(self, event_code: str, level: str, message: str,
+                            detail: dict) -> None:
+        """Build the canonical DiagnosticEvent for one ingestion-gap event.
+
+        The *cause* of a gap is the mission's §7 requirement: not "missing
+        message" but the specific class — does-not-exist, inaccessible,
+        partial-response, parse-refused, or an unknown we keep visible. The
+        event carries that as a stable reason plus the raw Telegram error when
+        one was returned.
+        """
+        from .diagnostics_contract import (
+            build_diagnostic_event, C_PIPELINE, ORIGIN_INTERNAL, C_TELEGRAM_API,
+        )
+        # The stable reason for each gap lifecycle point. A gap that exhausted
+        # its budget means Telegram never served the id — a deleted or service
+        # post, i.e. it *does not exist*, which is a terminal answer rather
+        # than an unknown one.
+        reason_by_code = {
+            "INGESTION_GAP_CREATED": "INGESTION_GAP_DETECTED",
+            "INGESTION_GAP_RECOVERED": "INGESTION_GAP_RECOVERED",
+            "INGESTION_GAP_EXHAUSTED": "INGESTION_MESSAGE_NOT_EXIST",
+            "INGESTION_GAP_PERMANENT_FAILURE": "INGESTION_GAP_RECOVERY_FAILED",
+        }
+        raw = detail.get("raw_error") or ""
+        is_telegram = bool(raw and str(raw) not in ("DIFFERENCE_TRUNCATED", ""))
+        event = build_diagnostic_event(
+            event_name=f"ingestion.{event_code.lower()}",
+            stage="INGEST",
+            task_id=str(detail.get("rule_id") or ""),
+            source_peer_id=str(detail.get("chat_id") or ""),
+            source_message_id=int(detail.get("source_message_id") or 0),
+            error_origin="TELEGRAM" if is_telegram else ORIGIN_INTERNAL,
+            category=C_TELEGRAM_API if is_telegram else C_PIPELINE,
+            reason=reason_by_code.get(event_code, "INGESTION_GAP_DETECTED"),
+            severity={"warn": "WARN", "error": "ERROR"}.get(level.lower(), "INFO"),
+            explanation=str(message)[:500],
+        )
+        # raw_error is a stable symbol (e.g. 'ID_NOT_RETURNED') or a Telegram
+        # error id; keep it verbatim on the raw layer.
+        if raw:
+            event.raw_rpc_id = str(raw)[:96]
         try:
-            getattr(self._log_client, level, self._log_client.info)(
-                "ingestion", "poll", message, {**detail, "event_code": event_code},
-            )
+            loop = asyncio.get_event_loop()
+            loop.create_task(self._diagnostics.record_event(event))
         except Exception:
             pass
 

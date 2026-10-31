@@ -965,6 +965,9 @@ async def main() -> None:
             # Structured emission of every gap/recovery event (with the raw
             # Telegram error attached) into the central log.
             log_client=container.get("log_client"),
+            # Persisted gap diagnostics: the cause of every gap is queryable
+            # per source message, with the raw Telegram error attached.
+            diagnostics_repo=container.get("diagnostics_repo"),
         )
         await poller.start()
         container["channel_poller"] = poller
