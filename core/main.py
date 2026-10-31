@@ -411,6 +411,9 @@ def build_container(cfg: Config) -> dict:
         # pipeline actually sees the source id — the only proof the post was
         # not lost.
         gap_repo=gap_repo,
+        # v32+ failure intelligence: parser failures persist a PARSING-category
+        # event here, distinguishable from Telegram API failures by origin.
+        diagnostics_repo=diagnostics_repo,
     )
     from core.infrastructure.telegram.pv_responder import AIPVResponder  # noqa: E402
     pv_responder = AIPVResponder(ai_repo=ai_repo, ai_factory=factory, db=db)

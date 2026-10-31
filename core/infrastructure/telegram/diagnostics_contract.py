@@ -517,7 +517,14 @@ def log_diagnostic_event(log_client: Any, event: "DiagnosticEvent") -> None:
             "trace_id": str(event.trace_id or ""),
             "explanation": event.explanation,
         }
-        getattr(log_client, level, log_client.info)(
+        method = getattr(log_client, level, None)
+        if method is None:
+            method = getattr(log_client, "info", None)
+        if method is None:
+            # A client with neither the mapped level nor .info cannot receive
+            # the event; better to drop it than to raise into the caller.
+            return
+        method(
             "diagnostics", str(event.category or "UNKNOWN"),
             str(event.event_name or "diagnostic.event"),
             detail,
