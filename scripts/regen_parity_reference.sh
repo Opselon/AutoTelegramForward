@@ -13,9 +13,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$ROOT/worker/internal/parity/reference_filter.json"
 
 python3 "$ROOT/worker/internal/parity/reference_filter.py" > "$OUT"
+python3 "$ROOT/worker/internal/parity/reference_branding.py" > "$ROOT/worker/internal/parity/reference_branding.json"
 
-python3 - "$OUT" <<'EOF'
+python3 - "$ROOT" <<'EOF'
 import json, sys
-n = len(json.load(open(sys.argv[1])))
-print(f"regen: {n} reference decisions -> {sys.argv[1]}")
+
+root = sys.argv[1]
+for name in ("reference_filter.json", "reference_branding.json"):
+    path = f"{root}/worker/internal/parity/{name}"
+    n = len(json.load(open(path)))
+    print(f"regen: {n} reference decisions -> {path}")
 EOF
