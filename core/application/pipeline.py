@@ -14,6 +14,7 @@ Guarantees:
 from dataclasses import dataclass, field
 from enum import Enum
 import logging
+import os
 import time
 from typing import Any, Callable, Dict, List, Optional
 import uuid
@@ -281,6 +282,26 @@ def _content_fingerprint(payload: "MessagePayload") -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
+def _normalize_for_fingerprint(text: str) -> str:
+    """The comparison form a branding dedup key is computed over.
+
+    Mirrors the Persian/Arabic fold the content engine applies, so two posts
+    that differ only in invisible characters or Arabic/Persian letter
+    spellings are the same post (the same rule the hop decision itself
+    applies). Whitespace is collapsed so a re-format that only rewraps a
+    paragraph does not create a second post in C.
+    """
+    try:
+        from .domain.content_policy import fold_text
+    except Exception:  # pragma: no cover - content_policy is always importable
+        fold_text = lambda value: str(value).casefold()  # noqa: E731
+    folded = fold_text(text or "")
+    # Collapse runs of whitespace (including the newlines a header/footer
+    # template may rewrap) to one space: the digest is over the content, not
+    # over its line breaking.
+    return " ".join(folded.split())
+
+
 class DurableMessagePipeline:
     """Production-Grade message pipeline coordinator implementing P1."""
 
@@ -503,6 +524,85 @@ class DurableMessagePipeline:
                 ctx.correlation_id[:8], rule.id[:8], getattr(ctx.payload, "message_id", "?"),
             )
         return plan
+
+    # ----------------------------------------------------------------- #
+    # Stage 3 — worker-owned execution
+    # ----------------------------------------------------------------- #
+
+    def _worker_owns_execution(self) -> bool:
+        """Whether the Go Worker owns delivery execution right now.
+
+        The strangler-fig switch: when it is set, the Python queue loop stands
+        down (see DurableQueueManager.start) and the branding hop side effect
+        moves with the job instead of running here. The enqueue stays Python's
+        either way — only the execution, and with it the ordering requirement
+        ("durable first, side effect second"), moves.
+        """
+        return os.environ.get("ATF_WORKER_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")
+
+    def _branding_intent(self, rule: ForwardRule, reason: str, text: str = "") -> Optional[Dict[str, Any]]:
+        """The hop plan the Worker *executes*, without posting anything here.
+
+        Python keeps the decision (the same shared ``should_hop`` the
+        dashboard preview uses) and hands the Worker everything it needs to
+        perform stage 1 itself: the channel, the content mode, the
+        ``force_forward`` flag and the deduplication fingerprint. The Worker
+        posts into C, persists the intermediate ids onto the job, and only
+        then performs stage 2 — so no post can be orphaned in C by an
+        enqueue failure, and no message is posted twice.
+        """
+        from ..domain import branding as branding_domain
+
+        inter_id = branding_domain.channel_id(rule)
+        if not inter_id:
+            return None
+        cfg = branding_domain.read_config(rule)
+        # The fingerprint dedupes the *post*, not the job: several targets that
+        # share one processed text share one post in C, while targets whose
+        # transforms produced different text each need their own. It is
+        # computed from the same inputs the Worker will post, so the two
+        # engines can never disagree about which posts are the same post.
+        fingerprint = self._branding_fingerprint(rule, text)
+        return {
+            "chat_id": inter_id,
+            # A sentinel: no id exists yet because the Worker performs stage 1.
+            # The legacy plan keys stay (message_id/message_ids) for the
+            # worker's own checkpoint, filled in by the Go side.
+            "message_id": 0,
+            "message_ids": [],
+            "force_forward": bool(cfg["force_forward"]),
+            "content_mode": str(getattr(rule, "content_mode", "AUTO") or "AUTO"),
+            "reason": reason,
+            "dedup_key": fingerprint,
+            "stage": "INTENT",
+        }
+
+    def _branding_fingerprint(self, rule: ForwardRule, text: str = "") -> str:
+        """A stable dedup key for one branding post.
+
+        Keyed on the identity the mission specifies (rule, channel C, content
+        mode, album grouping) plus a stable normalized digest of the *content*
+        the Worker will post. Two targets with identical processed content
+        reuse the same post in C; different content legitimately needs
+        different posts. No raw message text is persisted anywhere to compute
+        this — only the digest rides in the job payload.
+        """
+        import hashlib as _hashlib
+
+        from ..domain import branding as branding_domain
+
+        album = getattr(rule, "media_group_id", "") or ""
+        parts = [
+            str(rule.id or ""),
+            str(branding_domain.channel_id(rule) or ""),
+            str(getattr(rule, "content_mode", "AUTO") or "AUTO"),
+            str(album),
+            # The deliverable's own text: the dedup is over what C receives.
+            _normalize_for_fingerprint(text or ""),
+        ]
+        return _hashlib.sha256("\u241F".join(parts).encode("utf-8", "replace")).hexdigest()
+
+    # -- end Stage 3 helpers ------------------------------------------------- #
 
     async def _resolve_ingestion_gap(self, payload: "MessagePayload") -> None:
         """Mark any recorded ingestion gap for this source message resolved.
@@ -1132,12 +1232,26 @@ class DurableMessagePipeline:
             # outcome (including a failure) is cached per distinct text — C must
             # never receive two copies of one message, and a hop miss must fall
             # back to a direct delivery rather than drop the message.
+            #
+            # Stage 3 worker ownership: when the Go Worker owns delivery
+            # execution, the side effect moves with the job. Python enqueues a
+            # branding *intent* (the decision + the deliverable's fingerprint)
+            # and does NOT post into C; the Worker performs stage 1, persists
+            # the intermediate ids, and then performs stage 2. That ordering is
+            # what keeps a crash from orphaning a post in C when the enqueue
+            # never happened, and it keeps exactly one engine posting.
             branding_plan = None
             if hop_enabled and self._branding_hop is not None:
-                hop_key = target_text or ""
-                if hop_key not in hop_plans:
-                    hop_plans[hop_key] = await self._perform_brand_hop(ctx, rule, target_text)
-                branding_plan = hop_plans[hop_key]
+                if self._worker_owns_execution():
+                    hop_key = target_text or ""
+                    if hop_key not in hop_plans:
+                        hop_plans[hop_key] = self._branding_intent(rule, hop_reason, target_text)
+                    branding_plan = hop_plans[hop_key]
+                else:
+                    hop_key = target_text or ""
+                    if hop_key not in hop_plans:
+                        hop_plans[hop_key] = await self._perform_brand_hop(ctx, rule, target_text)
+                    branding_plan = hop_plans[hop_key]
 
             if self._queue is not None:
                 ok = await self._queue.enqueue_delivery(

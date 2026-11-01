@@ -261,3 +261,17 @@ func isInvisible(r rune) bool {
 func nfcFold(r rune) rune {
 	return r
 }
+
+// NormalizeText returns the fingerprint-stable comparison form of a text.
+//
+// The Python pipeline computes its branding dedup key over
+// `_normalize_for_fingerprint` (the content engine's fold, with whitespace
+// collapsed), so the Go side's dedup key must use exactly the same form or
+// the two engines disagree about which posts are the same post. This is that
+// function: foldText (NFC + invisible strip + Arabic/Persian variant
+// unification + case-fold) with runs of whitespace collapsed to one space —
+// a re-wrapped paragraph is the same content, not a new post.
+func NormalizeText(text string) string {
+	folded := foldText(text)
+	return strings.Join(strings.Fields(folded), " ")
+}

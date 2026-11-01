@@ -28,6 +28,57 @@ The important asymmetry, preserved exactly from the Python engine:
 * **`Defer` never spends an attempt.** A paused task, a throttled target, an
   offline session, an unusable bot token are states of the *environment*, not
   failures of the job. Spending an attempt on them is what turned a
+
+## Stage 3 Lifecycle Additions
+
+### 1. Branding Hop (Stage 1 Checkpoint + Stage 2 Execution)
+
+```
+CLAIMED
+   |
+   v
+[Preflight checks pass]
+   |
+   v
+[Send fence claimed]
+   |
+   v
+[Has branding intent?]
+   |
+   +-- YES --> ensureBrandingStage1 (post to C)
+   |                |
+   |                +-- Confirmed --> checkpoint on delivery_jobs (intermediate_chat_id, intermediate_message_id, delivery_stage='BRANDED')
+   |                |
+   |                +-- Already checkpointed? --> reuse confirmed ID without re-posting
+   |                |
+   |                +-- Ambiguous outcome --> MarkUnknown (never blind re-post)
+   |
+   v
+[Dispatch Stage 2: forward/copy C to target B]
+   |
+   v
+SENT --> FenceRecordSent --> MarkSent
+   |
+   v
+[Schedule Auto-Delete if auto_delete_seconds > 0]
+```
+
+### 2. Auto-Delete Scheduled Action Lifecycle
+
+```
+PENDING (due_at = confirmed_send_ts + ttl)
+   |
+   v (due_at elapsed)
+CLAIMED (atomic ClaimDue via FOR UPDATE SKIP LOCKED)
+   |
+   +-- Delete succeeded / message already absent --> Complete (DELETE row)
+   |
+   +-- FloodWait --> Retry (next_attempt_at = now + retry_after, attempt not spent)
+   |
+   +-- Transient error --> Retry (capped exponential backoff)
+   |
+   +-- Permanent error / budget spent --> Fail (state = 'FAILED', leaves row for audit)
+```
   ten-second session outage into a dead-lettered message reported as
   `DELIVERY_EXHAUSTED`.
 * **`MarkRetry` spends one.** Only a genuine Telegram failure consumes the

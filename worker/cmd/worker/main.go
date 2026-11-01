@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -34,12 +35,13 @@ import (
 	"atf/worker/internal/config"
 	"atf/worker/internal/domain/job"
 	"atf/worker/internal/engine/delivery"
+	"atf/worker/internal/engine/scheduler"
 	"atf/worker/internal/health"
 	"atf/worker/internal/queue"
 	"atf/worker/internal/rulestore"
 	"atf/worker/internal/telegraph"
-	"atf/worker/internal/telegraph/grpcclient"
 	"atf/worker/internal/telegraph/fakegateway"
+	"atf/worker/internal/telegraph/grpcclient"
 )
 
 // ContractVersion is the Telegram Gateway contract this build speaks. It
@@ -51,8 +53,8 @@ const ContractVersion = "tfgw/v1"
 // API does. Empty means "built without the flag"; the health surface reports
 // that rather than inventing a version.
 var (
-	CommitSHA  string
-	BuildInfo  string
+	CommitSHA string
+	BuildInfo string
 )
 
 func main() {
@@ -146,7 +148,13 @@ func run() error {
 	}
 	defer rules.Close()
 
-	engine := delivery.New(store, rules, gateway, &slogLogger{log}, &counters{}, workerID(), cfg.MediaDir, delivery.Options{
+	schedStore, err := openSchedulerStore(context.Background(), cfg)
+	if err != nil {
+		return err
+	}
+	defer schedStore.Close()
+
+	engine := delivery.New(store, rules, gateway, schedStore, &slogLogger{log}, &counters{}, workerID(), cfg.MediaDir, delivery.Options{
 		NumWorkers:            cfg.NumWorkers,
 		BatchSize:             cfg.BatchSize,
 		LeaseDuration:         time.Duration(cfg.LeaseSeconds * float64(time.Second)),
@@ -154,6 +162,8 @@ func run() error {
 		MaxPerMinutePerTarget: cfg.MaxPerMinutePerTarget,
 		RPCTimeout:            60 * time.Second,
 	})
+
+	schedEngine := scheduler.New(schedStore, gateway, &slogLogger{log}, &schedCounters{}, workerID(), "", scheduler.Defaults())
 
 	tracker := health.NewTracker()
 	healthSrv := health.NewServer(cfg.ListenAddr, tracker, func(ctx context.Context) error {
@@ -172,7 +182,17 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
 
+	var schedWG sync.WaitGroup
+	schedWG.Add(1)
+	go func() {
+		defer schedWG.Done()
+		if err := schedEngine.Run(ctx); err != nil {
+			log.Warn("scheduler engine stopped", "error", err)
+		}
+	}()
+
 	err = runLoop(ctx, log, engine, store, tracker, cfg)
+	schedWG.Wait()
 	log.Info("worker stopped")
 	if err != nil {
 		return err
@@ -446,3 +466,38 @@ func (c *counters) ObserveWait(seconds float64) {
 		c.waitSum += seconds
 	}
 }
+
+// openSchedulerStore opens the durable scheduled_actions store against the
+// same database the delivery queue uses (PostgreSQL when configured,
+// otherwise SQLite atf.db).
+func openSchedulerStore(ctx context.Context, cfg *config.Config) (scheduler.Store, error) {
+	if cfg.DatabaseURL != "" {
+		conn, err := sql.Open("pgx", cfg.DatabaseURL)
+		if err != nil {
+			return nil, fmt.Errorf("open postgres scheduler store: %w", redactDSN(err))
+		}
+		s, err := scheduler.NewPostgres(conn)
+		if err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("init postgres scheduler store: %w", redactDSN(err))
+		}
+		return s, nil
+	}
+	conn, err := sql.Open("sqlite3", cfg.DSN())
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite scheduler store: %w", err)
+	}
+	s, err := scheduler.NewSQLite(conn)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("init sqlite scheduler store: %w", err)
+	}
+	return s, nil
+}
+
+type schedCounters struct{}
+
+func (schedCounters) Outcome(kind string)                       {}
+func (schedCounters) ObserveDueLatency(seconds float64)         {}
+func (schedCounters) ObserveQueueDepth(n int)                   {}
+func (schedCounters) ObserveRetry(actionID string, attempt int) {}

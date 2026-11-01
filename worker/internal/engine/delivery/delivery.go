@@ -34,6 +34,7 @@ import (
 	"atf/worker/internal/domain/job"
 	"atf/worker/internal/domain/rule"
 	"atf/worker/internal/engine/filter"
+	"atf/worker/internal/engine/scheduler"
 	"atf/worker/internal/engine/transform"
 	"atf/worker/internal/queue"
 	"atf/worker/internal/telegraph"
@@ -78,24 +79,26 @@ type Options struct {
 // Engine is the delivery execution engine. It owns no goroutine state; the
 // Worker (cmd/worker) drives its Run loop.
 type Engine struct {
-	store    queue.Store
-	rules    rule.Store
-	gateway  telegraph.Gateway
-	filters  *filter.Engine
+	store      queue.Store
+	rules      rule.Store
+	gateway    telegraph.Gateway
+	scheduler  scheduler.Store
+	filters    *filter.Engine
 	transforms *transform.Engine
-	log      Logger
-	metrics  Metrics
-	opts     Options
-	workerID string
+	log        Logger
+	metrics    Metrics
+	opts       Options
+	workerID   string
 
-	mu       sync.Mutex
-	rate     map[string][]time.Time // per-target send timestamps
-	scratch  string                 // shared media scratch dir
+	mu      sync.Mutex
+	rate    map[string][]time.Time // per-target send timestamps
+	scratch string                 // shared media scratch dir
 }
 
 // New constructs an Engine. gateway may be the gRPC client or the in-process
-// fake — the engine never knows which.
-func New(store queue.Store, rules rule.Store, gateway telegraph.Gateway, log Logger, metrics Metrics, workerID, scratchDir string, opts Options) *Engine {
+// fake — the engine never knows which. scheduler may be nil in unit tests that
+// do not exercise auto-delete.
+func New(store queue.Store, rules rule.Store, gateway telegraph.Gateway, scheduler scheduler.Store, log Logger, metrics Metrics, workerID, scratchDir string, opts Options) *Engine {
 	if opts.NumWorkers < 1 {
 		opts.NumWorkers = 4
 	}
@@ -109,17 +112,18 @@ func New(store queue.Store, rules rule.Store, gateway telegraph.Gateway, log Log
 		opts.RPCTimeout = 60 * time.Second
 	}
 	return &Engine{
-		store:    store,
-		rules:    rules,
-		gateway:  gateway,
-		filters:  filter.New(),
+		store:      store,
+		rules:      rules,
+		gateway:    gateway,
+		scheduler:  scheduler,
+		filters:    filter.New(),
 		transforms: transform.New(),
-		log:      log,
-		metrics:  metrics,
-		opts:     opts,
-		workerID: workerID,
-		rate:     map[string][]time.Time{},
-		scratch:  scratchDir,
+		log:        log,
+		metrics:    metrics,
+		opts:       opts,
+		workerID:   workerID,
+		rate:       map[string][]time.Time{},
+		scratch:    scratchDir,
 	}
 }
 
@@ -280,10 +284,21 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 		// fall through: this worker owns the send
 	}
 
-	// 4. Dispatch. The job's own text already carries every ingest-side
-	// transform; the dispatch path re-decides only per-target overrides,
-	// never the task's own policies.
-	targetID, ferr := e.dispatch(ctx, j)
+	// 4. Stage-3 Branding Hop (Stage 1): if the job carries a branding
+	// intent, post the processed deliverable into channel C FIRST, checkpoint
+	// the intermediate ids on the job and in memory, then let dispatch
+	// execute Stage 2 (forwarding/copying C into target B).
+	//
+	// This ordering satisfies the mission's mandatory requirement:
+	// "durable enqueue must happen before the branding side effect".
+	// The job is claimed, the send fence is held, and stage 1 runs as part
+	// of the claimed execution — never before enqueue.
+	if err := e.ensureBrandingStage1(ctx, j, r, logger); err != nil {
+		return err
+	}
+
+	// 5. Dispatch (Stage 2 for branded deliveries; direct for unbranded).
+	targetID, ferr := e.dispatch(ctx, j, r)
 
 	if ferr != nil {
 		return e.handleFailure(ctx, j, logger, key, ferr)
@@ -301,6 +316,12 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	if err := e.store.MarkSent(ctx, j.ID, targetID); err != nil {
 		logger.Warn("mark_sent failed", "error", err)
 	}
+
+	// 6. Durable Auto-Delete Scheduling: schedule cleanup for the delivered
+	// message(s). Bounded TTL, persists in the same store, survives every
+	// restart of either process.
+	e.scheduleAutoDelete(ctx, j, r, targetID, logger)
+
 	if j.CreatedAt > 0 {
 		e.metrics.ObserveWait(math.Max(0, time.Since(time.Unix(j.CreatedAt, 0)).Seconds()))
 	}
@@ -327,7 +348,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 // but only when the task opted in (fallback_enabled): a refused forward must
 // fail the job instead of being rescued by a bypass the owner did not ask
 // for.
-func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob) (int64, *telegraph.DeliveryFailure) {
+func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.ForwardRule) (int64, *telegraph.DeliveryFailure) {
 	p := &j.Payload
 	callCtx, cancel := context.WithTimeout(ctx, e.opts.RPCTimeout)
 	defer cancel()
@@ -337,9 +358,28 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob) (int64, *tele
 	srcMsg := j.SourceMessageID
 	sessionID := p.SessionID()
 
+	transport := transportFor(j, r)
+	buttons := payloadButtons(p)
+
 	// A keyword-reply job is a pure-text follow-up: it never re-copies or
-	// re-forwards the source message's media.
+	// re-forwards the source message's media. Compatible with BOT transport
+	// when requested, falling back to USER when the bot is unavailable.
 	if p.IsReply() {
+		if transport == TransportBot {
+			bt := botTarget(j, r)
+			id, ferr := e.gateway.BotSendText(callCtx, bt, target, p.Text(), p.TopicID(), buttons)
+			e.metrics.ObserveRPC("bot_send_text", 0)
+			if ferr == nil {
+				return id, nil
+			}
+			if unsupportedFailure(ferr) {
+				e.jobLogger(j).Warn("bot route unsupported for keyword reply — falling back to account transport", "reason", ferr.Message)
+				id, ferr = e.gateway.SendMessage(callCtx, sessionID, target, p.Text(), p.TopicID())
+				e.metrics.ObserveRPC("send_message", 0)
+				return id, ferr
+			}
+			return 0, ferr
+		}
 		id, ferr := e.gateway.SendMessage(callCtx, sessionID, target, p.Text(), p.TopicID())
 		e.metrics.ObserveRPC("send_message", 0)
 		return id, ferr
@@ -368,23 +408,28 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob) (int64, *tele
 
 	// 2. DIRECT_FORWARD.
 	forwardMode := p.ForwardMode()
-albumFromIDs := p.AlbumMessageIDs()
+	albumFromIDs := p.AlbumMessageIDs()
 	if len(albumFromIDs) == 0 {
 		albumFromIDs = []int64{srcMsg}
 	}
 	if forwardMode == "DIRECT_FORWARD" {
-		ids, ferr := e.gateway.ForwardMessages(callCtx, sessionID, target, src, albumFromIDs, p.TopicID())
-		e.metrics.ObserveRPC("forward_messages", 0)
-		if ferr == nil && len(ids) > 0 {
-			return firstNonZero(ids), nil
-		}
-		if ferr != nil && !ferr.IsForwardingRestricted() {
-			return 0, ferr
-		}
-		// Restricted (or empty result): fall through to the copy path when
-		// the task allows the bypass, otherwise surface the failure.
-		if ferr != nil && !p.FallbackEnabled() {
-			return 0, ferr
+		if transport == TransportBot {
+			// The bot route has no native forward_messages: fall through to
+			// copy rather than failing, exactly as Python does (durable_queue.py).
+			e.jobLogger(j).Info("bot route has no native forward — delivering as a copy")
+		} else {
+			ids, ferr := e.gateway.ForwardMessages(callCtx, sessionID, target, src, albumFromIDs, p.TopicID())
+			e.metrics.ObserveRPC("forward_messages", 0)
+			if ferr == nil && len(ids) > 0 {
+				return firstNonZero(ids), nil
+			}
+			if ferr != nil && !ferr.IsForwardingRestricted() {
+				return 0, ferr
+			}
+			// Restricted: fall through to copy when fallback is allowed.
+			if ferr != nil && !p.FallbackEnabled() {
+				return 0, ferr
+			}
 		}
 	}
 
@@ -394,8 +439,53 @@ albumFromIDs := p.AlbumMessageIDs()
 		return e.dispatchAlbum(callCtx, j, albumFromIDs)
 	}
 
-	// 4. Content modes.
+	// 4. Content modes (USER or BOT transport).
 	caption := p.Text()
+
+	if transport == TransportBot {
+		bt := botTarget(j, r)
+		switch p.ContentMode() {
+		case "TEXT_ONLY":
+			id, ferr := e.gateway.BotSendText(callCtx, bt, target, firstNonEmpty(caption, "..."), p.TopicID(), buttons)
+			e.metrics.ObserveRPC("bot_send_text", 0)
+			if ferr != nil && unsupportedFailure(ferr) {
+				e.jobLogger(j).Warn("bot route unsupported for text — falling back to account transport", "reason", ferr.Message)
+				return e.gateway.SendMessage(callCtx, sessionID, target, firstNonEmpty(caption, "..."), p.TopicID())
+			}
+			return id, ferr
+		case "MEDIA_ONLY":
+			if p.HasMedia() {
+				id, ferr := e.gateway.BotCopyMessage(callCtx, bt, target, src, srcMsg, "", p.TopicID(), buttons)
+				e.metrics.ObserveRPC("bot_copy_message", 0)
+				if ferr != nil && unsupportedFailure(ferr) {
+					e.jobLogger(j).Warn("bot copy unsupported — falling back to account transport", "reason", ferr.Message)
+					return e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, "", p.TopicID())
+				}
+				return id, ferr
+			}
+			return 0, nil
+		}
+
+		// AUTO / TEXT_AND_MEDIA on the bot route:
+		if p.HasMedia() {
+			id, ferr := e.gateway.BotCopyMessage(callCtx, bt, target, src, srcMsg, caption, p.TopicID(), buttons)
+			e.metrics.ObserveRPC("bot_copy_message", 0)
+			if ferr != nil && unsupportedFailure(ferr) {
+				e.jobLogger(j).Warn("bot copy unsupported — falling back to account transport", "reason", ferr.Message)
+				return e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, caption, p.TopicID())
+			}
+			return id, ferr
+		}
+		id, ferr := e.gateway.BotSendText(callCtx, bt, target, firstNonEmpty(caption, "..."), p.TopicID(), buttons)
+		e.metrics.ObserveRPC("bot_send_text", 0)
+		if ferr != nil && unsupportedFailure(ferr) {
+			e.jobLogger(j).Warn("bot send unsupported — falling back to account transport", "reason", ferr.Message)
+			return e.gateway.SendMessage(callCtx, sessionID, target, firstNonEmpty(caption, "..."), p.TopicID())
+		}
+		return id, ferr
+	}
+
+	// USER transport (default):
 	switch p.ContentMode() {
 	case "TEXT_ONLY":
 		id, ferr := e.gateway.SendMessage(callCtx, sessionID, target, firstNonEmpty(caption, "..."), p.TopicID())
@@ -413,7 +503,7 @@ albumFromIDs := p.AlbumMessageIDs()
 		return 0, nil
 	}
 
-	// 5. AUTO / TEXT_AND_MEDIA.
+	// AUTO / TEXT_AND_MEDIA on USER transport:
 	if p.HasMedia() {
 		id, ferr := e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, caption, p.TopicID())
 		e.metrics.ObserveRPC("copy_message", 0)
@@ -863,4 +953,159 @@ func messageIDs(list any, single any) []int64 {
 	return out
 }
 
+// --- Stage 3: branding stage 1 execution and checkpoints ------------------- //
 
+// ensureBrandingStage1 executes the post into channel C when the job carries a
+// branding intent, checkpoints the intermediate ids onto the job row and in
+// memory, and updates the payload so stage 2 forwards from C.
+//
+// Ordering guarantee: the send fence is already held, the delivery job is
+// CLAIMED, and stage 1 runs as part of the claimed execution — never before
+// the job is durable.
+func (e *Engine) ensureBrandingStage1(ctx context.Context, j *job.DeliveryJob, r *rule.ForwardRule, logger Logger) error {
+	plan := readHopPlan(j)
+	if plan == nil || !plan.isIntent() {
+		// Not an intent: either unbranded, or a legacy already-performed
+		// hop whose intermediate ids are already on the payload.
+		return nil
+	}
+
+	// Channel C check: C must not be the message's own source, and must not
+	// be empty. A misconfigured channel delivers directly rather than
+	// dropping the message.
+	if plan.ChatID == "" || plan.ChatID == j.SourceChatID {
+		logger.Warn("branding channel C is missing or equal to source — delivering directly",
+			"brand_channel", plan.ChatID)
+		return nil
+	}
+
+	// Has stage 1 already been checkpointed on this job (e.g. from an earlier
+	// attempt that crashed before stage 2 completed)?
+	// If the job already has intermediate_message_id set, stage 1 landed:
+	// reuse the confirmed intermediate ids instead of posting twice into C.
+	if j.IntermediateMsgID > 0 && j.IntermediateChatID != "" {
+		logger.Info("reusing confirmed stage 1 checkpoint — will not post into C again",
+			"intermediate_chat", j.IntermediateChatID,
+			"intermediate_msg_id", j.IntermediateMsgID)
+		e.updateJobForStage2(j, plan, j.IntermediateChatID, []int64{j.IntermediateMsgID})
+		return nil
+	}
+
+	// Post into C through the Gateway:
+	transport := transportFor(j, r)
+	post := e.stage1Post(ctx, j, r, plan, transport)
+	callCtx, cancel := context.WithTimeout(ctx, e.opts.RPCTimeout)
+	defer cancel()
+
+	ids, ferr := e.gateway.BrandingStage1(callCtx, post)
+	if ferr != nil {
+		// An ambiguous stage-1 outcome leaves the job UNKNOWN for
+		// reconciliation: the post may have landed in C. Blindly re-posting
+		// is what creates duplicate branding messages.
+		if ferr.IsAmbiguous() {
+			logger.Error("ambiguous stage 1 outcome — marking UNKNOWN for reconciliation",
+				"code", ferr.Code, "error_type", ferr.ErrorType)
+			_ = e.store.MarkUnknown(ctx, j.ID, "Uncertain branding stage 1: "+ferr.Message)
+			e.metrics.Outcome("unknown")
+			return fmt.Errorf("uncertain branding stage 1: %s", ferr.Message)
+		}
+		// Permanent or transient: handleFailure handles the retry/fail
+		// lifecycle cleanly.
+		key := job.AttemptKey{
+			RuleID: j.RuleID, SourceChatID: j.SourceChatID,
+			SourceMessageID: j.SourceMessageID, TargetChatID: j.TargetChatID,
+			JobKind: j.JobKind,
+		}
+		_ = e.handleFailure(ctx, j, logger, key, ferr)
+		return fmt.Errorf("branding stage 1 failed: %s", ferr.Message)
+	}
+
+	if len(ids) == 0 {
+		logger.Warn("branding stage 1 posted nothing into C — delivering directly")
+		return nil
+	}
+
+	// Checkpoint confirmed: persist intermediate ids onto the job row so a
+	// crash between stage 1 and stage 2 never posts a second copy into C.
+	j.IntermediateChatID = plan.ChatID
+	j.IntermediateMsgID = ids[0]
+	j.DeliveryStage = "BRANDED"
+	e.updateJobForStage2(j, plan, plan.ChatID, ids)
+	logger.Info("branding stage 1 confirmed in C",
+		"brand_channel", plan.ChatID, "intermediate_ids", ids)
+	return nil
+}
+
+// updateJobForStage2 mutates the job's payload in memory so the dispatch path
+// reproduces the hop: forward from C (or copy from C on the bot route).
+func (e *Engine) updateJobForStage2(j *job.DeliveryJob, plan *hopPlan, cChat string, cIDs []int64) {
+	plan.Stage = "CONFIRMED"
+	plan.ChatID = cChat
+	plan.MessageID = cIDs[0]
+	plan.MessageIDs = cIDs
+	raw := j.Payload.Raw()
+	if raw == nil {
+		raw = map[string]any{}
+	}
+	raw["branding"] = map[string]any{
+		"chat_id":       cChat,
+		"message_id":    cIDs[0],
+		"message_ids":   cIDs,
+		"force_forward": plan.ForceForward,
+		"content_mode":  plan.ContentMode,
+		"reason":        plan.Reason,
+	}
+}
+
+// --- Stage 3: auto-delete scheduling --------------------------------------- //
+
+// scheduleAutoDelete persists the scheduled cleanup for a confirmed delivery.
+// It is called ONLY after delivery is confirmed (MarkSent), and only when the
+// task configured a positive TTL. A failure here is logged, never failing the
+// delivery: the message is already in the target.
+func (e *Engine) scheduleAutoDelete(ctx context.Context, j *job.DeliveryJob, r *rule.ForwardRule, targetMsgID int64, logger Logger) {
+	if e.scheduler == nil {
+		return
+	}
+	ttl := j.Payload.AutoDeleteSeconds()
+	if ttl <= 0 {
+		return
+	}
+	if targetMsgID <= 0 {
+		return
+	}
+
+	now := time.Now().Unix()
+	dueAt := float64(now + ttl)
+	transport := transportFor(j, r)
+	schedTransport := scheduler.TransportUser
+	transportRef := j.Payload.SessionID()
+	if transport == TransportBot {
+		schedTransport = scheduler.TransportBot
+		transportRef = botTarget(j, r).TokenID
+	}
+
+	action := scheduler.Action{
+		ID:            scheduler.ID(j.ID, scheduler.ActionAutoDelete, j.TargetChatID, targetMsgID),
+		JobID:         j.ID,
+		Type:          scheduler.ActionAutoDelete,
+		Transport:     schedTransport,
+		TransportRef:  transportRef,
+		OwnerUserID:   j.Payload.OwnerUserID(),
+		ChatID:        j.TargetChatID,
+		MessageID:     targetMsgID,
+		DueAt:         dueAt,
+		NextAttemptAt: dueAt,
+		MaxAttempts:   5,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+
+	if err := e.scheduler.Schedule(ctx, action); err != nil {
+		logger.Warn("could not schedule auto-delete — the cleanup may be delayed or missed",
+			"target_message_id", targetMsgID, "ttl", ttl, "error", err)
+		return
+	}
+	logger.Info("auto-delete scheduled",
+		"target_message_id", targetMsgID, "ttl_seconds", ttl, "due_at", dueAt)
+}

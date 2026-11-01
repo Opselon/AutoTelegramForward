@@ -63,7 +63,7 @@ func newFenceHarness(t *testing.T, rs rule.Store) (*harness, *fenceProbeStore) {
 	gw := fakegateway.New("")
 	metrics := &testMetrics{}
 	log := &testLogger{}
-	engine := New(store, rs, gw, log, metrics, "w-fence", t.TempDir(), Options{
+	engine := New(store, rs, gw, nil, log, metrics, "w-fence", t.TempDir(), Options{
 		NumWorkers: 2, BatchSize: 5, LeaseDuration: 30 * time.Second, RPCTimeout: 5 * time.Second,
 	})
 	probe := &fenceProbeStore{Store: store}
@@ -161,7 +161,7 @@ func TestRateLimitedTargetDoesNotClaimFence(t *testing.T) {
 	gw := fakegateway.New("")
 	metrics := &testMetrics{}
 	log := &testLogger{}
-	engine := New(store, &fixedRules{rule: &rule.ForwardRule{ID: "r1", IsActive: true}}, gw, log, metrics, "w-fence", t.TempDir(), Options{
+	engine := New(store, &fixedRules{rule: &rule.ForwardRule{ID: "r1", IsActive: true}}, gw, nil, log, metrics, "w-fence", t.TempDir(), Options{
 		NumWorkers: 2, BatchSize: 5, LeaseDuration: 30 * time.Second,
 		MaxPerMinutePerTarget: 1, RPCTimeout: 5 * time.Second,
 	})
@@ -236,7 +236,7 @@ func TestGenuineSendStillRequiresFenceClaim(t *testing.T) {
 func TestFenceUnavailableDefersWithoutSending(t *testing.T) {
 	store := queue.NewTestStore(t)
 	gw := fakegateway.New("")
-	engine := New(store, &fixedRules{rule: &rule.ForwardRule{ID: "r1", IsActive: true}}, gw, &testLogger{}, &testMetrics{}, "w-fence", t.TempDir(), Options{
+	engine := New(store, &fixedRules{rule: &rule.ForwardRule{ID: "r1", IsActive: true}}, gw, nil, &testLogger{}, &testMetrics{}, "w-fence", t.TempDir(), Options{
 		NumWorkers: 2, BatchSize: 5, LeaseDuration: 30 * time.Second, RPCTimeout: 5 * time.Second,
 	})
 	engine.store = &brokenFenceStore{Store: store}

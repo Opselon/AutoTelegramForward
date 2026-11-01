@@ -19,10 +19,15 @@ worker/
 │   ├── engine/
 │   │   ├── filter/              parity port of the Python FilterEngine
 │   │   ├── transform/           target-scoped rewrite + length clamping
-│   │   └── delivery/            the delivery decision tree + retry policy
+│   │   ├── delivery/            the delivery decision tree + retry policy
+│   │   └── scheduler/           Stage 3 durable auto-delete scheduler engine
+│   ├── domain/
+│   │   ├── job/                 DeliveryJob, Payload, AttemptKey, FenceOutcome
+│   │   ├── rule/                read-only ForwardRule/FilterRule projection
+│   │   └── branding/            Stage 3 branding decision + fold port (parity-tested)
 │   ├── queue/                   SQLite + PostgreSQL stores: one Store interface
 │   ├── rulestore/               composite rule store (forward_rules + filter_rules)
-│   ├── parity/                  offline cross-engine parity harness
+│   ├── parity/                  offline cross-engine parity harness (filter + branding)
 │   ├── telegraph/               the business-neutral Gateway port
 │   │   ├── grpcclient/          the only place that knows protobuf exists
 │   │   └── fakegateway/         deterministic, TEST-ONLY gateway
