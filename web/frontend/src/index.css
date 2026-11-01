@@ -3548,6 +3548,310 @@ input[type='radio']:disabled {
   min-inline-size: 0;
 }
 
+/* ============================== DevOps — pipeline flight deck ============ */
+/* Surface-scoped classes for the DevOps tab. Everything resolves to role
+   tokens; motion is subtle and reduced-motion users get none. The log
+   console is the hero instrument: mono-led, calm density. */
+
+.ops-section {
+  margin-block-end: var(--space-4);
+  animation: ops-in 240ms var(--ease-out) backwards;
+  animation-delay: calc(var(--ops-i, 0) * 45ms);
+}
+
+@keyframes ops-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.ops-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-block-end: var(--space-3);
+}
+
+.ops-head__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--type-md);
+  font-weight: 700;
+}
+
+.ops-head__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+/* Live toggle: a status instrument, not a ghost button — the dot breathes
+   only while the stream is live. */
+.ops-live {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-block-size: 32px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font-size: var(--type-xs);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  cursor: pointer;
+}
+
+.ops-live--on {
+  border-color: color-mix(in oklab, var(--color-success) 40%, transparent);
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.ops-live__dot {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.ops-live--on .ops-live__dot {
+  background: var(--color-success);
+  box-shadow: 0 0 8px color-mix(in oklab, var(--color-success) 80%, transparent);
+  animation: ops-breathe 2.4s var(--ease-out) infinite;
+}
+
+@keyframes ops-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 4px color-mix(in oklab, var(--color-success) 60%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 10px color-mix(in oklab, var(--color-success) 90%, transparent);
+  }
+}
+
+/* Signal chain: node cards joined by labelled connectors. A live link shows
+   a slow flow pulse along the wire; a dead one glows red once. */
+.ops-chain {
+  display: flex;
+  flex-direction: column;
+}
+
+.ops-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 2px 0 2px 22px;
+  min-block-size: 26px;
+  direction: ltr;
+}
+
+.ops-link__wire {
+  inline-size: 2px;
+  min-block-size: 18px;
+  border-radius: var(--radius-full);
+  background: color-mix(in oklab, var(--color-danger) 40%, transparent);
+}
+
+.ops-link--on .ops-link__wire {
+  background: color-mix(in oklab, var(--color-success) 50%, transparent);
+}
+
+.ops-node {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  border: 1px solid color-mix(in oklab, var(--color-danger) 35%, transparent);
+  background: var(--color-danger-soft);
+}
+
+.ops-node--on {
+  border-color: color-mix(in oklab, var(--color-success) 25%, transparent);
+  background: var(--color-success-soft);
+}
+
+.ops-node__dot {
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  background: var(--color-danger);
+  box-shadow: 0 0 10px color-mix(in oklab, var(--color-danger) 80%, transparent);
+}
+
+.ops-node--on .ops-node__dot {
+  background: var(--color-success);
+  box-shadow: 0 0 10px color-mix(in oklab, var(--color-success) 80%, transparent);
+}
+
+.ops-node__title {
+  font-size: var(--type-sm);
+  font-weight: 700;
+}
+
+.ops-node__sub {
+  font-size: var(--type-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.ops-node__verdict {
+  font-size: var(--type-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Console toolbar rows: mono-labelled control clusters. */
+.ops-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-block-end: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.ops-toolbar__label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--type-xs);
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+}
+
+.ops-filter {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.ops-select {
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--type-sm);
+  font-family: inherit;
+  max-inline-size: 240px;
+}
+
+.ops-console {
+  background: var(--color-surface-inset);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: var(--type-sm);
+  line-height: 1.6;
+  max-block-size: 520px;
+  overflow-y: auto;
+  box-shadow: inset 0 2px 10px var(--color-scrim);
+  min-inline-size: 0;
+}
+
+.ops-console__empty {
+  text-align: center;
+  padding: var(--space-5) var(--space-4);
+  color: var(--color-text-muted);
+}
+
+.ops-row {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  border-inline-start: 3px solid var(--color-border);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  word-break: break-word;
+  min-inline-size: 0;
+}
+
+.ops-row__time {
+  color: var(--color-text-muted);
+  font-size: var(--type-xs);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.ops-row__level {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  font-size: var(--type-xs);
+  flex-shrink: 0;
+}
+
+.ops-row__svc {
+  color: var(--color-accent-violet);
+  background: var(--color-primary-soft);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: var(--type-xs);
+  flex-shrink: 0;
+}
+
+.ops-chip {
+  color: var(--color-accent-violet);
+  background: var(--color-primary-soft);
+  border: 1px solid color-mix(in oklab, var(--color-accent-violet) 35%, transparent);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: var(--type-xs);
+  flex-shrink: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.ops-chip--info {
+  color: var(--color-info);
+  background: var(--color-info-soft);
+  border-color: color-mix(in oklab, var(--color-info) 35%, transparent);
+}
+
+@media (max-width: 640px) {
+  .ops-toolbar .ops-select,
+  .ops-toolbar .btn {
+    min-block-size: 44px;
+  }
+
+  .ops-head {
+    align-items: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ops-section {
+    animation: none;
+  }
+
+  .ops-live--on .ops-live__dot {
+    animation: none;
+  }
+}
+
 /* Layout utilities (spacing uses the 4px scale). */
 .tom-view {
   display: flex;
