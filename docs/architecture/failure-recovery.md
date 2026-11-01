@@ -35,10 +35,22 @@ still refuse (budget spent, backpressure). `IsAmbiguous` outranks
 | Telegram refused, unambiguous (4xx) | `FAILED` | unchanged | no |
 | FloodWait | `RETRY_WAIT` (next_retry_at = demanded window) | **0** | yes, after the wait |
 | transient (5xx, media) | `RETRY_WAIT`, exponential backoff, cap 5m | +1 | yes, until the budget |
-| budget exhausted | `FAILED` + a `dead_letter_queue` row | — | only by owner replay |
+| budget exhausted | `FAILED` + a `dead_letter_queue` row (`last_error`, `attempts`) | — | only by owner replay |
 | timeout / ambiguous | `UNKNOWN` | unchanged | **never automatically** |
 | session offline | `RETRY_WAIT` | **0** | when the session returns |
 | rule deleted / disabled / auto-paused | `FAILED` | — | no |
+| rule paused (temporary) | `RETRY_WAIT` by **defer** | **0** | when the pause expires |
+| rule store unreachable | `RETRY_WAIT` by **defer** | **0** | when the store returns |
+| filter rejects at delivery time | `FAILED` | — | no |
+| target rate-limited | `RETRY_WAIT` by **defer** | **0** | after the window |
+
+The last four rows are the Stage 2 preflight correction. The earlier
+implementation claimed the send-side fence *before* those checks, which
+meant a job that never reached Telegram could sit behind a CLAIMED fence
+until the sweeper turned the claim UNKNOWN — a job permanently blocked by
+something no send had happened for. Preflight now runs to completion before
+the first side effect; the fence is claimed only for jobs that will actually
+dispatch.
 
 ## Restart recovery
 

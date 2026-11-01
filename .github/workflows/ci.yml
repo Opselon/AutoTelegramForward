@@ -197,6 +197,55 @@ jobs:
             exit 1
           fi
 
+  go-worker-postgres-integration:
+    # The SQLite suite cannot prove the PostgreSQL adapter: SKIP LOCKED,
+    # JSONB decoding, DOUBLE PRECISION leases and the delivery_attempts
+    # UPSERT are all engine-specific. This job runs the integration suite
+    # against a REAL postgres service (never a SQLite stand-in), gated on
+    # the same DSN env var the tests skip on when unset.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: atf
+          POSTGRES_PASSWORD: atf_ci_password
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U atf"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.2"
+      - name: PostgreSQL integration tests
+        working-directory: worker
+        env:
+          ATF_TEST_POSTGRES_DSN: postgres://atf:atf_ci_password@127.0.0.1:5432/postgres
+        run: |
+          # The suite creates and drops its own scratch database per test, so
+          # a run never collides with the service's own bookkeeping db.
+          go test ./internal/queue/ -run '^TestPostgres' -v -timeout 300s
+          go test ./internal/queue/ -run '^TestPostgres' -race -timeout 300s
+      - name: Cross-engine parity suite
+        # The Go side of the parity harness compares against the committed
+        # reference produced by the REAL Python FilterEngine. Regenerate and
+        # diff, so a Python behavior change that nobody re-referenced fails
+        # here instead of silently diverging in production.
+        run: |
+          python3 worker/internal/parity/reference_filter.py > /tmp/reference.json
+          if ! diff -u worker/internal/parity/reference_filter.json /tmp/reference.json; then
+            echo "::error::parity reference is stale: run scripts/regen_parity_reference.sh"
+            exit 1
+          fi
+          cd worker && go test ./internal/parity/ -timeout 120s
+
   python-runtime-tests:
     # The Python Telegram Runtime half of the boundary: error taxonomy
     # parity with the Go enum, the gRPC contract, and the strangler-fig
@@ -218,7 +267,7 @@ jobs:
   docker-build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [python-tests, go-tests, go-worker-tests, python-runtime-tests]
+    needs: [python-tests, go-tests, go-worker-tests, go-worker-postgres-integration, python-runtime-tests]
     steps:
       - uses: actions/checkout@v4
       # Every image used to be rebuilt from scratch on every PR with plain

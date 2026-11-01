@@ -2,8 +2,9 @@
 
 > Implemented: the Go Worker's claim/fence/retry state machine
 > (`worker/internal/queue`, `worker/internal/engine/delivery`), verified by
-> `worker/internal/queue/sqlite_test.go` and
-> `worker/internal/engine/delivery/delivery_test.go`.
+> `worker/internal/queue/sqlite_test.go`,
+> `worker/internal/queue/postgres_test.go` (26 tests against a real
+> PostgreSQL) and `worker/internal/engine/delivery/delivery_test.go`.
 
 ## The state model (the existing one — no new states were invented)
 
@@ -40,16 +41,22 @@ request, a worker restart, a lease expiring mid-dispatch, a lost database
 connection, a network timeout, or a repeated scheduler run. The defense is
 layered:
 
-1. **The claim** — `ClaimBatch` marks rows CLAIMED inside one transaction, so
-   two workers cannot claim the same row.
+1. **The claim** — `ClaimBatch` marks rows CLAIMED inside one atomic statement
+   (`UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED)` on
+   PostgreSQL), so two workers cannot claim the same row and the claim never
+   opens a read-then-write window. A claim error fails closed: the Python
+   implementation's broad-except fallback (no row locking, no lane
+   isolation, `created_at`-only ordering) is deliberately not ported.
 2. **The target lane** — a job is only claimable when *no earlier unsent job
    exists for the same `target_chat_id`. One target is one lane with one
-   in-flight job; different targets proceed in parallel. (Test:
-   `TestTwoWorkersOneLane`.)
+   in-flight job; different targets proceed in parallel. Ordering is
+   `(source_chat_id, source_message_id, created_at, id)` on both backends —
+   never `created_at` alone. (Tests: `TestTwoWorkersOneLane`,
+   `TestPostgresSourceMessageOrdering`, `TestPostgresMultipleJobsOneTargetAreSerialized`.)
 3. **The send-side fence** (`delivery_attempts`) — Telegram has no
    idempotency key for ordinary sends, so the logical send is claimed
-   atomically *before any Telegram call*. The key is deterministic and
-   business-derived — `rule:source_chat:source_message:target[:kind]`,
+   atomically *after preflight and before any Telegram call*. The key is
+   deterministic and business-derived — `rule:source_chat:source_message:target[:kind]`,
    byte-identical to the Python `DeliveryAttemptKey.id` — so every claim,
    claim-after-crash and duplicate check resolves to the same row.
 

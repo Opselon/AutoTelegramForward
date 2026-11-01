@@ -1,0 +1,87 @@
+[
+  {
+    "name": "01_blacklist_keyword",
+    "action": "DROP",
+    "reason": "blacklist_keyword"
+  },
+  {
+    "name": "02_whitelist_mismatch",
+    "action": "DROP",
+    "reason": "whitelist_mismatch"
+  },
+  {
+    "name": "03_whitelist_match",
+    "action": "ALLOW",
+    "reason": "filter_passed"
+  },
+  {
+    "name": "04_regex_block",
+    "action": "DROP",
+    "reason": "regex_block:4\\d{3}"
+  },
+  {
+    "name": "05_regex_require",
+    "action": "DROP",
+    "reason": "regex_mismatch"
+  },
+  {
+    "name": "06_legacy_regex_blacklist_only",
+    "action": "DROP",
+    "reason": "regex_block:\\d{4}"
+  },
+  {
+    "name": "07_legacy_regex_require_any",
+    "action": "DROP",
+    "reason": "regex_mismatch"
+  },
+  {
+    "name": "08_disabled_filter_allows",
+    "action": "ALLOW",
+    "reason": "filter_disabled"
+  },
+  {
+    "name": "09_service_dropped",
+    "action": "DROP",
+    "reason": "service_message_dropped"
+  },
+  {
+    "name": "10_too_short",
+    "action": "DROP",
+    "reason": "too_short"
+  },
+  {
+    "name": "11_too_long",
+    "action": "DROP",
+    "reason": "too_long"
+  },
+  {
+    "name": "12_media_blocked",
+    "action": "DROP",
+    "reason": "media_blocked:video"
+  },
+  {
+    "name": "13_media_not_allowed",
+    "action": "DROP",
+    "reason": "media_not_allowed:video"
+  },
+  {
+    "name": "14_persian_variants",
+    "action": "DROP",
+    "reason": "blacklist_keyword"
+  },
+  {
+    "name": "15_multiword_phrase_whitespace",
+    "action": "DROP",
+    "reason": "blacklist_keyword"
+  },
+  {
+    "name": "16_link_blocked",
+    "action": "DROP",
+    "reason": "link_blocked"
+  },
+  {
+    "name": "17_no_filter_allows_service_when_drop_off",
+    "action": "ALLOW",
+    "reason": "filter_passed"
+  }
+]

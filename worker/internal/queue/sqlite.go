@@ -432,7 +432,15 @@ func (s *sqliteStore) PendingCount(ctx context.Context) (int, error) {
 	return count, err
 }
 
-// writeDeadLetter preserves an exhausted job for replay.
+// writeDeadLetter preserves an exhausted job for replay. The row id is
+// `dlq_<job_id>` — the Python implementation's own convention, so a dead
+// letter written by either engine lands on the same row.
+//
+// Column names follow the PRODUCTION SQLite DDL (database.py:370): SQLite
+// stores the reason in `last_error`, PostgreSQL in `error_message`. The
+// schemas are deliberately not unified here — this is the existing product's
+// dual-backend reality, and papering over it would make one engine write a
+// row the other cannot read.
 func writeDeadLetter(ctx context.Context, tx *sql.Tx, jobID, reason, eventCode string, now time.Time, attempts int) error {
 	var payloadJSON string
 	err := tx.QueryRowContext(ctx, `SELECT payload_json FROM delivery_jobs WHERE id=?`, jobID).
@@ -445,12 +453,12 @@ func writeDeadLetter(ctx context.Context, tx *sql.Tx, jobID, reason, eventCode s
 	}
 	_, err = tx.ExecContext(ctx, `
 		INSERT OR REPLACE INTO dead_letter_queue
-			(job_id, rule_id, source_chat_id, source_message_id, target_chat_id,
-			 payload_json, reason, event_code, attempts, dead_lettered_at)
-		SELECT ?, rule_id, source_chat_id, source_message_id, target_chat_id,
+			(id, job_id, rule_id, source_chat_id, source_message_id, target_chat_id,
+			 payload_json, attempts, last_error, error_category, dead_lettered_at)
+		SELECT ?, id, rule_id, source_chat_id, source_message_id, target_chat_id,
 		       ?, ?, ?, ?, ?
 		FROM delivery_jobs WHERE id=?`,
-		jobID, payloadJSON, reason, eventCode, attempts, now.Unix(), jobID)
+		"dlq_"+jobID, payloadJSON, attempts, reason, eventCode, now.Unix(), jobID)
 	if err != nil {
 		return fmt.Errorf("dead-letter insert: %w", err)
 	}
@@ -568,8 +576,11 @@ func (s *sqliteStore) FenceClaim(ctx context.Context, key job.AttemptKey, worker
 	row := tx.QueryRowContext(ctx, `
 		SELECT status, worker_id, lease_until, target_message_id, last_error, attempts
 		FROM delivery_attempts WHERE id=?`, key.String())
-	var a job.DeliveryAttempt
-	if err := row.Scan(&a.Status, &a.WorkerID, &a.LeaseUntil, &a.TargetMessageID, &a.LastError, &a.Attempts); err != nil {
+	var (
+		a        job.DeliveryAttempt
+		targetID sql.NullInt64
+	)
+	if err := row.Scan(&a.Status, &a.WorkerID, &a.LeaseUntil, &targetID, &a.LastError, &a.Attempts); err != nil {
 		if err == sql.ErrNoRows {
 			// The upsert succeeded but the row cannot be read: treat it as
 			// unavailable rather than guessing — refuse to dispatch unprotected.
@@ -579,6 +590,9 @@ func (s *sqliteStore) FenceClaim(ctx context.Context, key job.AttemptKey, worker
 	}
 	if err := tx.Commit(); err != nil {
 		return "", nil, fmt.Errorf("fence commit: %w", err)
+	}
+	if targetID.Valid {
+		a.TargetMessageID = targetID.Int64
 	}
 
 	switch a.Status {

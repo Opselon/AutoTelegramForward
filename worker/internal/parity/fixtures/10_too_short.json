@@ -1,0 +1,13 @@
+{
+  "text": "ab",
+  "media_type": "text",
+  "is_service": false,
+  "filter": {
+    "is_enabled": true,
+    "min_message_length": 5
+  },
+  "expect": {
+    "action": "DROP",
+    "reason": "too_short"
+  }
+}

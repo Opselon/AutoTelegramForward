@@ -26,16 +26,17 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"atf/worker/internal/config"
 	"atf/worker/internal/domain/job"
-	"atf/worker/internal/domain/rule"
 	"atf/worker/internal/engine/delivery"
 	"atf/worker/internal/health"
 	"atf/worker/internal/queue"
+	"atf/worker/internal/rulestore"
 	"atf/worker/internal/telegraph"
 	"atf/worker/internal/telegraph/grpcclient"
 	"atf/worker/internal/telegraph/fakegateway"
@@ -139,7 +140,12 @@ func run() error {
 		gateway = client
 	}
 
-	rules := ruleStore{}
+	rules, err := openRuleStore(context.Background(), cfg)
+	if err != nil {
+		return err
+	}
+	defer rules.Close()
+
 	engine := delivery.New(store, rules, gateway, &slogLogger{log}, &counters{}, workerID(), cfg.MediaDir, delivery.Options{
 		NumWorkers:            cfg.NumWorkers,
 		BatchSize:             cfg.BatchSize,
@@ -314,9 +320,61 @@ func runLoop(ctx context.Context, log *slog.Logger, engine *delivery.Engine, sto
 // atf.db the Python Core writes.
 func openStore(ctx context.Context, cfg *config.Config) (queue.Store, error) {
 	if cfg.DatabaseURL != "" {
-		return nil, fmt.Errorf("PostgreSQL support is not implemented in the worker yet (ATF_DATABASE_URL set); use SQLite for this migration stage")
+		s, err := queue.NewPostgres(ctx, cfg.DatabaseURL)
+		if err != nil {
+			return nil, fmt.Errorf("open delivery store: %w", redactDSN(err))
+		}
+		return s, nil
 	}
 	return queue.NewSQLite(ctx, cfg.DSN())
+}
+
+// openRuleStore builds the worker's read-only view of task state: the real
+// forward_rules row plus the filter_rules row it references, each from the
+// backend that actually owns it.
+//
+// The ownership split mirrors the Core composition root exactly (see
+// docs/architecture/data-ownership.md):
+//
+//   - delivery data follows ATF_DATABASE_URL (the delivery store above);
+//   - forward_rules follows ATF_POSTGRES_ALL — PostgreSQL only when the
+//     deployment opted the config repositories into it, SQLite otherwise;
+//   - filter_rules is ALWAYS SQLite under the current Core, so the worker
+//     opens the shared atf.db for it even when everything else is PG.
+//
+// The consequence: with ATF_DATABASE_URL set and ATF_POSTGRES_ALL unset the
+// rule store holds TWO databases (PG forward_rules + SQLite filter_rules).
+// That is deliberate, not an oversight — a worker that read filter_rules
+// from PostgreSQL would be reading a table that does not exist there.
+func openRuleStore(ctx context.Context, cfg *config.Config) (*rulestore.Store, error) {
+	rsCfg := rulestore.Config{
+		// filter_rules is ALWAYS SQLite under the current Core, and the
+		// Core initializes atf.db even when PostgreSQL carries the durable
+		// queue — so the SQLite DSN is set unconditionally.
+		SQLite:      rulestore.DSN{Raw: cfg.DSN()},
+		Postgres:    rulestore.DSN{Raw: cfg.DatabaseURL},
+		PostgresAll: cfg.PostgresAll,
+	}
+	store, err := rulestore.New(ctx, rsCfg)
+	if err != nil {
+		return nil, fmt.Errorf("open rule store: %w", redactDSN(err))
+	}
+	return store, nil
+}
+
+// redactDSN strips credentials from any DSN embedded in an error before
+// it reaches a log or the process's exit status, so a startup failure never
+// leaks the database password it is complaining about.
+func redactDSN(err error) error {
+	msg := err.Error()
+	// scheme://user:pass@host/db → scheme://host/db
+	if i := strings.Index(msg, "://"); i >= 0 {
+		rest := msg[i+3:]
+		if at := strings.Index(rest, "@"); at >= 0 {
+			msg = msg[:i+3] + rest[at+1:]
+		}
+	}
+	return errors.New(msg)
 }
 
 // workerID is this process's identity in the queue + fence. Hostname-prefixed
@@ -387,27 +445,4 @@ func (c *counters) ObserveWait(seconds float64) {
 		c.waitCount++
 		c.waitSum += seconds
 	}
-}
-
-// ruleStore is the worker's read-only projection of forward_rules. This
-// initial stage reads the same SQLite file the queue lives in; the gRPC
-// control plane (the real long-term owner) arrives with the PostgreSQL
-// stage. See docs/architecture/migration-plan.md.
-type ruleStore struct{}
-
-func (ruleStore) GetByID(ruleID string) (*rule.ForwardRule, *rule.FilterRule, error) {
-	// TODO(domestic stage 2): read forward_rules from the shared store.
-	//
-	// Stage 1 deliberately returns "no persisted filter attached" (nil) and
-	// a minimal always-active rule projection: the delivery-shape inputs
-	// (forward_mode, content_mode, fallback_enabled) already travel in the
-	// job payload, which is exactly what the Python dispatch path reads.
-	// Returning nil here keeps the delivery path correct while the rule
-	// read path is built out against the control plane.
-	return &rule.ForwardRule{
-		ID:           ruleID,
-		IsActive:     true,
-		ForwardMode:  "",
-		ContentMode:  "",
-	}, nil, nil
 }

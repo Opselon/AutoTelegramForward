@@ -1,0 +1,18 @@
+{
+  "text": "nothing here",
+  "media_type": "text",
+  "is_service": false,
+  "filter": {
+    "is_enabled": true,
+    "whitelist_keywords": [
+      "nothing"
+    ],
+    "regex_patterns": [
+      "\\d{4}"
+    ]
+  },
+  "expect": {
+    "action": "DROP",
+    "reason": "regex_mismatch"
+  }
+}

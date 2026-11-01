@@ -26,6 +26,15 @@ type Config struct {
 	DatabaseURL string
 	DBPath      string
 
+	// PostgresAll mirrors ATF_POSTGRES_ALL from the Core composition root:
+	// it moves forward_rules (and the other config repositories) to
+	// PostgreSQL too. It does NOT move filter_rules — the Core serves that
+	// from SQLite unconditionally, and the worker must read it from the
+	// same place or read the wrong database.
+	// When DatabaseURL is empty this is meaningless: without a PG endpoint
+	// there is nothing to move.
+	PostgresAll bool
+
 	// Queue knobs, shared 1:1 with the Python worker's ATF_QUEUE_* names.
 	NumWorkers      int
 	BatchSize       int
@@ -60,6 +69,7 @@ func FromEnv() (*Config, error) {
 		WorkerEnabled:          envBool("ATF_WORKER_ENABLED", false),
 		DatabaseURL:            os.Getenv("ATF_DATABASE_URL"),
 		DBPath:                 envStr("ATF_DB_PATH", "/app/data/atf.db"),
+		PostgresAll:            envBool("ATF_POSTGRES_ALL", false),
 		NumWorkers:             envInt("ATF_QUEUE_NUM_WORKERS", 4),
 		BatchSize:              envInt("ATF_QUEUE_BATCH_SIZE", 5),
 		MaxQueueSize:           envInt("ATF_QUEUE_MAX_SIZE", 2000),

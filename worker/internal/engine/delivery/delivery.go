@@ -132,10 +132,105 @@ func New(store queue.Store, rules rule.Store, gateway telegraph.Gateway, log Log
 func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	logger := e.jobLogger(j)
 
-	// 1. The send-side idempotency fence runs BEFORE any Telegram call.
-	// Telegram has no idempotency key for ordinary sends; claiming the
-	// logical send here is the only thing that stops a lease expiry or a
-	// crash-recovery loop from double-dispatching.
+	// ---------------------------------------------------------------------------
+	// PREFLIGHT: everything that can decide "do not send" without touching
+	// Telegram runs FIRST, before the send-side fence is claimed.
+	//
+	// This ordering is a correctness requirement, not an optimization. The
+	// fence is a long-lived CLAIMED row: if a paused rule or a rule-store
+	// outage defers a job *after* the fence was claimed, the job waits in
+	// RETRY_WAIT while the fence stays CLAIMED. The stale-claim sweep then
+	// converts it to UNKNOWN, and a delivery that never touched Telegram is
+	// blocked until a human reconciles it. Preflight first means a job only
+	// ever holds a fence claim when it is actually about to send.
+	// ---------------------------------------------------------------------------
+
+	// 1. Re-check the task at delivery time. A job can sit in the queue
+	// while its owner deletes or pauses the task; delivering then would
+	// forward a message the owner has already removed.
+	r, f, err := e.rules.GetByID(j.RuleID)
+	if err != nil {
+		// A rule-store outage is the environment, not the job: defer without
+		// spending an attempt, and without claiming any fence.
+		logger.Warn("rule store unavailable — deferring", "error", err)
+		_ = e.store.Defer(ctx, j.ID, "rule store unavailable", 5*time.Second)
+		e.metrics.Outcome("retried")
+		return nil
+	}
+	if r == nil {
+		logger.Info("rule no longer exists — dropping job")
+		_ = e.store.MarkFailed(ctx, j.ID, "Rule no longer exists")
+		e.metrics.Outcome("failed")
+		return nil
+	}
+	if !r.IsActive {
+		logger.Info("rule is disabled — dropping job")
+		_ = e.store.MarkFailed(ctx, j.ID, "Rule disabled")
+		e.metrics.Outcome("failed")
+		return nil
+	}
+	if r.AutoPauseReason != "" {
+		// The engine paused the task for a dead source/target; the message
+		// cannot be delivered until the owner fixes the chat.
+		logger.Info("rule is auto-paused — dropping job", "reason", r.AutoPauseReason)
+		_ = e.store.MarkFailed(ctx, j.ID, "Task paused: "+r.AutoPauseReason)
+		e.metrics.Outcome("failed")
+		return nil
+	}
+	// A paused task is not a failure: the job waits for the pause to lift.
+	// An *expired* pause is not a pause at all — the Python ForwardRule's
+	// is_currently_paused() reports False once paused_until has passed, so
+	// the job proceeds to a normal dispatch. No fence is claimed while the
+	// pause is actually in force — nothing is about to be sent.
+	now := time.Now()
+	if r.IsPaused && r.PauseStillActiveAt(now) {
+		backoff := 5 * time.Second
+		if r.PausedUntil > 0 {
+			if rem := time.Until(time.Unix(r.PausedUntil, 0)); rem > 0 {
+				backoff = rem
+			}
+		}
+		logger.Info("rule is paused — postponing job", "backoff", backoff.String())
+		_ = e.store.Defer(ctx, j.ID, "Rule paused", backoff)
+		e.metrics.Outcome("retried")
+		return nil
+	}
+
+	// 2. The persisted filter attached to the task is the only persisted
+	// filter re-evaluated at delivery time (the pipeline's content policies
+	// ran on the ingest side and are baked into the job payload).
+	//
+	// A filter drop is a permanent decision about this content: no send ever
+	// happens, so it must not leave an unresolved fence claim behind.
+	if f != nil {
+		text := j.Payload.Text()
+		res := e.filters.Evaluate(text, j.Payload.MediaType(), false, f)
+		if res.Action == filter.Drop {
+			logger.Info("job dropped by attached filter at delivery time", "reason", res.Reason)
+			_ = e.store.MarkFailed(ctx, j.ID, "Filter: "+res.Reason)
+			e.metrics.Outcome("failed")
+			return nil
+		}
+	}
+
+	// 3. Per-target rate limit. A throttled target is a defer (the lane is
+	// released and the job re-enters after the window), never an attempt —
+	// and never a fence claim.
+	if wait := e.targetRateWait(j.TargetChatID); wait > 0 {
+		logger.Info("target is throttled — deferring", "wait", wait.String())
+		_ = e.store.Defer(ctx, j.ID, "Target rate-limited", wait)
+		e.metrics.Outcome("retried")
+		return nil
+	}
+
+	// ---------------------------------------------------------------------------
+	// The send-side idempotency fence is claimed as the LAST step before the
+	// first Telegram side effect. Telegram has no idempotency key for
+	// ordinary sends, so claiming the logical send is the only thing that
+	// stops a lease expiry or a crash-recovery loop from double-dispatching —
+	// and because preflight already ran, the claim is held only for the
+	// actual dispatch window, never for a deferred job.
+	// ---------------------------------------------------------------------------
 	key := job.AttemptKey{
 		RuleID:          j.RuleID,
 		SourceChatID:    j.SourceChatID,
@@ -185,74 +280,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 		// fall through: this worker owns the send
 	}
 
-	// 2. Re-check the task at delivery time. A job can sit in the queue
-	// while its owner deletes or pauses the task; delivering then would
-	// forward a message the owner has already removed.
-	r, f, err := e.rules.GetByID(j.RuleID)
-	if err != nil {
-		logger.Warn("rule store unavailable — deferring", "error", err)
-		_ = e.store.Defer(ctx, j.ID, "rule store unavailable", 5*time.Second)
-		e.metrics.Outcome("retried")
-		return nil
-	}
-	if r == nil {
-		logger.Info("rule no longer exists — dropping job")
-		_ = e.store.MarkFailed(ctx, j.ID, "Rule no longer exists")
-		e.metrics.Outcome("failed")
-		return nil
-	}
-	if !r.IsActive {
-		logger.Info("rule is disabled — dropping job")
-		_ = e.store.MarkFailed(ctx, j.ID, "Rule disabled")
-		e.metrics.Outcome("failed")
-		return nil
-	}
-	if r.AutoPauseReason != "" {
-		// The engine paused the task for a dead source/target; the message
-		// cannot be delivered until the owner fixes the chat.
-		logger.Info("rule is auto-paused — dropping job", "reason", r.AutoPauseReason)
-		_ = e.store.MarkFailed(ctx, j.ID, "Task paused: "+r.AutoPauseReason)
-		e.metrics.Outcome("failed")
-		return nil
-	}
-	if r.IsPaused {
-		// A paused task is not a failure: the job waits for the pause to lift.
-		backoff := 5 * time.Second
-		if r.PausedUntil > 0 {
-			if rem := time.Until(time.Unix(r.PausedUntil, 0)); rem > 0 {
-				backoff = rem
-			}
-		}
-		logger.Info("rule is paused — postponing job", "backoff", backoff.String())
-		_ = e.store.Defer(ctx, j.ID, "Rule paused", backoff)
-		e.metrics.Outcome("retried")
-		return nil
-	}
-
-	// 3. The persisted filter attached to the task is the only persisted
-	// filter re-evaluated at delivery time (the pipeline's content policies
-	// ran on the ingest side and are baked into the job payload).
-	if f != nil {
-		text := j.Payload.Text()
-		res := e.filters.Evaluate(text, j.Payload.MediaType(), false, f)
-		if res.Action == filter.Drop {
-			logger.Info("job dropped by attached filter at delivery time", "reason", res.Reason)
-			_ = e.store.MarkFailed(ctx, j.ID, "Filter: "+res.Reason)
-			e.metrics.Outcome("failed")
-			return nil
-		}
-	}
-
-	// 4. Per-target rate limit. A throttled target is a defer (the lane is
-	// released and the job re-enters after the window), never an attempt.
-	if wait := e.targetRateWait(j.TargetChatID); wait > 0 {
-		logger.Info("target is throttled — deferring", "wait", wait.String())
-		_ = e.store.Defer(ctx, j.ID, "Target rate-limited", wait)
-		e.metrics.Outcome("retried")
-		return nil
-	}
-
-	// 5. Dispatch. The job's own text already carries every ingest-side
+	// 4. Dispatch. The job's own text already carries every ingest-side
 	// transform; the dispatch path re-decides only per-target overrides,
 	// never the task's own policies.
 	targetID, ferr := e.dispatch(ctx, j)
@@ -261,7 +289,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 		return e.handleFailure(ctx, j, logger, key, ferr)
 	}
 
-	// 6. Confirmed. Record the send on the fence BEFORE the job-row commit:
+	// 5. Confirmed. Record the send on the fence BEFORE the job-row commit:
 	// a crash between Telegram's response and the commit must leave the
 	// fence saying the send landed.
 	if err := e.store.FenceRecordSent(ctx, key, e.workerID, targetID); err != nil {

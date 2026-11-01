@@ -3,6 +3,8 @@
 // never writes these tables — the API and the pipeline own configuration.
 package rule
 
+import "time"
+
 // ForwardRule is the execution-relevant projection of a forward_rules row.
 //
 // Only the fields the *delivery* decision reads are carried. Anything else
@@ -13,14 +15,33 @@ type ForwardRule struct {
 	ID             string
 	SessionID      string
 	IsActive       bool
-	IsPaused       bool
-	PausedUntil    int64
-	OwnerUserID    int64
+	// IsPaused reports whether the owner paused the task. Whether the pause
+	// still *holds* is a separate question: Python's ForwardRule.is_currently_paused()
+	// reports False once paused_until has passed, so an expired pause must
+	// not keep blocking deliveries.
+	IsPaused    bool
+	PausedUntil int64
+	OwnerUserID int64
 	ForwardMode    string // DIRECT_FORWARD | COPY_MESSAGE | CUSTOM_HEADER_COPY
 	ContentMode    string // AUTO | TEXT_ONLY | MEDIA_ONLY | TEXT_AND_MEDIA
 	FallbackEnabled bool
 	// AutoPause is set by the failure policy when a source/target died.
 	AutoPauseReason string
+}
+
+// PauseStillActiveAt reports whether an explicit pause was in force at the
+// given instant. It mirrors core/domain/entities.py::is_currently_paused():
+// a pause whose deadline has elapsed is no longer a pause, so a task does
+// not stay blocked forever because its owner paused it for an hour three
+// days ago.
+func (r *ForwardRule) PauseStillActiveAt(now time.Time) bool {
+	if !r.IsPaused {
+		return false
+	}
+	if r.PausedUntil > 0 && now.Unix() >= r.PausedUntil {
+		return false
+	}
+	return true
 }
 
 // FilterRule is the execution-relevant projection of a filter_rules row.

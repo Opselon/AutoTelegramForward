@@ -198,6 +198,38 @@ services:
       retries: 3
       start_period: 40s
 
+  # PostgreSQL delivery store for the Go Worker. Profile-gated on `worker`
+  # for the same reason worker-store-init is: a stock deployment runs on
+  # SQLite and must not gain a database it never asked for. An operator opts
+  # the durable queue onto PostgreSQL by setting ATF_DATABASE_URL on the
+  # worker (and the Core, which owns the schema bootstrap).
+  #
+  # filter_rules stays in SQLite under the Core's composition root regardless
+  # — the volume below is why: even a fully-PostgreSQL deployment keeps the
+  # shared atf.db for the config tables the Core never moved.
+  postgres:
+    image: postgres:16-alpine
+    container_name: atf-postgres
+    logging: *default-logging
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${ATF_POSTGRES_USER:-atf}
+      POSTGRES_PASSWORD: ${ATF_POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${ATF_POSTGRES_DB:-atf_db}
+    volumes:
+      - atf-postgres-data:/var/lib/postgresql/data
+    networks:
+      - atf-net
+    # No ports: the database is reachable only inside the compose network.
+    # Publishing it would expose the delivery queue (and every rule row) to
+    # the host.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ATF_POSTGRES_USER:-atf} -d ${ATF_POSTGRES_DB:-atf_db}"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    profiles: ["worker"]
+
   # One-time preparation of the shared delivery store for the non-root
   # worker. The Core creates atf.db as root; the worker (uid 100) must be
   # able to write its claim updates to the SAME file. This runs only under
@@ -229,9 +261,6 @@ services:
     container_name: atf-worker
     logging: *default-logging
     restart: unless-stopped
-    depends_on:
-      core:
-        condition: service_healthy
     environment:
       # The switch. Unset = the Python loop owns delivery execution.
       ATF_WORKER_ENABLED: ${ATF_WORKER_ENABLED:-0}
@@ -251,11 +280,35 @@ services:
       ATF_QUEUE_LEASE_SECONDS: ${ATF_QUEUE_LEASE_SECONDS:-30}
       # Media scratch: a directory ONLY this container manages.
       ATF_MEDIA_DIR: /var/lib/atf/media
+      # PostgreSQL delivery store. Optional: unset keeps the worker on the
+      # shared SQLite atf.db above. When set, the worker opens its delivery
+      # store here AND still reads filter_rules from the SQLite file below —
+      # the Core's composition root keeps that table on SQLite, and a worker
+      # that read it from PostgreSQL would read a table that does not exist.
+      ATF_DATABASE_URL: ${ATF_DATABASE_URL:-}
+      # Moves forward_rules onto PostgreSQL too. Without it (the default) the
+      # worker reads rules from SQLite even with a PostgreSQL queue, exactly
+      # as the Core does. NEVER applies to filter_rules.
+      ATF_POSTGRES_ALL: ${ATF_POSTGRES_ALL:-0}
     volumes:
       # The shared delivery store: both engines read and write the same
       # atf.db (see the volume init for the cross-user write access).
+      # This volume is kept even when ATF_DATABASE_URL moves delivery_jobs to
+      # PostgreSQL, because filter_rules lives here and the Core initializes
+      # this file in every configuration.
       - atf-data:/app/data
       - atf-worker-media:/var/lib/atf/media
+    depends_on:
+      core:
+        condition: service_healthy
+      # `required: false` is what makes the profile gate work: when the
+      # `worker` profile is off, postgres does not exist and compose skips
+      # this dependency instead of failing; when the profile is on, the
+      # worker waits for the database to accept connections before it starts
+      # (and its SchemaCheck would refuse to report ready anyway).
+      postgres:
+        condition: service_healthy
+        required: false
     networks:
       - atf-net
     # Deliberately NO ports: section. The health/metrics surface on 8090 is
@@ -370,6 +423,10 @@ volumes:
   # and the Python Telegram Runtime writes into it over gRPC. One owner (the
   # worker), bounded by ATF_MEDIA_QUOTA_BYTES.
   atf-worker-media:
+  # PostgreSQL delivery store (worker profile). Created here, not assumed by
+  # the image: the worker receives its DSN from the environment and never
+  # bakes a backend into the build.
+  atf-postgres-data:
   logger-rust-data:
   caddy-data:
   caddy-config:

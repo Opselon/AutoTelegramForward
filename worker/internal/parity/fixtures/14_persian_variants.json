@@ -1,0 +1,15 @@
+{
+  "text": "سلام کوچک",
+  "media_type": "text",
+  "is_service": false,
+  "filter": {
+    "is_enabled": true,
+    "blacklist_keywords": [
+      "کوچک"
+    ]
+  },
+  "expect": {
+    "action": "DROP",
+    "reason": "blacklist_keyword"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "text": "URGENT: server down",
+  "media_type": "text",
+  "is_service": false,
+  "filter": {
+    "is_enabled": true,
+    "whitelist_keywords": [
+      "urgent"
+    ]
+  },
+  "expect": {
+    "action": "ALLOW",
+    "reason": "filter_passed"
+  }
+}

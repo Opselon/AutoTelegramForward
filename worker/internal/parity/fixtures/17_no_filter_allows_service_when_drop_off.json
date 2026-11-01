@@ -1,0 +1,13 @@
+{
+  "text": "pinned",
+  "media_type": "text",
+  "is_service": true,
+  "filter": {
+    "is_enabled": true,
+    "drop_service_messages": false
+  },
+  "expect": {
+    "action": "ALLOW",
+    "reason": "filter_passed"
+  }
+}

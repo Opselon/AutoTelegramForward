@@ -83,11 +83,14 @@ func New() *Engine { return &Engine{} }
 // Every DROP carries the Python engine's reason string.
 func (e *Engine) Evaluate(text string, mediaType string, isService bool, f *rule.FilterRule) Result {
 	if isService {
-		// Service messages: the Python engine drops when a filter exists
-		// (and drop_service_messages defaults true), and drops when there is
-		// no filter at all — the pipeline never enqueues them, so reaching
-		// here at all means something configured it.
-		return drop("service_message_dropped")
+		// Service messages: the Python engine drops when NO filter is
+		// attached, and when one is attached it honors the filter's own
+		// drop_service_messages flag (which defaults true, but is an owner
+		// switch — a filter configured to pass them through must not become
+		// a drop because the engine hardcoded its default).
+		if f == nil || f.DropService {
+			return drop("service_message_dropped")
+		}
 	}
 	if f == nil {
 		return allow("no_filter")
