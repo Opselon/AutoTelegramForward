@@ -30,20 +30,20 @@ import (
 type Fake struct {
 	mu sync.Mutex
 
-	nextID   int64
+	nextID    int64
 	copyCalls int
 
 	// Recorded calls, in arrival order. Tests assert against these.
 	Calls []Call
 
 	// Scripted behaviours. nil means "no scripted failure for this op".
-	ForwardFailsWith      *telegraph.DeliveryFailure
-	CopyFailsWith         *telegraph.DeliveryFailure
-	SendFailsWith         *telegraph.DeliveryFailure
+	ForwardFailsWith        *telegraph.DeliveryFailure
+	CopyFailsWith           *telegraph.DeliveryFailure
+	SendFailsWith           *telegraph.DeliveryFailure
 	CopyMediaGroupFailsWith *telegraph.DeliveryFailure
-	DownloadFailsWith     *telegraph.DeliveryFailure
-	SessionReady          bool
-	SessionState          string
+	DownloadFailsWith       *telegraph.DeliveryFailure
+	SessionReady            bool
+	SessionState            string
 
 	// RestrictedSource makes ForwardMessages fail with a typed
 	// FORWARDING_RESTRICTED, so the fallback path can be exercised without
@@ -58,18 +58,25 @@ type Fake struct {
 	// IDs returned for sends when nothing is scripted to fail. The n-th send
 	// returns ScriptedIDs[n] when set, otherwise a monotonically rising id.
 	ScriptedIDs []int64
+
+	// fakeBotOps carries the bot / delete / branding-stage-1 scripts and
+	// their recorded calls. See its own doc comment for the split.
+	fakeBotOps
+	// deleteScript answers DeleteMessages; nil = deleted. Kept as a pointer
+	// so a test can express "deleted with no failure" explicitly.
+	deleteScript *DeleteResult
 }
 
 // Call is one recorded gateway invocation.
 type Call struct {
-	Op        string
-	SessionID string
-	ChatID    int64
-	MessageID int64
-	TargetID  int64
-	Caption   string
-	Text      string
-	ThreadID  int64
+	Op         string
+	SessionID  string
+	ChatID     int64
+	MessageID  int64
+	TargetID   int64
+	Caption    string
+	Text       string
+	ThreadID   int64
 	MessageIDs []int64
 	// MediaPath is the staged scratch path of a download/upload staging.
 	MediaPath string
@@ -248,4 +255,209 @@ func (f *Fake) Recorded() []Call {
 	out := make([]Call, len(f.Calls))
 	copy(out, f.Calls)
 	return out
+}
+
+// --- bot transport -------------------------------------------------------- //
+
+// BotCall is one recorded bot operation, for test assertions.
+type BotCall struct {
+	Op            string
+	TokenID       string
+	OwnerUserID   int64
+	TargetChatID  int64
+	FromChatID    int64
+	MessageID     int64
+	MessageIDs    []int64
+	Text          string
+	Caption       string
+	ThreadID      int64
+	InlineButtons []string
+	Token         string
+	MediaType     string
+}
+
+// BotDeleteResult is what the scripted BotDeleteMessages returns. When nil
+// the operation succeeds and reports deleted=true.
+type BotDeleteResult struct {
+	Deleted bool
+	Failure *telegraph.DeliveryFailure
+}
+
+// BrandingStage1Result is what the scripted BrandingStage1 returns.
+type BrandingStage1Result struct {
+	IDs     []int64
+	Failure *telegraph.DeliveryFailure
+}
+
+// BotAvailabilityResult is what the scripted BotAvailability returns.
+type BotAvailabilityResult struct {
+	OK          bool
+	BotUsername string
+	Failure     *telegraph.DeliveryFailure
+}
+
+// fakeBotOps is the scripted-behaviour extension embedded in Fake.
+//
+// The fake deliberately keeps bot behaviour separate from the USER-transport
+// script: a test for the bot route asserts on BotCalls, never on Calls, so a
+// test that leaks a bot call into the USER path fails loudly.
+type fakeBotOps struct {
+	// BotAvailabilityScript answers availability probes; nil = ok with a
+	// generic username.
+	BotAvailabilityScript *BotAvailabilityResult
+	// BotSendFailsWith fails every bot send with this typed failure.
+	BotSendFailsWith *telegraph.DeliveryFailure
+	// BotSendUnsupported makes every bot send raise the typed
+	// BOT-unsupported signal the delivery engine falls back from.
+	BotSendUnsupported bool
+	// BotDeleteScript answers deletion; nil = deleted.
+	BotDeleteScript *BotDeleteResult
+	// BrandingStage1Script answers the stage-1 post; nil = one fresh id.
+	BrandingStage1Script *BrandingStage1Result
+	// BrandingStage1IDs are returned in order for successive stage-1 posts
+	// when BrandingStage1Script is nil. Exhausted → rising counter.
+	BrandingStage1IDs []int64
+
+	botCalls    []BotCall
+	brandingSeq int
+}
+
+// BotAvailability reports the scripted bot availability.
+func (f *Fake) BotAvailability(ctx context.Context, target telegraph.BotTarget) (bool, string, *telegraph.DeliveryFailure) {
+	f.mu.Lock()
+	f.botCalls = append(f.botCalls, BotCall{Op: "BotAvailability", TokenID: target.TokenID, OwnerUserID: target.OwnerUserID})
+	script := f.BotAvailabilityScript
+	f.mu.Unlock()
+	if script != nil {
+		return script.OK, script.BotUsername, script.Failure
+	}
+	return true, "fake-bot", nil
+}
+
+// BotSendText sends text through the scripted fake bot.
+func (f *Fake) BotSendText(ctx context.Context, target telegraph.BotTarget, targetChatID int64, text string, threadID int64, inlineButtons []string) (int64, *telegraph.DeliveryFailure) {
+	f.mu.Lock()
+	f.botCalls = append(f.botCalls, BotCall{Op: "BotSendText", TokenID: target.TokenID, OwnerUserID: target.OwnerUserID, TargetChatID: targetChatID, Text: text, ThreadID: threadID, InlineButtons: append([]string{}, inlineButtons...)})
+	if f.BotSendUnsupported {
+		f.mu.Unlock()
+		return 0, &telegraph.DeliveryFailure{Code: "TELEGRAM_PERMANENT_ERROR", ErrorType: "BOT_METHOD_INVALID", Message: "media group delivery is not available on the bot route"}
+	}
+	fail := f.BotSendFailsWith
+	f.mu.Unlock()
+	if fail != nil {
+		return 0, fail
+	}
+	return f.nextTargetID(), nil
+}
+
+// BotCopyMessage copies one message through the scripted fake bot.
+func (f *Fake) BotCopyMessage(ctx context.Context, target telegraph.BotTarget, targetChatID, fromChatID, messageID int64, caption string, threadID int64, inlineButtons []string) (int64, *telegraph.DeliveryFailure) {
+	f.mu.Lock()
+	f.botCalls = append(f.botCalls, BotCall{Op: "BotCopyMessage", TokenID: target.TokenID, OwnerUserID: target.OwnerUserID, TargetChatID: targetChatID, FromChatID: fromChatID, MessageID: messageID, Caption: caption, ThreadID: threadID, InlineButtons: append([]string{}, inlineButtons...)})
+	if f.BotSendUnsupported {
+		f.mu.Unlock()
+		return 0, &telegraph.DeliveryFailure{Code: "TELEGRAM_PERMANENT_ERROR", ErrorType: "BOT_METHOD_INVALID", Message: "media group delivery is not available on the bot route"}
+	}
+	fail := f.BotSendFailsWith
+	f.mu.Unlock()
+	if fail != nil {
+		return 0, fail
+	}
+	return f.nextTargetID(), nil
+}
+
+// BotSendMedia sends a staged file through the scripted fake bot.
+func (f *Fake) BotSendMedia(ctx context.Context, target telegraph.BotTarget, targetChatID int64, token, caption, mediaType string, threadID int64, inlineButtons []string) (int64, *telegraph.DeliveryFailure) {
+	f.mu.Lock()
+	f.botCalls = append(f.botCalls, BotCall{Op: "BotSendMedia", TokenID: target.TokenID, OwnerUserID: target.OwnerUserID, TargetChatID: targetChatID, Token: token, Caption: caption, MediaType: mediaType, ThreadID: threadID, InlineButtons: append([]string{}, inlineButtons...)})
+	if f.BotSendUnsupported {
+		f.mu.Unlock()
+		return 0, &telegraph.DeliveryFailure{Code: "TELEGRAM_PERMANENT_ERROR", ErrorType: "BOT_METHOD_INVALID", Message: "media group delivery is not available on the bot route"}
+	}
+	fail := f.BotSendFailsWith
+	f.mu.Unlock()
+	if fail != nil {
+		return 0, fail
+	}
+	return f.nextTargetID(), nil
+}
+
+// BotDeleteMessages deletes through the scripted fake bot.
+func (f *Fake) BotDeleteMessages(ctx context.Context, target telegraph.BotTarget, chatID int64, messageIDs []int64) (bool, *telegraph.DeliveryFailure) {
+	f.mu.Lock()
+	f.botCalls = append(f.botCalls, BotCall{Op: "BotDeleteMessages", TokenID: target.TokenID, OwnerUserID: target.OwnerUserID, TargetChatID: chatID, MessageIDs: append([]int64{}, messageIDs...)})
+	script := f.BotDeleteScript
+	f.mu.Unlock()
+	if script != nil {
+		return script.Deleted, script.Failure
+	}
+	return true, nil
+}
+
+// --- deletion (both transports) ------------------------------------------- //
+
+// DeleteResult is what the scripted DeleteMessages returns.
+type DeleteResult struct {
+	Deleted bool
+	Failure *telegraph.DeliveryFailure
+}
+
+// DeleteScript answers every DeleteMessages call; nil = deleted.
+type DeleteScript *DeleteResult
+
+// DeleteFailsWith makes every DeleteMessages fail with this typed failure.
+// A nil-failure script with Deleted=true reports a successful cleanup.
+func (f *Fake) DeleteMessages(ctx context.Context, transport telegraph.DeleteTransport, sessionID, botTokenID string, ownerUserID, chatID int64, messageIDs []int64) (bool, *telegraph.DeliveryFailure) {
+	f.record(Call{Op: "DeleteMessages:" + string(transport), SessionID: sessionID, ChatID: chatID, MessageIDs: append([]int64{}, messageIDs...)})
+	f.mu.Lock()
+	script := f.deleteScript
+	f.mu.Unlock()
+	if script != nil {
+		return (*script).Deleted, (*script).Failure
+	}
+	return true, nil
+}
+
+// --- branding stage 1 ------------------------------------------------------ //
+
+// BrandingStage1 posts into C according to the script.
+func (f *Fake) BrandingStage1(ctx context.Context, post telegraph.BrandingPost) ([]int64, *telegraph.DeliveryFailure) {
+	f.mu.Lock()
+	f.botCalls = append(f.botCalls, BotCall{
+		Op: "BrandingStage1", TokenID: post.BotTokenID, OwnerUserID: post.OwnerUserID,
+		TargetChatID: post.TargetChatID, FromChatID: post.SourceChatID, MessageID: post.SourceMessageID,
+		MessageIDs: append([]int64{}, post.SourceMessageIDs...), Text: post.Text, Caption: post.Caption,
+		ThreadID: post.ThreadID, InlineButtons: append([]string{}, post.InlineButtons...),
+	})
+	script := f.BrandingStage1Script
+	f.brandingSeq++
+	seq := f.brandingSeq
+	ids := f.BrandingStage1IDs
+	f.mu.Unlock()
+	if script != nil {
+		return script.IDs, script.Failure
+	}
+	if len(ids) > 0 {
+		if seq-1 < len(ids) {
+			return []int64{ids[seq-1]}, nil
+		}
+		return []int64{ids[len(ids)-1]}, nil
+	}
+	return []int64{f.nextTargetID()}, nil
+}
+
+// BotRecorded returns the recorded bot operations (for test assertions).
+func (f *Fake) BotRecorded() []BotCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]BotCall, len(f.botCalls))
+	copy(out, f.botCalls)
+	return out
+}
+
+// SetDeleteScript scripts DeleteMessages (nil restores "deleted").
+func (f *Fake) SetDeleteScript(script *DeleteResult) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.deleteScript = script
 }

@@ -202,6 +202,31 @@ class PyrogramAdapter:
             return 0, errors.normalize(exc, operation="send_message")
         return int(getattr(res, "id", 0) or 0), None
 
+    async def delete_messages(
+        self, chat_id: Any, message_ids: List[int],
+    ) -> Tuple[bool, Optional[errors.TelegramOperationError]]:
+        """Delete messages through this session.
+
+        Deletion is an idempotent cleanup operation: a message Telegram
+        reports as already absent is a successful outcome here, not a
+        failure — the scheduler's success condition is "the message is
+        gone", not "this exact call removed it".
+        """
+        if not message_ids:
+            return True, None
+        try:
+            await self._client.delete_messages(
+                chat_id=_chat(chat_id), message_ids=[int(i) for i in message_ids],
+            )
+        except Exception as exc:
+            normalized = errors.normalize(exc, operation="delete_messages")
+            # MESSAGE_NOT_FOUND proves the messages are already gone, which
+            # is the cleanup outcome the caller asked for.
+            if normalized.code == errors.MESSAGE_NOT_FOUND:
+                return True, None
+            return False, normalized
+        return True, None
+
     # --- media staging ---------------------------------------------------- #
 
     async def download_media(

@@ -103,6 +103,41 @@ class TelegramGatewayStub:
                 request_serializer=telegram__gateway__pb2.CopyMediaGroupRequest.SerializeToString,
                 response_deserializer=telegram__gateway__pb2.CopyMessagesResponse.FromString,
                 _registered_method=True)
+        self.BotAvailability = channel.unary_unary(
+                '/atf.worker.v1.TelegramGateway/BotAvailability',
+                request_serializer=telegram__gateway__pb2.BotAvailabilityRequest.SerializeToString,
+                response_deserializer=telegram__gateway__pb2.BotAvailabilityResponse.FromString,
+                _registered_method=True)
+        self.BotSendText = channel.unary_unary(
+                '/atf.worker.v1.TelegramGateway/BotSendText',
+                request_serializer=telegram__gateway__pb2.BotSendTextRequest.SerializeToString,
+                response_deserializer=telegram__gateway__pb2.SendOutcome.FromString,
+                _registered_method=True)
+        self.BotCopyMessage = channel.unary_unary(
+                '/atf.worker.v1.TelegramGateway/BotCopyMessage',
+                request_serializer=telegram__gateway__pb2.BotCopyMessageRequest.SerializeToString,
+                response_deserializer=telegram__gateway__pb2.SendOutcome.FromString,
+                _registered_method=True)
+        self.BotSendMedia = channel.unary_unary(
+                '/atf.worker.v1.TelegramGateway/BotSendMedia',
+                request_serializer=telegram__gateway__pb2.BotSendMediaRequest.SerializeToString,
+                response_deserializer=telegram__gateway__pb2.SendOutcome.FromString,
+                _registered_method=True)
+        self.BotDeleteMessages = channel.unary_unary(
+                '/atf.worker.v1.TelegramGateway/BotDeleteMessages',
+                request_serializer=telegram__gateway__pb2.BotDeleteMessagesRequest.SerializeToString,
+                response_deserializer=telegram__gateway__pb2.DeleteMessagesResponse.FromString,
+                _registered_method=True)
+        self.DeleteMessages = channel.unary_unary(
+                '/atf.worker.v1.TelegramGateway/DeleteMessages',
+                request_serializer=telegram__gateway__pb2.DeleteMessagesRequest.SerializeToString,
+                response_deserializer=telegram__gateway__pb2.DeleteMessagesResponse.FromString,
+                _registered_method=True)
+        self.BrandingStage1 = channel.unary_unary(
+                '/atf.worker.v1.TelegramGateway/BrandingStage1',
+                request_serializer=telegram__gateway__pb2.BrandingStage1Request.SerializeToString,
+                response_deserializer=telegram__gateway__pb2.BrandingStage1Response.FromString,
+                _registered_method=True)
         self.GatewayHealth = channel.unary_unary(
                 '/atf.worker.v1.TelegramGateway/GatewayHealth',
                 request_serializer=telegram__gateway__pb2.HealthRequest.SerializeToString,
@@ -202,8 +237,61 @@ class TelegramGatewayServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def BotAvailability(self, request, context):
+        """--- bot transport ----------------------------------------------------- //
+        Narrow typed Bot Api operations. The worker names a stored token by id and
+        the tenant it belongs to; the runtime resolves and re-checks ownership of
+        the token inside the trusted Python boundary. The raw token never crosses
+        this boundary in either direction.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def BotSendText(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def BotCopyMessage(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def BotSendMedia(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def BotDeleteMessages(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def DeleteMessages(self, request, context):
+        """--- deletion (auto-delete scheduler) ----------------------------------- //
+        One typed delete for both transports. A message that is already gone is
+        reported deleted: deletion is an idempotent cleanup operation.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def BrandingStage1(self, request, context):
+        """--- branding stage 1 --------------------------------------------------- //
+        Post the already-transformed deliverable into channel C. Go decided the
+        deliverable shape; Python executes the Telegram send and reports the ids.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
     def GatewayHealth(self, request, context):
-        """--- health ----------------------------------------------------------
+        """--- health ---------------------------------------------------------- //
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -276,6 +364,41 @@ def add_TelegramGatewayServicer_to_server(servicer, server):
                     servicer.CopyMediaGroup,
                     request_deserializer=telegram__gateway__pb2.CopyMediaGroupRequest.FromString,
                     response_serializer=telegram__gateway__pb2.CopyMessagesResponse.SerializeToString,
+            ),
+            'BotAvailability': grpc.unary_unary_rpc_method_handler(
+                    servicer.BotAvailability,
+                    request_deserializer=telegram__gateway__pb2.BotAvailabilityRequest.FromString,
+                    response_serializer=telegram__gateway__pb2.BotAvailabilityResponse.SerializeToString,
+            ),
+            'BotSendText': grpc.unary_unary_rpc_method_handler(
+                    servicer.BotSendText,
+                    request_deserializer=telegram__gateway__pb2.BotSendTextRequest.FromString,
+                    response_serializer=telegram__gateway__pb2.SendOutcome.SerializeToString,
+            ),
+            'BotCopyMessage': grpc.unary_unary_rpc_method_handler(
+                    servicer.BotCopyMessage,
+                    request_deserializer=telegram__gateway__pb2.BotCopyMessageRequest.FromString,
+                    response_serializer=telegram__gateway__pb2.SendOutcome.SerializeToString,
+            ),
+            'BotSendMedia': grpc.unary_unary_rpc_method_handler(
+                    servicer.BotSendMedia,
+                    request_deserializer=telegram__gateway__pb2.BotSendMediaRequest.FromString,
+                    response_serializer=telegram__gateway__pb2.SendOutcome.SerializeToString,
+            ),
+            'BotDeleteMessages': grpc.unary_unary_rpc_method_handler(
+                    servicer.BotDeleteMessages,
+                    request_deserializer=telegram__gateway__pb2.BotDeleteMessagesRequest.FromString,
+                    response_serializer=telegram__gateway__pb2.DeleteMessagesResponse.SerializeToString,
+            ),
+            'DeleteMessages': grpc.unary_unary_rpc_method_handler(
+                    servicer.DeleteMessages,
+                    request_deserializer=telegram__gateway__pb2.DeleteMessagesRequest.FromString,
+                    response_serializer=telegram__gateway__pb2.DeleteMessagesResponse.SerializeToString,
+            ),
+            'BrandingStage1': grpc.unary_unary_rpc_method_handler(
+                    servicer.BrandingStage1,
+                    request_deserializer=telegram__gateway__pb2.BrandingStage1Request.FromString,
+                    response_serializer=telegram__gateway__pb2.BrandingStage1Response.SerializeToString,
             ),
             'GatewayHealth': grpc.unary_unary_rpc_method_handler(
                     servicer.GatewayHealth,
@@ -638,6 +761,195 @@ class TelegramGateway:
             '/atf.worker.v1.TelegramGateway/CopyMediaGroup',
             telegram__gateway__pb2.CopyMediaGroupRequest.SerializeToString,
             telegram__gateway__pb2.CopyMessagesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def BotAvailability(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/atf.worker.v1.TelegramGateway/BotAvailability',
+            telegram__gateway__pb2.BotAvailabilityRequest.SerializeToString,
+            telegram__gateway__pb2.BotAvailabilityResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def BotSendText(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/atf.worker.v1.TelegramGateway/BotSendText',
+            telegram__gateway__pb2.BotSendTextRequest.SerializeToString,
+            telegram__gateway__pb2.SendOutcome.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def BotCopyMessage(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/atf.worker.v1.TelegramGateway/BotCopyMessage',
+            telegram__gateway__pb2.BotCopyMessageRequest.SerializeToString,
+            telegram__gateway__pb2.SendOutcome.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def BotSendMedia(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/atf.worker.v1.TelegramGateway/BotSendMedia',
+            telegram__gateway__pb2.BotSendMediaRequest.SerializeToString,
+            telegram__gateway__pb2.SendOutcome.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def BotDeleteMessages(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/atf.worker.v1.TelegramGateway/BotDeleteMessages',
+            telegram__gateway__pb2.BotDeleteMessagesRequest.SerializeToString,
+            telegram__gateway__pb2.DeleteMessagesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def DeleteMessages(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/atf.worker.v1.TelegramGateway/DeleteMessages',
+            telegram__gateway__pb2.DeleteMessagesRequest.SerializeToString,
+            telegram__gateway__pb2.DeleteMessagesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def BrandingStage1(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/atf.worker.v1.TelegramGateway/BrandingStage1',
+            telegram__gateway__pb2.BrandingStage1Request.SerializeToString,
+            telegram__gateway__pb2.BrandingStage1Response.FromString,
             options,
             channel_credentials,
             insecure,

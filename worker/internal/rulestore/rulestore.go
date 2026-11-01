@@ -194,12 +194,21 @@ const queryTimeout = 5 * time.Second
 // these, and selecting fewer columns is cheaper and more honest than
 // projecting the whole row and dropping most of it.
 //
+// Stage 3 note: several fields the hop/transport decision needs
+// (delivery_transport, bot_token_id, album_mode, topic_id,
+// inline_buttons_raw) are NOT columns — the Core's ForwardRule entity
+// resolves them out of the metadata JSON blob, so the worker must do the
+// same or it would be reading columns that do not exist on either backend.
+//
 // The placeholders are written for PostgreSQL ($1); the SQLite reader rewrites
 // them through rulesQuery before the statement ever executes, so one verified
 // projection serves both engines.
 const forwardProjection = `
 	SELECT id, session_id, is_active, is_paused, paused_until,
-	       forward_mode, content_mode, filter_rule_id, metadata
+	       forward_mode, content_mode, filter_rule_id, metadata,
+	       owner_user_id, fallback_enabled, intermediate_channel_id,
+	       use_intermediate, message_category, detection_criteria,
+	       split_long_caption
 	FROM forward_rules
 	WHERE id = $1
 `
@@ -245,20 +254,54 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		contentMode   sql.NullString
 		filterRuleID  sql.NullString
 		metadataJSON  sql.NullString
+
+		// Stage 3: transport + branding hop columns. All nullable through
+		// Null* types because an older database (or a PostgreSQL schema that
+		// predates the column) must still read, not crash: a missing column
+		// is the "feature off" default, exactly as the Python side treats it.
+		ownerUserID        sql.NullInt64
+		fallbackEnabled    sql.NullBool
+		intermediateChatID sql.NullString
+		useIntermediate    sql.NullBool
+		messageCategory    sql.NullString
+		detectionCriteria  sql.NullString
+		splitLongCaption   sql.NullBool
 	)
-	if err := rows.Scan(&id, &sessionID, &isActive, &isPaused, &pausedUntil,
-		&forwardMode, &contentMode, &filterRuleID, &metadataJSON); err != nil {
+	if err := rows.Scan(
+		&id, &sessionID, &isActive, &isPaused, &pausedUntil,
+		&forwardMode, &contentMode, &filterRuleID, &metadataJSON,
+		&ownerUserID, &fallbackEnabled, &intermediateChatID,
+		&useIntermediate, &messageCategory, &detectionCriteria,
+		&splitLongCaption,
+	); err != nil {
 		return nil, fmt.Errorf("scan forward_rules %s: %w", ruleID, err)
 	}
 
+	// FallbackEnabled defaults ON: the Python payload accessor treats a
+	// missing key as "older job, bypass allowed", and the rule read must
+	// agree or the two engines diverge on the same task.
+	fallback := true
+	if fallbackEnabled.Valid {
+		fallback = fallbackEnabled.Bool
+	}
+
 	extra := &extendedForwardRule{ForwardRule: &rule.ForwardRule{
-		ID:          id,
-		SessionID:   sessionID,
-		IsActive:    isActive,
-		IsPaused:    isPaused,
-		PausedUntil: pausedUntil,
-		ForwardMode: forwardMode.String,
-		ContentMode: contentMode.String,
+		ID:              id,
+		SessionID:       sessionID,
+		IsActive:        isActive,
+		IsPaused:        isPaused,
+		PausedUntil:     pausedUntil,
+		ForwardMode:     forwardMode.String,
+		ContentMode:     contentMode.String,
+		OwnerUserID:     ownerUserID.Int64,
+		FallbackEnabled: fallback,
+		// Branding hop columns. Every one degrades to the pre-feature default
+		// when the column is absent/empty, so an older database behaves
+		// exactly as before.
+		IntermediateChannelID: strings.TrimSpace(intermediateChatID.String),
+		UseIntermediate:       useIntermediate.Bool,
+		MessageCategory:       strings.ToUpper(strings.TrimSpace(messageCategory.String)),
+		SplitLongCaption:      splitLongCaption.Bool,
 	}, FilterRuleID: filterRuleID.String}
 
 	if metadataJSON.Valid && metadataJSON.String != "" {
@@ -266,6 +309,31 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		if err := json.Unmarshal([]byte(metadataJSON.String), &meta); err == nil {
 			extra.Metadata = meta
 		}
+	}
+
+	// detection_criteria is a JSONB column: the hop decision's VIP/origin
+	// gate reads it as a map. A missing/invalid blob means "no criteria
+	// configured", the same answer Python's vip_criteria_configured gives.
+	if detectionCriteria.Valid && detectionCriteria.String != "" {
+		var criteria map[string]any
+		if err := json.Unmarshal([]byte(detectionCriteria.String), &criteria); err == nil {
+			extra.DetectionCriteria = criteria
+		}
+	}
+
+	// The transport and per-task shape fields are NOT columns: the Core's
+	// ForwardRule entity resolves them out of the metadata JSON blob
+	// (delivery_transport, bot_token_id, album_mode, topic_id,
+	// intermediate_mode, custom_caption_template). Querying them as columns
+	// would read names neither backend's schema defines, so the projection
+	// reads the blob the Python entity reads.
+	if extra.Metadata != nil {
+		extra.DeliveryTransport = strings.ToUpper(strings.TrimSpace(metaStr(extra.Metadata, "delivery_transport", "USER")))
+		extra.BotTokenID = metaStr(extra.Metadata, "bot_token_id", "")
+		extra.IntermediateMode = strings.ToUpper(strings.TrimSpace(metaStr(extra.Metadata, "intermediate_mode", "NONE")))
+		extra.AlbumMode = strings.ToLower(strings.TrimSpace(metaStr(extra.Metadata, "album_mode", "album")))
+		extra.TopicID = metaInt64(extra.Metadata, "topic_id", 0)
+		extra.CustomCaptionTemplate = metaStr(extra.Metadata, "custom_caption_template", "")
 	}
 
 	// auto_pause is not a column: the engine records it inside the task's
@@ -276,6 +344,34 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		}
 	}
 	return extra, nil
+}
+
+// metaStr reads a string field from a decoded metadata blob with the
+// pre-feature default applied, mirroring the Python entity's own accessors
+// (str(self.metadata.get(key) or default)).
+func metaStr(meta map[string]any, key, def string) string {
+	if v, ok := meta[key]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	return def
+}
+
+// metaInt64 reads a numeric metadata field. JSON numbers decode as float64,
+// so the conversion goes through that, exactly like the payload accessor.
+func metaInt64(meta map[string]any, key string, def int64) int64 {
+	if v, ok := meta[key]; ok {
+		switch n := v.(type) {
+		case float64:
+			return int64(n)
+		case int:
+			return int64(n)
+		case int64:
+			return n
+		}
+	}
+	return def
 }
 
 // --- filter_rules ---------------------------------------------------------- //
@@ -331,14 +427,14 @@ func (s *Store) getFilter(ctx context.Context, filterID string) (*rule.FilterRul
 	}
 
 	f := &rule.FilterRule{
-		ID:               id,
-		IsEnabled:        true, // pre-v30 default; overridden when the column exists AND is false
-		DropService:      dropService,
-		MinMessageLength: minLen,
-		MaxMessageLength: maxLen,
+		ID:                id,
+		IsEnabled:         true, // pre-v30 default; overridden when the column exists AND is false
+		DropService:       dropService,
+		MinMessageLength:  minLen,
+		MaxMessageLength:  maxLen,
 		WhitelistKeywords: decodeStringList(whitelistJSON),
 		BlacklistKeywords: decodeStringList(blacklistJSON),
-		RegexPatterns:    decodeStringList(regexPatternsJSON),
+		RegexPatterns:     decodeStringList(regexPatternsJSON),
 		AllowedMediaTypes: decodeStringList(allowedJSON),
 		BlockedMediaTypes: decodeStringList(blockedJSON),
 	}

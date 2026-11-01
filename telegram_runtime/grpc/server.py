@@ -16,7 +16,7 @@ import asyncio
 import hmac
 import logging
 import os
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 import grpc
 from grpc.aio import ServerInterceptor
@@ -24,6 +24,7 @@ from grpc.aio import ServerInterceptor
 from telegram_runtime import errors
 from telegram_runtime.app.session_manager import SessionManager
 from telegram_runtime.adapters.pyrogram.client import PyrogramAdapter
+from telegram_runtime.adapters.bot_api import BotApiAdapter, BotTokenUnavailable
 
 logger = logging.getLogger("atf.telegram_runtime.grpc")
 
@@ -104,9 +105,14 @@ class TelegramGatewayServicer(pb_grpc.TelegramGatewayServicer):
     said. No business decisions, no retries, no business-level sleeps.
     """
 
-    def __init__(self, sessions: SessionManager, media_dir: str) -> None:
+    def __init__(self, sessions: SessionManager, media_dir: str, bots: Optional[BotApiAdapter] = None) -> None:
         self._sessions = sessions
         self._media_dir = media_dir
+        # The Bot Api adapter is optional so a standalone/integration runtime
+        # can serve sessions without the Core's token repository attached.
+        # Every bot RPC reports a typed refusal when it is absent — never a
+        # crash, and never a silent USER-transport substitution.
+        self._bots = bots
 
     # -- helpers ----------------------------------------------------------- #
 
@@ -116,6 +122,21 @@ class TelegramGatewayServicer(pb_grpc.TelegramGatewayServicer):
         if ferr is not None:
             return None, ferr
         return PyrogramAdapter(client), None
+
+    def _bots_or_refusal(self) -> Tuple[Optional[BotApiAdapter], Optional[pb.TelegramOperationError]]:
+        """The Bot Api adapter, or a typed refusal when none is attached.
+
+        A runtime without the token repository must answer bot RPCs with a
+        typed error — the Go Worker treats an absent capability as a
+        permanent refusal of that operation and decides the fallback itself.
+        """
+        if self._bots is None:
+            return None, self._err(errors.failed(
+                errors.TELEGRAM_PERMANENT_ERROR,
+                "this runtime serves no bot transport (no token repository attached)",
+                error_type="BOT_TRANSPORT_UNAVAILABLE",
+            ))
+        return self._bots, None
 
     @staticmethod
     def _err(f: errors.TelegramOperationError):
@@ -279,7 +300,227 @@ class TelegramGatewayServicer(pb_grpc.TelegramGatewayServicer):
             return pb.SendOutcome(error=self._err(f))
         return pb.SendOutcome(target_message_id=int(sent))
 
-    # -- health -------------------------------------------------------------- #
+    # -- bot transport -------------------------------------------------------- #
+
+    async def BotAvailability(self, request, context):
+        bots, refusal = self._bots_or_refusal()
+        if refusal is not None:
+            return pb.BotAvailabilityResponse(error=refusal)
+        target = request.bot
+        ok, username = await bots.availability(
+            target.bot_token_id, int(target.owner_user_id or 0),
+        )
+        return pb.BotAvailabilityResponse(ok=bool(ok), bot_username=username or "")
+
+    async def BotSendText(self, request, context):
+        bots, refusal = self._bots_or_refusal()
+        if refusal is not None:
+            return pb.SendOutcome(error=refusal)
+        target = request.bot
+        sent, ferr = await bots.send_text(
+            target.bot_token_id, int(target.owner_user_id or 0),
+            request.target_chat_id, request.text,
+            thread_id=int(request.message_thread_id or 0),
+            inline_buttons=list(request.inline_buttons),
+        )
+        if ferr is not None:
+            return pb.SendOutcome(error=self._err(ferr))
+        return pb.SendOutcome(target_message_id=int(sent))
+
+    async def BotCopyMessage(self, request, context):
+        bots, refusal = self._bots_or_refusal()
+        if refusal is not None:
+            return pb.SendOutcome(error=refusal)
+        target = request.bot
+        sent, ferr = await bots.copy_message(
+            target.bot_token_id, int(target.owner_user_id or 0),
+            request.target_chat_id, request.from_chat_id, request.message_id,
+            caption=request.caption or None,
+            thread_id=int(request.message_thread_id or 0),
+            inline_buttons=list(request.inline_buttons),
+        )
+        if ferr is not None:
+            return pb.SendOutcome(error=self._err(ferr))
+        return pb.SendOutcome(target_message_id=int(sent))
+
+    async def BotSendMedia(self, request, context):
+        bots, refusal = self._bots_or_refusal()
+        if refusal is not None:
+            return pb.SendOutcome(error=refusal)
+        target = request.bot
+        sent, ferr = await bots.send_media(
+            target.bot_token_id, int(target.owner_user_id or 0),
+            request.target_chat_id, request.file_reference_token,
+            request.caption, request.media_type,
+            thread_id=int(request.message_thread_id or 0),
+            inline_buttons=list(request.inline_buttons),
+        )
+        if ferr is not None:
+            return pb.SendOutcome(error=self._err(ferr))
+        return pb.SendOutcome(target_message_id=int(sent))
+
+    async def BotDeleteMessages(self, request, context):
+        bots, refusal = self._bots_or_refusal()
+        if refusal is not None:
+            return pb.DeleteMessagesResponse(error=refusal)
+        target = request.bot
+        deleted, ferr = await bots.delete_messages(
+            target.bot_token_id, int(target.owner_user_id or 0),
+            request.chat_id, list(request.message_ids),
+        )
+        if ferr is not None:
+            return pb.DeleteMessagesResponse(error=self._err(ferr))
+        return pb.DeleteMessagesResponse(deleted=bool(deleted))
+
+    # -- deletion (both transports) ------------------------------------------- //
+
+    async def DeleteMessages(self, request, context):
+        transport = str(request.transport or "user").strip().lower()
+        ids = [int(i) for i in request.message_ids]
+        if not ids:
+            return pb.DeleteMessagesResponse(
+                deleted=True,
+                error=self._err(errors.failed(
+                    errors.INTERNAL_ERROR, "no message ids supplied",
+                    error_type="EMPTY_MESSAGE_IDS",
+                )),
+            )
+
+        if transport == "bot":
+            bots, refusal = self._bots_or_refusal()
+            if refusal is not None:
+                return pb.DeleteMessagesResponse(error=refusal)
+            deleted, ferr = await bots.delete_messages(
+                request.bot_token_id, int(request.owner_user_id or 0),
+                request.chat_id, ids,
+            )
+            if ferr is not None:
+                return pb.DeleteMessagesResponse(error=self._err(ferr))
+            return pb.DeleteMessagesResponse(deleted=bool(deleted))
+
+        # USER transport: through the session's MTProto client.
+        adapter, ferr = self._adapter(request.session_id)
+        if ferr is not None:
+            return pb.DeleteMessagesResponse(error=self._err(ferr))
+        ok, f = await adapter.delete_messages(request.chat_id, ids)
+        if f is not None:
+            return pb.DeleteMessagesResponse(error=self._err(f))
+        return pb.DeleteMessagesResponse(deleted=bool(ok))
+
+    # -- branding stage 1 ------------------------------------------------------ #
+
+    async def BrandingStage1(self, request, context):
+        """post the processed deliverable into channel C.
+
+        The content decision (text / copy / media_group) was made by Go;
+        this only executes the Telegram side effect and reports the ids that
+        landed. The transformed text/caption travels verbatim — the runtime
+        never re-runs a transform.
+        """
+        transport = str(request.transport or "user").strip().lower()
+        operation = str(request.operation or "").strip().lower()
+        ids: list = []
+
+        if operation == "text":
+            body = str(request.text or "").strip()
+            if not body:
+                return pb.BrandingStage1Response(error=self._err(errors.failed(
+                    errors.INTERNAL_ERROR, "branding stage 1 text is empty",
+                    error_type="EMPTY_TEXT",
+                )))
+            if transport == "bot":
+                bots, refusal = self._bots_or_refusal()
+                if refusal is not None:
+                    return pb.BrandingStage1Response(error=refusal)
+                sent, ferr = await bots.send_text(
+                    request.bot_token_id, int(request.owner_user_id or 0),
+                    request.target_chat_id, body,
+                    thread_id=int(request.message_thread_id or 0),
+                    inline_buttons=list(request.inline_buttons),
+                )
+                if ferr is not None:
+                    return pb.BrandingStage1Response(error=self._err(ferr))
+                if sent:
+                    ids = [int(sent)]
+            else:
+                adapter, ferr = self._adapter(request.session_id)
+                if ferr is not None:
+                    return pb.BrandingStage1Response(error=self._err(ferr))
+                sent, f = await adapter.send_message(
+                    request.target_chat_id, body, int(request.message_thread_id or 0),
+                )
+                if f is not None:
+                    return pb.BrandingStage1Response(error=self._err(f))
+                if sent:
+                    ids = [int(sent)]
+
+        elif operation == "copy":
+            if transport == "bot":
+                bots, refusal = self._bots_or_refusal()
+                if refusal is not None:
+                    return pb.BrandingStage1Response(error=refusal)
+                sent, ferr = await bots.copy_message(
+                    request.bot_token_id, int(request.owner_user_id or 0),
+                    request.target_chat_id, request.source_chat_id,
+                    request.source_message_id,
+                    caption=request.caption or None,
+                    thread_id=int(request.message_thread_id or 0),
+                    inline_buttons=list(request.inline_buttons),
+                )
+                if ferr is not None:
+                    return pb.BrandingStage1Response(error=self._err(ferr))
+                if sent:
+                    ids = [int(sent)]
+            else:
+                adapter, ferr = self._adapter(request.session_id)
+                if ferr is not None:
+                    return pb.BrandingStage1Response(error=self._err(ferr))
+                sent, f = await adapter.copy_message(
+                    request.target_chat_id, request.source_chat_id,
+                    request.source_message_id,
+                    request.caption or None, int(request.message_thread_id or 0),
+                )
+                if f is not None:
+                    return pb.BrandingStage1Response(error=self._err(f))
+                if sent:
+                    ids = [int(sent)]
+
+        elif operation == "media_group":
+            # The album must stay grouped: copying only its first message
+            # would turn a grouped post into a single-item post for the
+            # target. The Bot Api has no album-preserving equivalent here,
+            # so the bot transport reports the typed refusal and Go decides
+            # the fallback (its own policy, never a hidden one).
+            if transport == "bot":
+                return pb.BrandingStage1Response(error=self._err(errors.failed(
+                    errors.TELEGRAM_PERMANENT_ERROR,
+                    "media group delivery is not available on the bot route",
+                    error_type="BOT_METHOD_INVALID",
+                )))
+            members = [int(i) for i in request.source_message_ids]
+            if not members:
+                members = [int(request.source_message_id)]
+            adapter, ferr = self._adapter(request.session_id)
+            if ferr is not None:
+                return pb.BrandingStage1Response(error=self._err(ferr))
+            sent_ids, f = await adapter.copy_media_group(
+                request.target_chat_id, request.source_chat_id, members[0],
+                request.caption or None, int(request.message_thread_id or 0),
+            )
+            if f is not None:
+                return pb.BrandingStage1Response(error=self._err(f))
+            ids = [int(i) for i in sent_ids or []]
+
+        else:
+            return pb.BrandingStage1Response(error=self._err(errors.failed(
+                errors.INTERNAL_ERROR,
+                f"unknown branding stage 1 operation: {request.operation!r}",
+                error_type="UNKNOWN_OPERATION",
+            )))
+
+        return pb.BrandingStage1Response(target_message_ids=ids)
+
+    # -- health -------------------------------------------------------------- //
 
     async def GatewayHealth(self, request, context):
         return pb.HealthResponse(
@@ -316,15 +557,26 @@ def _media_kind(msg: Any) -> str:
 # Server wiring
 # ---------------------------------------------------------------------------
 
-def build_server(sessions: SessionManager, addr: str, token: str, media_dir: str) -> grpc.aio.Server:
+def build_server(
+    sessions: SessionManager,
+    addr: str,
+    token: str,
+    media_dir: str,
+    bots: Optional[BotApiAdapter] = None,
+) -> grpc.aio.Server:
     """Construct the runtime's gRPC server.
 
     ``token`` must be non-empty; the caller (main) refuses to start otherwise.
+    ``bots`` is optional: a runtime without the Core's token repository serves
+    sessions and answers bot RPCs with a typed refusal — the Go Worker treats
+    that as a permanent refusal of the bot transport and decides its own
+    fallback, never a silent identity switch.
     """
     interceptors = [_AuthInterceptor(token)] if token else []
     server = grpc.aio.server(interceptors=interceptors)
     pb_grpc.add_TelegramGatewayServicer_to_server(
-        TelegramGatewayServicer(sessions, media_dir), server,
+        TelegramGatewayServicer(sessions, media_dir, bots=bots),
+        server,
     )
     bound = server.add_insecure_port(addr)
     if bound == 0:
@@ -333,9 +585,15 @@ def build_server(sessions: SessionManager, addr: str, token: str, media_dir: str
     return server
 
 
-async def serve(sessions: SessionManager, addr: str, token: str, media_dir: str) -> grpc.aio.Server:
+async def serve(
+    sessions: SessionManager,
+    addr: str,
+    token: str,
+    media_dir: str,
+    bots: Optional[BotApiAdapter] = None,
+) -> grpc.aio.Server:
     """Start the runtime server. Returns the started server (await
     ``server.wait_for_termination()``)."""
-    server = build_server(sessions, addr, token, media_dir)
+    server = build_server(sessions, addr, token, media_dir, bots=bots)
     await server.start()
     return server
