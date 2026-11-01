@@ -18,6 +18,7 @@ import {
   ArrowUp,
   Cable,
   Check,
+  ChevronDown,
   Copy,
   Database,
   Download,
@@ -26,6 +27,7 @@ import {
   History,
   Lock,
   RefreshCw,
+  Search,
   Terminal,
   Upload,
   X,
@@ -261,23 +263,23 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
           </div>
         </div>
 
-        {/* Filter & Search Bar */}
+        {/* Filter & Search — the Field pattern: label above the control, so a
+            narrow card can never clip a label off its edge. Controls fill
+            their grid cell; the search spans the full row beneath them. */}
         <div
           style={{
-            display: 'flex',
-            flexWrap: 'wrap',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
             gap: 'var(--space-2)',
-            alignItems: 'center',
-            justifyContent: 'space-between',
             marginBlockEnd: 'var(--space-3)',
             paddingBlockEnd: 'var(--space-3)',
             borderBottom: '1px solid var(--color-border)',
           }}
         >
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', alignItems: 'center' }}>
-            {/* Tenant scope: admins only. Switching refetches — the
-                poller effect re-arms on `logScope` too. */}
-            {canPickScope && (
+          {/* Tenant scope: admins only. Switching refetches — the
+              poller effect re-arms on `logScope` too. */}
+          {canPickScope && (
+            <div className="ops-filter">
               <div className="scope-toggle" role="group" aria-label={t('ui_log_scope_all_tenants')}>
                 <button
                   type="button"
@@ -296,11 +298,16 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                   {t('ui_log_scope_all_tenants')}
                 </button>
               </div>
-            )}
+            </div>
+          )}
 
-            <div className="ops-filter">
-              <span className="ops-toolbar__label">{t('ui_service')}</span>
+          <div className="ops-filter">
+            <label className="ops-toolbar__label" htmlFor="ops-log-service">
+              {t('ui_service')}
+            </label>
+            <span className="ops-selectwrap">
               <select
+                id="ops-log-service"
                 value={logFilterService}
                 onChange={(e) => {
                   setLogFilterService(e.target.value)
@@ -315,11 +322,17 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                 <option value="pipeline">{t('ui_service_pipeline')}</option>
                 <option value="boot">{t('ui_service_boot')}</option>
               </select>
-            </div>
+              <ChevronDown size={14} aria-hidden="true" />
+            </span>
+          </div>
 
-            <div className="ops-filter">
-              <span className="ops-toolbar__label">{t('ui_level')}</span>
+          <div className="ops-filter">
+            <label className="ops-toolbar__label" htmlFor="ops-log-level">
+              {t('ui_level')}
+            </label>
+            <span className="ops-selectwrap">
               <select
+                id="ops-log-level"
                 value={logFilterLevel}
                 onChange={(e) => {
                   setLogFilterLevel(e.target.value)
@@ -333,14 +346,20 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                 <option value="INFO">ℹ️ {t('ui_level_info')}</option>
                 <option value="DEBUG">🔍 {t('ui_level_debug')}</option>
               </select>
-            </div>
+              <ChevronDown size={14} aria-hidden="true" />
+            </span>
+          </div>
 
-            {/* v18: scope the console to one task's history. This is the
-                same attribution the per-task Logs tab renders, surfaced
-                where an operator already has the global view open. */}
-            <div className="ops-filter">
-              <span className="ops-toolbar__label">{t('ui_task')}</span>
+          {/* v18: scope the console to one task's history. This is the
+              same attribution the per-task Logs tab renders, surfaced
+              where an operator already has the global view open. */}
+          <div className="ops-filter">
+            <label className="ops-toolbar__label" htmlFor="ops-log-task">
+              {t('ui_task')}
+            </label>
+            <span className="ops-selectwrap">
               <select
+                id="ops-log-task"
                 value={logFilterRule}
                 onChange={(e) => {
                   setLogFilterRule(e.target.value)
@@ -348,7 +367,6 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                   fetchLogs(logFilterService, logFilterLevel, logSearch, { rule: e.target.value, offset: 0 })
                 }}
                 className="ops-select"
-                style={{ maxWidth: 220 }}
               >
                 <option value="all">{t('ui_all_tasks')}</option>
                 {(Array.isArray(rules) ? rules : []).map((r: any) => (
@@ -357,13 +375,19 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                   </option>
                 ))}
               </select>
-            </div>
+              <ChevronDown size={14} aria-hidden="true" />
+            </span>
+          </div>
 
-            {/* v18: read direction — newest-first for triage, oldest-first
-                for replaying how a task behaved. */}
-            <div className="ops-filter">
-              <span className="ops-toolbar__label">{t('ui_order')}</span>
+          {/* v18: read direction — newest-first for triage, oldest-first
+              for replaying how a task behaved. */}
+          <div className="ops-filter">
+            <label className="ops-toolbar__label" htmlFor="ops-log-order">
+              {t('ui_order')}
+            </label>
+            <span className="ops-selectwrap">
               <select
+                id="ops-log-order"
                 value={logOrder}
                 onChange={(e) => {
                   const order = e.target.value as 'desc' | 'asc'
@@ -376,31 +400,41 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                 <option value="desc">{t('ui_newest_first')}</option>
                 <option value="asc">{t('ui_oldest_first')}</option>
               </select>
-            </div>
+              <ChevronDown size={14} aria-hidden="true" />
+            </span>
           </div>
 
           {/* Text Search Input — debounced; typing never re-arms the
               poller per keystroke and never fires a fetch per key. */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minWidth: 260, flex: 1, maxWidth: 380 }}>
-            <input
-              type="text"
-              placeholder={t('ui_search_logs_live')}
-              value={searchDraft}
-              onChange={(e) => setSearchDraft(e.target.value)}
-              className="input-field"
-              style={{ padding: '6px 12px', fontSize: 'var(--type-sm)' }}
-            />
-            {searchDraft && (
-              <button
-                type="button"
-                onClick={() => setSearchDraft('')}
-                className="btn btn--ghost btn--icon btn--sm"
-                aria-label={t('ui_cancel')}
-                title={t('ui_cancel')}
-              >
-                <X size={14} />
-              </button>
-            )}
+          <div className="ops-filter" style={{ gridColumn: '1 / -1' }}>
+            <label className="ops-toolbar__label" htmlFor="ops-log-search">
+              {t('ui_search_logs_live')}
+            </label>
+            <span className="ops-selectwrap">
+              <input
+                id="ops-log-search"
+                type="text"
+                placeholder={t('ui_search_logs_live')}
+                value={searchDraft}
+                onChange={(e) => setSearchDraft(e.target.value)}
+                className="input-field"
+                style={{ paddingBlock: 'var(--space-2)', paddingInline: 'var(--space-3)', paddingInlineEnd: 'var(--space-6)', fontSize: 'var(--type-sm)', minBlockSize: 40 }}
+              />
+              {searchDraft ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchDraft('')}
+                  className="btn btn--ghost btn--icon btn--sm"
+                  style={{ position: 'absolute', insetInlineEnd: 4, minInlineSize: 32, minBlockSize: 32 }}
+                  aria-label={t('ui_cancel')}
+                  title={t('ui_cancel')}
+                >
+                  <X size={14} />
+                </button>
+              ) : (
+                <Search size={14} aria-hidden="true" />
+              )}
+            </span>
           </div>
         </div>
 

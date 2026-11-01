@@ -3625,21 +3625,33 @@ input[type='radio']:disabled {
   border-radius: var(--radius-full);
   background: var(--color-text-muted);
   flex-shrink: 0;
+  position: relative;
 }
 
+/* The glow lives on an ::after and only its opacity animates: box-shadow
+   repaints every frame, opacity composites. */
 .ops-live--on .ops-live__dot {
   background: var(--color-success);
-  box-shadow: 0 0 8px color-mix(in oklab, var(--color-success) 80%, transparent);
+}
+
+.ops-live--on .ops-live__dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: var(--radius-full);
+  background: var(--color-success);
+  filter: blur(3px);
+  opacity: 0.55;
   animation: ops-breathe 2.4s var(--ease-out) infinite;
 }
 
 @keyframes ops-breathe {
   0%,
   100% {
-    box-shadow: 0 0 4px color-mix(in oklab, var(--color-success) 60%, transparent);
+    opacity: 0.25;
   }
   50% {
-    box-shadow: 0 0 10px color-mix(in oklab, var(--color-success) 90%, transparent);
+    opacity: 0.8;
   }
 }
 
@@ -3740,21 +3752,51 @@ input[type='radio']:disabled {
   font-family: var(--font-mono);
 }
 
+/* Filter cluster: the design contract's Field pattern — label ABOVE the
+   control. The old label-beside-select row clipped its labels off the card
+   edge on phones; a column never fights the row for width. */
 .ops-filter {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.ops-selectwrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+}
+
+/* The chevron/hint icon is a DIRECT child; icons nested inside buttons
+   keep their normal flow. */
+.ops-selectwrap > svg {
+  position: absolute;
+  inset-inline-end: 10px;
+  pointer-events: none;
+  color: var(--color-text-muted);
 }
 
 .ops-select {
+  appearance: none;
+  inline-size: 100%;
+  min-block-size: 40px;
   background: var(--color-surface-2);
   border: 1px solid var(--color-border);
   color: var(--color-text);
   border-radius: var(--radius-sm);
-  padding: var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  padding-inline-end: var(--space-6);
   font-size: var(--type-sm);
   font-family: inherit;
-  max-inline-size: 240px;
+  cursor: pointer;
+  min-inline-size: 0;
+}
+
+.ops-select:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .ops-console {
@@ -3775,6 +3817,31 @@ input[type='radio']:disabled {
   text-align: center;
   padding: var(--space-5) var(--space-4);
   color: var(--color-text-muted);
+}
+
+/* Level toggle chip (collection policy): a real pressed-state control. */
+.ops-levelchip {
+  min-block-size: 36px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font-size: var(--type-xs);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  cursor: pointer;
+}
+
+.ops-levelchip[aria-pressed='true'] {
+  border-color: color-mix(in oklab, var(--color-info) 50%, transparent);
+  background: var(--color-info-soft);
+  color: var(--color-info);
+}
+
+.ops-levelchip:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .ops-row {
@@ -3832,8 +3899,10 @@ input[type='radio']:disabled {
 }
 
 @media (max-width: 640px) {
+  .ops-select,
   .ops-toolbar .ops-select,
-  .ops-toolbar .btn {
+  .ops-toolbar .btn,
+  .ops-live {
     min-block-size: 44px;
   }
 
