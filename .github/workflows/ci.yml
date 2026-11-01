@@ -184,12 +184,16 @@ jobs:
         # The Go and Python stubs are committed (both consumers compile from
         # the same .proto). Regenerate and diff, so a contract change that
         # forgot to re-generate fails here instead of drifting in production.
-        working-directory: worker
         run: |
-          # shellcheck disable=SC1091
-          python -m grpc_tools.protoc -Iworker/proto             --python_out=worker/proto/gen/python             --grpc_python_out=worker/proto/gen/python             worker/proto/telegram_gateway.proto
-          if ! git diff --exit-code -- worker/proto/gen; then
-            echo "::error::worker/proto/gen is stale: regenerate with the command in the step above"
+          # grpcio-tools provides the Python stub generator. The Go stubs are
+          # verified by the build/vet/test steps above: they must compile.
+          pip install --quiet "grpcio-tools==1.84.0"
+          python -m grpc_tools.protoc -Iworker/proto \
+            --python_out=worker/proto/gen/python \
+            --grpc_python_out=worker/proto/gen/python \
+            worker/proto/telegram_gateway.proto
+          if ! git diff --exit-code -- worker/proto/gen/python; then
+            echo "::error::worker/proto/gen is stale: regenerate with the commands in worker/README.md"
             exit 1
           fi
 
