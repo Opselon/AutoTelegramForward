@@ -185,7 +185,22 @@ class DurableQueueManager:
         self._queue_wait_sum: float = 0.0
 
     async def start(self) -> None:
-        """Start worker tasks and lease watchdog."""
+        """Start worker tasks and lease watchdog.
+
+        Strangler-fig migration switch: when ``ATF_WORKER_ENABLED`` is set,
+        the Go Worker owns delivery-job execution and this loop deliberately
+        does NOT start. The enqueue path (inserting into delivery_jobs)
+        stays here — ingest is still Python's — only the consumption moves.
+        That keeps exactly one authoritative execution path at a time, and
+        rolling back to the Python loop is a config flip, not a redeploy.
+        """
+        if os.environ.get("ATF_WORKER_ENABLED", "").strip().lower() in ("1", "true", "yes", "on"):
+            self._running = False
+            logger.info(
+                "[DURABLE_QUEUE] ATF_WORKER_ENABLED is set — the Go Worker owns delivery "
+                "execution; the Python queue loop is standing down (enqueue still active)."
+            )
+            return None
         if self._running:
             return None
         self._running = True

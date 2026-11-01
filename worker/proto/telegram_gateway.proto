@@ -1,0 +1,401 @@
+syntax = "proto3";
+
+package atf.worker.v1;
+
+option go_package = "atf/worker/proto/gen;tfgwpb";
+
+// <<contract: tfgw/v1>>
+//
+// TelegramGateway — the narrow, business-neutral transport contract between the
+// Go Worker (business execution plane) and the Python Telegram Runtime
+// (Telegram connectivity / MTProto execution plane).
+//
+// Design rules enforced by this contract:
+//
+//   * Go decides WHAT should happen; Python executes the Telegram-specific
+//     operation and reports WHAT Telegram actually said. There is no generic
+//     "invoke Python method" RPC anywhere in this file.
+//   * Every call carries request_meta (correlation id, the calling worker id,
+//     the job the operation belongs to) so a failure can be traced across the
+//     process boundary without logging message content or credentials.
+//     request_meta.fields is a flat string map for Exactly the identifiers a
+//     log line needs (rule_id, job_id, source/target chat ids). Never put
+//     message text, session strings, api hashes, tokens or passwords in it.
+//   * Errors are typed, not stringly: the runtime returns a typed
+//     TelegramOperationError whose code is one of the normalized
+//     DeliveryFailureCode values below. Go owns the retry decision; the runtime
+//     must never sleep-and-retry a business policy itself.
+//   * No streaming is used by v1. Media transport is staged through a
+//     shared scratch path (see TelegramMediaHandle) so neither process holds a
+//     full media file in memory, and a future v2 may add streaming without
+//     changing these request shapes.
+//
+// Backwards compatibility: add only optional fields and new RPCs; never reuse
+// field numbers, never change a field type, never remove an RPC. The
+// contract_major/contract_minor pair in the health RPC is the comparison the
+// Go side performs before it considers a runtime usable.
+
+// ---------------------------------------------------------------------------
+// Common
+// ---------------------------------------------------------------------------
+
+message RequestMeta {
+  // correlation id shared by API request -> job -> worker -> runtime call
+  string correlation_id = 1;
+  // id of the calling worker (for lease diagnostics only)
+  string worker_id = 2;
+  // the delivery job this operation belongs to (diagnostics only)
+  string job_id = 3;
+  // flat diagnostics map: rule_id, target/source chat ids, attempt, ...
+  // NEVER message content, session strings, api hashes, tokens, passwords.
+  map<string, string> fields = 4;
+}
+
+// Normalized failure classification shared by Go and Python.
+//
+// These are the Go-side canonical names. Python's runtime maps its pyrogram /
+// MTProto errors onto this same enum, so "what happened" survives the process
+// boundary unchanged and the Go retry policy decides from a stable vocabulary.
+enum DeliveryFailureCode {
+  DELIVERY_FAILURE_UNSPECIFIED = 0;
+  // Telegram refused the operation permanently for this content/chat.
+  TELEGRAM_PERMANENT_ERROR = 1;
+  // Telegram asked us to wait: FloodWait / SlowmodeWait / FloodPremiumWait.
+  // retry_after_seconds is authoritative.
+  FLOOD_WAIT = 2;
+  // Telegram-side rate limiting that did not carry a wait value.
+  RATE_LIMITED = 3;
+  // Response never arrived (timeout) — the outcome on Telegram's side is
+  // UNKNOWN and must not be treated as "not sent".
+  NETWORK_TIMEOUT = 4;
+  // Transport is down (connection reset, unreachable).
+  NETWORK_DISCONNECTED = 5;
+  // The session can no longer perform operations (auth revoked / logged out).
+  AUTHENTICATION_ERROR = 6;
+  // Session exists but is not usable right now (connecting, temporarily down).
+  SESSION_UNAVAILABLE = 7;
+  // Telegram says we may not do this in the target (no write permission).
+  PERMISSION_DENIED = 8;
+  CHAT_NOT_FOUND = 9;
+  MESSAGE_NOT_FOUND = 10;
+  // The source forbids forwarding/copying; a copy/re-upload fallback may be
+  // permitted by the worker's own policy (fallback_enabled).
+  FORWARDING_RESTRICTED = 11;
+  MEDIA_DOWNLOAD_FAILED = 12;
+  MEDIA_UPLOAD_FAILED = 13;
+  SOURCE_UNAVAILABLE = 14;
+  TARGET_UNAVAILABLE = 15;
+  TELEGRAM_TEMPORARY_ERROR = 16;
+  // Telegram accepted nothing and reported nothing usable (ambiguous reply).
+  UNKNOWN_DELIVERY_OUTCOME = 17;
+  INTERNAL_ERROR = 18;
+}
+
+message TelegramOperationError {
+  DeliveryFailureCode code = 1;
+  // Telegram's native error type string when known ("FLOOD_WAIT_X",
+  // "PEER_ID_INVALID", ...) — diagnostics only, already redacted by the
+  // runtime of secrets (session strings / tokens / api hashes).
+  string error_type = 2;
+  // Telegram's native status code when known ("400", "420", ...).
+  string error_code = 3;
+  // Seconds Telegram demanded we wait (FLOOD_WAIT family). 0 = unknown.
+  int32 retry_after_seconds = 4;
+  // Human-readable, redacted detail for operational logs.
+  string message = 5;
+}
+
+// Result of a single message-level send/forward/copy operation.
+message SendOutcome {
+  // Telegram's id of the message that landed in the target, when the
+  // operation was confirmed. 0 means "no confirmed id" (ambiguous).
+  int64 target_message_id = 1;
+  // Typed failure when the operation did not confirm. The runtime fills this
+  // instead of raising a gRPC error, so a *transport* failure (unreachable,
+  // deadline) stays distinguishable from a *Telegram* refusal: the first is
+  // returned as a gRPC-level error by the client adapter, the second as this
+  // typed field.
+  TelegramOperationError error = 2;
+}
+
+// ---------------------------------------------------------------------------
+// SessionControl — Go asks, Python owns connectivity
+// ---------------------------------------------------------------------------
+
+message SessionAvailabilityRequest {
+  RequestMeta meta = 1;
+  // Stable session identifier (never the session string or any secret).
+  string session_id = 2;
+}
+
+message SessionAvailabilityResponse {
+  // true only when the runtime can serve MTProto operations for this session
+  // right now. A session that is connecting is NOT ready.
+  bool ready = 1;
+  // Human-readable status for operational logs (redacted).
+  string state = 2;
+  TelegramOperationError error = 3;
+}
+
+// ---------------------------------------------------------------------------
+// MessageInfo — the minimal, business-neutral view of a source message
+// ---------------------------------------------------------------------------
+
+message MessageInfo {
+  int64 chat_id = 1;
+  int64 message_id = 2;
+  // media group id when this message is part of an album ("" otherwise)
+  string media_group_id = 3;
+  // whether the message carries any media at all
+  bool has_media = 4;
+  // normalized media kind ("photo", "video", "document", "audio", "voice",
+  // "video_note", "sticker", "animation", "text", ...) — classification is
+  // Python's because it reads the MTProto object; Go just carries the label.
+  string media_type = 5;
+}
+
+message GetMessageRequest {
+  RequestMeta meta = 1;
+  string session_id = 2;
+  int64 chat_id = 3;
+  int64 message_id = 4;
+}
+
+message GetMessageResponse {
+  MessageInfo info = 1;
+  TelegramOperationError error = 2;
+}
+
+message GetAlbumMessageIdsRequest {
+  RequestMeta meta = 1;
+  string session_id = 2;
+  int64 chat_id = 3;
+  // any known member id of the media group
+  int64 message_id = 4;
+}
+
+message GetAlbumMessageIdsResponse {
+  // every member id of the album, in Telegram's own order; empty when the
+  // message is not part of a group or the group cannot be resolved
+  repeated int64 message_ids = 1;
+  TelegramOperationError error = 2;
+}
+
+message GetFileExtensionRequest {
+  RequestMeta meta = 1;
+  string session_id = 2;
+  int64 chat_id = 3;
+  int64 message_id = 4;
+}
+
+message GetFileExtensionResponse {
+  // file extension (".jpg") or "" when the message has no file / unknown
+  string extension = 1;
+  TelegramOperationError error = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Media staging — bounded, never a full file in either process's memory
+// ---------------------------------------------------------------------------
+
+message TelegramMediaHandle {
+  // A path inside the shared media scratch volume that BOTH processes can
+  // read/write. Go stages an upload there and Python downloads there. Neither
+  // side reads the whole file into memory.
+  string path = 1;
+  // Suggested file name for the upload (may be "").
+  string file_name = 2;
+}
+
+message DownloadMediaRequest {
+  RequestMeta meta = 1;
+  string session_id = 2;
+  int64 chat_id = 3;
+  int64 message_id = 4;
+  // Where the runtime must write the file. Go owns this path (it owns the
+  // scratch volume's lifecycle and cleanup).
+  TelegramMediaHandle destination = 5;
+}
+
+message DownloadMediaResponse {
+  // Size in bytes of the file the runtime actually wrote.
+  int64 size_bytes = 1;
+  TelegramOperationError error = 2;
+}
+
+message PrepareMediaUploadRequest {
+  RequestMeta meta = 1;
+  string session_id = 2;
+  // Source to re-upload from, when known (re-upload fallback path).
+  int64 source_chat_id = 3;
+  int64 source_message_id = 4;
+  // Staged file in the shared scratch volume.
+  TelegramMediaHandle source = 5;
+  // The kind of media the file holds, as classified on the ingest side.
+  string media_type = 6;
+}
+
+message PrepareMediaUploadResponse {
+  // Opaque handle the runtime can turn into a Telegram file reference. The
+  // worker treats this as an input to SendMedia only; it never parses it.
+  // When empty, the send must fall back to a plain text delivery.
+  string file_reference_token = 1;
+  TelegramOperationError error = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Sends — the actual Telegram side effects
+// ---------------------------------------------------------------------------
+
+message ForwardMessagesRequest {
+  RequestMeta meta = 1;
+  string session_id = 2;
+  int64 target_chat_id = 3;
+  int64 from_chat_id = 4;
+  repeated int64 message_ids = 5;
+  // forum topic thread inside the target supergroup (0 = General / none)
+  int64 message_thread_id = 6;
+}
+
+message ForwardMessagesResponse {
+  // ids of the messages that landed in the target, aligned to message_ids.
+  // An entry of 0 means that member was not confirmed.
+  repeated int64 target_message_ids = 1;
+  TelegramOperationError error = 2;
+}
+
+message CopyMessageRequest {
+  RequestMeta meta = 1;
+  string session_id = 2;
+  int64 target_chat_id = 3;
+  int64 from_chat_id = 4;
+  int64 message_id = 5;
+  // Final caption/text for this target. Go has already applied every
+  // transform (header/footer, replace rules, AI rewrite). "" means "keep
+  // whatever the source carries" (Telegram's own caption).
+  string caption = 6;
+  // forum topic thread inside the target supergroup (0 = General / none)
+  int64 message_thread_id = 7;
+}
+
+message CopyMessagesRequest {
+  RequestMeta meta = 1;
+  string session_id = 2;
+  int64 target_chat_id = 3;
+  int64 from_chat_id = 4;
+  repeated int64 message_ids = 5;
+  // single caption shared by the whole group (mirrors copy_media_group)
+  string caption = 6;
+  int64 message_thread_id = 7;
+}
+
+message CopyMessagesResponse {
+  repeated int64 target_message_ids = 1;
+  TelegramOperationError error = 2;
+}
+
+message SendMessageRequest {
+  RequestMeta meta = 1;
+  string session_id = 2;
+  int64 target_chat_id = 3;
+  // fully transformed text
+  string text = 4;
+  int64 message_thread_id = 5;
+}
+
+message SendMediaRequest {
+  RequestMeta meta = 1;
+  string session_id = 2;
+  int64 target_chat_id = 3;
+  // The opaque token the runtime returned from PrepareMediaUpload. Empty
+  // means the staging failed and the caller must fall back to text.
+  string file_reference_token = 4;
+  // Final caption (already transformed by Go; "" = no caption).
+  string caption = 5;
+  // Media classification from the ingest side, used to pick the Telegram
+  // send method (photo/video/voice/audio/animation/sticker/document).
+  string media_type = 6;
+  int64 message_thread_id = 7;
+}
+
+message CopyMediaGroupRequest {
+  RequestMeta meta = 1;
+  string session_id = 2;
+  int64 target_chat_id = 3;
+  int64 from_chat_id = 4;
+  // any member of the group
+  int64 message_id = 5;
+  string caption = 6;
+  int64 message_thread_id = 7;
+}
+
+// ---------------------------------------------------------------------------
+// ReloadMedia — re-upload fallback needs fresh bytes
+// ---------------------------------------------------------------------------
+
+message ReloadMediaRequest {
+  RequestMeta meta = 1;
+  string session_id = 2;
+  int64 source_chat_id = 3;
+  int64 source_message_id = 4;
+  // where the runtime writes the bytes Go will then stage for upload
+  TelegramMediaHandle destination = 5;
+  // media classification from the ingest side
+  string media_type = 6;
+}
+
+message ReloadMediaResponse {
+  int64 size_bytes = 1;
+  TelegramOperationError error = 2;
+}
+
+// ---------------------------------------------------------------------------
+// The service
+// ---------------------------------------------------------------------------
+
+service TelegramGateway {
+  // --- session connectivity -------------------------------------------
+  rpc IsSessionReady(SessionAvailabilityRequest)
+      returns (SessionAvailabilityResponse) {}
+
+  // --- message reads ---------------------------------------------------
+  rpc GetMessage(GetMessageRequest) returns (GetMessageResponse) {}
+  rpc GetAlbumMessageIds(GetAlbumMessageIdsRequest)
+      returns (GetAlbumMessageIdsResponse) {}
+  rpc GetFileExtension(GetFileExtensionRequest)
+      returns (GetFileExtensionResponse) {}
+
+  // --- media staging ---------------------------------------------------
+  rpc DownloadMedia(DownloadMediaRequest) returns (DownloadMediaResponse) {}
+  rpc PrepareMediaUpload(PrepareMediaUploadRequest)
+      returns (PrepareMediaUploadResponse) {}
+  rpc ReloadMedia(ReloadMediaRequest) returns (ReloadMediaResponse) {}
+
+  // --- sends (the Telegram side effects) -------------------------------
+  rpc ForwardMessages(ForwardMessagesRequest)
+      returns (ForwardMessagesResponse) {}
+  rpc CopyMessage(CopyMessageRequest) returns (SendOutcome) {}
+  rpc CopyMessages(CopyMessagesRequest) returns (CopyMessagesResponse) {}
+  rpc SendMessage(SendMessageRequest) returns (SendOutcome) {}
+  // SendMedia uploads a staged file as new media. This is the re-upload half
+  // of the restricted-source fallback: the runtime received nothing from
+  // Telegram for this file, so it sends its own copy.
+  rpc SendMedia(SendMediaRequest) returns (SendOutcome) {}
+  rpc CopyMediaGroup(CopyMediaGroupRequest) returns (CopyMessagesResponse) {}
+
+  // --- health ----------------------------------------------------------
+  rpc GatewayHealth(HealthRequest) returns (HealthResponse) {}
+}
+
+message HealthRequest {
+  string ping = 1;
+}
+
+message HealthResponse {
+  // contract this runtime implements, in "tfwg/v1" form
+  string contract = 1;
+  int32 contract_major = 2;
+  int32 contract_minor = 3;
+  // "ok" when the runtime is serving
+  string status = 4;
+}

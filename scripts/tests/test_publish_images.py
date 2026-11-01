@@ -220,11 +220,16 @@ def test_the_health_wait_follows_the_services_being_deployed():
         assert f"SERVICES[{index}]" not in text, f"SERVICES[{index}] is a fixed slot"
 
 
-def test_the_service_list_can_be_narrowed_and_defaults_to_the_published_four():
+def test_the_service_list_can_be_narrowed_and_defaults_to_the_published_set():
     text = DEPLOY.read_text(encoding="utf-8")
     assert "ATF_SERVICES" in text
     assert "core api web logger" in text
-    assert set(overlay_services()) == set("core api web logger".split())
+    # The worker is a published service but NOT a default deploy target: it
+    # is opt-in (ATF_WORKER_ENABLED) and an image tag predating it cannot run
+    # it. The deploy script must therefore keep naming the pre-worker
+    # defaults while the overlay lists everything that is published.
+    assert "worker" in text
+    assert set(overlay_services()) == set("core api web logger worker".split())
 
 
 def test_every_deploy_step_uses_the_same_service_list():
