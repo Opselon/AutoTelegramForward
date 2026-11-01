@@ -51,6 +51,7 @@ from ...application.repositories import (
     IDeliveryAttemptRepository,
     IDeliveryQueueRepository,
     IErrorLogRepository,
+    IDiagnosticEventRepository,
     IFilterRuleRepository,
     IForwardRuleRepository,
     IIngestionGapRepository,
@@ -2883,6 +2884,13 @@ class SqliteIngestionGapRepository(IIngestionGapRepository):
 
     async def record_gaps(self, session_id: str, source_chat_id: str,
                           message_ids: Sequence[int]) -> int:
+        """Record missing ids as recovery work; return how many were **new**.
+
+        ``INSERT OR IGNORE`` means an id already known (or already terminal)
+        is not rewritten — without returning the genuinely-new count the
+        poller cannot tell "I just found a gap" from "I keep noticing the
+        same one", and logs the same truncation warning every sweep.
+        """
         if not message_ids:
             return 0
         now = int(time.time())
@@ -2892,7 +2900,8 @@ class SqliteIngestionGapRepository(IIngestionGapRepository):
             for mid in message_ids
         ]
         with self._db._lock:
-            self._db._conn.executemany(
+            cur = self._db._conn.cursor()
+            cur.executemany(
                 """
                 INSERT OR IGNORE INTO ingestion_gaps (
                     id, session_id, source_chat_id, source_message_id,
@@ -2902,8 +2911,9 @@ class SqliteIngestionGapRepository(IIngestionGapRepository):
                 """,
                 rows,
             )
+            inserted = int(cur.rowcount or 0)
             self._db._conn.commit()
-        return len(rows)
+        return inserted
 
     async def resolve_gap(self, session_id: str, source_chat_id: str,
                           message_id: int) -> bool:
@@ -2949,6 +2959,28 @@ class SqliteIngestionGapRepository(IIngestionGapRepository):
         )
         return [dict(r) for r in rows or []]
 
+    async def open_gaps(self, session_id: str, source_chat_id: str,
+                        below: int = 0, limit: int = 100) -> List[dict]:
+        """Still-open recovery work for one channel.
+
+        ``RESOLVED`` and ``FAILED`` are terminal — the post was delivered, or
+        the budget was spent on a post that does not exist — so they no
+        longer count as outstanding and must not hold the poller's cursor.
+        """
+        sql = (
+            "SELECT source_message_id, state, attempts, last_error, created_at "
+            "FROM ingestion_gaps "
+            "WHERE session_id = ? AND source_chat_id = ? AND state IN ('PENDING','RETRYING')"
+        )
+        params: tuple = (str(session_id), str(source_chat_id))
+        if below:
+            sql += " AND source_message_id <= ?"
+            params = params + (int(below),)
+        sql += " ORDER BY source_message_id ASC LIMIT ?"
+        params = params + (max(int(limit), 1),)
+        rows = self._db.query_all(sql, params)
+        return [dict(r) for r in rows or []]
+
     async def due_gaps(self, now: float, limit: int = 100) -> List[dict]:
         rows = self._db.query_all(
             """
@@ -2976,6 +3008,214 @@ class SqliteIngestionGapRepository(IIngestionGapRepository):
             (state, str(error)[:4096], float(next_retry_at), now, str(gap_id)),
         )
         return cur.rowcount > 0
+
+
+class SqliteDiagnosticEventRepository(IDiagnosticEventRepository):
+    """Append-only diagnostic history (schema v32), owner-scoped on read.
+
+    Writes never block the delivery path for long: one bounded
+    ``executemany`` and no index rebuild. Reads are the facet-filtered
+    monitoring queries and the per-message drill-down.
+
+    Owner scoping is enforced in this layer rather than the caller: every
+    read method adds the ``owner_id`` predicate, so a caller that forgets to
+    scope still cannot see another tenant's events.
+    """
+
+    _COLUMNS = (
+        "id", "ts", "event_name", "severity", "trace_id", "correlation_id",
+        "task_id", "owner_id", "job_id", "delivery_attempt_id", "worker_id",
+        "source_peer_id", "source_message_id", "target_peer_id",
+        "destination_message_id", "album_id", "stage", "strategy", "attempt",
+        "error_origin", "category", "reason", "retryable", "fallback_eligible",
+        "raw_exception_class", "raw_rpc_code", "raw_rpc_message", "raw_rpc_id",
+        "raw_library", "raw_method", "raw_retry_after", "parser_name",
+        "parser_version", "media_type", "entity_count", "text_length",
+        "explanation",
+    )
+
+    def __init__(self, db: SqliteDatabase) -> None:
+        self._db = db
+
+    # -- write ------------------------------------------------------------ #
+
+    def _row_from_event(self, event: Any) -> tuple:
+        to_bool = lambda v: 1 if v else 0
+        opt = lambda v: int(v) if v is not None else None
+        return (
+            str(getattr(event, "event_id", "") or uuid.uuid4().hex),
+            float(getattr(event, "timestamp", 0) or time.time()),
+            str(getattr(event, "event_name", "") or "")[:120],
+            str(getattr(event, "severity", "ERROR") or "ERROR")[:16],
+            str(getattr(event, "trace_id", "") or "")[:128],
+            str(getattr(event, "correlation_id", "") or "")[:128],
+            str(getattr(event, "task_id", "") or "")[:128],
+            int(getattr(event, "owner_id", 0) or 0),
+            str(getattr(event, "job_id", "") or "")[:128],
+            str(getattr(event, "delivery_attempt_id", "") or "")[:128],
+            str(getattr(event, "worker_id", "") or "")[:64],
+            str(getattr(event, "source_peer_id", "") or "")[:64],
+            int(getattr(event, "source_message_id", 0) or 0),
+            str(getattr(event, "target_peer_id", "") or "")[:64],
+            int(getattr(event, "destination_message_id", 0) or 0),
+            str(getattr(event, "album_id", "") or "")[:64],
+            str(getattr(event, "stage", "") or "")[:24],
+            str(getattr(event, "strategy", "") or "")[:24],
+            int(getattr(event, "attempt", 0) or 0),
+            str(getattr(event, "error_origin", "UNKNOWN") or "UNKNOWN")[:16],
+            str(getattr(event, "category", "UNKNOWN_INTERNAL_ERROR") or "")[:48],
+            str(getattr(event, "reason", "") or "")[:96],
+            to_bool(getattr(event, "retryable", False)),
+            to_bool(getattr(event, "fallback_eligible", False)),
+            str(getattr(event, "raw_exception_class", "") or "")[:96],
+            opt(getattr(event, "raw_rpc_code", None)),
+            str(getattr(event, "raw_rpc_message", "") or "")[:1000],
+            str(getattr(event, "raw_rpc_id", "") or "")[:96],
+            str(getattr(event, "raw_library", "") or "")[:64],
+            str(getattr(event, "raw_method", "") or "")[:96],
+            opt(getattr(event, "raw_retry_after", None)),
+            str(getattr(event, "parser_name", "") or "")[:64],
+            str(getattr(event, "parser_version", "") or "")[:48],
+            str(getattr(event, "media_type", "") or "")[:32],
+            opt(getattr(event, "entity_count", None)),
+            opt(getattr(event, "text_length", None)),
+            str(getattr(event, "explanation", "") or "")[:1000],
+        )
+
+    async def record_event(self, event: Any) -> bool:
+        try:
+            row = self._row_from_event(event)
+            self._db.execute(
+                f"INSERT OR REPLACE INTO diagnostic_events ({','.join(self._COLUMNS)}) "
+                f"VALUES ({','.join('?' for _ in self._COLUMNS)})",
+                row,
+            )
+            return True
+        except Exception as exc:
+            logger.warning("diagnostic_events write failed: %s", exc)
+            return False
+
+    async def record_events(self, events) -> int:
+        rows = []
+        for event in events or ():
+            try:
+                rows.append(self._row_from_event(event))
+            except Exception:
+                continue
+        if not rows:
+            return 0
+        try:
+            with self._db._lock:
+                self._db._conn.executemany(
+                    f"INSERT OR REPLACE INTO diagnostic_events ({','.join(self._COLUMNS)}) "
+                    f"VALUES ({','.join('?' for _ in self._COLUMNS)})",
+                    rows,
+                )
+                self._db._conn.commit()
+            return len(rows)
+        except Exception as exc:
+            logger.warning("diagnostic_events batch write failed: %s", exc)
+            return 0
+
+    # -- read ------------------------------------------------------------- #
+
+    def _row_to_dict(self, row) -> dict:
+        if row is None:
+            return {}
+        return dict(row) if isinstance(row, dict) else dict(zip(self._COLUMNS, row))
+
+    def _scope(self, owner_id: Optional[int]) -> str:
+        # Owner scoping is structural here, not the caller's job.
+        return " AND owner_id = ?" if owner_id is not None else ""
+
+    async def query_events(self, *, owner_id: Optional[int] = None,
+                           since_ts: float = 0, until_ts: float = 0,
+                           category: str = "", stage: str = "", severity: str = "",
+                           task_id: str = "", source_peer_id: str = "",
+                           source_message_id: Optional[int] = None,
+                           target_peer_id: str = "", trace_id: str = "",
+                           reason: str = "", limit: int = 100,
+                           offset: int = 0) -> List[dict]:
+        where = ["1=1"]
+        params: list = []
+        if owner_id is not None:
+            where.append("owner_id = ?"); params.append(int(owner_id))
+        if since_ts:
+            where.append("ts >= ?"); params.append(float(since_ts))
+        if until_ts:
+            where.append("ts <= ?"); params.append(float(until_ts))
+        for col, val in (("category", category), ("stage", stage), ("severity", severity),
+                         ("task_id", task_id), ("source_peer_id", source_peer_id),
+                         ("target_peer_id", target_peer_id), ("trace_id", trace_id),
+                         ("reason", reason)):
+            if val:
+                where.append(f"{col} = ?"); params.append(str(val))
+        if source_message_id is not None:
+            where.append("source_message_id = ?"); params.append(int(source_message_id))
+        sql = ("SELECT * FROM diagnostic_events WHERE " + " AND ".join(where)
+               + " ORDER BY ts DESC LIMIT ? OFFSET ?")
+        params += [max(1, min(int(limit), 500)), max(0, int(offset))]
+        try:
+            return [self._row_to_dict(r) for r in self._db.query_all(sql, tuple(params)) or ()]
+        except Exception as exc:
+            logger.warning("diagnostic_events query failed: %s", exc)
+            return []
+
+    async def message_timeline(self, source_peer_id: str, source_message_id: int,
+                               owner_id: Optional[int] = None) -> List[dict]:
+        scope = self._scope(owner_id)
+        params = [str(source_peer_id), int(source_message_id)]
+        sql = ("SELECT * FROM diagnostic_events WHERE source_peer_id = ? "
+               "AND source_message_id = ?" + scope + " ORDER BY ts ASC")
+        if owner_id is not None:
+            params.insert(2, int(owner_id))
+        try:
+            return [self._row_to_dict(r) for r in self._db.query_all(sql, tuple(params)) or ()]
+        except Exception as exc:
+            logger.warning("diagnostic_events timeline failed: %s", exc)
+            return []
+
+    async def facet_counts(self, *, owner_id: Optional[int] = None,
+                           since_ts: float = 0, until_ts: float = 0,
+                           facet: str = "category", limit: int = 50) -> List[dict]:
+        allowed = {"category", "stage", "severity", "reason", "task_id",
+                   "error_origin", "strategy", "raw_rpc_id"}
+        if facet not in allowed:
+            facet = "category"
+        where = ["1=1"]
+        params: list = []
+        if owner_id is not None:
+            where.append("owner_id = ?"); params.append(int(owner_id))
+        if since_ts:
+            where.append("ts >= ?"); params.append(float(since_ts))
+        if until_ts:
+            where.append("ts <= ?"); params.append(float(until_ts))
+        sql = (f"SELECT {facet} AS facet, COUNT(*) AS n FROM diagnostic_events "
+               "WHERE " + " AND ".join(where) + f" GROUP BY {facet} ORDER BY n DESC LIMIT ?")
+        params.append(max(1, min(int(limit), 200)))
+        try:
+            return [dict(r) for r in self._db.query_all(sql, tuple(params)) or ()]
+        except Exception as exc:
+            logger.warning("diagnostic_events facet query failed: %s", exc)
+            return []
+
+    async def retention_delete_before(self, before_ts: float, limit: int = 5000) -> int:
+        """Bounded deletion: one sweep removes at most ``limit`` old rows.
+
+        Bounded on purpose — an unbounded DELETE on a large table holds the
+        SQLite write lock for a long time, which blocks the delivery path's
+        own writes.
+        """
+        try:
+            cur = self._db.execute(
+                "DELETE FROM diagnostic_events WHERE ts < ? AND id IN "
+                "(SELECT id FROM diagnostic_events WHERE ts < ? LIMIT ?)",
+                (float(before_ts), float(before_ts), max(1, int(limit))),
+            )
+            return int(cur.rowcount or 0)
+        except Exception as exc:
+            logger.warning("diagnostic_events retention failed: %s", exc)
+            return 0
 
 
 class SqlitePromptRepository(IPromptRepository):

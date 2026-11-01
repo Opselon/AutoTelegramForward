@@ -1005,6 +1005,91 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_ingestion_gaps_sweep
         ON ingestion_gaps(state, next_retry_at);
     """,
+    32: """
+    -- v32: failure intelligence — per-attempt diagnostic history.
+    --
+    -- One row per structured DiagnosticEvent (see
+    -- core/infrastructure/telegram/diagnostics_contract.py): the raw Telegram
+    -- answer preserved verbatim (rpc code/id/message, wait value, method),
+    -- our stable normalized layer (category/reason/origin), the pipeline
+    -- stage and delivery strategy it happened in, and the full correlation
+    -- set (trace/correlation/task/job/attempt/owner).
+    --
+    -- Deliberate omissions, per the data-minimization rules: no message text,
+    -- no captions, no session strings, no tokens, no media bytes. Only
+    -- identifiers, lengths and counts.
+    --
+    -- The events append per attempt, so a retried delivery keeps every
+    -- intermediate failure and a successful fallback keeps the original one —
+    -- the mission's "never hide the native-forward error after a successful
+    -- fallback" is a query on this table, not a new mechanism.
+    CREATE TABLE IF NOT EXISTS diagnostic_events (
+        id TEXT PRIMARY KEY,
+        ts REAL NOT NULL,
+        event_name TEXT NOT NULL DEFAULT '',
+        severity TEXT NOT NULL DEFAULT 'ERROR',
+
+        -- correlation
+        trace_id TEXT NOT NULL DEFAULT '',
+        correlation_id TEXT NOT NULL DEFAULT '',
+        task_id TEXT NOT NULL DEFAULT '',
+        owner_id INTEGER NOT NULL DEFAULT 0,
+        job_id TEXT NOT NULL DEFAULT '',
+        delivery_attempt_id TEXT NOT NULL DEFAULT '',
+        worker_id TEXT NOT NULL DEFAULT '',
+
+        -- scoped message identifiers (never a bare message id)
+        source_peer_id TEXT NOT NULL DEFAULT '',
+        source_message_id INTEGER NOT NULL DEFAULT 0,
+        target_peer_id TEXT NOT NULL DEFAULT '',
+        destination_message_id INTEGER NOT NULL DEFAULT 0,
+        album_id TEXT NOT NULL DEFAULT '',
+
+        -- pipeline context
+        stage TEXT NOT NULL DEFAULT '',
+        strategy TEXT NOT NULL DEFAULT '',
+        attempt INTEGER NOT NULL DEFAULT 0,
+
+        -- normalized layer
+        error_origin TEXT NOT NULL DEFAULT 'UNKNOWN',
+        category TEXT NOT NULL DEFAULT 'UNKNOWN_INTERNAL_ERROR',
+        reason TEXT NOT NULL DEFAULT '',
+        retryable INTEGER NOT NULL DEFAULT 0,
+        fallback_eligible INTEGER NOT NULL DEFAULT 0,
+
+        -- raw Telegram layer: null where the library exposes nothing
+        raw_exception_class TEXT NOT NULL DEFAULT '',
+        raw_rpc_code TEXT,
+        raw_rpc_message TEXT NOT NULL DEFAULT '',
+        raw_rpc_id TEXT NOT NULL DEFAULT '',
+        raw_library TEXT NOT NULL DEFAULT '',
+        raw_method TEXT NOT NULL DEFAULT '',
+        raw_retry_after INTEGER,
+
+        -- parser / content context (lengths and counts only)
+        parser_name TEXT NOT NULL DEFAULT '',
+        parser_version TEXT NOT NULL DEFAULT '',
+        media_type TEXT NOT NULL DEFAULT '',
+        entity_count INTEGER,
+        text_length INTEGER,
+
+        explanation TEXT NOT NULL DEFAULT ''
+    );
+    -- The drill-down: an operator opens one message and reads its whole
+    -- timeline in order.
+    CREATE INDEX IF NOT EXISTS idx_diagnostic_events_message
+        ON diagnostic_events(source_peer_id, source_message_id, ts);
+    -- The monitoring facets: error rates by category, by stage, by task and
+    -- by target, over a time range.
+    CREATE INDEX IF NOT EXISTS idx_diagnostic_events_facet
+        ON diagnostic_events(ts, category, stage, severity);
+    -- The per-task reliability view plus owner scoping (tenant isolation).
+    CREATE INDEX IF NOT EXISTS idx_diagnostic_events_task
+        ON diagnostic_events(task_id, ts, category);
+    -- Trace/follow lookup and the retention sweep.
+    CREATE INDEX IF NOT EXISTS idx_diagnostic_events_trace
+        ON diagnostic_events(trace_id, ts);
+    """,
 }
 
 

@@ -207,6 +207,7 @@ def build_container(cfg: Config) -> dict:
     # engine the deployment uses.
     from core.infrastructure.persistence.sqlite_repositories import (  # noqa: E402
         SqliteDeliveryAttemptRepository,
+        SqliteDiagnosticEventRepository,
         SqliteIngestionGapRepository,
     )
     # Audit findings #1/#5 (forwarding reliability): the send-side idempotency
@@ -223,11 +224,17 @@ def build_container(cfg: Config) -> dict:
     else:
         gap_repo = SqliteIngestionGapRepository(db)
         attempts_repo = SqliteDeliveryAttemptRepository(db)
+    # Failure intelligence (schema v32): the structured diagnostic-event store.
+    # Appended once per attempt, so the retried and fallback history of every
+    # delivery is queryable. SQLite here; Postgres mirrors it in its own module.
+    diagnostics_repo = SqliteDiagnosticEventRepository(db)
     # Same deferred-pool rebinding rule as the other pg repos above.
     if asyncio.iscoroutine(gap_repo._db):
         gap_repo._db = pg_pool
     if asyncio.iscoroutine(attempts_repo._db):
         attempts_repo._db = pg_pool
+    if asyncio.iscoroutine(diagnostics_repo._db):
+        diagnostics_repo._db = pg_pool
     # Per-user task lifecycle (API-first phase 2): the authoritative state
     # machine lives beside every other tenant resource, whichever engine is in
     # use. Same deferred-pool rebinding rules as the other pg repos.
@@ -377,6 +384,10 @@ def build_container(cfg: Config) -> dict:
         # expiring mid-dispatch, a crash before the batch commit, or the legacy
         # direct path from double-dispatching one logical delivery.
         attempts_repo=attempts_repo,
+        # Failure intelligence: the structured diagnostic-event store. Every
+        # Telegram send failure appends the raw RPC error and the normalized
+        # classification, so the outcome is queryable per message and per facet.
+        diagnostics_repo=diagnostics_repo,
     )
     from core.application.pipeline import DurableMessagePipeline  # noqa: E402
     durable_pipeline = DurableMessagePipeline(
@@ -400,6 +411,9 @@ def build_container(cfg: Config) -> dict:
         # pipeline actually sees the source id — the only proof the post was
         # not lost.
         gap_repo=gap_repo,
+        # v32+ failure intelligence: parser failures persist a PARSING-category
+        # event here, distinguishable from Telegram API failures by origin.
+        diagnostics_repo=diagnostics_repo,
     )
     from core.infrastructure.telegram.pv_responder import AIPVResponder  # noqa: E402
     pv_responder = AIPVResponder(ai_repo=ai_repo, ai_factory=factory, db=db)
@@ -483,6 +497,8 @@ def build_container(cfg: Config) -> dict:
         # v32: the same gap repository the polling service owns, so the
         # reconciler reports on the same recovery work the poller performs.
         "gap_repo": gap_repo,
+        # v32: the diagnostic-event store, for the monitoring API.
+        "diagnostics_repo": diagnostics_repo,
         "task_repo": task_repo,
         "tasks": tasks,
         "queue_manager": queue_manager,
@@ -658,6 +674,11 @@ async def serve_grpc(container: dict, cfg: Config):
                 gap_repo=container.get("gap_repo"),
                 lease_seconds=float(container.get("queue_lease_seconds", 30.0) or 30.0),
             ),
+            # v33 (failure intelligence): the persisted diagnostic-event store.
+            # The query surface (timeline, facets, filters) reads through it,
+            # owner-scoped; absent on a pre-v33 Core, where the new RPCs
+            # return empty results rather than errors.
+            diagnostics_repo=container.get("diagnostics_repo"),
         ),
         server,
     )
@@ -949,6 +970,12 @@ async def main() -> None:
             # Audit finding #1: unreturned ids become durable recovery work
             # that this poller re-fetches with bounded backoff.
             gap_repo=container["gap_repo"],
+            # Structured emission of every gap/recovery event (with the raw
+            # Telegram error attached) into the central log.
+            log_client=container.get("log_client"),
+            # Persisted gap diagnostics: the cause of every gap is queryable
+            # per source message, with the raw Telegram error attached.
+            diagnostics_repo=container.get("diagnostics_repo"),
         )
         await poller.start()
         container["channel_poller"] = poller

@@ -485,6 +485,21 @@ export const endpointDetail: Record<string, EndpointDetail> = {
     summary: 'Purges the caller’s dead-letter queue. Ownership is applied before the delete, not after.',
     statuses: auth,
   },
+  'GET /api/diagnostic-events': {
+    summary:
+      'The persisted failure-intelligence events for the caller — every delivery attempt with its raw Telegram error (RPC code, id, retry-after) next to the normalized category, reason and origin.',
+    statuses: auth,
+  },
+  'GET /api/diagnostic-events/timeline': {
+    summary:
+      'One source message’s whole processing history, oldest first: every strategy attempted, every Telegram answer, every retry and fallback — the original failure preserved even when a later fallback succeeded.',
+    statuses: auth,
+  },
+  'GET /api/diagnostic-events/facets': {
+    summary:
+      'Event counts grouped by one whitelisted dimension (category, stage, severity, reason, strategy, origin) — the error-rate views behind the monitoring dashboard.',
+    statuses: auth,
+  },
   'POST /api/simulate': {
     summary:
       'Dry-runs a task against a sample message and returns the text that would be delivered — the cleaner, filters, replacements, header and footer applied in the real order.',

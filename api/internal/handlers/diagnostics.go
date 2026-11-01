@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -386,3 +387,127 @@ func (h *Handlers) Diagnostics(w http.ResponseWriter, r *http.Request) {
 
 // keep context import used even if build tags change.
 var _ = context.Background
+
+// ------------------------------------------------------------- failure events
+//
+// GET /api/v1/dash/diagnostic-events
+// GET /api/v1/dash/diagnostic-events/timeline
+// GET /api/v1/dash/diagnostic-events/facets
+//
+// The failure-intelligence query surface (gRPC v33). Every route is
+// owner-scoped from the authenticated identity — the request never carries a
+// tenant id the caller could forge, and the Core enforces the predicate again.
+
+// DiagnosticEvents lists the persisted diagnostic events for the caller.
+func (h *Handlers) DiagnosticEvents(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	q := r.URL.Query()
+	var since, until float64
+	if v := q.Get("since"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			since = f
+		}
+	}
+	if v := q.Get("until"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			until = f
+		}
+	}
+	resp, err := h.c.Delivery.QueryDiagnosticEvents(ctx, &pb.QueryDiagnosticEventsRequest{
+		OwnerUserId:     identity(r).UserID,
+		SinceTs:         since,
+		UntilTs:         until,
+		Category:        q.Get("category"),
+		Stage:           q.Get("stage"),
+		Severity:        q.Get("severity"),
+		TaskId:          q.Get("task_id"),
+		SourcePeerId:    q.Get("source_peer_id"),
+		SourceMessageId: parseInt64OrDefault(q.Get("source_message_id"), 0),
+		TraceId:         q.Get("trace_id"),
+		Reason:          q.Get("reason"),
+		Limit:           queryIntOrDefault(q.Get("limit"), 1, 500, 100),
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	events := resp.Events
+	if events == nil {
+		events = []*pb.DiagnosticEventEntry{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": events, "total": resp.TotalReturned})
+}
+
+// MessageTimeline is the per-message drill-down: one message's whole
+// processing history, oldest first, with every Telegram answer preserved.
+func (h *Handlers) MessageTimeline(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	q := r.URL.Query()
+	resp, err := h.c.Delivery.GetMessageTimeline(ctx, &pb.MessageTimelineRequest{
+		OwnerUserId:     identity(r).UserID,
+		SourcePeerId:    q.Get("source_peer_id"),
+		SourceMessageId: parseInt64OrDefault(q.Get("source_message_id"), 0),
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	events := resp.Events
+	if events == nil {
+		events = []*pb.DiagnosticEventEntry{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"events": events})
+}
+
+// DiagnosticFacets returns event counts grouped by one dimension — the
+// error-rate-by-category/stage views the monitoring dashboard renders.
+func (h *Handlers) DiagnosticFacets(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := withTimeout(r)
+	defer cancel()
+	q := r.URL.Query()
+	facet := q.Get("facet")
+	if facet == "" {
+		facet = "category"
+	}
+	switch facet {
+	case "category", "stage", "severity", "reason", "strategy", "error_origin":
+	default:
+		facet = "category"
+	}
+	var since float64
+	if v := q.Get("since"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			since = f
+		}
+	}
+	resp, err := h.c.Delivery.GetDiagnosticFacetCounts(ctx, &pb.DiagnosticFacetCountsRequest{
+		OwnerUserId: identity(r).UserID,
+		SinceTs:     since,
+		Facet:       facet,
+	})
+	if err != nil {
+		grpcError(w, err)
+		return
+	}
+	counts := resp.Counts
+	if counts == nil {
+		counts = []*pb.DiagnosticFacetCount{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"facet": facet, "counts": counts})
+}
+
+// parseInt64OrDefault parses an optional int64 query value, returning def
+// when absent or unparsable. Used for message ids, which are int64 on the wire.
+func parseInt64OrDefault(raw string, def int64) int64 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return def
+	}
+	v, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return def
+	}
+	return v
+}

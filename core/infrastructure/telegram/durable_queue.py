@@ -31,6 +31,12 @@ from ...domain.entities import DeliveryJob, DeliveryStatus, ForwardMode, Message
 from ...domain.services import AdvancedSettingsEngine
 from ...domain.value_objects import ContentMode
 from .errors import is_restricted_source_error, is_timeout_error, tg_detail, tg_error, wait_seconds
+from .diagnostics_contract import (
+    C_DELIVERY, C_MEDIA, C_PIPELINE, C_TELEGRAM_API, R_DELIVERY_OUTCOME_UNKNOWN,
+    R_TELEGRAM_FLOOD_WAIT, ORIGIN_TELEGRAM, S_COPY, S_NATIVE_FORWARD,
+    S_REUPLOAD, S_TEXT_RECONSTRUCT, build_diagnostic_event,
+    log_diagnostic_event, strategy_of, strategy_rpc_method,
+)
 from .failure_policy import classify_failure, error_code, rate_limit_seconds
 from .bot_transport import BotRouteAdapter, BotTransportCache, BotTransportUnsupported
 from .media_reference import extract_media_reference, send_media_reference
@@ -101,6 +107,7 @@ class DurableQueueManager:
         lease_coordinator: Any = None,
         owner_notifier: Optional[Callable[..., Any]] = None,
         attempts_repo: Any = None,
+        diagnostics_repo: Any = None,
     ) -> None:
         self._queue = queue_repo
         self._map = message_map_repo
@@ -131,6 +138,11 @@ class DurableQueueManager:
         # absent the worker falls back to the pre-fence behaviour (lease-only),
         # which is exactly the behaviour this store was introduced to close.
         self._attempts = attempts_repo
+        # Failure intelligence (schema v32): the structured diagnostic events
+        # store. Optional and None by default — every existing embedding and
+        # unit test keeps working, and the send path simply skips persistence
+        # when no store is wired.
+        self._diagnostics = diagnostics_repo
 
         # Tells a task's owner that the engine had to pause it (dead source or
         # target) or that their account cannot send. Wired in main.py to the
@@ -457,6 +469,101 @@ class DurableQueueManager:
         await self._map.add_or_update(mapping)
         res = await self._queue.enqueue(job)
         return True if res is None else bool(res)
+
+    async def _record_diagnostic(self, event: Any) -> None:
+        """Persist one structured diagnostic event, best effort.
+
+        The send path must never wait on diagnostics: the write is deferred to
+        a fire-and-forget task, and any failure is logged once and swallowed —
+        the delivery's own state transition is the authoritative record, this
+        is the forensic layer on top of it.
+
+        The event also fans out to the Rust logger (§10): that stream is what
+        the operational dashboards already read, so a failure is visible in
+        both places — the persisted per-attempt row and the live log — without
+        duplicating the business state.
+        """
+        if event is None:
+            return
+        log_diagnostic_event(self._log_client, event)
+        if self._diagnostics is None:
+            return
+        try:
+            await self._diagnostics.record_event(event)
+        except Exception as exc:
+            logger.debug("[PIPELINE:DIAGNOSTIC_WRITE_FAILED] %s", exc)
+
+    def _diagnostic_for_send_failure(self, *, job: DeliveryJob, exc: BaseException,
+                                     err_msg: str, owner_id: int, worker_id: str,
+                                     strategy: str, category: str,
+                                     reason: str = "", event_name: str = "") -> Any:
+        """Build the canonical event for a failed Telegram send.
+
+        The raw layer is extracted from the *actual* exception through
+        ``errors.extract`` — never fabricated, never paraphrased away — and
+        the normalized layer is the stable (category, reason) pair the
+        monitoring facets aggregate on.
+        """
+        from .diagnostics_contract import build_diagnostic_event, ORIGIN_TELEGRAM
+        from .failure_policy import classify_failure
+        is_timeout = is_timeout_error(exc)
+        decision = classify_failure(exc)
+        return build_diagnostic_event(
+            event_name=event_name or "delivery.send.failed",
+            stage="SEND", task_id=job.rule_id,
+            trace_id=str((job.payload_data or {}).get("correlation_id", "") or ""),
+            correlation_id=str((job.payload_data or {}).get("correlation_id", "") or ""),
+            owner_id=owner_id, job_id=job.id, worker_id=worker_id,
+            source_peer_id=job.source_chat_id, source_message_id=job.source_message_id,
+            target_peer_id=job.target_chat_id,
+            destination_message_id=int((job.payload_data or {}).get("sent_message_id") or 0),
+            album_id=str((job.payload_data or {}).get("media_group_id") or ""),
+            attempt=int(job.attempts or 0), strategy=strategy,
+            category=category, reason=reason, error_origin=ORIGIN_TELEGRAM,
+            # Transient classification reads the same policy the retry
+            # decision uses, so the diagnostic and the behaviour cannot disagree.
+            retryable=bool(decision.kind == "transient"),
+            fallback_eligible=is_restricted_source_error(exc),
+            severity="WARN" if is_timeout else "ERROR",
+            raw_exception=exc,
+            raw_method=strategy_rpc_method(strategy),
+            explanation=str(err_msg or exc)[:500],
+            client=getattr(self, "_pool", None),
+        )
+
+    async def _record_send_diagnostic(self, *, job: DeliveryJob,
+                                      exc: BaseException, strategy: str,
+                                      context: str = "") -> None:
+        """Record the raw Telegram error for one failed send attempt.
+
+        Called at the exact call site that raised, so the event states what
+        was *actually* attempted and what Telegram answered — before any
+        fallback rewrites the outcome. The fallback's own success adds another
+        event; this one is never overwritten, which is how a successful
+        re-upload still shows the original restriction (mission §6.3).
+        """
+        if self._diagnostics is None:
+            return
+        from .diagnostics_contract import build_diagnostic_event, ORIGIN_TELEGRAM
+        try:
+            await self._record_diagnostic(build_diagnostic_event(
+                event_name="delivery.strategy.failed", stage="SEND",
+                task_id=job.rule_id,
+                trace_id=str((job.payload_data or {}).get("correlation_id", "") or ""),
+                correlation_id=str((job.payload_data or {}).get("correlation_id", "") or ""),
+                owner_id=int((job.payload_data or {}).get("owner_user_id") or 0),
+                job_id=job.id, worker_id=str(getattr(self, "_worker_tag", "") or ""),
+                source_peer_id=job.source_chat_id, source_message_id=job.source_message_id,
+                target_peer_id=job.target_chat_id,
+                album_id=str((job.payload_data or {}).get("media_group_id") or ""),
+                attempt=int(job.attempts or 0), strategy=strategy,
+                category=C_TELEGRAM_API, error_origin=ORIGIN_TELEGRAM,
+                severity="WARN", raw_exception=exc,
+                raw_method=strategy_rpc_method(strategy),
+                explanation=f"{context or strategy} failed: {type(exc).__name__}",
+            ))
+        except Exception:
+            logger.debug("[PIPELINE:DIAGNOSTIC_BUILD_FAILED] %s", exc)
 
     async def _note_mapping(self, job: DeliveryJob, status, target_message_id=None) -> None:
         """Record a delivery outcome on the job's source→target mapping.
@@ -1240,6 +1347,14 @@ class DurableQueueManager:
             owner_id = int(getattr(rule_obj, "owner_user_id", 0) or 0) or int(
                 (job.payload_data or {}).get("owner_user_id") or 0
             )
+            # Failure intelligence: the strategy in force when the call failed,
+            # resolved from the snapshotted payload — the diagnostic must name
+            # what was actually being attempted, never the live rule.
+            send_strategy = strategy_of(
+                str((job.payload_data or {}).get("forward_mode", "COPY_MESSAGE")),
+                str((job.payload_data or {}).get("content_mode", "AUTO")),
+                bool((job.payload_data or {}).get("has_media", False)),
+            )
 
             # The Telegram call failed *before* any ambiguity: no copy is in
             # the target, so the fence is released for a retry. (Timeouts are
@@ -1319,6 +1434,15 @@ class DurableQueueManager:
                         await self._attempts.record_outcome(fence, worker_id, "UNKNOWN", f"timeout: {err_msg}")
                     except Exception:
                         logger.debug("delivery fence failed to record unknown outcome for %s", job.id)
+                # Failure intelligence: an UNKNOWN outcome is the ambiguity the
+                # mission says must stay *visibly* unresolved — never converted
+                # into a success or a plain failure.
+                await self._record_diagnostic(self._diagnostic_for_send_failure(
+                    job=job, exc=exc, err_msg=err_msg, owner_id=owner_id, worker_id=worker_id,
+                    strategy=send_strategy, category=C_DELIVERY,
+                    reason=R_DELIVERY_OUTCOME_UNKNOWN,
+                    event_name="delivery.outcome.unknown",
+                ))
                 return None
 
             # 2. FloodWait / recoverable retry. Only a *real* rate-limit error
@@ -1366,6 +1490,13 @@ class DurableQueueManager:
                         pass
                 await self._queue.mark_retry(job.id, err_msg, backoff_seconds=wait_sec)
                 await self._note_mapping(job, DeliveryStatus.RETRY_WAIT)
+                # Failure intelligence: a FloodWait is transient and the reason
+                # must say so, with Telegram's own wait duration preserved.
+                await self._record_diagnostic(self._diagnostic_for_send_failure(
+                    job=job, exc=exc, err_msg=err_msg, owner_id=owner_id, worker_id=worker_id,
+                    strategy=send_strategy, category=C_TELEGRAM_API,
+                    reason=R_TELEGRAM_FLOOD_WAIT, event_name="delivery.flood_wait.retrying",
+                ))
                 return None
 
             # 3. Classify: a chat that is permanently gone, an account that
@@ -1413,6 +1544,16 @@ class DurableQueueManager:
                         pass
                 await self._queue.mark_failed(job.id, err_msg)
                 await self._note_mapping(job, DeliveryStatus.FAILED)
+                # Failure intelligence: a permanent failure with the raw Telegram
+                # error preserved and the retryable/fallback flags the policy
+                # actually decided — the operator sees the same evidence the
+                # engine acted on.
+                await self._record_diagnostic(self._diagnostic_for_send_failure(
+                    job=job, exc=exc, err_msg=err_msg, owner_id=owner_id, worker_id=worker_id,
+                    strategy=send_strategy, category=C_TELEGRAM_API,
+                    reason="TELEGRAM_" + (decision.code or "UNKNOWN_RPC_ERROR"),
+                    event_name="delivery.telegram_api.failed",
+                ))
             elif decision.kind == "account":
                 # The session itself cannot send (revoked, unregistered,
                 # banned). Nothing about this task is wrong and a re-login
@@ -1484,6 +1625,7 @@ class DurableQueueManager:
         target: Any,
         caption: Optional[str],
         media_type: str = "",
+        job: Any = None,
     ) -> int:
         """Rebuild and send one protected message.
 
@@ -1500,6 +1642,18 @@ class DurableQueueManager:
         :class:`DeliveryBlockedError`, never a fake ``0`` success.
         """
         temp_path = None
+        # Correlation for the media events: the job is optional only for older
+        # call sites, never for the worker path that always has one.
+        d = job.payload_data if job is not None else {}
+        ctx = dict(
+            task_id=str(job.rule_id if job is not None else ""),
+            trace_id=str(d.get("correlation_id") or ""),
+            correlation_id=str(d.get("correlation_id") or ""),
+            owner_id=int(d.get("owner_user_id") or 0),
+            job_id=str(job.id if job is not None else ""),
+            source_peer_id=str(src_chat), source_message_id=int(src_msg_id),
+            target_peer_id=str(target),
+        )
         try:
             src_msg = None
             if hasattr(client, "get_messages"):
@@ -1510,6 +1664,13 @@ class DurableQueueManager:
                         "[PIPELINE:PROTECTED] get_messages failed while preparing re-upload src=%s msg=%s (%s)",
                         src_chat, src_msg_id, tg_detail(e) or type(e).__name__,
                     )
+                    await self._record_diagnostic(build_diagnostic_event(
+                        event_name="delivery.media.fetch_failed", stage="MEDIA",
+                        category=C_MEDIA, reason="MEDIA_FETCH_FAILED",
+                        error_origin=ORIGIN_TELEGRAM, raw_exception=e,
+                        explanation=f"get_messages failed for {src_chat}:{src_msg_id}",
+                        **ctx,
+                    ))
 
             # Layer 2: media-reference (file-id) send. The worker path lost
             # this layer for months and degraded protected media to a download
@@ -1534,8 +1695,22 @@ class DurableQueueManager:
                         "[PIPELINE:PROTECTED] download failed src=%s msg=%s (%s) — degrading to text if nothing else delivers",
                         src_chat, src_msg_id, tg_detail(dl_err) or type(dl_err).__name__,
                     )
+                    await self._record_diagnostic(build_diagnostic_event(
+                        event_name="delivery.media.download.failed", stage="MEDIA",
+                        category=C_MEDIA, reason="MEDIA_DOWNLOAD_FAILED",
+                        error_origin=ORIGIN_TELEGRAM, raw_exception=dl_err,
+                        explanation=f"media download failed for {src_chat}:{src_msg_id}",
+                        **ctx,
+                    ))
 
             if temp_path and os.path.exists(temp_path):
+                await self._record_diagnostic(build_diagnostic_event(
+                    event_name="delivery.media.upload.started", stage="MEDIA",
+                    category=C_MEDIA, reason="MEDIA_UPLOAD_STARTED",
+                    severity="INFO",
+                    explanation=f"re-uploading protected media for {src_chat}:{src_msg_id}",
+                    **ctx,
+                ))
                 mtype = str(media_type).lower()
                 if mtype == "photo" or getattr(src_msg, "photo", None):
                     res = await client.send_photo(chat_id=target, photo=temp_path, caption=caption)
@@ -1732,7 +1907,7 @@ class DurableQueueManager:
             except Exception:
                 pass
 
-    async def _on_restricted(self, client: Any, err: BaseException, fallback_enabled: bool, context: str) -> bool:
+    async def _on_restricted(self, client: Any, err: BaseException, fallback_enabled: bool, context: str, job: Any = None) -> bool:
         """Decide what a source-restriction error means for this delivery.
 
         Returns ``True`` when the caller must descend the copy/re-upload
@@ -1758,6 +1933,25 @@ class DurableQueueManager:
             "[PIPELINE:PROTECTED] %s blocked by source content protection (%s) — descending bypass chain",
             context, tg_detail(err) or type(err).__name__,
         )
+        # §6.3: every strategy transition produces an event explaining why the
+        # requested strategy was left and what will be attempted instead.
+        await self._record_diagnostic(build_diagnostic_event(
+            event_name="delivery.fallback.selected", stage="FALLBACK",
+            task_id=str(job.rule_id if job is not None else ""),
+            trace_id=str((job.payload_data or {}).get("correlation_id", "") or "")
+            if job is not None else "",
+            correlation_id=str((job.payload_data or {}).get("correlation_id", "") or "")
+            if job is not None else "",
+            owner_id=int((job.payload_data or {}).get("owner_user_id") or 0)
+            if job is not None else 0,
+            job_id=str(job.id if job is not None else ""),
+            source_peer_id=str(job.source_chat_id if job is not None else ""),
+            source_message_id=int(job.source_message_id if job is not None else 0),
+            target_peer_id=str(job.target_chat_id if job is not None else ""),
+            severity="WARN", category=C_DELIVERY, reason="FORWARD_RESTRICTED",
+            error_origin=ORIGIN_TELEGRAM, raw_exception=err,
+            explanation=f"{context}: source restricts forwarding, descending bypass chain",
+        ))
         return True
 
     async def _dispatch_to_telegram(self, client: Any, job: DeliveryJob) -> int:
@@ -2012,7 +2206,7 @@ class DurableQueueManager:
                     return getattr(res, "id", 0)
             except Exception as grp_err:
                 if is_restricted_source_error(grp_err) and await self._on_restricted(
-                    client, grp_err, fallback_enabled, "album group copy",
+                    client, grp_err, fallback_enabled, "album group copy", job=job,
                 ):
                     self._note_fallback(job.id, owner=int(data.get("owner_user_id") or 0), what="album re-upload")
                 else:
@@ -2035,10 +2229,10 @@ class DurableQueueManager:
                     return getattr(res, "id", 0)
                 except Exception as c_err:
                     if is_restricted_source_error(c_err) and await self._on_restricted(
-                        client, c_err, fallback_enabled, "MEDIA_ONLY copy",
+                        client, c_err, fallback_enabled, "MEDIA_ONLY copy", job=job,
                     ):
                         self._note_fallback(job.id, owner=int(data.get("owner_user_id") or 0), what="media re-upload")
-                        return await self._reupload_media(client, src_chat, src_msg_id, target, None, data.get("media_type", ""))
+                        return await self._reupload_media(client, src_chat, src_msg_id, target, None, data.get("media_type", ""), job=job)
                     raise
             return 0
 
@@ -2054,11 +2248,19 @@ class DurableQueueManager:
                 )
                 return getattr(res, "id", 0)
             except Exception as c_err:
+                # Failure intelligence: capture the raw Telegram error *here*,
+                # at the exact call that raised — before the fallback even
+                # decides what to do. This is the only point that sees the
+                # strategy actually attempted, so it is the only point that can
+                # record "Telegram said X while we were doing Y".
+                await self._record_send_diagnostic(
+                    job=job, exc=c_err, strategy=S_COPY, context="copy_message",
+                )
                 if is_restricted_source_error(c_err) and await self._on_restricted(
-                    client, c_err, fallback_enabled, "copy_message",
+                    client, c_err, fallback_enabled, "copy_message", job=job,
                 ):
                     self._note_fallback(job.id, owner=int(data.get("owner_user_id") or 0), what="media re-upload")
-                    return await self._reupload_media(client, src_chat, src_msg_id, target, caption, data.get("media_type", ""))
+                    return await self._reupload_media(client, src_chat, src_msg_id, target, caption, data.get("media_type", ""), job=job)
                 raise
 
         res = await client.send_message(chat_id=target, text=text or "...", **thread_kwargs)

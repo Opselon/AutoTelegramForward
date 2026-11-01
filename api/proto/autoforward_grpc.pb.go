@@ -914,10 +914,13 @@ var ForwardRuleControlService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	DeliveryControlService_GetDeliveryStats_FullMethodName = "/autoforward.DeliveryControlService/GetDeliveryStats"
-	DeliveryControlService_ListDeadLetter_FullMethodName   = "/autoforward.DeliveryControlService/ListDeadLetter"
-	DeliveryControlService_ReplayDeadLetter_FullMethodName = "/autoforward.DeliveryControlService/ReplayDeadLetter"
-	DeliveryControlService_PurgeDeadLetter_FullMethodName  = "/autoforward.DeliveryControlService/PurgeDeadLetter"
+	DeliveryControlService_GetDeliveryStats_FullMethodName         = "/autoforward.DeliveryControlService/GetDeliveryStats"
+	DeliveryControlService_ListDeadLetter_FullMethodName           = "/autoforward.DeliveryControlService/ListDeadLetter"
+	DeliveryControlService_ReplayDeadLetter_FullMethodName         = "/autoforward.DeliveryControlService/ReplayDeadLetter"
+	DeliveryControlService_PurgeDeadLetter_FullMethodName          = "/autoforward.DeliveryControlService/PurgeDeadLetter"
+	DeliveryControlService_QueryDiagnosticEvents_FullMethodName    = "/autoforward.DeliveryControlService/QueryDiagnosticEvents"
+	DeliveryControlService_GetMessageTimeline_FullMethodName       = "/autoforward.DeliveryControlService/GetMessageTimeline"
+	DeliveryControlService_GetDiagnosticFacetCounts_FullMethodName = "/autoforward.DeliveryControlService/GetDiagnosticFacetCounts"
 )
 
 // DeliveryControlServiceClient is the client API for DeliveryControlService service.
@@ -928,6 +931,12 @@ type DeliveryControlServiceClient interface {
 	ListDeadLetter(ctx context.Context, in *ListDeadLetterRequest, opts ...grpc.CallOption) (*ListDeadLetterResponse, error)
 	ReplayDeadLetter(ctx context.Context, in *ReplayDeadLetterRequest, opts ...grpc.CallOption) (*RuleActionResponse, error)
 	PurgeDeadLetter(ctx context.Context, in *PurgeDeadLetterRequest, opts ...grpc.CallOption) (*RuleActionResponse, error)
+	// v33 (additive — failure intelligence): query the persisted diagnostic
+	// events. The owner scope is always enforced; an unauthenticated or
+	// cross-tenant read is impossible by construction.
+	QueryDiagnosticEvents(ctx context.Context, in *QueryDiagnosticEventsRequest, opts ...grpc.CallOption) (*QueryDiagnosticEventsResponse, error)
+	GetMessageTimeline(ctx context.Context, in *MessageTimelineRequest, opts ...grpc.CallOption) (*MessageTimelineResponse, error)
+	GetDiagnosticFacetCounts(ctx context.Context, in *DiagnosticFacetCountsRequest, opts ...grpc.CallOption) (*DiagnosticFacetCountsResponse, error)
 }
 
 type deliveryControlServiceClient struct {
@@ -978,6 +987,36 @@ func (c *deliveryControlServiceClient) PurgeDeadLetter(ctx context.Context, in *
 	return out, nil
 }
 
+func (c *deliveryControlServiceClient) QueryDiagnosticEvents(ctx context.Context, in *QueryDiagnosticEventsRequest, opts ...grpc.CallOption) (*QueryDiagnosticEventsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(QueryDiagnosticEventsResponse)
+	err := c.cc.Invoke(ctx, DeliveryControlService_QueryDiagnosticEvents_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *deliveryControlServiceClient) GetMessageTimeline(ctx context.Context, in *MessageTimelineRequest, opts ...grpc.CallOption) (*MessageTimelineResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MessageTimelineResponse)
+	err := c.cc.Invoke(ctx, DeliveryControlService_GetMessageTimeline_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *deliveryControlServiceClient) GetDiagnosticFacetCounts(ctx context.Context, in *DiagnosticFacetCountsRequest, opts ...grpc.CallOption) (*DiagnosticFacetCountsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiagnosticFacetCountsResponse)
+	err := c.cc.Invoke(ctx, DeliveryControlService_GetDiagnosticFacetCounts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DeliveryControlServiceServer is the server API for DeliveryControlService service.
 // All implementations must embed UnimplementedDeliveryControlServiceServer
 // for forward compatibility.
@@ -986,6 +1025,12 @@ type DeliveryControlServiceServer interface {
 	ListDeadLetter(context.Context, *ListDeadLetterRequest) (*ListDeadLetterResponse, error)
 	ReplayDeadLetter(context.Context, *ReplayDeadLetterRequest) (*RuleActionResponse, error)
 	PurgeDeadLetter(context.Context, *PurgeDeadLetterRequest) (*RuleActionResponse, error)
+	// v33 (additive — failure intelligence): query the persisted diagnostic
+	// events. The owner scope is always enforced; an unauthenticated or
+	// cross-tenant read is impossible by construction.
+	QueryDiagnosticEvents(context.Context, *QueryDiagnosticEventsRequest) (*QueryDiagnosticEventsResponse, error)
+	GetMessageTimeline(context.Context, *MessageTimelineRequest) (*MessageTimelineResponse, error)
+	GetDiagnosticFacetCounts(context.Context, *DiagnosticFacetCountsRequest) (*DiagnosticFacetCountsResponse, error)
 	mustEmbedUnimplementedDeliveryControlServiceServer()
 }
 
@@ -1007,6 +1052,15 @@ func (UnimplementedDeliveryControlServiceServer) ReplayDeadLetter(context.Contex
 }
 func (UnimplementedDeliveryControlServiceServer) PurgeDeadLetter(context.Context, *PurgeDeadLetterRequest) (*RuleActionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method PurgeDeadLetter not implemented")
+}
+func (UnimplementedDeliveryControlServiceServer) QueryDiagnosticEvents(context.Context, *QueryDiagnosticEventsRequest) (*QueryDiagnosticEventsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method QueryDiagnosticEvents not implemented")
+}
+func (UnimplementedDeliveryControlServiceServer) GetMessageTimeline(context.Context, *MessageTimelineRequest) (*MessageTimelineResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetMessageTimeline not implemented")
+}
+func (UnimplementedDeliveryControlServiceServer) GetDiagnosticFacetCounts(context.Context, *DiagnosticFacetCountsRequest) (*DiagnosticFacetCountsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDiagnosticFacetCounts not implemented")
 }
 func (UnimplementedDeliveryControlServiceServer) mustEmbedUnimplementedDeliveryControlServiceServer() {
 }
@@ -1102,6 +1156,60 @@ func _DeliveryControlService_PurgeDeadLetter_Handler(srv interface{}, ctx contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DeliveryControlService_QueryDiagnosticEvents_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(QueryDiagnosticEventsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DeliveryControlServiceServer).QueryDiagnosticEvents(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DeliveryControlService_QueryDiagnosticEvents_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DeliveryControlServiceServer).QueryDiagnosticEvents(ctx, req.(*QueryDiagnosticEventsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DeliveryControlService_GetMessageTimeline_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MessageTimelineRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DeliveryControlServiceServer).GetMessageTimeline(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DeliveryControlService_GetMessageTimeline_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DeliveryControlServiceServer).GetMessageTimeline(ctx, req.(*MessageTimelineRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DeliveryControlService_GetDiagnosticFacetCounts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiagnosticFacetCountsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DeliveryControlServiceServer).GetDiagnosticFacetCounts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DeliveryControlService_GetDiagnosticFacetCounts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DeliveryControlServiceServer).GetDiagnosticFacetCounts(ctx, req.(*DiagnosticFacetCountsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DeliveryControlService_ServiceDesc is the grpc.ServiceDesc for DeliveryControlService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1124,6 +1232,18 @@ var DeliveryControlService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PurgeDeadLetter",
 			Handler:    _DeliveryControlService_PurgeDeadLetter_Handler,
+		},
+		{
+			MethodName: "QueryDiagnosticEvents",
+			Handler:    _DeliveryControlService_QueryDiagnosticEvents_Handler,
+		},
+		{
+			MethodName: "GetMessageTimeline",
+			Handler:    _DeliveryControlService_GetMessageTimeline_Handler,
+		},
+		{
+			MethodName: "GetDiagnosticFacetCounts",
+			Handler:    _DeliveryControlService_GetDiagnosticFacetCounts_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

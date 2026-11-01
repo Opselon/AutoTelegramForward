@@ -299,6 +299,7 @@ class DurableMessagePipeline:
         prompt_service: Optional[Any] = None,
         pool: Optional[Any] = None,
         log_client: Optional[Any] = None,
+        diagnostics_repo: Optional[Any] = None,
         audit_repo: Optional[Any] = None,
         log_policy: Optional["LogPolicy"] = None,
         branding_hop: Optional[Any] = None,
@@ -319,6 +320,9 @@ class DurableMessagePipeline:
         self._prompt_service = prompt_service
         self._pool = pool
         self._log_client = log_client
+        # v32+: the persisted diagnostic-event store. Optional — an older
+        # wiring keeps working, the parser events simply do not persist.
+        self._diagnostics = diagnostics_repo
         self._audit_repo = audit_repo
         # Branding hop performer (port): the dispatcher, wired by main.py. Kept
         # optional so a bare pipeline — unit tests, embedded use — still runs;
@@ -351,6 +355,60 @@ class DurableMessagePipeline:
     # -----------------------------------------------------------------
     # Main Entry Point
     # -----------------------------------------------------------------
+    async def _record_parser_diagnostic(self, *, ctx: Any, exc: BaseException,
+                                       stage_reason: str,
+                                       raw_message: Any = None) -> None:
+        """Emit one parser-failure diagnostic event (mission §8).
+
+        Parser defects are a first-class category, distinguishable from
+        Telegram API failures by construction: the origin is INTERNAL because
+        *our* normalization raised while Telegram delivered the message fine.
+        Content is never logged — only identifiers, lengths and field-presence
+        indicators.
+        """
+        try:
+            from ..infrastructure.telegram.diagnostics_contract import (
+                build_diagnostic_event, C_PARSING, ORIGIN_INTERNAL,
+            )
+            diag = getattr(self, "_diagnostics", None)
+            log_client = getattr(self, "_log_client", None)
+            # Safe metadata only: lengths and counts, never the text itself.
+            text_len = 0
+            media_type = ""
+            if raw_message is not None:
+                t = getattr(raw_message, "text", None)
+                if isinstance(t, str):
+                    text_len = len(t)
+                mt = getattr(raw_message, "media_type", None)
+                if isinstance(mt, str):
+                    media_type = mt
+            event = build_diagnostic_event(
+                event_name="parse.failed", stage="PARSE",
+                category=C_PARSING, reason=stage_reason,
+                error_origin=ORIGIN_INTERNAL, raw_exception=exc,
+                severity="ERROR",
+                trace_id=str(getattr(ctx, "correlation_id", "") or ""),
+                correlation_id=str(getattr(ctx, "correlation_id", "") or ""),
+                source_peer_id=str(getattr(ctx, "chat_id", "") or ""),
+                source_message_id=int(getattr(ctx, "message_id", 0) or 0),
+                text_length=text_len, media_type=media_type,
+                explanation=f"normalization failed: {type(exc).__name__}",
+            )
+            if diag is not None:
+                try:
+                    await diag.record_event(event)
+                except Exception:
+                    pass
+            if log_client is not None:
+                from ..infrastructure.telegram.diagnostics_contract import (
+                    log_diagnostic_event,
+                )
+                log_diagnostic_event(log_client, event)
+        except Exception:
+            # Best effort: the pipeline's own failure handling must never be
+            # broken by the diagnostics layer it is trying to report through.
+            pass
+
     async def _audit(self, ctx: "PipelineContext", event_type: str, outcome: str,
                      severity: str = "INFO", reason_code: str = "", rule_id: str = "",
                      feature_id: str = "FWD_MESSAGE_DELIVERY", **kw) -> None:
@@ -510,6 +568,14 @@ class DurableMessagePipeline:
             ctx.record_stage(PipelineStage.NORMALIZE, False, reason="normalize_error", error=str(exc))
             self.metrics.failed_total += 1
             logger.exception("[%s] Normalize error: %s", ctx.correlation_id, exc)
+            # §8: parser defects are a first-class category. The origin is
+            # INTERNAL — our own normalization raised, Telegram delivered the
+            # message fine — so an operator can tell a parser defect from a
+            # Telegram API failure at a glance (mission §4-B).
+            await self._record_parser_diagnostic(
+                ctx=ctx, exc=exc, stage_reason="MESSAGE_NORMALIZATION_FAILED",
+                raw_message=raw_message,
+            )
             return ctx
 
         if payload.is_service:
