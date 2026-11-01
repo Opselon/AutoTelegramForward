@@ -212,6 +212,24 @@ func (p *Payload) Branding() map[string]any {
 // InlineButtons is the raw inline-button spec for the BOT transport.
 func (p *Payload) InlineButtons() []any { return p.stringListAny("inline_buttons") }
 
+// BotTokenID is the stored bot token a BOT job names (never the token).
+func (p *Payload) BotTokenID() string {
+	// The pipeline snapshots the task's metadata-resolved value at enqueue;
+	// older jobs carry nothing and the live rule's read fills it in.
+	return p.str("bot_token_id", "")
+}
+
+// ForwardOrigin is the "Forwarded from <channel>" header, when the source
+// message carried one. The hop decision matches on it.
+func (p *Payload) ForwardOrigin() map[string]any {
+	if v, ok := p.raw["forward_origin"]; ok {
+		if m, ok := v.(map[string]any); ok {
+			return m
+		}
+	}
+	return nil
+}
+
 func (p *Payload) stringListAny(key string) []any {
 	if v, ok := p.raw[key]; ok {
 		if list, ok := v.([]any); ok {

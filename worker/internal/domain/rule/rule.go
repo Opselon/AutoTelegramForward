@@ -58,6 +58,12 @@ type ForwardRule struct {
 	AlbumMode string
 	// TopicID is the forum thread (0 = General / none).
 	TopicID int64
+
+	// Metadata is the task's metadata JSON blob. It carries the
+	// branding_hop sub-blob and the metadata-resolved transport/shape fields
+	// the Core's ForwardRule entity reads out of it, so the worker reads the
+	// same blob the Python entity reads.
+	Metadata map[string]any
 }
 
 // PauseStillActiveAt reports whether an explicit pause was in force at the

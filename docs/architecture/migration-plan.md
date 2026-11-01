@@ -82,17 +82,27 @@ behavioral parity; rolling back is always a config flip, not a redeploy.
   the Python `DurableQueueManager` loop is untouched and remains the
   fallback.
 
-## Stage 3 — BOT transport, branding-hop stage-1, advanced settings (future)
+## Stage 3 — (THIS PR, stacked on PR #286)
 
-* `delivery_transport: BOT` through the runtime contract (a `SendMedia`-style
-  RPC that posts through the attached bot token).
-* The branding hop's *stage 1* (the post into channel C) still runs on the
-  Python dispatch path; the worker already reproduces stage 2
-  (`brandingStage`).
-* `forward_every_n`, keyword replies, auto-delete scheduling: owned by the
-  pipeline today, eventually a worker-side scheduler.
+| Capability | Status | Evidence |
+|---|---|---|
+| BOT Delivery Transport | **Go, done** | Narrow typed Bot API operations in `telegram_gateway.proto` (`BotSendText`, `BotCopyMessage`, `BotSendMedia`, `BotDeleteMessages`, `BotAvailability`); `telegram_runtime/adapters/bot_api` reuses `BotApiTransport` connection pool; owner-validated on every call (including cache hits); unsupported Bot API operations fall back to USER transport with explicit logging; `TestBOTDeliveryDispatchesThroughBot`, `TestBOTDeliveryFallsBackToUSERWhenUnsupported` |
+| Bot Token Security | **done** | The Go Worker **never** receives, logs, or stores raw bot tokens. The wire carries `bot_token_id` + `owner_user_id`; resolution, tenant authorization (`get_owned` with owner in WHERE clause), and decryption happen strictly inside the Python Runtime (`telegram_runtime/app/bot_store.py`) |
+| Branding Hop Stage 1 in Go Worker | **Go, done** | Decision logic ported to `worker/internal/domain/branding` with 24 shared parity fixtures against the live Python implementation (`TestBrandingDecisionMatchesPython`); durable enqueue happens **before** the branding side effect; intermediate post into channel C executed by Go Worker (`ensureBrandingStage1`) and checkpointed on `delivery_jobs` (`intermediate_chat_id`, `intermediate_message_id`, `delivery_stage`); resumes without duplicate post into C on restart (`TestBrandingStage1ReusesConfirmedCheckpoint`); fan-out content deduplication via normalized content digest |
+| Durable Auto-Delete Scheduler | **Go, done** | Dedicated scheduled-action engine in `worker/internal/engine/scheduler`; replaces Python in-memory `asyncio.sleep`; durable `scheduled_actions` table on SQLite (migration 33) and PostgreSQL (`initialize_postgres_schema` + `schema.sql`); atomic `ClaimDue` with `FOR UPDATE SKIP LOCKED`; bounded loop and worker pool (no per-action goroutine or timer); survives Worker/Runtime restarts; USER and BOT deletion; idempotent cleanup; 14 SQLite + 4 PostgreSQL integration tests |
+| Keyword Reply Delivery Compatibility | **Go, done** | Text-only dispatch compatible with BOT and USER transports; independent `job_kind` idempotency key; never overwrites primary message mapping; never copies source media; `TestKeywordReplyBOTCompatibility` |
+| Forward Every N Preservation | **preserved** | Preserved at the event-ingestion level in Python (Core `forward_interval.py`); atomic counter advancement before fan-out; **not** moved to per-target Worker jobs (deferred to Stage 4 event-ingress boundary) |
 
-## Stage 4 — ownership transfer (future)
+## Stage 4 — Event Ingestion and Business Pipeline Extraction (Future Work)
+
+- Move normalized Telegram update processing into Go.
+- Move event-level `forward_every_n` cadence ownership.
+- Move Keyword Reply matching and generation.
+- Move remaining business filters and content policies.
+- Establish an explicit event-level idempotency contract.
+- Keep Python as the MTProto / Bot API Telegram connectivity runtime.
+
+## Stage 5 — Final Ownership Transfer (Future Work)
 
 With parity demonstrated over a full release cycle, flip the default of
 `ATF_WORKER_ENABLED` to `on` and delete the Python `DurableQueueManager`

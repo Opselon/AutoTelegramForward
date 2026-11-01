@@ -37,26 +37,30 @@ docker run --rm -d --name atf-pg -e POSTGRES_PASSWORD=test \
 
 cd worker
 ATF_TEST_POSTGRES_DSN=postgres://postgres:test@127.0.0.1:55432/postgres \
-  go test ./internal/queue/ -run '^TestPostgres' -v
+  go test ./internal/queue/ ./internal/engine/scheduler/ -run '^TestPostgres' -v
 ```
 
 Without the variable the suite **skips** (a local `go test ./...` stays
 green without a database); CI arms it against a real postgres service.
 
 Each test creates its own scratch database, applies the production queue
-schema, and drops it on cleanup — no shared state, no half-mutated schema
-left behind by a failed run.
+schema (including `scheduled_actions` v33), and drops it on cleanup — no
+shared state, no half-mutated schema left behind by a failed run.
 
 ### Cross-engine parity
 
-`worker/internal/parity` runs 17 shared JSON fixtures through **both** the Go
-filter engine and the real Python `FilterEngine` (`core.domain.services` —
-the live pipeline's own class, not a shadow implementation) and compares the
+`worker/internal/parity` runs shared JSON fixtures through **both** the Go
+engines and the real Python implementations (`core.domain.services.FilterEngine`
+and `core.domain.branding.should_hop` / `SmartRoutingEngine` — the live
+pipeline's own classes, not shadow implementations) and compares the
 normalized decisions. It is offline, deterministic, and touches no session,
 no network and no production data.
 
+* **Filter parity** — 17 fixtures (`reference_filter.json`)
+* **Branding decision parity** — 24 fixtures (`reference_branding.json`)
+
 ```bash
-# Regenerate the committed reference after a fixture or a Python behavior change
+# Regenerate the committed references after a fixture or Python behavior change
 scripts/regen_parity_reference.sh
 ```
 
