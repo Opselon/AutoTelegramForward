@@ -219,8 +219,12 @@ services:
       # The shared internal RPC secret — the same value the Go API already
       # uses against the core. Empty + enabled = refuse to start, on purpose.
       ATF_CORE_RPC_TOKEN: ${ATF_CORE_RPC_TOKEN:-}
-      # The SQLite store the Python Core writes (same volume, same file).
-      ATF_DB_PATH: /app/data/atf.db
+      # The SQLite store the Python Core writes — the SAME file both engines
+      # share, mounted at the worker-owned path the image prepared, so the
+      # non-root worker can actually write the claim updates. (Mounting the
+      # shared atf-data volume at /app/data would work only for a user that
+      # can write root-owned rows; the worker runs as `atf`.)
+      ATF_DB_PATH: /var/lib/atf/data/atf.db
       # The Python Telegram Runtime's gRPC endpoint.
       ATF_TELEGRAM_RUNTIME_ADDR: ${ATF_TELEGRAM_RUNTIME_ADDR:-core:50053}
       # Queue knobs shared 1:1 with the Python worker's ATF_QUEUE_* names.
@@ -230,7 +234,9 @@ services:
       # Media scratch: a directory ONLY this container manages.
       ATF_MEDIA_DIR: /var/lib/atf/media
     volumes:
-      - atf-data:/app/data
+      # The shared delivery store: both engines read and write the same
+      # atf.db, at a path the worker's image owns (see ATF_DB_PATH above).
+      - atf-data:/var/lib/atf/data
       - atf-worker-media:/var/lib/atf/media
     networks:
       - atf-net
