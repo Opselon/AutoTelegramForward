@@ -350,6 +350,148 @@ message ReloadMediaResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Bot transport — Go asks for a Bot API operation, Python owns the token
+// ---------------------------------------------------------------------------
+
+// BotTarget identifies one Bot Api operation's destination. The worker never
+// holds the token: it names the *stored* token by id and the tenant it belongs
+// to, and the runtime resolves, re-checks ownership of, and decrypts the token
+// inside the trusted Python boundary before any Bot Api call.
+message BotTarget {
+  RequestMeta meta = 1;
+  // id of the stored bot token (never the token itself)
+  string bot_token_id = 2;
+  // tenant this delivery belongs to — the runtime re-validates that this owner
+  // actually owns the named token before every call, cache hit included.
+  int64 owner_user_id = 3;
+}
+
+message BotSendTextRequest {
+  BotTarget bot = 1;
+  int64 target_chat_id = 2;
+  // fully transformed text
+  string text = 3;
+  // forum topic thread inside the target supergroup (0 = General / none)
+  int64 message_thread_id = 4;
+  // raw inline-button spec exactly as the task stored it (rows of
+  // {"text","url"} dicts and/or "label|url" strings). The runtime parses it
+  // and degrades to no markup when it is unusable — a bad button config must
+  // never fail the message.
+  repeated string inline_buttons = 5;
+}
+
+message BotCopyMessageRequest {
+  BotTarget bot = 1;
+  int64 target_chat_id = 2;
+  int64 from_chat_id = 3;
+  int64 message_id = 4;
+  // final transformed caption ("" = keep whatever the source carries)
+  string caption = 5;
+  int64 message_thread_id = 6;
+  repeated string inline_buttons = 7;
+}
+
+message BotSendMediaRequest {
+  BotTarget bot = 1;
+  int64 target_chat_id = 2;
+  // opaque staged-file token the runtime returned from PrepareMediaUpload;
+  // empty means the send must degrade to a plain text delivery.
+  string file_reference_token = 3;
+  string caption = 4;
+  // media classification, used to pick the Bot Api send method
+  string media_type = 5;
+  int64 message_thread_id = 6;
+  repeated string inline_buttons = 7;
+}
+
+message BotDeleteMessagesRequest {
+  BotTarget bot = 1;
+  int64 chat_id = 2;
+  repeated int64 message_ids = 3;
+}
+
+// Bot availability: is this token valid, owned by this tenant and the bot
+// usable right now? Reported as a typed outcome, never as a bare boolean,
+// so an unusable bot is distinguishable from a transient lookup failure.
+message BotAvailabilityRequest {
+  BotTarget bot = 1;
+}
+
+message BotAvailabilityResponse {
+  // true only when the token resolves, is owned by the requesting tenant, is
+  // active, and the Bot Api answered getMe with this bot's identity.
+  bool ok = 1;
+  // the bot's @username when known (diagnostics/labels only)
+  string bot_username = 2;
+  TelegramOperationError error = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Message deletion — the durable auto-delete scheduler's transport
+// ---------------------------------------------------------------------------
+
+message DeleteMessagesRequest {
+  RequestMeta meta = 1;
+  // "user" deletes through the MTProto session, "bot" through the stored token.
+  string transport = 2;
+  // session id for transport="user" (stable identifier, never a session string)
+  string session_id = 3;
+  // bot token reference for transport="bot" (id only, never the token)
+  string bot_token_id = 4;
+  int64 owner_user_id = 5;
+  int64 chat_id = 6;
+  repeated int64 message_ids = 7;
+}
+
+message DeleteMessagesResponse {
+  // true when Telegram proved the messages are gone — either deleted now or
+  // already absent. Both are a successful cleanup: deletion is idempotent.
+  bool deleted = 1;
+  TelegramOperationError error = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Branding stage 1 — post the processed deliverable into channel C
+// ---------------------------------------------------------------------------
+
+// One BrandingStage1 call posts the already-transformed deliverable into the
+// branding channel C. The content decision (what C receives per content_mode)
+// is Go's; Python only executes the low-level Telegram send and reports the
+// ids that landed. Go never re-runs a transform here.
+message BrandingStage1Request {
+  RequestMeta meta = 1;
+  // transport that must execute the post: "user" or "bot"
+  string transport = 2;
+  string session_id = 3;
+  // bot token reference when transport="bot" (id only, never the token)
+  string bot_token_id = 4;
+  int64 owner_user_id = 5;
+  // channel C
+  int64 target_chat_id = 6;
+  // forum topic inside C (0 = General / none)
+  int64 message_thread_id = 7;
+  // the deliverable shape Go decided:
+  //   text        — post this string (TEXT_ONLY, or a text-only source)
+  //   copy        — copy this source message, with this caption
+  //   media_group — copy the album this source message belongs to
+  string operation = 8;
+  int64 source_chat_id = 9;
+  int64 source_message_id = 10;
+  // every member of the album when operation="media_group"
+  repeated int64 source_message_ids = 11;
+  string text = 12;
+  string caption = 13;
+  repeated string inline_buttons = 14;
+}
+
+message BrandingStage1Response {
+  // ids of the messages that landed in C, in Telegram's own order. Empty means
+  // nothing was confirmed (an ambiguous outcome is reported through error).
+  repeated int64 target_message_ids = 1;
+  TelegramOperationError error = 2;
+}
+
+// ---------------------------------------------------------------------------
 // The service
 // ---------------------------------------------------------------------------
 
@@ -383,7 +525,28 @@ service TelegramGateway {
   rpc SendMedia(SendMediaRequest) returns (SendOutcome) {}
   rpc CopyMediaGroup(CopyMediaGroupRequest) returns (CopyMessagesResponse) {}
 
-  // --- health ----------------------------------------------------------
+  // --- bot transport ----------------------------------------------------- //
+  // Narrow typed Bot Api operations. The worker names a stored token by id and
+  // the tenant it belongs to; the runtime resolves and re-checks ownership of
+  // the token inside the trusted Python boundary. The raw token never crosses
+  // this boundary in either direction.
+  rpc BotAvailability(BotAvailabilityRequest) returns (BotAvailabilityResponse) {}
+  rpc BotSendText(BotSendTextRequest) returns (SendOutcome) {}
+  rpc BotCopyMessage(BotCopyMessageRequest) returns (SendOutcome) {}
+  rpc BotSendMedia(BotSendMediaRequest) returns (SendOutcome) {}
+  rpc BotDeleteMessages(BotDeleteMessagesRequest) returns (DeleteMessagesResponse) {}
+
+  // --- deletion (auto-delete scheduler) ----------------------------------- //
+  // One typed delete for both transports. A message that is already gone is
+  // reported deleted: deletion is an idempotent cleanup operation.
+  rpc DeleteMessages(DeleteMessagesRequest) returns (DeleteMessagesResponse) {}
+
+  // --- branding stage 1 --------------------------------------------------- //
+  // Post the already-transformed deliverable into channel C. Go decided the
+  // deliverable shape; Python executes the Telegram send and reports the ids.
+  rpc BrandingStage1(BrandingStage1Request) returns (BrandingStage1Response) {}
+
+  // --- health ---------------------------------------------------------- //
   rpc GatewayHealth(HealthRequest) returns (HealthResponse) {}
 }
 

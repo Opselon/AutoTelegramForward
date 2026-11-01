@@ -2026,6 +2026,878 @@ func (x *ReloadMediaResponse) GetError() *TelegramOperationError {
 	return nil
 }
 
+// BotTarget identifies one Bot Api operation's destination. The worker never
+// holds the token: it names the *stored* token by id and the tenant it belongs
+// to, and the runtime resolves, re-checks ownership of, and decrypts the token
+// inside the trusted Python boundary before any Bot Api call.
+type BotTarget struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Meta  *RequestMeta           `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
+	// id of the stored bot token (never the token itself)
+	BotTokenId string `protobuf:"bytes,2,opt,name=bot_token_id,json=botTokenId,proto3" json:"bot_token_id,omitempty"`
+	// tenant this delivery belongs to — the runtime re-validates that this owner
+	// actually owns the named token before every call, cache hit included.
+	OwnerUserId   int64 `protobuf:"varint,3,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BotTarget) Reset() {
+	*x = BotTarget{}
+	mi := &file_telegram_gateway_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BotTarget) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BotTarget) ProtoMessage() {}
+
+func (x *BotTarget) ProtoReflect() protoreflect.Message {
+	mi := &file_telegram_gateway_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BotTarget.ProtoReflect.Descriptor instead.
+func (*BotTarget) Descriptor() ([]byte, []int) {
+	return file_telegram_gateway_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *BotTarget) GetMeta() *RequestMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+func (x *BotTarget) GetBotTokenId() string {
+	if x != nil {
+		return x.BotTokenId
+	}
+	return ""
+}
+
+func (x *BotTarget) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+type BotSendTextRequest struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Bot          *BotTarget             `protobuf:"bytes,1,opt,name=bot,proto3" json:"bot,omitempty"`
+	TargetChatId int64                  `protobuf:"varint,2,opt,name=target_chat_id,json=targetChatId,proto3" json:"target_chat_id,omitempty"`
+	// fully transformed text
+	Text string `protobuf:"bytes,3,opt,name=text,proto3" json:"text,omitempty"`
+	// forum topic thread inside the target supergroup (0 = General / none)
+	MessageThreadId int64 `protobuf:"varint,4,opt,name=message_thread_id,json=messageThreadId,proto3" json:"message_thread_id,omitempty"`
+	// raw inline-button spec exactly as the task stored it (rows of
+	// {"text","url"} dicts and/or "label|url" strings). The runtime parses it
+	// and degrades to no markup when it is unusable — a bad button config must
+	// never fail the message.
+	InlineButtons []string `protobuf:"bytes,5,rep,name=inline_buttons,json=inlineButtons,proto3" json:"inline_buttons,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BotSendTextRequest) Reset() {
+	*x = BotSendTextRequest{}
+	mi := &file_telegram_gateway_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BotSendTextRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BotSendTextRequest) ProtoMessage() {}
+
+func (x *BotSendTextRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_telegram_gateway_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BotSendTextRequest.ProtoReflect.Descriptor instead.
+func (*BotSendTextRequest) Descriptor() ([]byte, []int) {
+	return file_telegram_gateway_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *BotSendTextRequest) GetBot() *BotTarget {
+	if x != nil {
+		return x.Bot
+	}
+	return nil
+}
+
+func (x *BotSendTextRequest) GetTargetChatId() int64 {
+	if x != nil {
+		return x.TargetChatId
+	}
+	return 0
+}
+
+func (x *BotSendTextRequest) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *BotSendTextRequest) GetMessageThreadId() int64 {
+	if x != nil {
+		return x.MessageThreadId
+	}
+	return 0
+}
+
+func (x *BotSendTextRequest) GetInlineButtons() []string {
+	if x != nil {
+		return x.InlineButtons
+	}
+	return nil
+}
+
+type BotCopyMessageRequest struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Bot          *BotTarget             `protobuf:"bytes,1,opt,name=bot,proto3" json:"bot,omitempty"`
+	TargetChatId int64                  `protobuf:"varint,2,opt,name=target_chat_id,json=targetChatId,proto3" json:"target_chat_id,omitempty"`
+	FromChatId   int64                  `protobuf:"varint,3,opt,name=from_chat_id,json=fromChatId,proto3" json:"from_chat_id,omitempty"`
+	MessageId    int64                  `protobuf:"varint,4,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	// final transformed caption ("" = keep whatever the source carries)
+	Caption         string   `protobuf:"bytes,5,opt,name=caption,proto3" json:"caption,omitempty"`
+	MessageThreadId int64    `protobuf:"varint,6,opt,name=message_thread_id,json=messageThreadId,proto3" json:"message_thread_id,omitempty"`
+	InlineButtons   []string `protobuf:"bytes,7,rep,name=inline_buttons,json=inlineButtons,proto3" json:"inline_buttons,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *BotCopyMessageRequest) Reset() {
+	*x = BotCopyMessageRequest{}
+	mi := &file_telegram_gateway_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BotCopyMessageRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BotCopyMessageRequest) ProtoMessage() {}
+
+func (x *BotCopyMessageRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_telegram_gateway_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BotCopyMessageRequest.ProtoReflect.Descriptor instead.
+func (*BotCopyMessageRequest) Descriptor() ([]byte, []int) {
+	return file_telegram_gateway_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *BotCopyMessageRequest) GetBot() *BotTarget {
+	if x != nil {
+		return x.Bot
+	}
+	return nil
+}
+
+func (x *BotCopyMessageRequest) GetTargetChatId() int64 {
+	if x != nil {
+		return x.TargetChatId
+	}
+	return 0
+}
+
+func (x *BotCopyMessageRequest) GetFromChatId() int64 {
+	if x != nil {
+		return x.FromChatId
+	}
+	return 0
+}
+
+func (x *BotCopyMessageRequest) GetMessageId() int64 {
+	if x != nil {
+		return x.MessageId
+	}
+	return 0
+}
+
+func (x *BotCopyMessageRequest) GetCaption() string {
+	if x != nil {
+		return x.Caption
+	}
+	return ""
+}
+
+func (x *BotCopyMessageRequest) GetMessageThreadId() int64 {
+	if x != nil {
+		return x.MessageThreadId
+	}
+	return 0
+}
+
+func (x *BotCopyMessageRequest) GetInlineButtons() []string {
+	if x != nil {
+		return x.InlineButtons
+	}
+	return nil
+}
+
+type BotSendMediaRequest struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Bot          *BotTarget             `protobuf:"bytes,1,opt,name=bot,proto3" json:"bot,omitempty"`
+	TargetChatId int64                  `protobuf:"varint,2,opt,name=target_chat_id,json=targetChatId,proto3" json:"target_chat_id,omitempty"`
+	// opaque staged-file token the runtime returned from PrepareMediaUpload;
+	// empty means the send must degrade to a plain text delivery.
+	FileReferenceToken string `protobuf:"bytes,3,opt,name=file_reference_token,json=fileReferenceToken,proto3" json:"file_reference_token,omitempty"`
+	Caption            string `protobuf:"bytes,4,opt,name=caption,proto3" json:"caption,omitempty"`
+	// media classification, used to pick the Bot Api send method
+	MediaType       string   `protobuf:"bytes,5,opt,name=media_type,json=mediaType,proto3" json:"media_type,omitempty"`
+	MessageThreadId int64    `protobuf:"varint,6,opt,name=message_thread_id,json=messageThreadId,proto3" json:"message_thread_id,omitempty"`
+	InlineButtons   []string `protobuf:"bytes,7,rep,name=inline_buttons,json=inlineButtons,proto3" json:"inline_buttons,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *BotSendMediaRequest) Reset() {
+	*x = BotSendMediaRequest{}
+	mi := &file_telegram_gateway_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BotSendMediaRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BotSendMediaRequest) ProtoMessage() {}
+
+func (x *BotSendMediaRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_telegram_gateway_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BotSendMediaRequest.ProtoReflect.Descriptor instead.
+func (*BotSendMediaRequest) Descriptor() ([]byte, []int) {
+	return file_telegram_gateway_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *BotSendMediaRequest) GetBot() *BotTarget {
+	if x != nil {
+		return x.Bot
+	}
+	return nil
+}
+
+func (x *BotSendMediaRequest) GetTargetChatId() int64 {
+	if x != nil {
+		return x.TargetChatId
+	}
+	return 0
+}
+
+func (x *BotSendMediaRequest) GetFileReferenceToken() string {
+	if x != nil {
+		return x.FileReferenceToken
+	}
+	return ""
+}
+
+func (x *BotSendMediaRequest) GetCaption() string {
+	if x != nil {
+		return x.Caption
+	}
+	return ""
+}
+
+func (x *BotSendMediaRequest) GetMediaType() string {
+	if x != nil {
+		return x.MediaType
+	}
+	return ""
+}
+
+func (x *BotSendMediaRequest) GetMessageThreadId() int64 {
+	if x != nil {
+		return x.MessageThreadId
+	}
+	return 0
+}
+
+func (x *BotSendMediaRequest) GetInlineButtons() []string {
+	if x != nil {
+		return x.InlineButtons
+	}
+	return nil
+}
+
+type BotDeleteMessagesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Bot           *BotTarget             `protobuf:"bytes,1,opt,name=bot,proto3" json:"bot,omitempty"`
+	ChatId        int64                  `protobuf:"varint,2,opt,name=chat_id,json=chatId,proto3" json:"chat_id,omitempty"`
+	MessageIds    []int64                `protobuf:"varint,3,rep,packed,name=message_ids,json=messageIds,proto3" json:"message_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BotDeleteMessagesRequest) Reset() {
+	*x = BotDeleteMessagesRequest{}
+	mi := &file_telegram_gateway_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BotDeleteMessagesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BotDeleteMessagesRequest) ProtoMessage() {}
+
+func (x *BotDeleteMessagesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_telegram_gateway_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BotDeleteMessagesRequest.ProtoReflect.Descriptor instead.
+func (*BotDeleteMessagesRequest) Descriptor() ([]byte, []int) {
+	return file_telegram_gateway_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *BotDeleteMessagesRequest) GetBot() *BotTarget {
+	if x != nil {
+		return x.Bot
+	}
+	return nil
+}
+
+func (x *BotDeleteMessagesRequest) GetChatId() int64 {
+	if x != nil {
+		return x.ChatId
+	}
+	return 0
+}
+
+func (x *BotDeleteMessagesRequest) GetMessageIds() []int64 {
+	if x != nil {
+		return x.MessageIds
+	}
+	return nil
+}
+
+// Bot availability: is this token valid, owned by this tenant and the bot
+// usable right now? Reported as a typed outcome, never as a bare boolean,
+// so an unusable bot is distinguishable from a transient lookup failure.
+type BotAvailabilityRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Bot           *BotTarget             `protobuf:"bytes,1,opt,name=bot,proto3" json:"bot,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BotAvailabilityRequest) Reset() {
+	*x = BotAvailabilityRequest{}
+	mi := &file_telegram_gateway_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BotAvailabilityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BotAvailabilityRequest) ProtoMessage() {}
+
+func (x *BotAvailabilityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_telegram_gateway_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BotAvailabilityRequest.ProtoReflect.Descriptor instead.
+func (*BotAvailabilityRequest) Descriptor() ([]byte, []int) {
+	return file_telegram_gateway_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *BotAvailabilityRequest) GetBot() *BotTarget {
+	if x != nil {
+		return x.Bot
+	}
+	return nil
+}
+
+type BotAvailabilityResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// true only when the token resolves, is owned by the requesting tenant, is
+	// active, and the Bot Api answered getMe with this bot's identity.
+	Ok bool `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
+	// the bot's @username when known (diagnostics/labels only)
+	BotUsername   string                  `protobuf:"bytes,2,opt,name=bot_username,json=botUsername,proto3" json:"bot_username,omitempty"`
+	Error         *TelegramOperationError `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BotAvailabilityResponse) Reset() {
+	*x = BotAvailabilityResponse{}
+	mi := &file_telegram_gateway_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BotAvailabilityResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BotAvailabilityResponse) ProtoMessage() {}
+
+func (x *BotAvailabilityResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_telegram_gateway_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BotAvailabilityResponse.ProtoReflect.Descriptor instead.
+func (*BotAvailabilityResponse) Descriptor() ([]byte, []int) {
+	return file_telegram_gateway_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *BotAvailabilityResponse) GetOk() bool {
+	if x != nil {
+		return x.Ok
+	}
+	return false
+}
+
+func (x *BotAvailabilityResponse) GetBotUsername() string {
+	if x != nil {
+		return x.BotUsername
+	}
+	return ""
+}
+
+func (x *BotAvailabilityResponse) GetError() *TelegramOperationError {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
+type DeleteMessagesRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Meta  *RequestMeta           `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
+	// "user" deletes through the MTProto session, "bot" through the stored token.
+	Transport string `protobuf:"bytes,2,opt,name=transport,proto3" json:"transport,omitempty"`
+	// session id for transport="user" (stable identifier, never a session string)
+	SessionId string `protobuf:"bytes,3,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// bot token reference for transport="bot" (id only, never the token)
+	BotTokenId    string  `protobuf:"bytes,4,opt,name=bot_token_id,json=botTokenId,proto3" json:"bot_token_id,omitempty"`
+	OwnerUserId   int64   `protobuf:"varint,5,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	ChatId        int64   `protobuf:"varint,6,opt,name=chat_id,json=chatId,proto3" json:"chat_id,omitempty"`
+	MessageIds    []int64 `protobuf:"varint,7,rep,packed,name=message_ids,json=messageIds,proto3" json:"message_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteMessagesRequest) Reset() {
+	*x = DeleteMessagesRequest{}
+	mi := &file_telegram_gateway_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteMessagesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteMessagesRequest) ProtoMessage() {}
+
+func (x *DeleteMessagesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_telegram_gateway_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteMessagesRequest.ProtoReflect.Descriptor instead.
+func (*DeleteMessagesRequest) Descriptor() ([]byte, []int) {
+	return file_telegram_gateway_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *DeleteMessagesRequest) GetMeta() *RequestMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+func (x *DeleteMessagesRequest) GetTransport() string {
+	if x != nil {
+		return x.Transport
+	}
+	return ""
+}
+
+func (x *DeleteMessagesRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *DeleteMessagesRequest) GetBotTokenId() string {
+	if x != nil {
+		return x.BotTokenId
+	}
+	return ""
+}
+
+func (x *DeleteMessagesRequest) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *DeleteMessagesRequest) GetChatId() int64 {
+	if x != nil {
+		return x.ChatId
+	}
+	return 0
+}
+
+func (x *DeleteMessagesRequest) GetMessageIds() []int64 {
+	if x != nil {
+		return x.MessageIds
+	}
+	return nil
+}
+
+type DeleteMessagesResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// true when Telegram proved the messages are gone — either deleted now or
+	// already absent. Both are a successful cleanup: deletion is idempotent.
+	Deleted       bool                    `protobuf:"varint,1,opt,name=deleted,proto3" json:"deleted,omitempty"`
+	Error         *TelegramOperationError `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteMessagesResponse) Reset() {
+	*x = DeleteMessagesResponse{}
+	mi := &file_telegram_gateway_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteMessagesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteMessagesResponse) ProtoMessage() {}
+
+func (x *DeleteMessagesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_telegram_gateway_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteMessagesResponse.ProtoReflect.Descriptor instead.
+func (*DeleteMessagesResponse) Descriptor() ([]byte, []int) {
+	return file_telegram_gateway_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *DeleteMessagesResponse) GetDeleted() bool {
+	if x != nil {
+		return x.Deleted
+	}
+	return false
+}
+
+func (x *DeleteMessagesResponse) GetError() *TelegramOperationError {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
+// One BrandingStage1 call posts the already-transformed deliverable into the
+// branding channel C. The content decision (what C receives per content_mode)
+// is Go's; Python only executes the low-level Telegram send and reports the
+// ids that landed. Go never re-runs a transform here.
+type BrandingStage1Request struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Meta  *RequestMeta           `protobuf:"bytes,1,opt,name=meta,proto3" json:"meta,omitempty"`
+	// transport that must execute the post: "user" or "bot"
+	Transport string `protobuf:"bytes,2,opt,name=transport,proto3" json:"transport,omitempty"`
+	SessionId string `protobuf:"bytes,3,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	// bot token reference when transport="bot" (id only, never the token)
+	BotTokenId  string `protobuf:"bytes,4,opt,name=bot_token_id,json=botTokenId,proto3" json:"bot_token_id,omitempty"`
+	OwnerUserId int64  `protobuf:"varint,5,opt,name=owner_user_id,json=ownerUserId,proto3" json:"owner_user_id,omitempty"`
+	// channel C
+	TargetChatId int64 `protobuf:"varint,6,opt,name=target_chat_id,json=targetChatId,proto3" json:"target_chat_id,omitempty"`
+	// forum topic inside C (0 = General / none)
+	MessageThreadId int64 `protobuf:"varint,7,opt,name=message_thread_id,json=messageThreadId,proto3" json:"message_thread_id,omitempty"`
+	// the deliverable shape Go decided:
+	//
+	//	text        — post this string (TEXT_ONLY, or a text-only source)
+	//	copy        — copy this source message, with this caption
+	//	media_group — copy the album this source message belongs to
+	Operation       string `protobuf:"bytes,8,opt,name=operation,proto3" json:"operation,omitempty"`
+	SourceChatId    int64  `protobuf:"varint,9,opt,name=source_chat_id,json=sourceChatId,proto3" json:"source_chat_id,omitempty"`
+	SourceMessageId int64  `protobuf:"varint,10,opt,name=source_message_id,json=sourceMessageId,proto3" json:"source_message_id,omitempty"`
+	// every member of the album when operation="media_group"
+	SourceMessageIds []int64  `protobuf:"varint,11,rep,packed,name=source_message_ids,json=sourceMessageIds,proto3" json:"source_message_ids,omitempty"`
+	Text             string   `protobuf:"bytes,12,opt,name=text,proto3" json:"text,omitempty"`
+	Caption          string   `protobuf:"bytes,13,opt,name=caption,proto3" json:"caption,omitempty"`
+	InlineButtons    []string `protobuf:"bytes,14,rep,name=inline_buttons,json=inlineButtons,proto3" json:"inline_buttons,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *BrandingStage1Request) Reset() {
+	*x = BrandingStage1Request{}
+	mi := &file_telegram_gateway_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BrandingStage1Request) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BrandingStage1Request) ProtoMessage() {}
+
+func (x *BrandingStage1Request) ProtoReflect() protoreflect.Message {
+	mi := &file_telegram_gateway_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BrandingStage1Request.ProtoReflect.Descriptor instead.
+func (*BrandingStage1Request) Descriptor() ([]byte, []int) {
+	return file_telegram_gateway_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *BrandingStage1Request) GetMeta() *RequestMeta {
+	if x != nil {
+		return x.Meta
+	}
+	return nil
+}
+
+func (x *BrandingStage1Request) GetTransport() string {
+	if x != nil {
+		return x.Transport
+	}
+	return ""
+}
+
+func (x *BrandingStage1Request) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *BrandingStage1Request) GetBotTokenId() string {
+	if x != nil {
+		return x.BotTokenId
+	}
+	return ""
+}
+
+func (x *BrandingStage1Request) GetOwnerUserId() int64 {
+	if x != nil {
+		return x.OwnerUserId
+	}
+	return 0
+}
+
+func (x *BrandingStage1Request) GetTargetChatId() int64 {
+	if x != nil {
+		return x.TargetChatId
+	}
+	return 0
+}
+
+func (x *BrandingStage1Request) GetMessageThreadId() int64 {
+	if x != nil {
+		return x.MessageThreadId
+	}
+	return 0
+}
+
+func (x *BrandingStage1Request) GetOperation() string {
+	if x != nil {
+		return x.Operation
+	}
+	return ""
+}
+
+func (x *BrandingStage1Request) GetSourceChatId() int64 {
+	if x != nil {
+		return x.SourceChatId
+	}
+	return 0
+}
+
+func (x *BrandingStage1Request) GetSourceMessageId() int64 {
+	if x != nil {
+		return x.SourceMessageId
+	}
+	return 0
+}
+
+func (x *BrandingStage1Request) GetSourceMessageIds() []int64 {
+	if x != nil {
+		return x.SourceMessageIds
+	}
+	return nil
+}
+
+func (x *BrandingStage1Request) GetText() string {
+	if x != nil {
+		return x.Text
+	}
+	return ""
+}
+
+func (x *BrandingStage1Request) GetCaption() string {
+	if x != nil {
+		return x.Caption
+	}
+	return ""
+}
+
+func (x *BrandingStage1Request) GetInlineButtons() []string {
+	if x != nil {
+		return x.InlineButtons
+	}
+	return nil
+}
+
+type BrandingStage1Response struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// ids of the messages that landed in C, in Telegram's own order. Empty means
+	// nothing was confirmed (an ambiguous outcome is reported through error).
+	TargetMessageIds []int64                 `protobuf:"varint,1,rep,packed,name=target_message_ids,json=targetMessageIds,proto3" json:"target_message_ids,omitempty"`
+	Error            *TelegramOperationError `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *BrandingStage1Response) Reset() {
+	*x = BrandingStage1Response{}
+	mi := &file_telegram_gateway_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BrandingStage1Response) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BrandingStage1Response) ProtoMessage() {}
+
+func (x *BrandingStage1Response) ProtoReflect() protoreflect.Message {
+	mi := &file_telegram_gateway_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BrandingStage1Response.ProtoReflect.Descriptor instead.
+func (*BrandingStage1Response) Descriptor() ([]byte, []int) {
+	return file_telegram_gateway_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *BrandingStage1Response) GetTargetMessageIds() []int64 {
+	if x != nil {
+		return x.TargetMessageIds
+	}
+	return nil
+}
+
+func (x *BrandingStage1Response) GetError() *TelegramOperationError {
+	if x != nil {
+		return x.Error
+	}
+	return nil
+}
+
 type HealthRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ping          string                 `protobuf:"bytes,1,opt,name=ping,proto3" json:"ping,omitempty"`
@@ -2035,7 +2907,7 @@ type HealthRequest struct {
 
 func (x *HealthRequest) Reset() {
 	*x = HealthRequest{}
-	mi := &file_telegram_gateway_proto_msgTypes[27]
+	mi := &file_telegram_gateway_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2047,7 +2919,7 @@ func (x *HealthRequest) String() string {
 func (*HealthRequest) ProtoMessage() {}
 
 func (x *HealthRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_telegram_gateway_proto_msgTypes[27]
+	mi := &file_telegram_gateway_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2060,7 +2932,7 @@ func (x *HealthRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthRequest.ProtoReflect.Descriptor instead.
 func (*HealthRequest) Descriptor() ([]byte, []int) {
-	return file_telegram_gateway_proto_rawDescGZIP(), []int{27}
+	return file_telegram_gateway_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *HealthRequest) GetPing() string {
@@ -2084,7 +2956,7 @@ type HealthResponse struct {
 
 func (x *HealthResponse) Reset() {
 	*x = HealthResponse{}
-	mi := &file_telegram_gateway_proto_msgTypes[28]
+	mi := &file_telegram_gateway_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2096,7 +2968,7 @@ func (x *HealthResponse) String() string {
 func (*HealthResponse) ProtoMessage() {}
 
 func (x *HealthResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_telegram_gateway_proto_msgTypes[28]
+	mi := &file_telegram_gateway_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2109,7 +2981,7 @@ func (x *HealthResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthResponse.ProtoReflect.Descriptor instead.
 func (*HealthResponse) Descriptor() ([]byte, []int) {
-	return file_telegram_gateway_proto_rawDescGZIP(), []int{28}
+	return file_telegram_gateway_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *HealthResponse) GetContract() string {
@@ -2316,6 +3188,82 @@ const file_telegram_gateway_proto_rawDesc = "" +
 	"\x13ReloadMediaResponse\x12\x1d\n" +
 	"\n" +
 	"size_bytes\x18\x01 \x01(\x03R\tsizeBytes\x12;\n" +
+	"\x05error\x18\x02 \x01(\v2%.atf.worker.v1.TelegramOperationErrorR\x05error\"\x81\x01\n" +
+	"\tBotTarget\x12.\n" +
+	"\x04meta\x18\x01 \x01(\v2\x1a.atf.worker.v1.RequestMetaR\x04meta\x12 \n" +
+	"\fbot_token_id\x18\x02 \x01(\tR\n" +
+	"botTokenId\x12\"\n" +
+	"\rowner_user_id\x18\x03 \x01(\x03R\vownerUserId\"\xcd\x01\n" +
+	"\x12BotSendTextRequest\x12*\n" +
+	"\x03bot\x18\x01 \x01(\v2\x18.atf.worker.v1.BotTargetR\x03bot\x12$\n" +
+	"\x0etarget_chat_id\x18\x02 \x01(\x03R\ftargetChatId\x12\x12\n" +
+	"\x04text\x18\x03 \x01(\tR\x04text\x12*\n" +
+	"\x11message_thread_id\x18\x04 \x01(\x03R\x0fmessageThreadId\x12%\n" +
+	"\x0einline_buttons\x18\x05 \x03(\tR\rinlineButtons\"\x97\x02\n" +
+	"\x15BotCopyMessageRequest\x12*\n" +
+	"\x03bot\x18\x01 \x01(\v2\x18.atf.worker.v1.BotTargetR\x03bot\x12$\n" +
+	"\x0etarget_chat_id\x18\x02 \x01(\x03R\ftargetChatId\x12 \n" +
+	"\ffrom_chat_id\x18\x03 \x01(\x03R\n" +
+	"fromChatId\x12\x1d\n" +
+	"\n" +
+	"message_id\x18\x04 \x01(\x03R\tmessageId\x12\x18\n" +
+	"\acaption\x18\x05 \x01(\tR\acaption\x12*\n" +
+	"\x11message_thread_id\x18\x06 \x01(\x03R\x0fmessageThreadId\x12%\n" +
+	"\x0einline_buttons\x18\a \x03(\tR\rinlineButtons\"\xa5\x02\n" +
+	"\x13BotSendMediaRequest\x12*\n" +
+	"\x03bot\x18\x01 \x01(\v2\x18.atf.worker.v1.BotTargetR\x03bot\x12$\n" +
+	"\x0etarget_chat_id\x18\x02 \x01(\x03R\ftargetChatId\x120\n" +
+	"\x14file_reference_token\x18\x03 \x01(\tR\x12fileReferenceToken\x12\x18\n" +
+	"\acaption\x18\x04 \x01(\tR\acaption\x12\x1d\n" +
+	"\n" +
+	"media_type\x18\x05 \x01(\tR\tmediaType\x12*\n" +
+	"\x11message_thread_id\x18\x06 \x01(\x03R\x0fmessageThreadId\x12%\n" +
+	"\x0einline_buttons\x18\a \x03(\tR\rinlineButtons\"\x80\x01\n" +
+	"\x18BotDeleteMessagesRequest\x12*\n" +
+	"\x03bot\x18\x01 \x01(\v2\x18.atf.worker.v1.BotTargetR\x03bot\x12\x17\n" +
+	"\achat_id\x18\x02 \x01(\x03R\x06chatId\x12\x1f\n" +
+	"\vmessage_ids\x18\x03 \x03(\x03R\n" +
+	"messageIds\"D\n" +
+	"\x16BotAvailabilityRequest\x12*\n" +
+	"\x03bot\x18\x01 \x01(\v2\x18.atf.worker.v1.BotTargetR\x03bot\"\x89\x01\n" +
+	"\x17BotAvailabilityResponse\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\x12!\n" +
+	"\fbot_username\x18\x02 \x01(\tR\vbotUsername\x12;\n" +
+	"\x05error\x18\x03 \x01(\v2%.atf.worker.v1.TelegramOperationErrorR\x05error\"\x84\x02\n" +
+	"\x15DeleteMessagesRequest\x12.\n" +
+	"\x04meta\x18\x01 \x01(\v2\x1a.atf.worker.v1.RequestMetaR\x04meta\x12\x1c\n" +
+	"\ttransport\x18\x02 \x01(\tR\ttransport\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x03 \x01(\tR\tsessionId\x12 \n" +
+	"\fbot_token_id\x18\x04 \x01(\tR\n" +
+	"botTokenId\x12\"\n" +
+	"\rowner_user_id\x18\x05 \x01(\x03R\vownerUserId\x12\x17\n" +
+	"\achat_id\x18\x06 \x01(\x03R\x06chatId\x12\x1f\n" +
+	"\vmessage_ids\x18\a \x03(\x03R\n" +
+	"messageIds\"o\n" +
+	"\x16DeleteMessagesResponse\x12\x18\n" +
+	"\adeleted\x18\x01 \x01(\bR\adeleted\x12;\n" +
+	"\x05error\x18\x02 \x01(\v2%.atf.worker.v1.TelegramOperationErrorR\x05error\"\x8f\x04\n" +
+	"\x15BrandingStage1Request\x12.\n" +
+	"\x04meta\x18\x01 \x01(\v2\x1a.atf.worker.v1.RequestMetaR\x04meta\x12\x1c\n" +
+	"\ttransport\x18\x02 \x01(\tR\ttransport\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x03 \x01(\tR\tsessionId\x12 \n" +
+	"\fbot_token_id\x18\x04 \x01(\tR\n" +
+	"botTokenId\x12\"\n" +
+	"\rowner_user_id\x18\x05 \x01(\x03R\vownerUserId\x12$\n" +
+	"\x0etarget_chat_id\x18\x06 \x01(\x03R\ftargetChatId\x12*\n" +
+	"\x11message_thread_id\x18\a \x01(\x03R\x0fmessageThreadId\x12\x1c\n" +
+	"\toperation\x18\b \x01(\tR\toperation\x12$\n" +
+	"\x0esource_chat_id\x18\t \x01(\x03R\fsourceChatId\x12*\n" +
+	"\x11source_message_id\x18\n" +
+	" \x01(\x03R\x0fsourceMessageId\x12,\n" +
+	"\x12source_message_ids\x18\v \x03(\x03R\x10sourceMessageIds\x12\x12\n" +
+	"\x04text\x18\f \x01(\tR\x04text\x12\x18\n" +
+	"\acaption\x18\r \x01(\tR\acaption\x12%\n" +
+	"\x0einline_buttons\x18\x0e \x03(\tR\rinlineButtons\"\x83\x01\n" +
+	"\x16BrandingStage1Response\x12,\n" +
+	"\x12target_message_ids\x18\x01 \x03(\x03R\x10targetMessageIds\x12;\n" +
 	"\x05error\x18\x02 \x01(\v2%.atf.worker.v1.TelegramOperationErrorR\x05error\"#\n" +
 	"\rHealthRequest\x12\x12\n" +
 	"\x04ping\x18\x01 \x01(\tR\x04ping\"\x92\x01\n" +
@@ -2345,8 +3293,7 @@ const file_telegram_gateway_proto_rawDesc = "" +
 	"\x12TARGET_UNAVAILABLE\x10\x0f\x12\x1c\n" +
 	"\x18TELEGRAM_TEMPORARY_ERROR\x10\x10\x12\x1c\n" +
 	"\x18UNKNOWN_DELIVERY_OUTCOME\x10\x11\x12\x12\n" +
-	"\x0eINTERNAL_ERROR\x10\x122\xa2\n" +
-	"\n" +
+	"\x0eINTERNAL_ERROR\x10\x122\xa7\x0f\n" +
 	"\x0fTelegramGateway\x12i\n" +
 	"\x0eIsSessionReady\x12).atf.worker.v1.SessionAvailabilityRequest\x1a*.atf.worker.v1.SessionAvailabilityResponse\"\x00\x12S\n" +
 	"\n" +
@@ -2361,7 +3308,14 @@ const file_telegram_gateway_proto_rawDesc = "" +
 	"\fCopyMessages\x12\".atf.worker.v1.CopyMessagesRequest\x1a#.atf.worker.v1.CopyMessagesResponse\"\x00\x12N\n" +
 	"\vSendMessage\x12!.atf.worker.v1.SendMessageRequest\x1a\x1a.atf.worker.v1.SendOutcome\"\x00\x12J\n" +
 	"\tSendMedia\x12\x1f.atf.worker.v1.SendMediaRequest\x1a\x1a.atf.worker.v1.SendOutcome\"\x00\x12]\n" +
-	"\x0eCopyMediaGroup\x12$.atf.worker.v1.CopyMediaGroupRequest\x1a#.atf.worker.v1.CopyMessagesResponse\"\x00\x12N\n" +
+	"\x0eCopyMediaGroup\x12$.atf.worker.v1.CopyMediaGroupRequest\x1a#.atf.worker.v1.CopyMessagesResponse\"\x00\x12b\n" +
+	"\x0fBotAvailability\x12%.atf.worker.v1.BotAvailabilityRequest\x1a&.atf.worker.v1.BotAvailabilityResponse\"\x00\x12N\n" +
+	"\vBotSendText\x12!.atf.worker.v1.BotSendTextRequest\x1a\x1a.atf.worker.v1.SendOutcome\"\x00\x12T\n" +
+	"\x0eBotCopyMessage\x12$.atf.worker.v1.BotCopyMessageRequest\x1a\x1a.atf.worker.v1.SendOutcome\"\x00\x12P\n" +
+	"\fBotSendMedia\x12\".atf.worker.v1.BotSendMediaRequest\x1a\x1a.atf.worker.v1.SendOutcome\"\x00\x12e\n" +
+	"\x11BotDeleteMessages\x12'.atf.worker.v1.BotDeleteMessagesRequest\x1a%.atf.worker.v1.DeleteMessagesResponse\"\x00\x12_\n" +
+	"\x0eDeleteMessages\x12$.atf.worker.v1.DeleteMessagesRequest\x1a%.atf.worker.v1.DeleteMessagesResponse\"\x00\x12_\n" +
+	"\x0eBrandingStage1\x12$.atf.worker.v1.BrandingStage1Request\x1a%.atf.worker.v1.BrandingStage1Response\"\x00\x12N\n" +
 	"\rGatewayHealth\x12\x1c.atf.worker.v1.HealthRequest\x1a\x1d.atf.worker.v1.HealthResponse\"\x00B\x1dZ\x1batf/worker/proto/gen;tfgwpbb\x06proto3"
 
 var (
@@ -2377,7 +3331,7 @@ func file_telegram_gateway_proto_rawDescGZIP() []byte {
 }
 
 var file_telegram_gateway_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_telegram_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_telegram_gateway_proto_msgTypes = make([]protoimpl.MessageInfo, 41)
 var file_telegram_gateway_proto_goTypes = []any{
 	(DeliveryFailureCode)(0),            // 0: atf.worker.v1.DeliveryFailureCode
 	(*RequestMeta)(nil),                 // 1: atf.worker.v1.RequestMeta
@@ -2407,12 +3361,23 @@ var file_telegram_gateway_proto_goTypes = []any{
 	(*CopyMediaGroupRequest)(nil),       // 25: atf.worker.v1.CopyMediaGroupRequest
 	(*ReloadMediaRequest)(nil),          // 26: atf.worker.v1.ReloadMediaRequest
 	(*ReloadMediaResponse)(nil),         // 27: atf.worker.v1.ReloadMediaResponse
-	(*HealthRequest)(nil),               // 28: atf.worker.v1.HealthRequest
-	(*HealthResponse)(nil),              // 29: atf.worker.v1.HealthResponse
-	nil,                                 // 30: atf.worker.v1.RequestMeta.FieldsEntry
+	(*BotTarget)(nil),                   // 28: atf.worker.v1.BotTarget
+	(*BotSendTextRequest)(nil),          // 29: atf.worker.v1.BotSendTextRequest
+	(*BotCopyMessageRequest)(nil),       // 30: atf.worker.v1.BotCopyMessageRequest
+	(*BotSendMediaRequest)(nil),         // 31: atf.worker.v1.BotSendMediaRequest
+	(*BotDeleteMessagesRequest)(nil),    // 32: atf.worker.v1.BotDeleteMessagesRequest
+	(*BotAvailabilityRequest)(nil),      // 33: atf.worker.v1.BotAvailabilityRequest
+	(*BotAvailabilityResponse)(nil),     // 34: atf.worker.v1.BotAvailabilityResponse
+	(*DeleteMessagesRequest)(nil),       // 35: atf.worker.v1.DeleteMessagesRequest
+	(*DeleteMessagesResponse)(nil),      // 36: atf.worker.v1.DeleteMessagesResponse
+	(*BrandingStage1Request)(nil),       // 37: atf.worker.v1.BrandingStage1Request
+	(*BrandingStage1Response)(nil),      // 38: atf.worker.v1.BrandingStage1Response
+	(*HealthRequest)(nil),               // 39: atf.worker.v1.HealthRequest
+	(*HealthResponse)(nil),              // 40: atf.worker.v1.HealthResponse
+	nil,                                 // 41: atf.worker.v1.RequestMeta.FieldsEntry
 }
 var file_telegram_gateway_proto_depIdxs = []int32{
-	30, // 0: atf.worker.v1.RequestMeta.fields:type_name -> atf.worker.v1.RequestMeta.FieldsEntry
+	41, // 0: atf.worker.v1.RequestMeta.fields:type_name -> atf.worker.v1.RequestMeta.FieldsEntry
 	0,  // 1: atf.worker.v1.TelegramOperationError.code:type_name -> atf.worker.v1.DeliveryFailureCode
 	2,  // 2: atf.worker.v1.SendOutcome.error:type_name -> atf.worker.v1.TelegramOperationError
 	1,  // 3: atf.worker.v1.SessionAvailabilityRequest.meta:type_name -> atf.worker.v1.RequestMeta
@@ -2441,39 +3406,64 @@ var file_telegram_gateway_proto_depIdxs = []int32{
 	1,  // 26: atf.worker.v1.ReloadMediaRequest.meta:type_name -> atf.worker.v1.RequestMeta
 	13, // 27: atf.worker.v1.ReloadMediaRequest.destination:type_name -> atf.worker.v1.TelegramMediaHandle
 	2,  // 28: atf.worker.v1.ReloadMediaResponse.error:type_name -> atf.worker.v1.TelegramOperationError
-	4,  // 29: atf.worker.v1.TelegramGateway.IsSessionReady:input_type -> atf.worker.v1.SessionAvailabilityRequest
-	7,  // 30: atf.worker.v1.TelegramGateway.GetMessage:input_type -> atf.worker.v1.GetMessageRequest
-	9,  // 31: atf.worker.v1.TelegramGateway.GetAlbumMessageIds:input_type -> atf.worker.v1.GetAlbumMessageIdsRequest
-	11, // 32: atf.worker.v1.TelegramGateway.GetFileExtension:input_type -> atf.worker.v1.GetFileExtensionRequest
-	14, // 33: atf.worker.v1.TelegramGateway.DownloadMedia:input_type -> atf.worker.v1.DownloadMediaRequest
-	16, // 34: atf.worker.v1.TelegramGateway.PrepareMediaUpload:input_type -> atf.worker.v1.PrepareMediaUploadRequest
-	26, // 35: atf.worker.v1.TelegramGateway.ReloadMedia:input_type -> atf.worker.v1.ReloadMediaRequest
-	18, // 36: atf.worker.v1.TelegramGateway.ForwardMessages:input_type -> atf.worker.v1.ForwardMessagesRequest
-	20, // 37: atf.worker.v1.TelegramGateway.CopyMessage:input_type -> atf.worker.v1.CopyMessageRequest
-	21, // 38: atf.worker.v1.TelegramGateway.CopyMessages:input_type -> atf.worker.v1.CopyMessagesRequest
-	23, // 39: atf.worker.v1.TelegramGateway.SendMessage:input_type -> atf.worker.v1.SendMessageRequest
-	24, // 40: atf.worker.v1.TelegramGateway.SendMedia:input_type -> atf.worker.v1.SendMediaRequest
-	25, // 41: atf.worker.v1.TelegramGateway.CopyMediaGroup:input_type -> atf.worker.v1.CopyMediaGroupRequest
-	28, // 42: atf.worker.v1.TelegramGateway.GatewayHealth:input_type -> atf.worker.v1.HealthRequest
-	5,  // 43: atf.worker.v1.TelegramGateway.IsSessionReady:output_type -> atf.worker.v1.SessionAvailabilityResponse
-	8,  // 44: atf.worker.v1.TelegramGateway.GetMessage:output_type -> atf.worker.v1.GetMessageResponse
-	10, // 45: atf.worker.v1.TelegramGateway.GetAlbumMessageIds:output_type -> atf.worker.v1.GetAlbumMessageIdsResponse
-	12, // 46: atf.worker.v1.TelegramGateway.GetFileExtension:output_type -> atf.worker.v1.GetFileExtensionResponse
-	15, // 47: atf.worker.v1.TelegramGateway.DownloadMedia:output_type -> atf.worker.v1.DownloadMediaResponse
-	17, // 48: atf.worker.v1.TelegramGateway.PrepareMediaUpload:output_type -> atf.worker.v1.PrepareMediaUploadResponse
-	27, // 49: atf.worker.v1.TelegramGateway.ReloadMedia:output_type -> atf.worker.v1.ReloadMediaResponse
-	19, // 50: atf.worker.v1.TelegramGateway.ForwardMessages:output_type -> atf.worker.v1.ForwardMessagesResponse
-	3,  // 51: atf.worker.v1.TelegramGateway.CopyMessage:output_type -> atf.worker.v1.SendOutcome
-	22, // 52: atf.worker.v1.TelegramGateway.CopyMessages:output_type -> atf.worker.v1.CopyMessagesResponse
-	3,  // 53: atf.worker.v1.TelegramGateway.SendMessage:output_type -> atf.worker.v1.SendOutcome
-	3,  // 54: atf.worker.v1.TelegramGateway.SendMedia:output_type -> atf.worker.v1.SendOutcome
-	22, // 55: atf.worker.v1.TelegramGateway.CopyMediaGroup:output_type -> atf.worker.v1.CopyMessagesResponse
-	29, // 56: atf.worker.v1.TelegramGateway.GatewayHealth:output_type -> atf.worker.v1.HealthResponse
-	43, // [43:57] is the sub-list for method output_type
-	29, // [29:43] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	1,  // 29: atf.worker.v1.BotTarget.meta:type_name -> atf.worker.v1.RequestMeta
+	28, // 30: atf.worker.v1.BotSendTextRequest.bot:type_name -> atf.worker.v1.BotTarget
+	28, // 31: atf.worker.v1.BotCopyMessageRequest.bot:type_name -> atf.worker.v1.BotTarget
+	28, // 32: atf.worker.v1.BotSendMediaRequest.bot:type_name -> atf.worker.v1.BotTarget
+	28, // 33: atf.worker.v1.BotDeleteMessagesRequest.bot:type_name -> atf.worker.v1.BotTarget
+	28, // 34: atf.worker.v1.BotAvailabilityRequest.bot:type_name -> atf.worker.v1.BotTarget
+	2,  // 35: atf.worker.v1.BotAvailabilityResponse.error:type_name -> atf.worker.v1.TelegramOperationError
+	1,  // 36: atf.worker.v1.DeleteMessagesRequest.meta:type_name -> atf.worker.v1.RequestMeta
+	2,  // 37: atf.worker.v1.DeleteMessagesResponse.error:type_name -> atf.worker.v1.TelegramOperationError
+	1,  // 38: atf.worker.v1.BrandingStage1Request.meta:type_name -> atf.worker.v1.RequestMeta
+	2,  // 39: atf.worker.v1.BrandingStage1Response.error:type_name -> atf.worker.v1.TelegramOperationError
+	4,  // 40: atf.worker.v1.TelegramGateway.IsSessionReady:input_type -> atf.worker.v1.SessionAvailabilityRequest
+	7,  // 41: atf.worker.v1.TelegramGateway.GetMessage:input_type -> atf.worker.v1.GetMessageRequest
+	9,  // 42: atf.worker.v1.TelegramGateway.GetAlbumMessageIds:input_type -> atf.worker.v1.GetAlbumMessageIdsRequest
+	11, // 43: atf.worker.v1.TelegramGateway.GetFileExtension:input_type -> atf.worker.v1.GetFileExtensionRequest
+	14, // 44: atf.worker.v1.TelegramGateway.DownloadMedia:input_type -> atf.worker.v1.DownloadMediaRequest
+	16, // 45: atf.worker.v1.TelegramGateway.PrepareMediaUpload:input_type -> atf.worker.v1.PrepareMediaUploadRequest
+	26, // 46: atf.worker.v1.TelegramGateway.ReloadMedia:input_type -> atf.worker.v1.ReloadMediaRequest
+	18, // 47: atf.worker.v1.TelegramGateway.ForwardMessages:input_type -> atf.worker.v1.ForwardMessagesRequest
+	20, // 48: atf.worker.v1.TelegramGateway.CopyMessage:input_type -> atf.worker.v1.CopyMessageRequest
+	21, // 49: atf.worker.v1.TelegramGateway.CopyMessages:input_type -> atf.worker.v1.CopyMessagesRequest
+	23, // 50: atf.worker.v1.TelegramGateway.SendMessage:input_type -> atf.worker.v1.SendMessageRequest
+	24, // 51: atf.worker.v1.TelegramGateway.SendMedia:input_type -> atf.worker.v1.SendMediaRequest
+	25, // 52: atf.worker.v1.TelegramGateway.CopyMediaGroup:input_type -> atf.worker.v1.CopyMediaGroupRequest
+	33, // 53: atf.worker.v1.TelegramGateway.BotAvailability:input_type -> atf.worker.v1.BotAvailabilityRequest
+	29, // 54: atf.worker.v1.TelegramGateway.BotSendText:input_type -> atf.worker.v1.BotSendTextRequest
+	30, // 55: atf.worker.v1.TelegramGateway.BotCopyMessage:input_type -> atf.worker.v1.BotCopyMessageRequest
+	31, // 56: atf.worker.v1.TelegramGateway.BotSendMedia:input_type -> atf.worker.v1.BotSendMediaRequest
+	32, // 57: atf.worker.v1.TelegramGateway.BotDeleteMessages:input_type -> atf.worker.v1.BotDeleteMessagesRequest
+	35, // 58: atf.worker.v1.TelegramGateway.DeleteMessages:input_type -> atf.worker.v1.DeleteMessagesRequest
+	37, // 59: atf.worker.v1.TelegramGateway.BrandingStage1:input_type -> atf.worker.v1.BrandingStage1Request
+	39, // 60: atf.worker.v1.TelegramGateway.GatewayHealth:input_type -> atf.worker.v1.HealthRequest
+	5,  // 61: atf.worker.v1.TelegramGateway.IsSessionReady:output_type -> atf.worker.v1.SessionAvailabilityResponse
+	8,  // 62: atf.worker.v1.TelegramGateway.GetMessage:output_type -> atf.worker.v1.GetMessageResponse
+	10, // 63: atf.worker.v1.TelegramGateway.GetAlbumMessageIds:output_type -> atf.worker.v1.GetAlbumMessageIdsResponse
+	12, // 64: atf.worker.v1.TelegramGateway.GetFileExtension:output_type -> atf.worker.v1.GetFileExtensionResponse
+	15, // 65: atf.worker.v1.TelegramGateway.DownloadMedia:output_type -> atf.worker.v1.DownloadMediaResponse
+	17, // 66: atf.worker.v1.TelegramGateway.PrepareMediaUpload:output_type -> atf.worker.v1.PrepareMediaUploadResponse
+	27, // 67: atf.worker.v1.TelegramGateway.ReloadMedia:output_type -> atf.worker.v1.ReloadMediaResponse
+	19, // 68: atf.worker.v1.TelegramGateway.ForwardMessages:output_type -> atf.worker.v1.ForwardMessagesResponse
+	3,  // 69: atf.worker.v1.TelegramGateway.CopyMessage:output_type -> atf.worker.v1.SendOutcome
+	22, // 70: atf.worker.v1.TelegramGateway.CopyMessages:output_type -> atf.worker.v1.CopyMessagesResponse
+	3,  // 71: atf.worker.v1.TelegramGateway.SendMessage:output_type -> atf.worker.v1.SendOutcome
+	3,  // 72: atf.worker.v1.TelegramGateway.SendMedia:output_type -> atf.worker.v1.SendOutcome
+	22, // 73: atf.worker.v1.TelegramGateway.CopyMediaGroup:output_type -> atf.worker.v1.CopyMessagesResponse
+	34, // 74: atf.worker.v1.TelegramGateway.BotAvailability:output_type -> atf.worker.v1.BotAvailabilityResponse
+	3,  // 75: atf.worker.v1.TelegramGateway.BotSendText:output_type -> atf.worker.v1.SendOutcome
+	3,  // 76: atf.worker.v1.TelegramGateway.BotCopyMessage:output_type -> atf.worker.v1.SendOutcome
+	3,  // 77: atf.worker.v1.TelegramGateway.BotSendMedia:output_type -> atf.worker.v1.SendOutcome
+	36, // 78: atf.worker.v1.TelegramGateway.BotDeleteMessages:output_type -> atf.worker.v1.DeleteMessagesResponse
+	36, // 79: atf.worker.v1.TelegramGateway.DeleteMessages:output_type -> atf.worker.v1.DeleteMessagesResponse
+	38, // 80: atf.worker.v1.TelegramGateway.BrandingStage1:output_type -> atf.worker.v1.BrandingStage1Response
+	40, // 81: atf.worker.v1.TelegramGateway.GatewayHealth:output_type -> atf.worker.v1.HealthResponse
+	61, // [61:82] is the sub-list for method output_type
+	40, // [40:61] is the sub-list for method input_type
+	40, // [40:40] is the sub-list for extension type_name
+	40, // [40:40] is the sub-list for extension extendee
+	0,  // [0:40] is the sub-list for field type_name
 }
 
 func init() { file_telegram_gateway_proto_init() }
@@ -2487,7 +3477,7 @@ func file_telegram_gateway_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_telegram_gateway_proto_rawDesc), len(file_telegram_gateway_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   30,
+			NumMessages:   41,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
