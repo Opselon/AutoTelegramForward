@@ -51,14 +51,15 @@ CREATE TABLE IF NOT EXISTS delivery_attempts (
     job_kind TEXT NOT NULL DEFAULT 'forward',
     status TEXT NOT NULL DEFAULT 'CLAIMED',
     worker_id TEXT NOT NULL DEFAULT '',
+    target_message_id INTEGER,
     lease_until REAL NOT NULL DEFAULT 0,
     attempts INTEGER NOT NULL DEFAULT 0,
-    target_message_id INTEGER NOT NULL DEFAULT 0,
     last_error TEXT NOT NULL DEFAULT '',
-    resolution_reason TEXT NOT NULL DEFAULT '',
     created_at INTEGER NOT NULL DEFAULT 0,
-    updated_at INTEGER NOT NULL DEFAULT 0
+    updated_at INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(rule_id, source_chat_id, source_message_id, target_chat_id, job_kind)
 );
+CREATE INDEX IF NOT EXISTS idx_delivery_attempts_fence ON delivery_attempts(status, lease_until);
 CREATE INDEX IF NOT EXISTS idx_delivery_attempts_fence
     ON delivery_attempts(status, lease_until);
 CREATE TABLE IF NOT EXISTS message_map (
@@ -74,17 +75,20 @@ CREATE TABLE IF NOT EXISTS message_map (
 );
 CREATE TABLE IF NOT EXISTS dead_letter_queue (
     id TEXT PRIMARY KEY,
-    job_id TEXT NOT NULL UNIQUE,
+    job_id TEXT,
     rule_id TEXT NOT NULL,
     source_chat_id TEXT NOT NULL,
     source_message_id INTEGER NOT NULL,
     target_chat_id TEXT NOT NULL,
-    payload_json TEXT NOT NULL DEFAULT '{}',
-    reason TEXT NOT NULL DEFAULT '',
-    event_code TEXT NOT NULL DEFAULT '',
+    payload_json TEXT NOT NULL DEFAULT '',
     attempts INTEGER NOT NULL DEFAULT 0,
-    dead_lettered_at INTEGER NOT NULL DEFAULT 0
+    last_error TEXT NOT NULL DEFAULT '',
+    error_category TEXT NOT NULL DEFAULT '',
+    dead_lettered_at INTEGER NOT NULL,
+    UNIQUE(rule_id, source_chat_id, source_message_id, target_chat_id)
 );
+CREATE INDEX IF NOT EXISTS idx_dlq_rule ON dead_letter_queue(rule_id, dead_lettered_at);
+CREATE INDEX IF NOT EXISTS idx_dlq_ts ON dead_letter_queue(dead_lettered_at);
 `
 
 // newTestStore opens a fresh temp SQLite with the Core's queue schema.
