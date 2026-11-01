@@ -235,13 +235,19 @@ jobs:
           go test ./internal/queue/ -run '^TestPostgres' -race -timeout 300s
       - name: Cross-engine parity suite
         # The Go side of the parity harness compares against the committed
-        # reference produced by the REAL Python FilterEngine. Regenerate and
-        # diff, so a Python behavior change that nobody re-referenced fails
-        # here instead of silently diverging in production.
+        # references produced by the REAL Python FilterEngine and the REAL
+        # Python branding decision. Regenerate and diff, so a Python behavior
+        # change that nobody re-referenced fails here instead of silently
+        # diverging in production.
         run: |
-          python3 worker/internal/parity/reference_filter.py > /tmp/reference.json
-          if ! diff -u worker/internal/parity/reference_filter.json /tmp/reference.json; then
-            echo "::error::parity reference is stale: run scripts/regen_parity_reference.sh"
+          python3 worker/internal/parity/reference_filter.py > /tmp/reference_filter.json
+          if ! diff -u worker/internal/parity/reference_filter.json /tmp/reference_filter.json; then
+            echo "::error::filter parity reference is stale: run scripts/regen_parity_reference.sh"
+            exit 1
+          fi
+          python3 worker/internal/parity/reference_branding.py > /tmp/reference_branding.json
+          if ! diff -u worker/internal/parity/reference_branding.json /tmp/reference_branding.json; then
+            echo "::error::branding parity reference is stale: run scripts/regen_parity_reference.sh"
             exit 1
           fi
           cd worker && go test ./internal/parity/ -timeout 120s
