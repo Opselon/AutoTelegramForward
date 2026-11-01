@@ -88,6 +88,30 @@ type sqliteStore struct {
 	db *sql.DB
 }
 
+// writable is a startup probe: a store that cannot be written cannot serve
+// the queue — the claim update alone is a write. Opening the file and
+// *pinging* it is not enough, because a read-only filesystem still answers
+// a ping. Acquiring and rolling back a transaction whose DSN carries
+// `_txlock=immediate` proves the file is writable and lockable, and leaves
+// no schema object and no row behind.
+//
+// This is what makes the worker honest about a volume its non-root user
+// cannot write: the process refuses to start rather than reporting "ready"
+// while every claim fails.
+func writable(ctx context.Context, db *sql.DB) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("probe write: %w", err)
+	}
+	// CREATE TABLE IF NOT EXISTS is the cheapest statement that still
+	// demands a write lock; rolled back, it leaves nothing behind.
+	if _, err := tx.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS atf_worker_probe (id INTEGER PRIMARY KEY)`); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("probe write: %w", err)
+	}
+	return tx.Rollback()
+}
+
 // NewSQLite opens the existing atf.db and applies the busy/locking behaviour
 // the Python side relies on (single writer, serialised by the kernel lock).
 func NewSQLite(ctx context.Context, dsn string) (Store, error) {
@@ -103,6 +127,10 @@ func NewSQLite(ctx context.Context, dsn string) (Store, error) {
 	if err := conn.PingContext(ctx); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("ping delivery db: %w", err)
+	}
+	if err := writable(ctx, conn); err != nil {
+		conn.Close()
+		return nil, err
 	}
 	return &sqliteStore{db: conn}, nil
 }

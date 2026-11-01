@@ -11,6 +11,30 @@
 Port 8090 is **internal-only**: the compose service deliberately publishes
 nothing.
 
+## The shared store: one file, one ownership constraint
+
+The worker and the Python Core read and write **the same `atf.db`** — that
+is the whole design (one queue, two engines). The Core creates the file as
+**root**; the worker runs as **`atf` (uid 100, gid 101)**. Two things
+follow:
+
+1. **Prepare the volume once** before the first worker start, under the
+   `worker` compose profile:
+
+   ```bash
+   docker compose --profile worker run --rm worker-store-init
+   ```
+
+   It grants group 101 write access to the store (idempotent — safe to
+   re-run after any Core restart). This is the only deployment step that
+   differs from a stock install, and it disappears with the PostgreSQL
+   store in stage 2.
+2. On startup the worker **proves the store is writable** (an immediate
+   write transaction, rolled back). A worker that cannot write refuses to
+   start rather than reporting `ready` while every claim fails — the
+   fail-closed behaviour the health surface promises. If you see
+   `probe write: attempt to write a readonly database`, re-run step 1.
+
 ## Turning the Go Worker on (the whole migration in one command)
 
 ```bash
