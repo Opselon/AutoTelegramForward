@@ -63,7 +63,11 @@ type Config struct {
 
 // New builds the rule store, opening exactly the databases the configuration
 // requires — never both when one will do.
-func New(ctx context.Context, cfg Config) (rule.Store, error) {
+//
+// The concrete *Store (not the rule.Store interface) is returned so callers
+// that own the process lifecycle can Close it; the compile-time assertion in
+// drivers.go still guarantees the interface is satisfied.
+func New(ctx context.Context, cfg Config) (*Store, error) {
 	store := &Store{}
 
 	// forward_rules: PostgreSQL only when the Core's own selection rule says

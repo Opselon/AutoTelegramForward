@@ -52,7 +52,12 @@ func NewPostgres(ctx context.Context, dsn string) (Store, error) {
 		conn.Close()
 		return nil, fmt.Errorf("ping delivery db: %w", err)
 	}
-	return &pgStore{db: conn}, nil
+	s := &pgStore{db: conn}
+	if err := s.SchemaCheck(ctx); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return s, nil
 }
 
 func (s *pgStore) Close() error { return s.db.Close() }
@@ -96,8 +101,8 @@ func (s *pgStore) SchemaCheck(ctx context.Context) error {
 			"target_message_id", "delivery_status", "updated_at",
 		},
 		"dead_letter_queue": {
-			"id", "job_id", "rule_id", "payload_json", "error_message",
-			"error_category", "dead_lettered_at",
+			"id", "job_id", "rule_id", "payload_json", "last_error",
+			"error_category", "dead_lettered_at", "attempts",
 		},
 	} {
 		for _, col := range cols {
@@ -396,6 +401,12 @@ func (s *pgStore) PendingCount(ctx context.Context) (int, error) {
 // writeDeadLetterPG preserves an exhausted job for replay, inside the caller's
 // transaction. The row id is `dlq_<job_id>` — the Python implementation's own
 // convention, so a dead letter written by either engine lands on the same row.
+//
+// The error-text column is `last_error` on the current schema. The table also
+// carries a legacy `error_message` column (the backend's older name, kept so
+// no deployed row loses its text) — but the *write* contract is last_error,
+// matching PostgresDeliveryQueueRepository, and writing the legacy name would
+// leave last_error empty on rows Python later reads.
 func writeDeadLetterPG(ctx context.Context, tx *sql.Tx, jobID, reason, eventCode string, now time.Time, attempts int) error {
 	var exists bool
 	err := tx.QueryRowContext(ctx,
@@ -412,16 +423,18 @@ func writeDeadLetterPG(ctx context.Context, tx *sql.Tx, jobID, reason, eventCode
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO dead_letter_queue (
 			id, job_id, rule_id, source_chat_id, source_message_id,
-			target_chat_id, payload_json, error_message, error_category, dead_lettered_at
+			target_chat_id, payload_json, attempts, last_error,
+			error_category, dead_lettered_at
 		)
 		SELECT $1, id, rule_id, source_chat_id, source_message_id,
-		       target_chat_id, payload_json, $2, $3, $4
-		FROM delivery_jobs WHERE id=$5
+		       target_chat_id, payload_json, $2, $3, $4, $5
+		FROM delivery_jobs WHERE id=$6
 		ON CONFLICT (id) DO UPDATE SET
-			error_message = EXCLUDED.error_message,
+			last_error = EXCLUDED.last_error,
+			attempts = EXCLUDED.attempts,
 			error_category = EXCLUDED.error_category,
 			dead_lettered_at = EXCLUDED.dead_lettered_at`,
-		"dlq_"+jobID, reason, eventCode, now.Unix(), jobID)
+		"dlq_"+jobID, attempts, reason, eventCode, now.Unix(), jobID)
 	if err != nil {
 		return fmt.Errorf("dead-letter insert: %w", err)
 	}
