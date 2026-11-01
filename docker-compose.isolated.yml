@@ -91,6 +91,57 @@ services:
     networks:
       - atf-hardening-internal
 
+  # Go execution engine for the hardened/PostgreSQL stack. The same opt-in
+  # rule as the main compose file: ATF_WORKER_ENABLED is unset by default, so
+  # this container reports health and consumes nothing until an operator
+  # turns it on.
+  #
+  # Backend selection mirrors the Core beside it: delivery data follows
+  # ATF_DATABASE_URL (already set on core), forward_rules follows
+  # ATF_POSTGRES_ALL ("1" here), and filter_rules stays on the SQLite file
+  # the Core keeps in atf-hardening-data. The worker therefore mounts that
+  # volume even though its queue is PostgreSQL — filter_rules lives there.
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: atf-hardened-worker
+    logging: *default-logging
+    restart: unless-stopped
+    profiles: ["worker"]
+    depends_on:
+      core:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      ATF_WORKER_ENABLED: ${ATF_WORKER_ENABLED:-0}
+      ATF_CORE_RPC_TOKEN: ${ATF_CORE_RPC_TOKEN:-}
+      ATF_TELEGRAM_RUNTIME_ADDR: ${ATF_TELEGRAM_RUNTIME_ADDR:-core:50053}
+      # The delivery queue follows the Core onto PostgreSQL.
+      ATF_DATABASE_URL: postgresql://${POSTGRES_USER:-atf}:${POSTGRES_PASSWORD:-atf_secure_password_dev}@postgres:5432/${POSTGRES_DB:-atf_db}
+      # The Core in this stack runs ATF_POSTGRES_ALL=1, so forward_rules is
+      # in PostgreSQL too; filter_rules is still SQLite (below).
+      ATF_POSTGRES_ALL: "1"
+      # The config database the Core always initializes, even in a fully
+      # PostgreSQL deployment: filter_rules lives here.
+      ATF_DB_PATH: /app/data/atf.db
+      ATF_MEDIA_DIR: /var/lib/atf/media
+      ATF_QUEUE_NUM_WORKERS: ${ATF_QUEUE_NUM_WORKERS:-4}
+      ATF_QUEUE_BATCH_SIZE: ${ATF_QUEUE_BATCH_SIZE:-5}
+      ATF_QUEUE_LEASE_SECONDS: ${ATF_QUEUE_LEASE_SECONDS:-30}
+    volumes:
+      - atf-hardening-data:/app/data
+      - atf-hardening-worker-media:/var/lib/atf/media
+    networks:
+      - atf-hardening-internal
+    healthcheck:
+      test: ["CMD", "atf-worker", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   api:
     build:
       context: .
@@ -138,6 +189,8 @@ services:
 volumes:
   atf-hardening-postgres-data:
   atf-hardening-data:
+  # Worker-owned media scratch, mirroring the main compose file's volume.
+  atf-hardening-worker-media:
 
 networks:
   atf-hardening-internal:
