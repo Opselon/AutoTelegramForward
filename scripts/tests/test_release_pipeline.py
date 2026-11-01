@@ -311,13 +311,22 @@ def test_no_dockerfile_contains_an_unbounded_retry_loop():
 
 
 def test_ci_docker_job_uses_caches_and_proves_a_hit():
-    """CI rebuilt all four images from scratch on every PR and never checked that
-    a cache existed at all."""
+    """CI rebuilt all images from scratch on every PR and never checked that
+    a cache existed at all.
+
+    The ci.yml docker job builds every service that has a Dockerfile in the
+    base compose file, which is core, logger, api, web and the Go worker.
+    release.yml's SERVICES tuple is deliberately not reused here: the worker
+    is publish-only (no multi-arch manifest) while still being a CI image.
+    """
     workflow = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8"))
     job = workflow["jobs"]["docker-build"]
     builds = [s for s in job["steps"] if "build-push-action" in str(s.get("uses", ""))]
+    ci_services = ("core", "logger", "api", "web", "worker")
 
-    assert len(builds) == len(SERVICES), f"expected {len(SERVICES)} cached image builds, got {len(builds)}"
+    assert len(builds) == len(ci_services), (
+        f"expected {len(ci_services)} cached image builds, got {len(builds)}"
+    )
     for step in builds:
         with_ = step["with"]
         assert with_.get("cache-from") and with_.get("cache-to"), (
