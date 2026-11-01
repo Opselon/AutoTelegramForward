@@ -1,0 +1,15 @@
+{
+  "text": "buy cheap ROLEX now",
+  "media_type": "text",
+  "is_service": false,
+  "filter": {
+    "is_enabled": true,
+    "blacklist_keywords": [
+      "rolex"
+    ]
+  },
+  "expect": {
+    "action": "DROP",
+    "reason": "blacklist_keyword"
+  }
+}

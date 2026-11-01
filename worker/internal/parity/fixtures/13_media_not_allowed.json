@@ -1,0 +1,16 @@
+{
+  "text": "hi",
+  "media_type": "video",
+  "is_service": false,
+  "filter": {
+    "is_enabled": true,
+    "allowed_media_types": [
+      "photo",
+      "text"
+    ]
+  },
+  "expect": {
+    "action": "DROP",
+    "reason": "media_not_allowed:video"
+  }
+}

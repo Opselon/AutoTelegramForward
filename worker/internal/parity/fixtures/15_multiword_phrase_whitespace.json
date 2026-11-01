@@ -1,0 +1,15 @@
+{
+  "text": "please  contact   support",
+  "media_type": "text",
+  "is_service": false,
+  "filter": {
+    "is_enabled": true,
+    "blacklist_keywords": [
+      "please contact support"
+    ]
+  },
+  "expect": {
+    "action": "DROP",
+    "reason": "blacklist_keyword"
+  }
+}

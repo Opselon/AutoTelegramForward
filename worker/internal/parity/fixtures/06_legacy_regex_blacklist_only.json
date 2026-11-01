@@ -1,0 +1,18 @@
+{
+  "text": "code 1234 expires",
+  "media_type": "text",
+  "is_service": false,
+  "filter": {
+    "is_enabled": true,
+    "blacklist_keywords": [
+      "zzz"
+    ],
+    "regex_patterns": [
+      "\\d{4}"
+    ]
+  },
+  "expect": {
+    "action": "DROP",
+    "reason": "regex_block:\\d{4}"
+  }
+}

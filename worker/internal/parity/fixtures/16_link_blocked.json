@@ -1,0 +1,15 @@
+{
+  "text": "see http://example.com/a",
+  "media_type": "text",
+  "is_service": false,
+  "filter": {
+    "is_enabled": true,
+    "blocked_media_types": [
+      "link"
+    ]
+  },
+  "expect": {
+    "action": "DROP",
+    "reason": "link_blocked"
+  }
+}

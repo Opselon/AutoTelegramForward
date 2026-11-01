@@ -1,0 +1,16 @@
+{
+  "text": "hello world",
+  "media_type": "text",
+  "is_service": false,
+  "filter": {
+    "is_enabled": true,
+    "whitelist_keywords": [
+      "urgent",
+      "sale"
+    ]
+  },
+  "expect": {
+    "action": "DROP",
+    "reason": "whitelist_mismatch"
+  }
+}

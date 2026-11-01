@@ -1,0 +1,13 @@
+{
+  "text": "way too long message body here",
+  "media_type": "text",
+  "is_service": false,
+  "filter": {
+    "is_enabled": true,
+    "max_message_length": 10
+  },
+  "expect": {
+    "action": "DROP",
+    "reason": "too_long"
+  }
+}

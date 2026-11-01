@@ -1,0 +1,15 @@
+{
+  "text": "order 4521 confirmed",
+  "media_type": "text",
+  "is_service": false,
+  "filter": {
+    "is_enabled": true,
+    "regex_block": [
+      "4\\d{3}"
+    ]
+  },
+  "expect": {
+    "action": "DROP",
+    "reason": "regex_block:4\\d{3}"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "text": "invoice 4521 paid",
+  "media_type": "text",
+  "is_service": false,
+  "filter": {
+    "is_enabled": true,
+    "regex_require": [
+      "INV-\\d+"
+    ]
+  },
+  "expect": {
+    "action": "DROP",
+    "reason": "regex_mismatch"
+  }
+}

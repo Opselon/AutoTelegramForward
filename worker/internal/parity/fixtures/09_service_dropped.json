@@ -1,0 +1,10 @@
+{
+  "text": "",
+  "media_type": "text",
+  "is_service": true,
+  "filter": null,
+  "expect": {
+    "action": "DROP",
+    "reason": "service_message_dropped"
+  }
+}

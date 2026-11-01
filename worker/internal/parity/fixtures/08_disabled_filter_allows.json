@@ -1,0 +1,15 @@
+{
+  "text": "anything",
+  "media_type": "text",
+  "is_service": false,
+  "filter": {
+    "is_enabled": false,
+    "blacklist_keywords": [
+      "anything"
+    ]
+  },
+  "expect": {
+    "action": "ALLOW",
+    "reason": "filter_disabled"
+  }
+}
