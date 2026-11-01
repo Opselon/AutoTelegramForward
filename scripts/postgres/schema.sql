@@ -104,9 +104,15 @@ CREATE TABLE IF NOT EXISTS dead_letter_queue (
     source_message_id BIGINT NOT NULL,
     target_chat_id TEXT NOT NULL,
     payload_json JSONB NOT NULL DEFAULT '{}',
-    error_message TEXT NOT NULL DEFAULT '',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT NOT NULL DEFAULT '',
     error_category TEXT NOT NULL DEFAULT '',
-    dead_lettered_at BIGINT NOT NULL
+    dead_lettered_at BIGINT NOT NULL,
+    -- Legacy: this backend's older name for `last_error`, kept so no
+    -- deployed row loses its error text. Nothing reads or writes it any
+    -- more; the contract is `last_error` on both backends, and this table
+    -- must stay byte-identical to initialize_postgres_schema()'s version.
+    error_message TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_dlq_rule ON dead_letter_queue (rule_id, dead_lettered_at);
