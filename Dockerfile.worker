@@ -1,0 +1,80 @@
+# syntax=docker/dockerfile:1.7
+#
+# Go Worker — the business execution plane of AutoTelegramForward.
+#
+# Two stages: the builder carries the Go toolchain and compiles; the runtime
+# image is distroless-shaped (alpine, no compilers, no shell beyond busybox)
+# and runs as a non-root user. The worker never contains a Telegram library,
+# a Python interpreter or a secret.
+#
+# Build context is the REPOSITORY ROOT (not worker/): the module's proto
+# generated code is committed under worker/proto/gen, so the build needs no
+# protoc step here — it builds exactly what CI tested.
+
+# --------------------------------------------------------------------------- #
+# Build stage
+# --------------------------------------------------------------------------- #
+FROM golang:1.27.2-alpine AS builder
+
+WORKDIR /src
+
+# Module metadata first: dependency download is its own cache layer, so a
+# source-only change does not re-resolve the module graph.
+COPY worker/go.mod worker/go.sum ./worker/
+RUN --mount=type=cache,id=atf-worker-gomod,target=/root/go/pkg/mod \
+    --mount=type=cache,id=atf-worker-goenv,target=/root/.cache/go-build \
+    cd worker && go mod download
+
+# The whole worker tree (generated protobuf code included).
+COPY worker/ ./worker/
+
+# CGO is ON: the delivery store is SQLite through go-sqlite3 (the same
+# engine the Python Core embeds), and go-sqlite3 needs cgo. The runtime
+# image below carries the one shared library that produces (musl libc) and
+# nothing else — no compiler, no headers, no Go toolchain.
+ARG ATF_COMMIT_SHA=
+RUN --mount=type=cache,id=atf-worker-gomod,target=/root/go/pkg/mod \
+    --mount=type=cache,id=atf-worker-goenv,target=/root/.cache/go-build \
+    apk add --no-cache gcc musl-dev && \
+    cd worker && \
+    CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
+    go build \
+      -trimpath \
+      -ldflags "-s -w \
+        -X main.CommitSHA=${ATF_COMMIT_SHA} \
+        -X main.BuildInfo=worker" \
+      -o /out/atf-worker ./cmd/worker
+
+# --------------------------------------------------------------------------- #
+# Runtime stage
+# --------------------------------------------------------------------------- #
+FROM alpine:3.22
+
+# The runtime needs: CA certificates (gRPC to the runtime over TLS-able
+# links), tzdata (scheduling in the operator's zone) and the musl libc the
+# cgo SQLite build links against. No compilers, no Python, no Telegram
+# library, no protoc — those stay in the builder stage above.
+RUN apk add --no-cache ca-certificates tzdata libstdc++ && \
+    addgroup -S atf && adduser -S -G atf -h /home/atf atf
+
+# The shared media scratch volume: the worker owns its lifecycle and cleanup.
+# 0750: the worker (non-root) reads and writes it; nobody else on the host
+# needs to.
+RUN mkdir -p /var/lib/atf/media /var/lib/atf/data && chown -R atf:atf /var/lib/atf
+
+COPY --from=builder /out/atf-worker /usr/local/bin/atf-worker
+
+USER atf
+
+ENV ATF_WORKER_ENABLED=0 \
+    ATF_TELEGRAM_RUNTIME_ADDR=core:50053 \
+    ATF_MEDIA_DIR=/var/lib/atf/media \
+    ATF_DB_PATH=/var/lib/atf/data/atf.db
+
+# Health: /healthz is the readiness probe (delivery store reachable), /livez
+# is liveness (the loop is advancing). Both are served on 8090, which stays
+# internal — nothing publishes it.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+    CMD /usr/local/bin/atf-worker healthcheck || exit 1
+
+ENTRYPOINT ["/usr/local/bin/atf-worker"]

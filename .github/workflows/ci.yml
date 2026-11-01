@@ -154,10 +154,71 @@ jobs:
           go test ./... -timeout 300s
           go test -race ./... -timeout 600s
 
+  go-worker-tests:
+    # The Go Worker is a separate module (worker/go.mod): it builds and tests
+    # independently of the API module, and must stay independently green so a
+    # regression in the execution plane cannot hide behind an unrelated API
+    # failure (and vice versa).
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.27.2"
+      - name: Build
+        working-directory: worker
+        run: go build ./...
+      - name: Vet
+        working-directory: worker
+        run: go vet ./...
+      - name: Test
+        working-directory: worker
+        run: |
+          # The delivery/queue/fence semantics are concurrent by construction,
+          # so the race detector runs over the whole module rather than a
+          # hand-picked subset.
+          go test ./... -timeout 300s
+          go test -race ./... -timeout 600s
+      - name: Generated protobuf is up to date
+        # The Go and Python stubs are committed (both consumers compile from
+        # the same .proto). Regenerate and diff, so a contract change that
+        # forgot to re-generate fails here instead of drifting in production.
+        run: |
+          # grpcio-tools provides the Python stub generator. The Go stubs are
+          # verified by the build/vet/test steps above: they must compile.
+          pip install --quiet "grpcio-tools==1.84.0"
+          python -m grpc_tools.protoc -Iworker/proto \
+            --python_out=worker/proto/gen/python \
+            --grpc_python_out=worker/proto/gen/python \
+            worker/proto/telegram_gateway.proto
+          if ! git diff --exit-code -- worker/proto/gen/python; then
+            echo "::error::worker/proto/gen is stale: regenerate with the commands in worker/README.md"
+            exit 1
+          fi
+
+  python-runtime-tests:
+    # The Python Telegram Runtime half of the boundary: error taxonomy
+    # parity with the Go enum, the gRPC contract, and the strangler-fig
+    # switch that moves delivery ownership to the Go Worker.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Runtime contract and switch tests
+        run: python -m pytest -q telegram_runtime/tests
+
   docker-build:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    needs: [python-tests, go-tests]
+    needs: [python-tests, go-tests, go-worker-tests, python-runtime-tests]
     steps:
       - uses: actions/checkout@v4
       # Every image used to be rebuilt from scratch on every PR with plain
@@ -197,6 +258,17 @@ jobs:
           push: false
           cache-from: type=gha,scope=ci-logger
           cache-to: type=gha,mode=max,scope=ci-logger
+      - name: Build worker image
+        uses: docker/build-push-action@v6
+        timeout-minutes: 15
+        with:
+          context: .
+          file: Dockerfile.worker
+          tags: atf-worker
+          load: true
+          push: false
+          cache-from: type=gha,scope=ci-worker
+          cache-to: type=gha,mode=max,scope=ci-worker
       - name: Build web image
         uses: docker/build-push-action@v6
         timeout-minutes: 20

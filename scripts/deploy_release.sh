@@ -30,6 +30,9 @@ COMPOSE_DIR="${ATF_COMPOSE_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 ENV_FILE="${ATF_ENV_FILE:-$COMPOSE_DIR/.env}"
 # Which services to move. All four by default; override to move a subset
 # (ATF_SERVICES="core api") when only some images changed.
+# The worker is opt-in (ATF_WORKER_ENABLED) and may not exist on an image
+# tag predating it, so it is NOT part of the default list. Name it explicitly
+# when deploying the Go execution engine: ATF_SERVICES="worker core".
 read -r -a SERVICES <<< "${ATF_SERVICES:-core api web logger}"
 HEALTH_TIMEOUT="${ATF_HEALTH_TIMEOUT:-90}"
 # Readiness gate. Container health says the processes answer; readiness says the

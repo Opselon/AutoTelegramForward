@@ -55,6 +55,11 @@ jobs:
             dockerfile: Dockerfile.api
           - service: web
             dockerfile: Dockerfile.web
+          # The Go execution engine. Published under the same immutable
+          # sha-<short> + moving tag scheme as every other service, so a
+          # deploy pulls a CI-built image rather than compiling on the box.
+          - service: worker
+            dockerfile: Dockerfile.worker
           - service: logger
             dockerfile: Dockerfile.logger-rust
     steps:

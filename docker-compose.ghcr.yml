@@ -26,3 +26,8 @@ services:
     image: ${ATF_REGISTRY:-ghcr.io}/${ATF_GHCR_OWNER:-opselon}/atf-api:${ATF_IMAGE_TAG:-master}
   web:
     image: ${ATF_REGISTRY:-ghcr.io}/${ATF_GHCR_OWNER:-opselon}/atf-web:${ATF_IMAGE_TAG:-master}
+  # The Go execution engine follows the same pull-based deploy discipline:
+  # immutable sha-<short> tag for a deploy you can name, `master` as the
+  # moving default.
+  worker:
+    image: ${ATF_REGISTRY:-ghcr.io}/${ATF_GHCR_OWNER:-opselon}/atf-worker:${ATF_IMAGE_TAG:-master}

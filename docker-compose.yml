@@ -198,6 +198,52 @@ services:
       retries: 3
       start_period: 40s
 
+  # Go execution engine (business execution plane). OFF by default:
+  # ATF_WORKER_ENABLED must be set (AND ATF_CORE_RPC_TOKEN must be non-empty)
+  # before this container consumes a single delivery job. Until then the
+  # Python Core keeps its queue loop and this worker only reports health —
+  # the strangler-fig guarantee that one, and only one, execution path runs.
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: atf-worker
+    logging: *default-logging
+    restart: unless-stopped
+    depends_on:
+      core:
+        condition: service_healthy
+    environment:
+      # The switch. Unset = the Python loop owns delivery execution.
+      ATF_WORKER_ENABLED: ${ATF_WORKER_ENABLED:-0}
+      # The shared internal RPC secret — the same value the Go API already
+      # uses against the core. Empty + enabled = refuse to start, on purpose.
+      ATF_CORE_RPC_TOKEN: ${ATF_CORE_RPC_TOKEN:-}
+      # The SQLite store the Python Core writes (same volume, same file).
+      ATF_DB_PATH: /app/data/atf.db
+      # The Python Telegram Runtime's gRPC endpoint.
+      ATF_TELEGRAM_RUNTIME_ADDR: ${ATF_TELEGRAM_RUNTIME_ADDR:-core:50053}
+      # Queue knobs shared 1:1 with the Python worker's ATF_QUEUE_* names.
+      ATF_QUEUE_NUM_WORKERS: ${ATF_QUEUE_NUM_WORKERS:-4}
+      ATF_QUEUE_BATCH_SIZE: ${ATF_QUEUE_BATCH_SIZE:-5}
+      ATF_QUEUE_LEASE_SECONDS: ${ATF_QUEUE_LEASE_SECONDS:-30}
+      # Media scratch: a directory ONLY this container manages.
+      ATF_MEDIA_DIR: /var/lib/atf/media
+    volumes:
+      - atf-data:/app/data
+      - atf-worker-media:/var/lib/atf/media
+    networks:
+      - atf-net
+    # Deliberately NO ports: section. The health/metrics surface on 8090 is
+    # internal-only — nothing outside the compose network needs it, and
+    # publishing it would expose an authenticated internal RPC to the host.
+    healthcheck:
+      test: ["CMD", "atf-worker", "healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
   api:
     build:
       context: .
@@ -296,6 +342,10 @@ services:
 
 volumes:
   atf-data:
+  # Worker-owned media scratch: the Go Worker stages re-upload downloads here
+  # and the Python Telegram Runtime writes into it over gRPC. One owner (the
+  # worker), bounded by ATF_MEDIA_QUOTA_BYTES.
+  atf-worker-media:
   logger-rust-data:
   caddy-data:
   caddy-config:
