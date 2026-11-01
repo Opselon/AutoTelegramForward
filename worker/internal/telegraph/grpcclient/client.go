@@ -28,8 +28,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
-	pb "atf/worker/proto/gen"
 	"atf/worker/internal/telegraph"
+	pb "atf/worker/proto/gen"
 )
 
 // contractTag is stamped into every call's metadata so the runtime can
@@ -286,8 +286,8 @@ func (c *Client) PrepareMediaUpload(ctx context.Context, sessionID string, sourc
 	resp, err := c.gateway.PrepareMediaUpload(callCtx, &pb.PrepareMediaUploadRequest{
 		Meta: newJob("", "", nil).meta(), SessionId: sessionID,
 		SourceChatId: sourceChatID, SourceMessageId: sourceMessageID,
-		Source:     &pb.TelegramMediaHandle{Path: source.Path, FileName: source.FileName},
-		MediaType:  mediaType,
+		Source:    &pb.TelegramMediaHandle{Path: source.Path, FileName: source.FileName},
+		MediaType: mediaType,
 	})
 	if err != nil {
 		return "", transportFailure(err)
@@ -405,4 +405,181 @@ func (c *Client) SendMessage(ctx context.Context, sessionID string, targetChatID
 		return 0, f
 	}
 	return resp.GetTargetMessageId(), nil
+}
+
+// --- bot transport -------------------------------------------------------- //
+
+// BotAvailability reports whether the named bot is usable by this tenant.
+func (c *Client) BotAvailability(ctx context.Context, target telegraph.BotTarget) (bool, string, *telegraph.DeliveryFailure) {
+	callCtx, cancel := c.ctxWithMeta(ctx, "", "", nil)
+	defer cancel()
+	resp, err := c.gateway.BotAvailability(callCtx, &pb.BotAvailabilityRequest{
+		Bot: &pb.BotTarget{
+			Meta:        newJob("", "", map[string]string{"bot_token_id": target.TokenID}).meta(),
+			BotTokenId:  target.TokenID,
+			OwnerUserId: target.OwnerUserID,
+		},
+	})
+	if err != nil {
+		return false, "", transportFailure(err)
+	}
+	if f := opFailure(resp.GetError()); f != nil {
+		return false, "", f
+	}
+	return resp.GetOk(), resp.GetBotUsername(), nil
+}
+
+// BotSendText sends fully transformed text through the bot.
+func (c *Client) BotSendText(ctx context.Context, target telegraph.BotTarget, targetChatID int64, text string, threadID int64, inlineButtons []string) (int64, *telegraph.DeliveryFailure) {
+	callCtx, cancel := c.ctxWithMeta(ctx, "", "", nil)
+	defer cancel()
+	resp, err := c.gateway.BotSendText(callCtx, &pb.BotSendTextRequest{
+		Bot:             botTargetPB(target),
+		TargetChatId:    targetChatID,
+		Text:            text,
+		MessageThreadId: threadID,
+		InlineButtons:   inlineButtons,
+	})
+	if err != nil {
+		return 0, transportFailure(err)
+	}
+	if f := opFailure(resp.GetError()); f != nil {
+		return 0, f
+	}
+	return resp.GetTargetMessageId(), nil
+}
+
+// BotCopyMessage copies one source message through the bot.
+func (c *Client) BotCopyMessage(ctx context.Context, target telegraph.BotTarget, targetChatID, fromChatID, messageID int64, caption string, threadID int64, inlineButtons []string) (int64, *telegraph.DeliveryFailure) {
+	callCtx, cancel := c.ctxWithMeta(ctx, "", "", nil)
+	defer cancel()
+	resp, err := c.gateway.BotCopyMessage(callCtx, &pb.BotCopyMessageRequest{
+		Bot:             botTargetPB(target),
+		TargetChatId:    targetChatID,
+		FromChatId:      fromChatID,
+		MessageId:       messageID,
+		Caption:         caption,
+		MessageThreadId: threadID,
+		InlineButtons:   inlineButtons,
+	})
+	if err != nil {
+		return 0, transportFailure(err)
+	}
+	if f := opFailure(resp.GetError()); f != nil {
+		return 0, f
+	}
+	return resp.GetTargetMessageId(), nil
+}
+
+// BotSendMedia sends a staged file through the bot.
+func (c *Client) BotSendMedia(ctx context.Context, target telegraph.BotTarget, targetChatID int64, token, caption, mediaType string, threadID int64, inlineButtons []string) (int64, *telegraph.DeliveryFailure) {
+	callCtx, cancel := c.ctxWithMeta(ctx, "", "", nil)
+	defer cancel()
+	resp, err := c.gateway.BotSendMedia(callCtx, &pb.BotSendMediaRequest{
+		Bot:                botTargetPB(target),
+		TargetChatId:       targetChatID,
+		FileReferenceToken: token,
+		Caption:            caption,
+		MediaType:          mediaType,
+		MessageThreadId:    threadID,
+		InlineButtons:      inlineButtons,
+	})
+	if err != nil {
+		return 0, transportFailure(err)
+	}
+	if f := opFailure(resp.GetError()); f != nil {
+		return 0, f
+	}
+	return resp.GetTargetMessageId(), nil
+}
+
+// BotDeleteMessages deletes messages through the bot. An already-deleted
+// message is reported deleted: deletion is an idempotent cleanup.
+func (c *Client) BotDeleteMessages(ctx context.Context, target telegraph.BotTarget, chatID int64, messageIDs []int64) (bool, *telegraph.DeliveryFailure) {
+	callCtx, cancel := c.ctxWithMeta(ctx, "", "", nil)
+	defer cancel()
+	resp, err := c.gateway.BotDeleteMessages(callCtx, &pb.BotDeleteMessagesRequest{
+		Bot:        botTargetPB(target),
+		ChatId:     chatID,
+		MessageIds: messageIDs,
+	})
+	if err != nil {
+		return false, transportFailure(err)
+	}
+	if f := opFailure(resp.GetError()); f != nil {
+		return false, f
+	}
+	return resp.GetDeleted(), nil
+}
+
+// --- deletion (both transports) ------------------------------------------- //
+
+// DeleteMessages deletes messages through the session or the bot.
+func (c *Client) DeleteMessages(ctx context.Context, transport telegraph.DeleteTransport, sessionID, botTokenID string, ownerUserID, chatID int64, messageIDs []int64) (bool, *telegraph.DeliveryFailure) {
+	callCtx, cancel := c.ctxWithMeta(ctx, "", "", map[string]string{
+		"transport": string(transport), "session_id": sessionID,
+	})
+	defer cancel()
+	req := &pb.DeleteMessagesRequest{
+		Meta:        newJob("", "", map[string]string{"transport": string(transport)}).meta(),
+		Transport:   string(transport),
+		SessionId:   sessionID,
+		BotTokenId:  botTokenID,
+		OwnerUserId: ownerUserID,
+		ChatId:      chatID,
+		MessageIds:  messageIDs,
+	}
+	resp, err := c.gateway.DeleteMessages(callCtx, req)
+	if err != nil {
+		return false, transportFailure(err)
+	}
+	if f := opFailure(resp.GetError()); f != nil {
+		return false, f
+	}
+	return resp.GetDeleted(), nil
+}
+
+// --- branding stage 1 ------------------------------------------------------ //
+
+// BrandingStage1 posts the processed deliverable into channel C.
+func (c *Client) BrandingStage1(ctx context.Context, post telegraph.BrandingPost) ([]int64, *telegraph.DeliveryFailure) {
+	callCtx, cancel := c.ctxWithMeta(ctx, "", "", map[string]string{
+		"transport": string(post.Transport), "target_chat_id": fmt.Sprintf("%d", post.TargetChatID),
+	})
+	defer cancel()
+	resp, err := c.gateway.BrandingStage1(callCtx, &pb.BrandingStage1Request{
+		Meta: newJob("", "", map[string]string{
+			"transport": string(post.Transport), "operation": post.Operation,
+		}).meta(),
+		Transport:        string(post.Transport),
+		SessionId:        post.SessionID,
+		BotTokenId:       post.BotTokenID,
+		OwnerUserId:      post.OwnerUserID,
+		TargetChatId:     post.TargetChatID,
+		MessageThreadId:  post.ThreadID,
+		Operation:        post.Operation,
+		SourceChatId:     post.SourceChatID,
+		SourceMessageId:  post.SourceMessageID,
+		SourceMessageIds: post.SourceMessageIDs,
+		Text:             post.Text,
+		Caption:          post.Caption,
+		InlineButtons:    post.InlineButtons,
+	})
+	if err != nil {
+		return nil, transportFailure(err)
+	}
+	if f := opFailure(resp.GetError()); f != nil {
+		return nil, f
+	}
+	return resp.GetTargetMessageIds(), nil
+}
+
+// botTargetPB builds the wire form of a tenant-scoped bot token reference.
+// It never carries the token itself — only its stored id and the tenant.
+func botTargetPB(target telegraph.BotTarget) *pb.BotTarget {
+	return &pb.BotTarget{
+		Meta:        newJob("", "", map[string]string{"bot_token_id": target.TokenID}).meta(),
+		BotTokenId:  target.TokenID,
+		OwnerUserId: target.OwnerUserID,
+	}
 }

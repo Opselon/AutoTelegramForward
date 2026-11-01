@@ -41,17 +41,17 @@ type fixtureCase struct {
 }
 
 type fixtureFilter struct {
-	IsEnabled          bool     `json:"is_enabled"`
-	WhitelistKeywords  []string `json:"whitelist_keywords"`
-	BlacklistKeywords  []string `json:"blacklist_keywords"`
-	RegexPatterns      []string `json:"regex_patterns"`
-	RegexBlock         []string `json:"regex_block"`
-	RegexRequire       []string `json:"regex_require"`
-	AllowedMediaTypes  []string `json:"allowed_media_types"`
-	BlockedMediaTypes  []string `json:"blocked_media_types"`
-	DropService        bool     `json:"drop_service_messages"`
-	MinMessageLength   int      `json:"min_message_length"`
-	MaxMessageLength   int      `json:"max_message_length"`
+	IsEnabled         bool     `json:"is_enabled"`
+	WhitelistKeywords []string `json:"whitelist_keywords"`
+	BlacklistKeywords []string `json:"blacklist_keywords"`
+	RegexPatterns     []string `json:"regex_patterns"`
+	RegexBlock        []string `json:"regex_block"`
+	RegexRequire      []string `json:"regex_require"`
+	AllowedMediaTypes []string `json:"allowed_media_types"`
+	BlockedMediaTypes []string `json:"blocked_media_types"`
+	DropService       bool     `json:"drop_service_messages"`
+	MinMessageLength  int      `json:"min_message_length"`
+	MaxMessageLength  int      `json:"max_message_length"`
 }
 
 type expectedOutcome struct {

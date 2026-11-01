@@ -29,6 +29,7 @@ reading a database that cannot answer its queries.
 | `delivery_attempts` | the engine dispatching the send | the same engine | both | shared fence; the id format is byte-identical across engines |
 | `message_map` | Python pipeline at enqueue | the engine that confirmed the delivery | both, plus sync engine | only the **primary forward** may update a row — a keyword reply shares the key and must not overwrite it |
 | `dead_letter_queue` | the engine that exhausted a job | replay is owner-scoped | API + bot | the written columns (`last_error`, `attempts`) match the Python contract on both backends |
+| `scheduled_actions` | Go Worker (on confirmed delivery with `auto_delete_seconds > 0`) | Go Worker scheduler loop (`Complete` deletes, `Fail` marks FAILED, `Retry` bumps attempt) | Go Worker (claim due via `FOR UPDATE SKIP LOCKED`) | Stage 3 durable auto-delete store on SQLite (migration 33) and PostgreSQL (`initialize_postgres_schema` + `schema.sql`). State only; minimal retention (done = deleted) |
 | `forward_rules` | Go API (through the Core's gRPC) | never | Go Worker read-only | the Worker never writes configuration |
 | `filter_rules` | Go API (through the Core's gRPC) | never | Go Worker read-only | **always SQLite** under the current Core — see below |
 | `sessions`, everything else | Python Core | Python Core | — | untouched by this stage |

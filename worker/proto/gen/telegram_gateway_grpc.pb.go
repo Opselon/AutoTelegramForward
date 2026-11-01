@@ -32,6 +32,13 @@ const (
 	TelegramGateway_SendMessage_FullMethodName        = "/atf.worker.v1.TelegramGateway/SendMessage"
 	TelegramGateway_SendMedia_FullMethodName          = "/atf.worker.v1.TelegramGateway/SendMedia"
 	TelegramGateway_CopyMediaGroup_FullMethodName     = "/atf.worker.v1.TelegramGateway/CopyMediaGroup"
+	TelegramGateway_BotAvailability_FullMethodName    = "/atf.worker.v1.TelegramGateway/BotAvailability"
+	TelegramGateway_BotSendText_FullMethodName        = "/atf.worker.v1.TelegramGateway/BotSendText"
+	TelegramGateway_BotCopyMessage_FullMethodName     = "/atf.worker.v1.TelegramGateway/BotCopyMessage"
+	TelegramGateway_BotSendMedia_FullMethodName       = "/atf.worker.v1.TelegramGateway/BotSendMedia"
+	TelegramGateway_BotDeleteMessages_FullMethodName  = "/atf.worker.v1.TelegramGateway/BotDeleteMessages"
+	TelegramGateway_DeleteMessages_FullMethodName     = "/atf.worker.v1.TelegramGateway/DeleteMessages"
+	TelegramGateway_BrandingStage1_FullMethodName     = "/atf.worker.v1.TelegramGateway/BrandingStage1"
 	TelegramGateway_GatewayHealth_FullMethodName      = "/atf.worker.v1.TelegramGateway/GatewayHealth"
 )
 
@@ -59,7 +66,25 @@ type TelegramGatewayClient interface {
 	// Telegram for this file, so it sends its own copy.
 	SendMedia(ctx context.Context, in *SendMediaRequest, opts ...grpc.CallOption) (*SendOutcome, error)
 	CopyMediaGroup(ctx context.Context, in *CopyMediaGroupRequest, opts ...grpc.CallOption) (*CopyMessagesResponse, error)
-	// --- health ----------------------------------------------------------
+	// --- bot transport ----------------------------------------------------- //
+	// Narrow typed Bot Api operations. The worker names a stored token by id and
+	// the tenant it belongs to; the runtime resolves and re-checks ownership of
+	// the token inside the trusted Python boundary. The raw token never crosses
+	// this boundary in either direction.
+	BotAvailability(ctx context.Context, in *BotAvailabilityRequest, opts ...grpc.CallOption) (*BotAvailabilityResponse, error)
+	BotSendText(ctx context.Context, in *BotSendTextRequest, opts ...grpc.CallOption) (*SendOutcome, error)
+	BotCopyMessage(ctx context.Context, in *BotCopyMessageRequest, opts ...grpc.CallOption) (*SendOutcome, error)
+	BotSendMedia(ctx context.Context, in *BotSendMediaRequest, opts ...grpc.CallOption) (*SendOutcome, error)
+	BotDeleteMessages(ctx context.Context, in *BotDeleteMessagesRequest, opts ...grpc.CallOption) (*DeleteMessagesResponse, error)
+	// --- deletion (auto-delete scheduler) ----------------------------------- //
+	// One typed delete for both transports. A message that is already gone is
+	// reported deleted: deletion is an idempotent cleanup operation.
+	DeleteMessages(ctx context.Context, in *DeleteMessagesRequest, opts ...grpc.CallOption) (*DeleteMessagesResponse, error)
+	// --- branding stage 1 --------------------------------------------------- //
+	// Post the already-transformed deliverable into channel C. Go decided the
+	// deliverable shape; Python executes the Telegram send and reports the ids.
+	BrandingStage1(ctx context.Context, in *BrandingStage1Request, opts ...grpc.CallOption) (*BrandingStage1Response, error)
+	// --- health ---------------------------------------------------------- //
 	GatewayHealth(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error)
 }
 
@@ -201,6 +226,76 @@ func (c *telegramGatewayClient) CopyMediaGroup(ctx context.Context, in *CopyMedi
 	return out, nil
 }
 
+func (c *telegramGatewayClient) BotAvailability(ctx context.Context, in *BotAvailabilityRequest, opts ...grpc.CallOption) (*BotAvailabilityResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BotAvailabilityResponse)
+	err := c.cc.Invoke(ctx, TelegramGateway_BotAvailability_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *telegramGatewayClient) BotSendText(ctx context.Context, in *BotSendTextRequest, opts ...grpc.CallOption) (*SendOutcome, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SendOutcome)
+	err := c.cc.Invoke(ctx, TelegramGateway_BotSendText_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *telegramGatewayClient) BotCopyMessage(ctx context.Context, in *BotCopyMessageRequest, opts ...grpc.CallOption) (*SendOutcome, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SendOutcome)
+	err := c.cc.Invoke(ctx, TelegramGateway_BotCopyMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *telegramGatewayClient) BotSendMedia(ctx context.Context, in *BotSendMediaRequest, opts ...grpc.CallOption) (*SendOutcome, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SendOutcome)
+	err := c.cc.Invoke(ctx, TelegramGateway_BotSendMedia_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *telegramGatewayClient) BotDeleteMessages(ctx context.Context, in *BotDeleteMessagesRequest, opts ...grpc.CallOption) (*DeleteMessagesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteMessagesResponse)
+	err := c.cc.Invoke(ctx, TelegramGateway_BotDeleteMessages_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *telegramGatewayClient) DeleteMessages(ctx context.Context, in *DeleteMessagesRequest, opts ...grpc.CallOption) (*DeleteMessagesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteMessagesResponse)
+	err := c.cc.Invoke(ctx, TelegramGateway_DeleteMessages_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *telegramGatewayClient) BrandingStage1(ctx context.Context, in *BrandingStage1Request, opts ...grpc.CallOption) (*BrandingStage1Response, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BrandingStage1Response)
+	err := c.cc.Invoke(ctx, TelegramGateway_BrandingStage1_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *telegramGatewayClient) GatewayHealth(ctx context.Context, in *HealthRequest, opts ...grpc.CallOption) (*HealthResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(HealthResponse)
@@ -235,7 +330,25 @@ type TelegramGatewayServer interface {
 	// Telegram for this file, so it sends its own copy.
 	SendMedia(context.Context, *SendMediaRequest) (*SendOutcome, error)
 	CopyMediaGroup(context.Context, *CopyMediaGroupRequest) (*CopyMessagesResponse, error)
-	// --- health ----------------------------------------------------------
+	// --- bot transport ----------------------------------------------------- //
+	// Narrow typed Bot Api operations. The worker names a stored token by id and
+	// the tenant it belongs to; the runtime resolves and re-checks ownership of
+	// the token inside the trusted Python boundary. The raw token never crosses
+	// this boundary in either direction.
+	BotAvailability(context.Context, *BotAvailabilityRequest) (*BotAvailabilityResponse, error)
+	BotSendText(context.Context, *BotSendTextRequest) (*SendOutcome, error)
+	BotCopyMessage(context.Context, *BotCopyMessageRequest) (*SendOutcome, error)
+	BotSendMedia(context.Context, *BotSendMediaRequest) (*SendOutcome, error)
+	BotDeleteMessages(context.Context, *BotDeleteMessagesRequest) (*DeleteMessagesResponse, error)
+	// --- deletion (auto-delete scheduler) ----------------------------------- //
+	// One typed delete for both transports. A message that is already gone is
+	// reported deleted: deletion is an idempotent cleanup operation.
+	DeleteMessages(context.Context, *DeleteMessagesRequest) (*DeleteMessagesResponse, error)
+	// --- branding stage 1 --------------------------------------------------- //
+	// Post the already-transformed deliverable into channel C. Go decided the
+	// deliverable shape; Python executes the Telegram send and reports the ids.
+	BrandingStage1(context.Context, *BrandingStage1Request) (*BrandingStage1Response, error)
+	// --- health ---------------------------------------------------------- //
 	GatewayHealth(context.Context, *HealthRequest) (*HealthResponse, error)
 	mustEmbedUnimplementedTelegramGatewayServer()
 }
@@ -285,6 +398,27 @@ func (UnimplementedTelegramGatewayServer) SendMedia(context.Context, *SendMediaR
 }
 func (UnimplementedTelegramGatewayServer) CopyMediaGroup(context.Context, *CopyMediaGroupRequest) (*CopyMessagesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CopyMediaGroup not implemented")
+}
+func (UnimplementedTelegramGatewayServer) BotAvailability(context.Context, *BotAvailabilityRequest) (*BotAvailabilityResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BotAvailability not implemented")
+}
+func (UnimplementedTelegramGatewayServer) BotSendText(context.Context, *BotSendTextRequest) (*SendOutcome, error) {
+	return nil, status.Error(codes.Unimplemented, "method BotSendText not implemented")
+}
+func (UnimplementedTelegramGatewayServer) BotCopyMessage(context.Context, *BotCopyMessageRequest) (*SendOutcome, error) {
+	return nil, status.Error(codes.Unimplemented, "method BotCopyMessage not implemented")
+}
+func (UnimplementedTelegramGatewayServer) BotSendMedia(context.Context, *BotSendMediaRequest) (*SendOutcome, error) {
+	return nil, status.Error(codes.Unimplemented, "method BotSendMedia not implemented")
+}
+func (UnimplementedTelegramGatewayServer) BotDeleteMessages(context.Context, *BotDeleteMessagesRequest) (*DeleteMessagesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BotDeleteMessages not implemented")
+}
+func (UnimplementedTelegramGatewayServer) DeleteMessages(context.Context, *DeleteMessagesRequest) (*DeleteMessagesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteMessages not implemented")
+}
+func (UnimplementedTelegramGatewayServer) BrandingStage1(context.Context, *BrandingStage1Request) (*BrandingStage1Response, error) {
+	return nil, status.Error(codes.Unimplemented, "method BrandingStage1 not implemented")
 }
 func (UnimplementedTelegramGatewayServer) GatewayHealth(context.Context, *HealthRequest) (*HealthResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GatewayHealth not implemented")
@@ -544,6 +678,132 @@ func _TelegramGateway_CopyMediaGroup_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TelegramGateway_BotAvailability_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BotAvailabilityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TelegramGatewayServer).BotAvailability(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TelegramGateway_BotAvailability_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TelegramGatewayServer).BotAvailability(ctx, req.(*BotAvailabilityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TelegramGateway_BotSendText_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BotSendTextRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TelegramGatewayServer).BotSendText(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TelegramGateway_BotSendText_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TelegramGatewayServer).BotSendText(ctx, req.(*BotSendTextRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TelegramGateway_BotCopyMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BotCopyMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TelegramGatewayServer).BotCopyMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TelegramGateway_BotCopyMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TelegramGatewayServer).BotCopyMessage(ctx, req.(*BotCopyMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TelegramGateway_BotSendMedia_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BotSendMediaRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TelegramGatewayServer).BotSendMedia(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TelegramGateway_BotSendMedia_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TelegramGatewayServer).BotSendMedia(ctx, req.(*BotSendMediaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TelegramGateway_BotDeleteMessages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BotDeleteMessagesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TelegramGatewayServer).BotDeleteMessages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TelegramGateway_BotDeleteMessages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TelegramGatewayServer).BotDeleteMessages(ctx, req.(*BotDeleteMessagesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TelegramGateway_DeleteMessages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteMessagesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TelegramGatewayServer).DeleteMessages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TelegramGateway_DeleteMessages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TelegramGatewayServer).DeleteMessages(ctx, req.(*DeleteMessagesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _TelegramGateway_BrandingStage1_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BrandingStage1Request)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TelegramGatewayServer).BrandingStage1(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TelegramGateway_BrandingStage1_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TelegramGatewayServer).BrandingStage1(ctx, req.(*BrandingStage1Request))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _TelegramGateway_GatewayHealth_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(HealthRequest)
 	if err := dec(in); err != nil {
@@ -620,6 +880,34 @@ var TelegramGateway_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CopyMediaGroup",
 			Handler:    _TelegramGateway_CopyMediaGroup_Handler,
+		},
+		{
+			MethodName: "BotAvailability",
+			Handler:    _TelegramGateway_BotAvailability_Handler,
+		},
+		{
+			MethodName: "BotSendText",
+			Handler:    _TelegramGateway_BotSendText_Handler,
+		},
+		{
+			MethodName: "BotCopyMessage",
+			Handler:    _TelegramGateway_BotCopyMessage_Handler,
+		},
+		{
+			MethodName: "BotSendMedia",
+			Handler:    _TelegramGateway_BotSendMedia_Handler,
+		},
+		{
+			MethodName: "BotDeleteMessages",
+			Handler:    _TelegramGateway_BotDeleteMessages_Handler,
+		},
+		{
+			MethodName: "DeleteMessages",
+			Handler:    _TelegramGateway_DeleteMessages_Handler,
+		},
+		{
+			MethodName: "BrandingStage1",
+			Handler:    _TelegramGateway_BrandingStage1_Handler,
 		},
 		{
 			MethodName: "GatewayHealth",

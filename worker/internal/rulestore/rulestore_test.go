@@ -65,7 +65,14 @@ func applyRuleSchema(t *testing.T, db *sql.DB) {
 			forward_mode TEXT NOT NULL DEFAULT 'COPY_MESSAGE',
 			content_mode TEXT NOT NULL DEFAULT 'AUTO',
 			filter_rule_id TEXT,
-			metadata TEXT NOT NULL DEFAULT '{}'
+			metadata TEXT NOT NULL DEFAULT '{}',
+			owner_user_id INTEGER NOT NULL DEFAULT 0,
+			fallback_enabled INTEGER NOT NULL DEFAULT 1,
+			intermediate_channel_id TEXT NOT NULL DEFAULT '',
+			use_intermediate INTEGER NOT NULL DEFAULT 0,
+			message_category TEXT NOT NULL DEFAULT 'ALL',
+			detection_criteria TEXT NOT NULL DEFAULT '{}',
+			split_long_caption INTEGER NOT NULL DEFAULT 1
 		)`,
 		`CREATE TABLE IF NOT EXISTS filter_rules (
 			id TEXT PRIMARY KEY,
@@ -256,17 +263,17 @@ func TestAttachedFilterIsReadWithAllLists(t *testing.T) {
 	store := newTestStore(t)
 	insertRule(t, store.rulesDB, "r6", true, false, 0, "f6", "")
 	insertFilter(t, store.rulesDB, "f6", &rule.FilterRule{
-		IsEnabled:          true,
-		WhitelistKeywords:  []string{"wanted"},
-		BlacklistKeywords:  []string{"blocked"},
-		RegexBlock:         []string{`^spam`},
-		RegexRequire:       []string{`^promo`},
-		RegexPatterns:      []string{`legacy`},
-		AllowedMediaTypes:  []string{"photo"},
-		BlockedMediaTypes:  []string{"video"},
-		DropService:        true,
-		MinMessageLength:   5,
-		MaxMessageLength:   500,
+		IsEnabled:         true,
+		WhitelistKeywords: []string{"wanted"},
+		BlacklistKeywords: []string{"blocked"},
+		RegexBlock:        []string{`^spam`},
+		RegexRequire:      []string{`^promo`},
+		RegexPatterns:     []string{`legacy`},
+		AllowedMediaTypes: []string{"photo"},
+		BlockedMediaTypes: []string{"video"},
+		DropService:       true,
+		MinMessageLength:  5,
+		MaxMessageLength:  500,
 	})
 
 	r, f, err := store.GetByID("r6")
@@ -350,14 +357,25 @@ func TestLegacyRowWithoutV30Columns(t *testing.T) {
 	}
 	defer db.Close()
 
-	// The PRE-v30 filter schema: no regex_block, no regex_require, no is_enabled.
 	for _, stmt := range []string{
+		// The PRE-Stage-3 forward_rules shape: none of the branding columns
+		// the projection now reads existed yet. SQLite's guarded ALTER TABLE
+		// ADD COLUMN is how the real bootstrap heals a live table, so this
+		// fixture reproduces exactly that: the old shape, then the columns
+		// added the way the migration adds them (idempotent, with defaults).
 		`CREATE TABLE forward_rules (
 			id TEXT PRIMARY KEY, session_id TEXT NOT NULL DEFAULT '',
 			is_active INTEGER NOT NULL DEFAULT 1, is_paused INTEGER NOT NULL DEFAULT 0,
 			paused_until INTEGER NOT NULL DEFAULT 0, forward_mode TEXT NOT NULL DEFAULT 'COPY_MESSAGE',
 			content_mode TEXT NOT NULL DEFAULT 'AUTO', filter_rule_id TEXT, metadata TEXT NOT NULL DEFAULT '{}'
 		)`,
+		`ALTER TABLE forward_rules ADD COLUMN owner_user_id INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE forward_rules ADD COLUMN fallback_enabled INTEGER NOT NULL DEFAULT 1`,
+		`ALTER TABLE forward_rules ADD COLUMN intermediate_channel_id TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE forward_rules ADD COLUMN use_intermediate INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE forward_rules ADD COLUMN message_category TEXT NOT NULL DEFAULT 'ALL'`,
+		`ALTER TABLE forward_rules ADD COLUMN detection_criteria TEXT NOT NULL DEFAULT '{}'`,
+		`ALTER TABLE forward_rules ADD COLUMN split_long_caption INTEGER NOT NULL DEFAULT 1`,
 		`CREATE TABLE filter_rules (
 			id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '',
 			whitelist_keywords TEXT NOT NULL DEFAULT '[]',

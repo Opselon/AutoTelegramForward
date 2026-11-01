@@ -259,4 +259,39 @@ CREATE INDEX IF NOT EXISTS idx_pg_error_rule ON error_log(rule_id);
 
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
 
+-- v33 parity (SQLite migration 33): durable scheduled actions — the
+-- auto-delete scheduler's store. Same columns, names and UNIQUE key as the
+-- SQLite table; the Go Worker reads this table from either backend, so any
+-- drift is a claim that silently does nothing on one of them.
+--
+-- State only: no message text, no media metadata, no credentials. Completed
+-- actions are DELETED, not archived — the retention policy is minimal by
+-- design.
+CREATE TABLE IF NOT EXISTS scheduled_actions (
+    id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL DEFAULT '',
+    action_type TEXT NOT NULL DEFAULT 'auto_delete',
+    transport TEXT NOT NULL DEFAULT 'user',
+    transport_ref TEXT NOT NULL DEFAULT '',
+    owner_user_id BIGINT NOT NULL DEFAULT 0,
+    chat_id TEXT NOT NULL,
+    message_id BIGINT NOT NULL DEFAULT 0,
+    due_at DOUBLE PRECISION NOT NULL DEFAULT 0,
+    next_attempt_at DOUBLE PRECISION NOT NULL DEFAULT 0,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 5,
+    last_error TEXT NOT NULL DEFAULT '',
+    state TEXT NOT NULL DEFAULT 'PENDING',
+    created_at BIGINT NOT NULL,
+    updated_at BIGINT NOT NULL,
+    CONSTRAINT scheduled_actions_unique
+        UNIQUE (job_id, action_type, chat_id, message_id)
+);
+CREATE INDEX IF NOT EXISTS idx_scheduled_actions_due
+    ON scheduled_actions (state, next_attempt_at, due_at);
+CREATE INDEX IF NOT EXISTS idx_scheduled_actions_owner
+    ON scheduled_actions (owner_user_id, state);
+CREATE INDEX IF NOT EXISTS idx_scheduled_actions_transport
+    ON scheduled_actions (transport, state);
+
 COMMIT;

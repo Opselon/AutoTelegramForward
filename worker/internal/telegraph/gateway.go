@@ -132,11 +132,101 @@ type Gateway interface {
 	// CopyMessages copies several messages one-for-one.
 	CopyMessages(ctx context.Context, sessionID string, targetChatID, fromChatID int64, messageIDs []int64, caption string, threadID int64) ([]int64, *DeliveryFailure)
 	// CopyMediaGroup copies an album as a group.
-	CopyMediaGroup(ctx context.Context, sessionID string, targetChatID, fromChatID, messageID int64, caption string, threadID int64) ([]int64, *DeliveryFailure)
+	CopyMediaGroup(ctx context.Context, sessionID string, targetChatID, fromChatID int64, messageID int64, caption string, threadID int64) ([]int64, *DeliveryFailure)
 	// SendMessage sends plain transformed text.
 	SendMessage(ctx context.Context, sessionID string, targetChatID int64, text string, threadID int64) (int64, *DeliveryFailure)
 	// SendMedia uploads a staged file as new media — the re-upload half of
 	// the restricted-source fallback. The token is the opaque reference
 	// PrepareMediaUpload returned; "" means "stage it as text instead".
 	SendMedia(ctx context.Context, sessionID string, targetChatID int64, token, caption, mediaType string, threadID int64) (int64, *DeliveryFailure)
+
+	// --- bot transport ---------------------------------------------------- //
+	// Narrow typed Bot Api operations. The worker names a stored token by id
+	// and the tenant it belongs to; the runtime resolves, re-checks ownership
+	// of, and decrypts the token inside the trusted Python boundary. The raw
+	// token never crosses this boundary in either direction.
+
+	// BotAvailability reports whether the named bot is usable by this tenant.
+	BotAvailability(ctx context.Context, target BotTarget) (ok bool, botUsername string, ferr *DeliveryFailure)
+	// BotSendText sends fully transformed text through the bot, with the
+	// task's raw inline-button spec (the runtime parses and degrades it).
+	BotSendText(ctx context.Context, target BotTarget, targetChatID int64, text string, threadID int64, inlineButtons []string) (int64, *DeliveryFailure)
+	// BotCopyMessage copies one source message through the bot.
+	BotCopyMessage(ctx context.Context, target BotTarget, targetChatID, fromChatID, messageID int64, caption string, threadID int64, inlineButtons []string) (int64, *DeliveryFailure)
+	// BotSendMedia sends a staged file through the bot (the restricted-source
+	// fallback on the bot route). An empty token means degrade to text.
+	BotSendMedia(ctx context.Context, target BotTarget, targetChatID int64, token, caption, mediaType string, threadID int64, inlineButtons []string) (int64, *DeliveryFailure)
+	// BotDeleteMessages deletes messages through the bot. A message that is
+	// already gone is reported deleted: deletion is idempotent cleanup.
+	BotDeleteMessages(ctx context.Context, target BotTarget, chatID int64, messageIDs []int64) (bool, *DeliveryFailure)
+
+	// --- deletion (auto-delete scheduler) --------------------------------- //
+
+	// DeleteMessages deletes messages through the session or the bot. A
+	// message that is already gone is reported deleted: deletion is an
+	// idempotent cleanup operation, never a duplicate of a prior delete.
+	DeleteMessages(ctx context.Context, transport DeleteTransport, sessionID, botTokenID string, ownerUserID, chatID int64, messageIDs []int64) (bool, *DeliveryFailure)
+
+	// --- branding stage 1 ------------------------------------------------- //
+
+	// BrandingStage1 posts the processed deliverable into channel C and
+	// reports the ids that landed. It never re-runs a transform.
+	BrandingStage1(ctx context.Context, post BrandingPost) ([]int64, *DeliveryFailure)
+}
+
+// BotTarget is a named, tenant-scoped reference to a stored bot token.
+//
+// The worker never holds the token itself: the runtime resolves the token id
+// through the Core's owner-scoped repository, re-validates that this tenant
+// actually owns it, and decrypts it inside the trusted Python boundary.
+type BotTarget struct {
+	// TokenID is the stored bot token's id (never the raw token).
+	TokenID string
+	// OwnerUserID is the tenant this delivery belongs to. The runtime
+	// re-validates ownership on every call, cache hit included — a token id
+	// travels in the job payload and anything that travels can be transplanted.
+	OwnerUserID int64
+}
+
+// DeleteTransport selects which Telegram identity performs an operation.
+type DeleteTransport string
+
+const (
+	// TransportUser executes through the owner's MTProto session.
+	TransportUser DeleteTransport = "user"
+	// TransportBot executes through the stored bot token.
+	TransportBot DeleteTransport = "bot"
+)
+
+// BrandingPost is one "post the processed deliverable into C" request.
+//
+// The content decision (what C receives per content_mode) is Go's; the
+// runtime only executes the low-level Telegram send and reports the ids.
+type BrandingPost struct {
+	// Transport selects who executes the post ("user" or "bot").
+	Transport DeleteTransport
+	// SessionID for transport="user" (stable id, never a session string).
+	SessionID string
+	// BotTokenID for transport="bot" (stored token id, never the token).
+	BotTokenID string
+	// OwnerUserID is the tenant the hop belongs to.
+	OwnerUserID int64
+	// TargetChatID is channel C.
+	TargetChatID int64
+	// ThreadID is the forum topic inside C (0 = General / none).
+	ThreadID int64
+	// Operation is the deliverable shape Go decided:
+	// "text" | "copy" | "media_group".
+	Operation string
+	// SourceChatID / SourceMessageID identify the message to copy.
+	SourceChatID    int64
+	SourceMessageID int64
+	// SourceMessageIDs lists every album member for "media_group".
+	SourceMessageIDs []int64
+	// Text is the fully transformed text for operation="text".
+	Text string
+	// Caption is the transformed caption for "copy"/"media_group".
+	Caption string
+	// InlineButtons is the raw per-task button spec (bot transport only).
+	InlineButtons []string
 }

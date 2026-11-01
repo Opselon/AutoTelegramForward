@@ -26,11 +26,30 @@ telegram_runtime/
 ├── errors.py                      the shared typed taxonomy (19 codes)
 ├── app/
 │   ├── session_manager.py         readiness + client lookup over the Core's ClientPool
-│   └── pool_bootstrap.py          standalone-path session start (tests/dev)
-├── adapters/pyrogram/client.py    ONE pyrogram client behind the typed contract
+│   ├── pool_bootstrap.py          standalone-path session start (tests/dev)
+│   └── bot_store.py               Stage 3 read-only, owner-scoped bot token resolution
+├── adapters/
+│   ├── pyrogram/client.py         ONE pyrogram client behind the typed contract
+│   └── bot_api/__init__.py        Stage 3 Bot API adapter (BotApiTransport reuse)
 ├── grpc/server.py                 the tfgw/v1 servicer + bearer auth interceptor
-└── tests/                         16 tests: taxonomy parity, contract, switch
+└── tests/                         16+ tests: taxonomy parity, contract, switch
 ```
+
+## Stage 3 Bot Token Security Boundary
+
+The Go Worker **never** receives, logs, or stores raw bot tokens.
+
+1. The wire carries `bot_token_id` + `owner_user_id` inside `BotTarget`.
+2. The Runtime resolves the token through `telegram_runtime/app/bot_store.py`
+   via `get_owned(token_id, owner_user_id)` where `owner_user_id` is part of
+   the SQL `WHERE` clause: a transplanted id never even round-trips the
+   secret.
+3. Decryption happens strictly inside the Python boundary using the Core's
+   `CryptoService` (`ATF_MASTER_KEY`).
+4. Re-checked on every call, **including cache hits**: a pooled transport
+   keyed by token id alone is never handed to a different tenant.
+5. Bot API connection pooling (`BotApiTransport`, `httpx.AsyncClient`) is
+   reused across messages; tokens are never logged or echoed in errors.
 
 ## Ownership decisions and why
 

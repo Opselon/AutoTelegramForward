@@ -64,10 +64,39 @@ async def main_async(args: argparse.Namespace) -> int:
     os.makedirs(media_dir, exist_ok=True)
 
     sessions = SessionManager(pool)
-    server = await serve(sessions, args.addr, token, media_dir)
+    # The Bot Api adapter resolves stored bot tokens through the Core's
+    # owner-scoped repository. Tokens (and their decryption) stay inside this
+    # process: the Go Worker only ever names a token by its stored id.
+    bots = _resolve_bot_adapter(os.environ.get("ATF_DB_PATH", "data/atf.db"))
+    server = await serve(sessions, args.addr, token, media_dir, bots=bots)
     logger.info("telegram runtime ready on %s", args.addr)
     await server.wait_for_termination()
+    if bots is not None:
+        await bots.aclose()
     return 0
+
+
+def _resolve_bot_adapter(db_path: str):
+    """Build the Bot Api adapter over the Core's owner-scoped token store.
+
+    The standalone runtime reads the same shared atf.db the Core owns, so a
+    token resolved here is the token the owner attached — with the owner in
+    the SELECT's WHERE clause, exactly as the Core's own path does it. When
+    the store cannot be opened the runtime still serves sessions and answers
+    bot RPCs with a typed refusal: a missing capability is reported, never
+    silently downgraded.
+    """
+    if not db_path or not os.path.exists(db_path):
+        logger.info("no shared store at %s — bot transport unavailable (typed refusal)", db_path)
+        return None
+    try:
+        from telegram_runtime.app.bot_store import standalone_bot_repo
+        repo = standalone_bot_repo(db_path)
+    except Exception as exc:  # a failed wiring must not kill the runtime
+        logger.warning("bot token store unavailable (%s) — bot transport answers a typed refusal", exc)
+        return None
+    from telegram_runtime.adapters.bot_api import BotApiAdapter
+    return BotApiAdapter(repo)
 
 
 def main() -> None:

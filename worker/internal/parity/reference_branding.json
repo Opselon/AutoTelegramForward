@@ -1,0 +1,488 @@
+[
+  {
+    "message": {
+      "text": "hello"
+    },
+    "name": "disabled_no_channel",
+    "reason": "branding_disabled:no_channel",
+    "rule": {},
+    "take_hop": false
+  },
+  {
+    "message": {
+      "text": "hello"
+    },
+    "name": "disabled_flag_off",
+    "reason": "branding_disabled:flag_off",
+    "rule": {
+      "intermediate_channel_id": "-100999"
+    },
+    "take_hop": false
+  },
+  {
+    "message": {
+      "text": "hello"
+    },
+    "name": "flag_via_legacy_mode",
+    "reason": "branding_always",
+    "rule": {
+      "intermediate_channel_id": "-100999",
+      "intermediate_mode": "VIA_INTERMEDIATE"
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "text": "hello"
+    },
+    "name": "always",
+    "reason": "branding_always",
+    "rule": {
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "text": "New product offered today"
+    },
+    "name": "keyword_match",
+    "reason": "branding_triggers_matched:keywords",
+    "rule": {
+      "branding_hop": {
+        "keywords": [
+          "offered",
+          "price"
+        ],
+        "match_mode": "any",
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "text": "nothing to see here"
+    },
+    "name": "keyword_miss",
+    "reason": "branding_triggers_unmatched:none",
+    "rule": {
+      "branding_hop": {
+        "keywords": [
+          "offered"
+        ],
+        "match_mode": "any",
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": false
+  },
+  {
+    "message": {
+      "text": "فروش ویژه امروز"
+    },
+    "name": "persian_keyword",
+    "reason": "branding_triggers_matched:keywords",
+    "rule": {
+      "branding_hop": {
+        "keywords": [
+          "فروش"
+        ],
+        "match_mode": "any",
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "text": "فروش ویژه امروز"
+    },
+    "name": "persian_keyword_miss",
+    "reason": "branding_triggers_unmatched:none",
+    "rule": {
+      "branding_hop": {
+        "keywords": [
+          "خرید"
+        ],
+        "match_mode": "any",
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": false
+  },
+  {
+    "message": {
+      "forward_origin": {
+        "from_chat_id": "-100555",
+        "from_chat_title": "Channel Five",
+        "from_chat_username": "chanfive"
+      },
+      "text": "hello"
+    },
+    "name": "origin_id_match",
+    "reason": "branding_triggers_matched:origin",
+    "rule": {
+      "branding_hop": {
+        "match_mode": "any",
+        "origin_ids": [
+          "-100555"
+        ],
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "forward_origin": {
+        "from_chat_id": "-100555",
+        "from_chat_title": "Channel Five",
+        "from_chat_username": "chanfive"
+      },
+      "text": "hello"
+    },
+    "name": "origin_username_match",
+    "reason": "branding_triggers_matched:origin",
+    "rule": {
+      "branding_hop": {
+        "match_mode": "any",
+        "origin_ids": [
+          "@chanfive"
+        ],
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "forward_origin": {
+        "from_chat_id": "-100555",
+        "from_chat_title": "Channel Five",
+        "from_chat_username": ""
+      },
+      "text": "hello"
+    },
+    "name": "origin_title_match",
+    "reason": "branding_triggers_matched:origin",
+    "rule": {
+      "branding_hop": {
+        "match_mode": "any",
+        "origin_titles": [
+          "channel five"
+        ],
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "forward_origin": {
+        "from_chat_id": "-100555",
+        "from_chat_title": "Channel Five",
+        "from_chat_username": ""
+      },
+      "text": "hello"
+    },
+    "name": "origin_title_partial",
+    "reason": "branding_triggers_matched:origin",
+    "rule": {
+      "branding_hop": {
+        "match_mode": "any",
+        "origin_titles": [
+          "Five"
+        ],
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "text": "hello"
+    },
+    "name": "origin_missing",
+    "reason": "branding_triggers_unmatched:none",
+    "rule": {
+      "branding_hop": {
+        "match_mode": "any",
+        "origin_ids": [
+          "-100555"
+        ],
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": false
+  },
+  {
+    "message": {
+      "text": "hello"
+    },
+    "name": "require_forward_gate",
+    "reason": "branding_requires_forward_origin",
+    "rule": {
+      "branding_hop": {
+        "keywords": [
+          "hello"
+        ],
+        "require_forward": true,
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": false
+  },
+  {
+    "message": {
+      "forward_origin": {
+        "from_chat_id": "-100555",
+        "from_chat_title": "Five",
+        "from_chat_username": ""
+      },
+      "text": "hello"
+    },
+    "name": "require_forward_satisfied",
+    "reason": "branding_triggers_matched:keywords",
+    "rule": {
+      "branding_hop": {
+        "keywords": [
+          "hello"
+        ],
+        "require_forward": true,
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "forward_origin": {
+        "from_chat_id": "-100555",
+        "from_chat_title": "Five",
+        "from_chat_username": ""
+      },
+      "text": "hello"
+    },
+    "name": "match_all_satisfied",
+    "reason": "branding_triggers_matched:origin,keywords",
+    "rule": {
+      "branding_hop": {
+        "keywords": [
+          "hello"
+        ],
+        "match_mode": "all",
+        "origin_ids": [
+          "-100555"
+        ],
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "forward_origin": {
+        "from_chat_id": "-100555",
+        "from_chat_title": "Five",
+        "from_chat_username": ""
+      },
+      "text": "hello"
+    },
+    "name": "match_all_one_missing",
+    "reason": "branding_triggers_unmatched:origin",
+    "rule": {
+      "branding_hop": {
+        "keywords": [
+          "nomatch"
+        ],
+        "match_mode": "all",
+        "origin_ids": [
+          "-100555"
+        ],
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": false
+  },
+  {
+    "message": {
+      "forward_origin": {
+        "from_chat_id": "-100555",
+        "from_chat_title": "Five",
+        "from_chat_username": ""
+      },
+      "text": "hello"
+    },
+    "name": "match_any_one_of_two",
+    "reason": "branding_triggers_matched:origin",
+    "rule": {
+      "branding_hop": {
+        "keywords": [
+          "nomatch"
+        ],
+        "match_mode": "any",
+        "origin_ids": [
+          "-100555"
+        ],
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "text": "hello"
+    },
+    "name": "no_triggers_configured",
+    "reason": "branding_no_triggers_configured",
+    "rule": {
+      "branding_hop": {
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "text": "offered"
+    },
+    "name": "invalid_config_degrades",
+    "reason": "branding_triggers_matched:keywords",
+    "rule": {
+      "branding_hop": {
+        "keywords": [
+          1,
+          2,
+          "offered"
+        ],
+        "match_mode": "bogus",
+        "origin_ids": 5,
+        "require_forward": null,
+        "triggers_enabled": "yes"
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "forward_origin": {
+        "from_chat_id": "-100555",
+        "from_chat_title": "Five",
+        "from_chat_username": ""
+      },
+      "text": "hello"
+    },
+    "name": "vip_matched",
+    "reason": "branding_vip_matched:any_matched:origin_matched",
+    "rule": {
+      "detection_criteria": {
+        "forward_origin_chat_ids": [
+          "-100555"
+        ]
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "text": "hello"
+    },
+    "name": "vip_unmatched",
+    "reason": "branding_vip_unmatched:no_criteria_matched",
+    "rule": {
+      "detection_criteria": {
+        "forward_origin_chat_ids": [
+          "-100555"
+        ]
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": false
+  },
+  {
+    "message": {
+      "forward_origin": {
+        "from_chat_id": "-100555",
+        "from_chat_title": "Five",
+        "from_chat_username": ""
+      },
+      "text": "hello"
+    },
+    "name": "vip_with_triggers",
+    "reason": "branding_triggers_matched:keywords,vip",
+    "rule": {
+      "branding_hop": {
+        "keywords": [
+          "hello"
+        ],
+        "match_mode": "all",
+        "triggers_enabled": true
+      },
+      "detection_criteria": {
+        "forward_origin_chat_ids": [
+          "-100555"
+        ]
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "caption": "not this",
+      "text": "captioned body"
+    },
+    "name": "caption_text",
+    "reason": "branding_triggers_matched:keywords",
+    "rule": {
+      "branding_hop": {
+        "keywords": [
+          "captioned"
+        ],
+        "match_mode": "any",
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  }
+]

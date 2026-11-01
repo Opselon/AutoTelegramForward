@@ -36,8 +36,8 @@ func (m *testMetrics) Outcome(kind string) {
 		m.unknown++
 	}
 }
-func (m *testMetrics) ObserveRPC(string, float64)  {}
-func (m *testMetrics) ObserveWait(float64)         {}
+func (m *testMetrics) ObserveRPC(string, float64) {}
+func (m *testMetrics) ObserveWait(float64)        {}
 
 // staticRules returns a live, unpaused rule and no persisted filter.
 type staticRules struct{}
@@ -72,7 +72,7 @@ func newHarness(t *testing.T, opts ...Options) *harness {
 		o = opts[0]
 	}
 	dir := t.TempDir()
-	engine := New(store, staticRules{}, gw, log, metrics, "w-test", dir, o)
+	engine := New(store, staticRules{}, gw, nil, log, metrics, "w-test", dir, o)
 	return &harness{store: store, gateway: gw, engine: engine, metrics: metrics, log: log}
 }
 
@@ -366,8 +366,8 @@ func TestBrandingHopForwardsFromC(t *testing.T) {
 		Payload: *jobPayload(map[string]any{
 			"text": "branded",
 			"branding": map[string]any{
-				"chat_id":      "-100C",
-				"message_id":   float64(55),
+				"chat_id":       "-100C",
+				"message_id":    float64(55),
 				"force_forward": true,
 			},
 		}),
@@ -402,7 +402,7 @@ func TestSplitAlbumResumesNotDuplicates(t *testing.T) {
 		Payload: *jobPayload(map[string]any{
 			"text": "album", "media_group_id": "g1",
 			"album_message_ids": []any{float64(1), float64(2), float64(3)},
-			"album_mode": "split",
+			"album_mode":        "split",
 		}),
 	}
 	h.enqueue(t, j)
@@ -434,7 +434,7 @@ func TestSplitAlbumResumesNotDuplicates(t *testing.T) {
 		Payload: *jobPayload(map[string]any{
 			"text": "album", "media_group_id": "g2",
 			"album_message_ids": []any{float64(11), float64(12), float64(13)},
-			"album_mode":       "split",
+			"album_mode":        "split",
 		}),
 	}
 	h.enqueue(t, partial)
@@ -607,5 +607,3 @@ func TestMediaScratchIsPerJob(t *testing.T) {
 		t.Errorf("distinct scratch paths = %d, want 2 (per-job uniqueness)", len(paths))
 	}
 }
-
-
