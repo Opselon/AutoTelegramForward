@@ -1090,6 +1090,55 @@ MIGRATIONS = {
     CREATE INDEX IF NOT EXISTS idx_diagnostic_events_trace
         ON diagnostic_events(trace_id, ts);
     """,
+    33: """
+    -- v33: durable scheduled actions (Stage 3 — the auto-delete scheduler).
+    --
+    -- The Python implementation scheduled deletion as an in-memory
+    -- asyncio.sleep task: a Core restart while it slept lost the deletion
+    -- forever. This table moves the schedule into the durable store the Go
+    -- Worker owns, so a pending deletion survives every restart of either
+    -- process.
+    --
+    -- Design rules (see docs/architecture/worker-engine.md):
+    --
+    -- * state only. No message text, no media metadata, no credentials:
+    --   the row carries the identifiers an executor needs and nothing else.
+    -- * one row per logical action, keyed deterministically on the delivery
+    --   identity, so the same confirmed delivery cannot register the same
+    --   deletion twice (the dedup key is UNIQUE).
+    -- * completed actions are DELETED, not archived: the retention policy
+    --   is minimal by design, and a cleanup history is not a feature the
+    --   product has ever needed.
+    -- * the same table serves every action type: the scheduler loop is one
+    --   bounded engine, not one timer forest per kind.
+    CREATE TABLE IF NOT EXISTS scheduled_actions (
+        id TEXT PRIMARY KEY,
+        job_id TEXT NOT NULL DEFAULT '',
+        action_type TEXT NOT NULL DEFAULT 'auto_delete',
+        transport TEXT NOT NULL DEFAULT 'user',
+        transport_ref TEXT NOT NULL DEFAULT '',
+        owner_user_id INTEGER NOT NULL DEFAULT 0,
+        chat_id TEXT NOT NULL,
+        message_id INTEGER NOT NULL DEFAULT 0,
+        due_at REAL NOT NULL DEFAULT 0,
+        next_attempt_at REAL NOT NULL DEFAULT 0,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 5,
+        last_error TEXT NOT NULL DEFAULT '',
+        state TEXT NOT NULL DEFAULT 'PENDING',
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        UNIQUE(job_id, action_type, chat_id, message_id)
+    );
+    -- The claim path: the scheduler looks for due work it may fence out.
+    CREATE INDEX IF NOT EXISTS idx_scheduled_actions_due
+        ON scheduled_actions(state, next_attempt_at, due_at);
+    -- The per-tenant/transport views an operator or a panel needs.
+    CREATE INDEX IF NOT EXISTS idx_scheduled_actions_owner
+        ON scheduled_actions(owner_user_id, state);
+    CREATE INDEX IF NOT EXISTS idx_scheduled_actions_transport
+        ON scheduled_actions(transport, state);
+    """,
 }
 
 
