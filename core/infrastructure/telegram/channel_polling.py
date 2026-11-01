@@ -258,6 +258,8 @@ class ChannelPollingService:
         lease_coordinator=None,
         gap_repo=None,
         log_client=None,
+        # Persisted gap diagnostics (schema v32): the same gap events the
+        # structured logger emits become queryable per source message.
         diagnostics_repo=None,
     ) -> None:
         self._pool = pool
@@ -935,6 +937,7 @@ class ChannelPollingService:
         dropped record (the ``LogClient`` itself is bounded and counts what it
         drops), never into a missed source message.
         """
+
         if self._log_client is not None:
             try:
                 getattr(self._log_client, level, self._log_client.info)(
@@ -1014,6 +1017,7 @@ class ChannelPollingService:
         if raw:
             event.raw_rpc_id = str(raw)[:96]
         return event
+
 
     async def _open_gaps_below(self, session_id: str, chat_id: str, below: int) -> List[int]:
         """Ids in this channel that are still unaccounted for, at or below ``below``.
