@@ -1,8 +1,9 @@
 # Migration Plan — Strangler-Fig Extraction of the Python Core
 
-> This is the plan the current PR implements **stage 1** of. It is written as
-> the map for every remaining engine so a reviewer can see the whole path,
-> not just the first step.
+> Stage 1 established the execution boundary. Stage 2 makes that boundary
+> trustworthy for the real production database and real user configuration.
+> This is the map for every remaining engine, so a reviewer can see the whole
+> path, not just the current step.
 
 ## The invariant that never breaks
 
@@ -11,7 +12,7 @@ No capability is ever owned by Go and Python at the same time; nothing is
 ever deleted from Python until the Go replacement has demonstrated
 behavioral parity; rolling back is always a config flip, not a redeploy.
 
-## Stage 1 — this PR (DONE)
+## Stage 1 — (DONE)
 
 | Capability | Status | Evidence |
 |---|---|---|
@@ -28,20 +29,20 @@ behavioral parity; rolling back is always a config flip, not a redeploy.
 | Docker / compose / CI integration | **done** | `Dockerfile.worker`, compose service, 2 new CI jobs |
 | Activation | **off by default** | flip `ATF_WORKER_ENABLED` |
 
-### What is NOT done in stage 1 (and is not claimed)
+### What was NOT done in stage 1 (and was not claimed)
 
-* **The rule store is a stub.** `cmd/worker/main.go::ruleStore` returns a
+* **The rule store was a stub.** `cmd/worker/main.go::ruleStore` returned a
   minimal always-active projection. The delivery-shape inputs
   (`forward_mode`, `content_mode`, `fallback_enabled`, `topic_id`, ...) all
   travel in the job payload — which is exactly what the Python dispatch path
-  reads — so the delivery path is correct, but the *delivery-time re-check*
-  of a task's active/paused state happens through that projection, not
+  reads — so the delivery path was correct, but the *delivery-time re-check*
+  of a task's active/paused state happened through that projection, not
   through a real read of `forward_rules`. **Stage 2 wires the real read.**
-* **PostgreSQL is refused for now** (`openStore` returns an explicit error
-  when `ATF_DATABASE_URL` is set): the store is SQLite-only until the
-  PostgreSQL claim/fence SQL is ported and parity-tested. The Python loop
-  remains the execution path on Postgres deployments.
-* **The BOT delivery transport is not implemented in Go.** A job whose
+* **PostgreSQL was refused** (`openStore` returned an explicit error when
+  `ATF_DATABASE_URL` was set): the store was SQLite-only until the
+  PostgreSQL claim/fence SQL was ported and parity-tested. The Python loop
+  remained the execution path on Postgres deployments.
+* **The BOT delivery transport was not implemented in Go.** A job whose
   payload says `delivery_transport: BOT` is not yet dispatched through the
   bot route; leave the Python loop on for tasks that use it.
 * **AI rewriting, Replace rules, Clean rules, header/footer formatting and
@@ -49,19 +50,39 @@ behavioral parity; rolling back is always a config flip, not a redeploy.
   payload.** The Go worker applies the *result*, which is correct; it does
   not (yet) own the computation.
 
-## Stage 2 — rule store + PostgreSQL (next PR)
+## Stage 2 — rule store + PostgreSQL (DONE)
 
-1. Replace `ruleStore` with a read over `forward_rules` / `filter_rules`
-   (SQLite first, then PostgreSQL), reusing the Go API's existing
-   repository patterns.
-2. Port the claim/fence SQL to PostgreSQL, mirroring
-   `postgres_repositories.py` byte-for-byte (same lock semantics —
-   `SELECT ... FOR UPDATE SKIP LOCKED` where Python uses it, or the same
-   NOT-EXISTS lane predicate under READ COMMITTED).
-3. Add a `worker`-side parity harness: run both engines against the same
-   fixture database and compare decisions (shadow mode, §Shadow below).
+| Capability | Status | Evidence |
+|---|---|---|
+| PostgreSQL delivery store (full `Store` interface) | **done** | `worker/internal/queue/postgres.go` |
+| Claim concurrency + ordering over `FOR UPDATE SKIP LOCKED` | **done** | 26-test integration suite against a real postgres |
+| Idempotency fence on PostgreSQL (byte-identical key) | **done** | `FenceClaim` + fence tests, both backends |
+| Backend selection matches the Python composition root | **done** | `cmd/worker/main.go::openStore`/`openRuleStore`, `data-ownership.md` |
+| Real rule store (no stub) | **done** | `worker/internal/rulestore` |
+| ForwardRule persisted state read | **done** | active/paused/paused-until/auto-pause from `metadata` JSON |
+| FilterRule persisted state read | **done** | legacy pre-v30 rows stay enabled (`is_enabled` compatibility) |
+| Fence ordering (preflight before claim) | **done** | `fence_ordering_test.go` regression suite |
+| Offline cross-engine parity harness | **done** | `worker/internal/parity` + 17 shared fixtures |
+| Real PostgreSQL integration in CI | **done** | `go-worker-postgres-integration` job (postgres:17 service) |
+| Docker/compose backend wiring | **done** | profile-gated postgres service, `required:false` dependency |
 
-## Stage 3 — BOT transport, branding-hop stage-1, advanced settings
+### Stage 2 scope boundaries (deliberately not done)
+
+* **The Python Core remains the schema/bootstrap owner.** The worker verifies
+  schema compatibility at startup and fails closed when a required object is
+  missing; it never runs a migration of its own.
+* **The unsafe Python claim fallback is not ported.**
+  `PostgresDeliveryQueueRepository.claim_batch` carries a broad-except
+  fallback that degrades to a read-then-update with no `SKIP LOCKED`, no lane
+  isolation and `created_at`-only ordering. The Go implementation fails
+  closed on any claim error instead — reproducing that fallback would
+  convert a real production SQL error into an unprotected claim.
+* **No BOT transport, no Stage 3/4 work** (below).
+* **The worker stays opt-in.** `ATF_WORKER_ENABLED` still defaults to off;
+  the Python `DurableQueueManager` loop is untouched and remains the
+  fallback.
+
+## Stage 3 — BOT transport, branding-hop stage-1, advanced settings (future)
 
 * `delivery_transport: BOT` through the runtime contract (a `SendMedia`-style
   RPC that posts through the attached bot token).
@@ -71,7 +92,7 @@ behavioral parity; rolling back is always a config flip, not a redeploy.
 * `forward_every_n`, keyword replies, auto-delete scheduling: owned by the
   pipeline today, eventually a worker-side scheduler.
 
-## Stage 4 — ownership transfer
+## Stage 4 — ownership transfer (future)
 
 With parity demonstrated over a full release cycle, flip the default of
 `ATF_WORKER_ENABLED` to `on` and delete the Python `DurableQueueManager`
@@ -80,13 +101,14 @@ one.**
 
 ## Shadow mode
 
-Shadow mode is **not enabled** in this stage, deliberately: the observable
-decision surface is already fully covered by the parity test suites (the
-filter port, the fence, the queue semantics), and a shadow mode that
-duplicated a *Telegram side effect* would violate the one-authoritative-path
-rule. Shadow mode becomes useful in stage 2+, when the *decision* can be
-compared offline (normalize both decisions and diff) with no side effect at
-all — the comparison target is the job rows, not the target chats.
+Shadow mode is **not enabled**, deliberately: the observable decision surface
+is already fully covered by the offline parity harness (the filter decisions,
+the fence, the queue semantics, the claim ordering — see
+`worker/internal/parity`), and a shadow mode that duplicated a *Telegram side
+effect* would violate the one-authoritative-path rule. The parity harness
+compares **decisions and state transitions, never side effects**: it runs
+both engines against the same fixtures and normalizes the outputs, with no
+session, no network and no production data touched.
 
 ## Rollback
 
@@ -94,6 +116,6 @@ all — the comparison target is the job rows, not the target chats.
    CLAIMED by the Go worker are reclaimed when their leases expire.
 2. The fence guarantees that handover cannot double-send: a job whose send
    the Go worker recorded as SENT is `already_sent` for the Python loop too,
-   because the key format is byte-identical.
-3. No database migration to undo — stage 1 adds **no tables, no columns, no
-   indexes**.
+   because the key format is byte-identical (`rule:src_chat:src_msg:target[:kind]`).
+3. No database migration to undo — stage 2 adds **no tables, no columns, no
+   indexes**. The schema it reads is the one the Python Core already owns.
