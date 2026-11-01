@@ -14,20 +14,26 @@ nothing.
 ## The shared store: one file, one ownership constraint
 
 The worker and the Python Core read and write **the same `atf.db`** — that
-is the whole design (one queue, two engines). Two things follow:
+is the whole design (one queue, two engines). The Core creates the file as
+**root**; the worker runs as **`atf` (uid 100, gid 101)**. Two things
+follow:
 
-1. The container must mount the Core's data volume at a path the worker's
-   image owns (`/var/lib/atf/data`, prepared `atf:atf` in the Dockerfile).
-   The compose service does this; a deployment that instead mounts
-   `atf-data` at `/app/data` inherits the Core's root-owned rows and the
-   non-root worker cannot write its claim updates.
+1. **Prepare the volume once** before the first worker start, under the
+   `worker` compose profile:
+
+   ```bash
+   docker compose --profile worker run --rm worker-store-init
+   ```
+
+   It grants group 101 write access to the store (idempotent — safe to
+   re-run after any Core restart). This is the only deployment step that
+   differs from a stock install, and it disappears with the PostgreSQL
+   store in stage 2.
 2. On startup the worker **proves the store is writable** (an immediate
    write transaction, rolled back). A worker that cannot write refuses to
    start rather than reporting `ready` while every claim fails — the
-   fail-closed behaviour the health surface promises.
-
-This constraint disappears in stage 2, when the PostgreSQL store becomes
-the worker's primary and SQLite is the local-development path.
+   fail-closed behaviour the health surface promises. If you see
+   `probe write: attempt to write a readonly database`, re-run step 1.
 
 ## Turning the Go Worker on (the whole migration in one command)
 

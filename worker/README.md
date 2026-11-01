@@ -59,6 +59,19 @@ python -m grpc_tools.protoc -Iworker/proto \
 | `ATF_MEDIA_DIR` | `/var/lib/atf/media` | shared media scratch (worker-owned) |
 | `ATF_WORKER_LISTEN` | `0.0.0.0:8090` | health/metrics, internal-only |
 
+## Deploying it (the one non-stock step)
+
+The worker shares the Core's `atf.db`, which the Core creates as root while
+the worker runs as `atf` (uid 100 / gid 101). Before the first start:
+
+```bash
+docker compose --profile worker run --rm worker-store-init
+```
+
+Grants group write access on the store (idempotent). After that, setting
+`ATF_WORKER_ENABLED=1` is the whole switch. A worker on an unwritable
+store refuses to start — by design: the readiness surface must not lie.
+
 ## What is NOT implemented here (stage 1)
 
 * The rule store is a minimal projection (`cmd/worker/main.go::ruleStore`);

@@ -198,6 +198,25 @@ services:
       retries: 3
       start_period: 40s
 
+  # One-time preparation of the shared delivery store for the non-root
+  # worker. The Core creates atf.db as root; the worker (uid 100) must be
+  # able to write its claim updates to the SAME file. This runs only under
+  # the `worker` profile (i.e. when the operator opts into the Go Worker),
+  # so a stock deployment never sees it.
+  worker-store-init:
+    image: alpine:3.22
+    container_name: atf-worker-store-init
+    restart: "no"
+    volumes:
+      - atf-data:/data
+    # chgrp to the worker's gid (101 in the alpine image, from `addgroup -S`)
+    # and grant group write on the database and its WAL siblings. Idempotent:
+    # a second run is a no-op, so re-running after a Core restart is safe.
+    command: >
+      sh -c "chgrp -R 101 /data && chmod -R g+w /data || true;
+             echo 'shared store prepared for the atf group'"
+    profiles: ["worker"]
+
   # Go execution engine (business execution plane). OFF by default:
   # ATF_WORKER_ENABLED must be set (AND ATF_CORE_RPC_TOKEN must be non-empty)
   # before this container consumes a single delivery job. Until then the
@@ -220,11 +239,10 @@ services:
       # uses against the core. Empty + enabled = refuse to start, on purpose.
       ATF_CORE_RPC_TOKEN: ${ATF_CORE_RPC_TOKEN:-}
       # The SQLite store the Python Core writes — the SAME file both engines
-      # share, mounted at the worker-owned path the image prepared, so the
-      # non-root worker can actually write the claim updates. (Mounting the
-      # shared atf-data volume at /app/data would work only for a user that
-      # can write root-owned rows; the worker runs as `atf`.)
-      ATF_DB_PATH: /var/lib/atf/data/atf.db
+      # share. The worker runs as `atf` (uid 100) while the Core runs as
+      # root, so the volume init below grants group write access to atf.db
+      # before this container starts.
+      ATF_DB_PATH: /app/data/atf.db
       # The Python Telegram Runtime's gRPC endpoint.
       ATF_TELEGRAM_RUNTIME_ADDR: ${ATF_TELEGRAM_RUNTIME_ADDR:-core:50053}
       # Queue knobs shared 1:1 with the Python worker's ATF_QUEUE_* names.
@@ -235,8 +253,8 @@ services:
       ATF_MEDIA_DIR: /var/lib/atf/media
     volumes:
       # The shared delivery store: both engines read and write the same
-      # atf.db, at a path the worker's image owns (see ATF_DB_PATH above).
-      - atf-data:/var/lib/atf/data
+      # atf.db (see the volume init for the cross-user write access).
+      - atf-data:/app/data
       - atf-worker-media:/var/lib/atf/media
     networks:
       - atf-net
