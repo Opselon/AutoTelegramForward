@@ -37,6 +37,7 @@ import (
 	"atf/worker/internal/engine/delivery"
 	"atf/worker/internal/engine/scheduler"
 	"atf/worker/internal/health"
+	"atf/worker/internal/observability"
 	"atf/worker/internal/queue"
 	"atf/worker/internal/rulestore"
 	"atf/worker/internal/telegraph"
@@ -95,8 +96,16 @@ func run() error {
 	// service. Fields carry correlation/job/rule ids, never message content
 	// or credentials.
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: workerLogLevel(),
 	}))
+
+	centralLogs, logErr := observability.NewFromEnv()
+	if logErr != nil {
+		log.Warn("central Logger client could not be initialized; stdout logging remains active", "error", logErr)
+	} else if centralLogs != nil {
+		log.Info("central Logger client initialized", "address", os.Getenv("ATF_LOGGER_ADDR"))
+		defer centralLogs.Close()
+	}
 
 	cfg, err := config.FromEnv()
 	if err != nil {
@@ -154,7 +163,8 @@ func run() error {
 	}
 	defer schedStore.Close()
 
-	engine := delivery.New(store, rules, gateway, schedStore, &slogLogger{log}, &counters{}, workerID(), cfg.MediaDir, delivery.Options{
+	deliveryLog := &slogLogger{log: log, central: centralLogs, module: "worker.delivery"}
+	engine := delivery.New(store, rules, gateway, schedStore, deliveryLog, &counters{}, workerID(), cfg.MediaDir, delivery.Options{
 		NumWorkers:            cfg.NumWorkers,
 		BatchSize:             cfg.BatchSize,
 		LeaseDuration:         time.Duration(cfg.LeaseSeconds * float64(time.Second)),
@@ -163,7 +173,8 @@ func run() error {
 		RPCTimeout:            60 * time.Second,
 	})
 
-	schedEngine := scheduler.New(schedStore, gateway, &slogLogger{log}, &schedCounters{}, workerID(), "", scheduler.Defaults())
+	schedulerLog := &slogLogger{log: log, central: centralLogs, module: "worker.scheduler"}
+	schedEngine := scheduler.New(schedStore, gateway, schedulerLog, &schedCounters{}, workerID(), "", scheduler.Defaults())
 
 	tracker := health.NewTracker()
 	healthSrv := health.NewServer(cfg.ListenAddr, tracker, func(ctx context.Context) error {
@@ -418,11 +429,38 @@ func dbLabel(cfg *config.Config) string {
 
 // --- adapters: keep the engine free of logging/metrics plumbing ------------ //
 
-type slogLogger struct{ log *slog.Logger }
+type slogLogger struct {
+	log     *slog.Logger
+	central *observability.Client
+	module  string
+}
 
-func (l *slogLogger) Info(msg string, args ...any)  { l.log.Info(msg, args...) }
-func (l *slogLogger) Warn(msg string, args ...any)  { l.log.Warn(msg, args...) }
-func (l *slogLogger) Error(msg string, args ...any) { l.log.Error(msg, args...) }
+func (l *slogLogger) Info(msg string, args ...any) {
+	l.log.Info(msg, args...)
+	if l.central != nil { l.central.Emit("INFO", "", l.module, msg, args...) }
+}
+func (l *slogLogger) Warn(msg string, args ...any) {
+	l.log.Warn(msg, args...)
+	if l.central != nil { l.central.Emit("WARN", "", l.module, msg, args...) }
+}
+func (l *slogLogger) Error(msg string, args ...any) {
+	l.log.Error(msg, args...)
+	if l.central != nil { l.central.Emit("ERROR", "", l.module, msg, args...) }
+}
+
+// workerLogLevel controls the local JSON stream. Central collection is
+// separately governed by ATF_LOG_LEVELS / LOG_LEVEL in the log client.
+func workerLogLevel() slog.Level {
+	level := strings.ToLower(strings.TrimSpace(os.Getenv("LOG_LEVEL")))
+	if level == "" { level = strings.ToLower(strings.TrimSpace(os.Getenv("ATF_WORKER_LOG_LEVEL"))) }
+	switch level {
+	case "trace", "debug": return slog.LevelDebug
+	case "warn", "warning": return slog.LevelWarn
+	case "error": return slog.LevelError
+	case "info", "": return slog.LevelInfo
+	default: return slog.LevelInfo
+	}
+}
 
 type counters struct {
 	mu        sync.Mutex
