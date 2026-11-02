@@ -20,6 +20,8 @@ WORKDIR /src
 
 # Module metadata first: dependency download is its own cache layer, so a
 # source-only change does not re-resolve the module graph.
+COPY api/go.mod api/go.sum ./api/
+COPY api/proto/ ./api/proto/
 COPY worker/go.mod worker/go.sum ./worker/
 RUN --mount=type=cache,id=atf-worker-gomod,target=/root/go/pkg/mod \
     --mount=type=cache,id=atf-worker-goenv,target=/root/.cache/go-build \
