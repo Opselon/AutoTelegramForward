@@ -25,7 +25,10 @@ func (h *fanoutHandler) Enabled(ctx context.Context, level slog.Level) bool {
 }
 
 func (h *fanoutHandler) Handle(ctx context.Context, record slog.Record) error {
-	err := h.stdout.Handle(ctx, record)
+	var err error
+	if h.stdout.Enabled(ctx, record.Level) {
+		err = h.stdout.Handle(ctx, record)
+	}
 	if h.central == nil {
 		return err
 	}
