@@ -94,8 +94,16 @@ func run() error {
 	// Logger and the Python Core emit, so one collector handles every
 	// service. Fields carry correlation/job/rule ids, never message content
 	// or credentials.
+	logLevel := slog.LevelInfo
+	if strings.EqualFold(os.Getenv("LOG_LEVEL"), "debug") {
+		logLevel = slog.LevelDebug
+	} else if strings.EqualFold(os.Getenv("LOG_LEVEL"), "warn") {
+		logLevel = slog.LevelWarn
+	} else if strings.EqualFold(os.Getenv("LOG_LEVEL"), "error") {
+		logLevel = slog.LevelError
+	}
 	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
+		Level: logLevel,
 	}))
 
 	cfg, err := config.FromEnv()
