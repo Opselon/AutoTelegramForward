@@ -1,0 +1,67 @@
+%%{init: {'theme':'dark','themeVariables':{'fontSize':'13px'}}}%%
+flowchart TD
+    classDef py fill:#1a3a5c,stroke:#4a9,color:#eef
+    classDef go fill:#3a2a1a,stroke:#c84,color:#fec
+    classDef dead fill:#4a2020,stroke:#c44,color:#fcc
+    classDef dup fill:#3a3a1a,stroke:#aa4,color:#ffd
+
+    IN[Incoming Telegram Event] --> NORM[Normalizer<br/>dispatcher.py:316]
+    NORM --> ROUTE{matching_rules<br/>per-owner single match<br/>services.py:622}
+    ROUTE --> SRC[Source routing<br/>RT-*]
+    ROUTE --> AUD[Audience filters<br/>message_category / VIP]
+
+    AUD --> FLT[FilterEngine.evaluate<br/>services.py:37]
+    FLT --> MED[media_block_reason<br/>media_filter.py:77]
+    MED --> POL[ContentPolicy.evaluate<br/>content_policy.py:823]
+    POL --> FEN[forward_every_n<br/>pipeline.py:1036]
+
+    FEN --> ACC[/Accepted message/]
+    ACC --> DUP[content-dedup claim<br/>pipeline.py:861]
+    DUP --> TRANS
+
+    subgraph TRANS[Transformation - pipeline.py:1401-1580]
+        direction TB
+        CLN[CleanerRule.clean<br/>entities.py:2335] --> LME[LinkManagementEngine<br/>services.py:758]
+        LME --> EMO[remove_emojis<br/>pipeline.py:1461]
+        EMO --> CLMP1[_clamp_entities]
+        CLMP1 --> EMPTY{empty_after_clean?<br/>pipeline.py:1467}
+        EMPTY -->|yes| DROPMSG[(DROP<br/>only drop in transforms)]
+        EMPTY -->|no| POLX[ContentPolicy.transform<br/>content_policy.py:907]
+        POLX --> AI[AI transform<br/>pipeline.py:1524]
+        AI --> RPL[replace_text<br/>text_replace.apply_replacements]
+        RPL --> HDR[header / footer<br/>pipeline.py:1547 raw]
+        HDR --> ADV[watermark / link_buttons<br/>affiliate_kit :1558]
+        ADV --> CLMP2[_clamp_entities final]
+    end
+
+    CLMP2 --> TGT
+    subgraph TGT[Per-target - pipeline.py:1163-1296]
+        direction TB
+        LOOP{is_loop?} -->|yes| SKIP[skip this target only]
+        LOOP -->|no| TPOL[target-scoped override<br/>evaluate + transform :1197]
+        TPOL --> BRD[branding hop plan<br/>deduped per text :1243]
+        BRD --> ENQ[enqueue_delivery :1256]
+    end
+    ENQ --> JOB[(delivery_jobs)]
+    JOB --> WV
+
+    subgraph WV[Go Worker - delivery.go]
+        direction TB
+        PREF[preflight :190] --> GFILT[attached FilterRule<br/>re-evaluate :212]
+        GFILT --> RATE[per-target rate DEFER :221]
+        RATE --> FENCE[idempotency fence claim :238]
+        FENCE --> BSTAGE[branding stage 1<br/>post into C + checkpoint]
+        BSTAGE --> DISP[dispatch USER or BOT]
+        DISP --> FRS[FenceRecordSent]
+        FRS --> SAD[scheduleAutoDelete<br/>durable]
+    end
+    DISP --> TG[(Telegram)]
+
+    class FLT,MED,POL,FEN,DUP,CLN,LME,EMO,POLX,RPL,HDR,ADV,AI,CLMP1,CLMP2,TPOL,BRD,ENQ,CLN py
+    class PREF,GFILT,RATE,FENCE,BSTAGE,DISP,FRS,SAD,ROUTE,SRC,AUD,NORM go
+    class GDEAD1,GDEAD2 dead
+    class GDEAD3 dup
+
+    GDEAD1["DEAD: Go transform package<br/>RemoveEmojis/Hashtags/Usernames/Tidy<br/>F-08 - zero production callers"]:::dead
+    GDEAD2["DEAD: filter_inline_keyboard<br/>services.py:1065<br/>F-16 - zero callers"]:::dead
+    GDEAD3["DUPLICATED: emoji regex x3<br/>services.py:31 / entities.py:103 / transform.go:33<br/>F-03 all byte-identical, all wrong"]:::dup
