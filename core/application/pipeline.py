@@ -1273,16 +1273,34 @@ class DurableMessagePipeline:
                     decision.reason, policy.source or "task",
                 )
                 continue
-            for policy in chain[1:]:
-                if policy.is_active:
-                    rewritten, notes = policy.transform(target_text or "")
-                    if notes:
-                        target_text = rewritten
-                        logger.info(
-                            "[PIPELINE:POLICY_TARGET] [%s] Rule %s rewrote msg %s for target %s at %s: %s",
-                            ctx.correlation_id[:8], rule.id[:8], payload.message_id, target,
-                            policy.source or "target", notes,
-                        )
+            # The target-scoped override's REWRITE half. Two modes, and
+            # which one runs is the Stage 4.2 execution boundary:
+            #
+            # * Python owns the transform stage (the default) — the
+            #   rewrite runs here, on this target's copy, exactly as it
+            #   always has. The result is what the job carries as its
+            #   transformed text.
+            # * The Go Worker owns the transform stage
+            #   (ATF_WORKER_TRANSFORMS) — the rewrite must NOT run here.
+            #   The fan-out enqueues the raw snapshot and the Worker
+            #   re-runs the whole pipeline against it; applying the
+            #   override here too would double-apply it, and enqueueing
+            #   the Python-transformed result as the job's text would
+            #   make the Worker treat a rewritten text as the raw input.
+            #   The target override's DECISION half (the reject above)
+            #   is per-target routing, not text transformation, so it
+            #   stays in the fan-out in both modes.
+            if not self._worker_owns_transforms():
+                for policy in chain[1:]:
+                    if policy.is_active:
+                        rewritten, notes = policy.transform(target_text or "")
+                        if notes:
+                            target_text = rewritten
+                            logger.info(
+                                "[PIPELINE:POLICY_TARGET] [%s] Rule %s rewrote msg %s for target %s at %s: %s",
+                                ctx.correlation_id[:8], rule.id[:8], payload.message_id, target,
+                                policy.source or "target", notes,
+                            )
             # Branding hop: post this target's processed text into C once, then
             # hand the plan to the queue so the worker reproduces the hop. The
             # outcome (including a failure) is cached per distinct text — C must

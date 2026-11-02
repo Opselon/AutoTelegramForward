@@ -1,6 +1,7 @@
 package rulestore
 
 import (
+	"strconv"
 	"strings"
 
 	"atf/worker/internal/domain/cleaning"
@@ -39,9 +40,11 @@ func transformConfigFromMetadata(meta map[string]any) cleaning.Config {
 	cfg.LinkRewriteMap = mapField(meta, "link_rewrite_map")
 	cfg.RemoveEmojis = metaBool(meta, "remove_emojis", false)
 
-	if policyBlob, ok := meta["content_policy"].(map[string]any); ok {
+	policyBlob, _ := meta["content_policy"].(map[string]any)
+	if policyBlob != nil {
 		cfg.ContentPolicy = buildContentPolicy(policyBlob)
 	}
+	cfg.TargetOverrides = buildTargetOverrides(policyBlob, meta)
 	cfg.Replacements = buildReplacements(meta["replacements"])
 	cfg.Header = metaStr(meta, "header", "")
 	cfg.Footer = metaStr(meta, "footer", "")
@@ -292,4 +295,63 @@ func mapField(blob map[string]any, key string) map[string]string {
 		}
 	}
 	return out
+}
+
+// buildTargetOverrides reads the target-scoped policy overrides. They live
+// inside the content policy blob as
+// metadata["content_policy"]["target_policies"]["<chat id>"] = {...}
+// (entities.py:1256-1262, policy_chain's target lookup at :1403-1408).
+//
+// The flat metadata keys are NOT consulted: a target override is always
+// nested, because the flat form has no way to say which target it belongs
+// to. An override that is not a dict is ignored rather than coerced —
+// Python's ContentPolicy.from_dict would reject it the same way.
+func buildTargetOverrides(policyBlob map[string]any, meta map[string]any) map[string]*cleaning.ContentPolicy {
+	raw := nestedPolicyKey(policyBlob, meta, "target_policies")
+	if raw == nil {
+		return nil
+	}
+	out := make(map[string]*cleaning.ContentPolicy, len(raw))
+	for key, item := range raw {
+		blob, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		out[goChatKey(key)] = buildContentPolicy(blob)
+	}
+	return out
+}
+
+// nestedPolicyKey reads target_policies from the policy blob, tolerating a
+// blob that never carried the key (the common case: no target overrides).
+func nestedPolicyKey(policyBlob map[string]any, meta map[string]any, key string) map[string]any {
+	if policyBlob != nil {
+		if raw, ok := policyBlob[key].(map[string]any); ok {
+			return raw
+		}
+	}
+	if meta != nil {
+		if raw, ok := meta[key].(map[string]any); ok {
+			return raw
+		}
+	}
+	return nil
+}
+
+// goChatKey mirrors cleaning.chatKey (Python _chat_key). Duplicated here
+// rather than exported because the rulestore builds the map and the
+// pipeline looks it up: two call sites of one rule, and keeping the lookup
+// key algorithm next to each side is what makes the pair obviously equal.
+func goChatKey(chatID string) string {
+	trimmed := strings.TrimSpace(chatID)
+	if trimmed == "" {
+		return ""
+	}
+	if n, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+		return strconv.FormatInt(n, 10)
+	}
+	if f, err := strconv.ParseFloat(trimmed, 64); err == nil {
+		return strconv.FormatInt(int64(f), 10)
+	}
+	return trimmed
 }

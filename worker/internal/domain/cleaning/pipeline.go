@@ -2,6 +2,7 @@ package cleaning
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -132,6 +133,21 @@ func (p *Pipeline) Apply(raw string, cfg Config, entities []Entity) Result {
 		if applied {
 			text = next
 			notes = append(notes, "content_policy")
+		}
+	}
+
+	// 5b. The target-scoped override. The Python fan-out applies the
+	// matching entry's rewrite to THIS target's copy alone — one task can
+	// route A,B -> X,Y where X and Y carry different overrides — so the
+	// Worker applies it after the task policy, on the same target's text.
+	// An absent entry rewrites nothing; it never relaxes the task policy.
+	// (pipeline.py:1276-1285, the loop over chain[1:] — chain[0] is the
+	// task policy itself and was applied in step 5.)
+	if override := cfg.TargetOverrides[chatKey(cfg.TargetChatID)]; override != nil {
+		next, applied := applyContentPolicyRewrite(text, override)
+		if applied {
+			text = next
+			notes = append(notes, "target_override")
 		}
 	}
 
@@ -449,4 +465,25 @@ func tidy(text string) string {
 	text = manySpaces.ReplaceAllString(text, " ")
 	text = regexp.MustCompile(`[ \t]+\n`).ReplaceAllString(text, "\n")
 	return strings.TrimSpace(text)
+}
+
+// chatKey normalizes a chat id the way Python's _chat_key does
+// (entities.py:81-92): "-100123" as an int, a float and a string are one
+// chat; an @username passes through unchanged. The target-override lookup
+// matches on the same key the Python policy_chain builds its map with, so
+// a UI that sends "-100123" and a client that sends -100123 resolve to the
+// same override.
+func chatKey(chatID string) string {
+	trimmed := strings.TrimSpace(chatID)
+	if trimmed == "" {
+		return ""
+	}
+	// A leading "-" is part of a numeric supergroup id, not whitespace.
+	if n, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+		return strconv.FormatInt(n, 10)
+	}
+	if f, err := strconv.ParseFloat(trimmed, 64); err == nil {
+		return strconv.FormatInt(int64(f), 10)
+	}
+	return trimmed
 }
