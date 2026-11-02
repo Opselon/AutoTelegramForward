@@ -21,6 +21,7 @@ import (
 	"os"
 
 	"atf/worker/internal/domain/cleaning"
+	"atf/worker/internal/rulestore"
 )
 
 type testCase struct {
@@ -67,6 +68,21 @@ func boolField(m map[string]any, key string) bool {
 		}
 	}
 	return false
+}
+
+// rulestoreProbeTransform runs the case's metadata through the REAL
+// rulestore projection (the same transformConfigFromMetadata the delivery
+// engine consults), so the parity harness exercises the paid-addon
+// entitlement gate production enforces instead of a hand-built Config
+// that would silently bypass it. Returns nil when the metadata cannot be
+// encoded, in which case the caller leaves the add-ons off (fail closed).
+func rulestoreProbeTransform(meta map[string]any) *cleaning.Config {
+	raw, err := json.Marshal(meta)
+	if err != nil {
+		return nil
+	}
+	cfg := rulestore.ProbeTransform(meta, string(raw))
+	return &cfg
 }
 
 func strField(m map[string]any, key string) string {
@@ -229,18 +245,21 @@ func runCase(c testCase) string {
 			cfg.Replacements = entriesFromMap(c.Replacements)
 		}
 	case "advanced":
+		// The paid-addon entitlement gate is part of this engine's
+		// semantics, not an optional extra: Python's
+		// apply_content_transforms consults is_addon_enabled before
+		// link_buttons or affiliate_kit runs, and a Go side that builds
+		// the Config by hand would apply both without the entitlement —
+		// a premium-feature bypass the parity harness would hide by
+		// construction. Routing the case's metadata through the real
+		// rulestore projection makes the harness see what production
+		// sees: the gate fails closed.
+		//
+		// The watermark is not a paid add-on and projects directly.
 		cfg.Watermark = strField(c.Metadata, "watermark_text")
-		if buttons, ok := c.Metadata["link_buttons"].([]any); ok {
-			for _, item := range buttons {
-				if m, ok := item.(map[string]any); ok {
-					cfg.LinkButtons = append(cfg.LinkButtons, cleaning.LinkButton{
-						Text: strField(m, "text"), URL: strField(m, "url"),
-					})
-				}
-			}
-		}
-		if ak, ok := c.Metadata["affiliate_kit"].(map[string]any); ok && boolField(ak, "enabled") {
-			cfg.AffiliateKit = &cleaning.AffiliateKit{Prefix: strField(ak, "prefix")}
+		if probed := rulestoreProbeTransform(c.Metadata); probed != nil {
+			cfg.LinkButtons = probed.LinkButtons
+			cfg.AffiliateKit = probed.AffiliateKit
 		}
 	case "header_footer":
 		cfg.Header = c.Header
