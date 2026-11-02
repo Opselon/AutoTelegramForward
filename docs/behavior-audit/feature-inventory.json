@@ -1,0 +1,632 @@
+{
+ "schema_version": "2.0.0",
+ "generated_from": "source inspection of master@35ee530cc80cd17d1ac7d702c4e5f5ea8024889a",
+ "generated_at": "2026-11-02",
+ "baseline_prs": [
+  "#284 (Go Worker execution boundary)",
+  "#286 (PostgreSQL persistence + RuleStore)",
+  "#288 (BOT transport, branding, durable scheduler)"
+ ],
+ "status_vocabulary": [
+  "FULLY_IMPLEMENTED",
+  "PARTIALLY_IMPLEMENTED",
+  "LEGACY_ONLY",
+  "UI_ONLY",
+  "STORED_BUT_UNUSED",
+  "UNREFERENCED_HELPER",
+  "DUPLICATED",
+  "INCOMPATIBLE",
+  "NOT_IMPLEMENTED",
+  "NOT_VERIFIED"
+ ],
+ "engines": {
+  "note": "Five independent text/decision systems exist. See docs/behavior-audit/COORDINATOR_VOCABULARY.md.",
+  "filter_rule": {
+   "py": "core/domain/services.py:37 FilterEngine.evaluate",
+   "go": "worker/internal/engine/filter/filter.go:84",
+   "go_called_from": "worker/internal/engine/delivery/delivery.go:212"
+  },
+  "content_policy": {
+   "py": "core/domain/content_policy.py:691 ContentPolicy",
+   "go": null,
+   "go_note": "Not re-evaluated at delivery; baked into payload (delivery.go:193-199)"
+  },
+  "cleaner": {
+   "py": "core/domain/entities.py:2335 CleanerRule.clean",
+   "go": "worker/internal/engine/transform/transform.go RemoveEmojis etc.",
+   "go_note": "UNREFERENCED_HELPER - no production callers"
+  },
+  "link_engine": {
+   "py": "core/domain/services.py:758 LinkManagementEngine",
+   "go": null
+  },
+  "legacy_transform_text": {
+   "py": "core/domain/services.py:194 FilterEngine.transform_text",
+   "go": null,
+   "prod_callers": [
+    "sync_engine.py:261 (edit sync)",
+    "servicers.py:1523 (gRPC TestRule preview)"
+   ],
+   "note": "NOT on the durable pipeline"
+  }
+ },
+ "features": [
+  {
+   "id": "FLT-001",
+   "name": "FilterRule attached-filter evaluation",
+   "owner": "Python (ingest) + Go (delivery)",
+   "runtime_path": "pipeline.py:918 -> FilterEngine.evaluate (services.py:37); delivery.go:212 -> filter.Engine.Evaluate",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:37-190; filter.go:84-222; F-11/F-12",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "FLT-002",
+   "name": "FilterRule service-message drop",
+   "owner": "Python + Go",
+   "runtime_path": "FilterEngine.evaluate step 1",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:61-66; filter.go:85-96",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "FLT-003",
+   "name": "FilterRule media allow/deny",
+   "owner": "Python + Go",
+   "runtime_path": "FilterEngine.evaluate steps 2-3",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:69-77; filter.go:106-135",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "FLT-004",
+   "name": "FilterRule block_links",
+   "owner": "Python only at delivery",
+   "runtime_path": "pipeline.py:957 link_block_reason; FilterEngine services.py:79",
+   "status": "PARTIALLY_IMPLEMENTED",
+   "evidence": "F-12: Go rulestore never populates rule.FilterRule.BlockLinks (rulestore.go:420-462)",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "FLT-005",
+   "name": "FilterRule min/max length bounds",
+   "owner": "Python + Go",
+   "runtime_path": "FilterEngine.evaluate steps 4-5",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:83-87; filter.go:137-141; F-11 (order differs)",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "FLT-006",
+   "name": "FilterRule blacklist/whitelist keywords",
+   "owner": "Python + Go",
+   "runtime_path": "FilterEngine.evaluate steps 6-7 via content_policy.contains_word",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:89-95; filter.go:143-160",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "FLT-007",
+   "name": "FilterRule regex_block / regex_require",
+   "owner": "Python + Go",
+   "runtime_path": "FilterEngine.evaluate steps 8-9, compile_user_regex, fails closed",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:99-170; filter.go:163-208",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "FLT-008",
+   "name": "FilterRule regex_patterns legacy compat",
+   "owner": "Python + Go",
+   "runtime_path": "legacy list becomes block or require depending on keyword shape",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:104-116; filter.go:172-181",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "FLT-009",
+   "name": "FilterRule is_enabled (v30 park)",
+   "owner": "Python + Go",
+   "runtime_path": "evaluation skipped when disabled",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:68-72; filter.go:98-103",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "POL-001",
+   "name": "ContentPolicy master switch",
+   "owner": "Python",
+   "runtime_path": "content_policy.evaluate is_active (enabled None/True/False semantics)",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "content_policy.py:823-829",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "POL-002",
+   "name": "blacklist_off / whitelist_off per-list switches (v30)",
+   "owner": "Python",
+   "runtime_path": "evaluate skips a parked list but keeps its words",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "content_policy.py:823, 855-906",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "POL-003",
+   "name": "whitelist_mode any/all/phrase",
+   "owner": "Python",
+   "runtime_path": "evaluate per mode; phrase joins words with a space",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "content_policy.py:856-875",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "POL-004",
+   "name": "Policy match flags (case_sensitive/word_boundary/normalize)",
+   "owner": "Python",
+   "runtime_path": "fold_text + needle patterns incl. Arabic/Persian folding",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "content_policy.py:131-258",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "POL-005",
+   "name": "ContentPolicy regex block/require with ReDoS guard",
+   "owner": "Python",
+   "runtime_path": "compile_user_regex, _hostile_pattern, bounded_search 8192",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "content_policy.py:312-352, 100-118",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "POL-006",
+   "name": "policy_chain (task + source + target override)",
+   "owner": "Python",
+   "runtime_path": "entities.py:1380; additive-only constraints",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "entities.py:1380-1402; pipeline.py:974, 1197-1205",
+   "migration_stage": "4.5"
+  },
+  {
+   "id": "POL-007",
+   "name": "ContentPolicy.transform (remove_links/strip/replacements)",
+   "owner": "Python",
+   "runtime_path": "single-pass composition (opposite of RPL sequential)",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "content_policy.py:907-944, 979-1006",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "MED-001",
+   "name": "Unified media gate (block flags + allow list)",
+   "owner": "Python",
+   "runtime_path": "media_block_reason; allow-list takes precedence",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "media_filter.py:65-92",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "MED-002",
+   "name": "link_block_reason task-level gate",
+   "owner": "Python",
+   "runtime_path": "has_link() predicate",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "media_filter.py:94-99; pipeline.py:957; F-14",
+   "migration_stage": "4.1"
+  },
+  {
+   "id": "CLN-001",
+   "name": "Cleaner master switch + build_cleaner",
+   "owner": "Python",
+   "runtime_path": "cleaner_enabled derives True from legacy flags",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "entities.py:927, 808-880",
+   "migration_stage": "4.2"
+  },
+  {
+   "id": "CLN-002",
+   "name": "CleanerRule patterns (literal/regex, case)",
+   "owner": "Python",
+   "runtime_path": "clean() pattern pass, re.error swallowed",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "entities.py:2380-2391",
+   "migration_stage": "4.2"
+  },
+  {
+   "id": "CLN-003",
+   "name": "Cleaner URL/mention/hashtag/emoji/phone/empty-line",
+   "owner": "Python",
+   "runtime_path": "clean() in fixed order",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "entities.py:2391-2405",
+   "migration_stage": "4.2"
+  },
+  {
+   "id": "CLN-004",
+   "name": "Cleaner strip_buttons (inline keyboard)",
+   "owner": "Python",
+   "runtime_path": "applied by pipeline, not by clean()",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "pipeline.py:1424-1431",
+   "migration_stage": "4.2"
+  },
+  {
+   "id": "CLN-005",
+   "name": "Cleaner apply_to_caption=False",
+   "owner": "Python",
+   "runtime_path": "flag stored but engine sees caption via effective_text",
+   "status": "PARTIALLY_IMPLEMENTED",
+   "evidence": "F-09; entities.py:2366, 2498-2502",
+   "migration_stage": "4.2"
+  },
+  {
+   "id": "CLN-006",
+   "name": "Cleaner cleaner_config blob",
+   "owner": "Python",
+   "runtime_path": "config key wins over legacy flag",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "entities.py:796, 1017-1073",
+   "migration_stage": "4.2"
+  },
+  {
+   "id": "RPL-001",
+   "name": "ReplaceEntry storage compat (legacy/structured/rid-keyed)",
+   "owner": "Python",
+   "runtime_path": "to_value/to_rule_value/entry_from_value/normalize_map",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "text_replace.py:109-209, 247-338",
+   "migration_stage": "4.3"
+  },
+  {
+   "id": "RPL-002",
+   "name": "Literal + regex modes, flags i/c/m/s/x, whole-word",
+   "owner": "Python",
+   "runtime_path": "compile_entry",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "text_replace.py:350-373",
+   "migration_stage": "4.3"
+  },
+  {
+   "id": "RPL-003",
+   "name": "Exact-case-first (smart case) legacy behavior",
+   "owner": "Python",
+   "runtime_path": "apply_entry literal branch",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "text_replace.py:385-390",
+   "migration_stage": "4.3"
+  },
+  {
+   "id": "RPL-004",
+   "name": "Priority ordering, stable ties, sequential application",
+   "owner": "Python",
+   "runtime_path": "apply_replacements sorts by -priority, stable",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "text_replace.py:415-439",
+   "migration_stage": "4.3"
+  },
+  {
+   "id": "RPL-005",
+   "name": "Replace management (ReplaceRuleService, all surfaces)",
+   "owner": "Python",
+   "runtime_path": "create/validate/store/edit/enable/priority/duplicate/delete",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "core/application/replace_rules.py; grpc_server/replace_servicer.py; replace_bot_ui.py",
+   "migration_stage": "4.3"
+  },
+  {
+   "id": "UNI-001",
+   "name": "Emoji removal (3 byte-identical regex copies)",
+   "owner": "Python + Go (identical output)",
+   "runtime_path": "EMOJI_REGEX services.py:31; _CLEANER_EMOJI_RE entities.py:103; Go transform.go:33",
+   "status": "INCOMPATIBLE",
+   "evidence": "F-03: destroys non-emoji SMP, leaves ZWJ/keycap fragments",
+   "migration_stage": "4.2"
+  },
+  {
+   "id": "UNI-002",
+   "name": "Go transform package emoji/hashtag/username helpers",
+   "owner": "Go",
+   "runtime_path": "RemoveEmojis/Hashtags/Usernames/Tidy/Clamp",
+   "status": "UNREFERENCED_HELPER",
+   "evidence": "F-08: delivery.go:87,120 constructs the engine but no method is called",
+   "migration_stage": "4.2"
+  },
+  {
+   "id": "LNK-001",
+   "name": "LinkPolicy 8-value enum + fail-closed resolve",
+   "owner": "Python",
+   "runtime_path": "value_objects.py:151; services.py:1001",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:1001-1028",
+   "migration_stage": "4.4"
+  },
+  {
+   "id": "LNK-002",
+   "name": "Domain allowlist/blocklist, subdomain match",
+   "owner": "Python",
+   "runtime_path": "matches_domain",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:822-835",
+   "migration_stage": "4.4"
+  },
+  {
+   "id": "LNK-003",
+   "name": "Link rewrite map",
+   "owner": "Python",
+   "runtime_path": "process_text_and_entities _rewrite_url",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:836-1000",
+   "migration_stage": "4.4"
+  },
+  {
+   "id": "LNK-004",
+   "name": "SSRF/private-IP URL safety",
+   "owner": "Python",
+   "runtime_path": "is_safe_url",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:769-805",
+   "migration_stage": "4.4"
+  },
+  {
+   "id": "LNK-005",
+   "name": "UTF-16 entity offset shifting",
+   "owner": "Python",
+   "runtime_path": "_shifted",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:973-1000",
+   "migration_stage": "4.4"
+  },
+  {
+   "id": "LNK-006",
+   "name": "Inline keyboard URL-button filtering",
+   "owner": "Python",
+   "runtime_path": "filter_inline_keyboard",
+   "status": "UNREFERENCED_HELPER",
+   "evidence": "F-16: zero production callers across core/web/api/mobile/worker",
+   "migration_stage": "4.4"
+  },
+  {
+   "id": "LNK-007",
+   "name": "remove_links (cleaner toggle) + link_replacement precedence",
+   "owner": "Python",
+   "runtime_path": "pipeline if/elif vs legacy precedence",
+   "status": "PARTIALLY_IMPLEMENTED",
+   "evidence": "F-04: pipeline.py:1438 vs services.py:268-271",
+   "migration_stage": "4.2/4.4"
+  },
+  {
+   "id": "ADV-001",
+   "name": "Watermark (append, dedup, 200 cap)",
+   "owner": "Python",
+   "runtime_path": "apply_content_transforms step 1",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:1441-1458; pipeline.py:1558",
+   "migration_stage": "4.4"
+  },
+  {
+   "id": "ADV-002",
+   "name": "Link buttons add-on",
+   "owner": "Python",
+   "runtime_path": "apply_content_transforms step 2 + is_addon_enabled",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:1460-1470",
+   "migration_stage": "4.4"
+  },
+  {
+   "id": "ADV-003",
+   "name": "Affiliate kit URL prefixing",
+   "owner": "Python",
+   "runtime_path": "apply_content_transforms step 3",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:1472-1484",
+   "migration_stage": "4.4"
+  },
+  {
+   "id": "ADV-004",
+   "name": "Header/Footer (durable path)",
+   "owner": "Python",
+   "runtime_path": "pipeline.py:1547 apply_header_footer",
+   "status": "PARTIALLY_IMPLEMENTED",
+   "evidence": "F-15: placeholders never interpolated on the durable path",
+   "migration_stage": "4.4"
+  },
+  {
+   "id": "ADV-005",
+   "name": "Header/Footer placeholder interpolation",
+   "owner": "Python",
+   "runtime_path": "HeaderFormatter.format_text",
+   "status": "LEGACY_ONLY",
+   "evidence": "F-15: only transform_text (sync_engine/gRPC preview) calls it",
+   "migration_stage": "4.4"
+  },
+  {
+   "id": "ADV-006",
+   "name": "Auto-delete TTL",
+   "owner": "Python (in-memory) + Go (durable scheduler)",
+   "runtime_path": "get_auto_delete_seconds; scheduleAutoDelete",
+   "status": "DUPLICATED",
+   "evidence": "F-17 bounds disagree; F-19 Python loop lost on restart",
+   "migration_stage": "4.5"
+  },
+  {
+   "id": "ADV-007",
+   "name": "Edit time window",
+   "owner": "Python",
+   "runtime_path": "is_edit_within_window",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:1513-1531; pipeline.py:820",
+   "migration_stage": "4.5"
+  },
+  {
+   "id": "ADV-008",
+   "name": "Dispatch delay",
+   "owner": "Python",
+   "runtime_path": "get_dispatch_delay",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:1538; F-17 bound disagreement",
+   "migration_stage": "4.4"
+  },
+  {
+   "id": "AI-001",
+   "name": "AI rewrite (config, gate, fallback policy)",
+   "owner": "Python",
+   "runtime_path": "pipeline.py:1616 _run_ai_transform; 1724 _handle_ai_fallback",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "pipeline.py:1616-1800; entities.py:427 AIFallbackPolicy",
+   "migration_stage": "4.4"
+  },
+  {
+   "id": "RT-001",
+   "name": "SmartRoutingEngine rule matching",
+   "owner": "Python",
+   "runtime_path": "services.py:415; per-owner single match; multi_route",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:415-655",
+   "migration_stage": "4.5"
+  },
+  {
+   "id": "RT-002",
+   "name": "Loop prevention per target",
+   "owner": "Python",
+   "runtime_path": "is_loop skip (not drop)",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "pipeline.py:1162-1176",
+   "migration_stage": "4.5"
+  },
+  {
+   "id": "EVT-001",
+   "name": "Event lifecycle (10 update types)",
+   "owner": "Python",
+   "runtime_path": "dispatcher.py:314-404 branch order",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "c-handoff 1; dispatcher.py",
+   "migration_stage": "4.5"
+  },
+  {
+   "id": "DUP-001",
+   "name": "Content fingerprint dedup (claim/release)",
+   "owner": "Python",
+   "runtime_path": "claim_content_hash + _release_content_claim in finally",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "pipeline.py:861, 752",
+   "migration_stage": "4.5"
+  },
+  {
+   "id": "DUP-002",
+   "name": "dedupe_policy STRICT/RELAXED/DISABLED",
+   "owner": "Python",
+   "runtime_path": "-",
+   "status": "STORED_BUT_UNUSED",
+   "evidence": "F-01: persisted by SQLite/Postgres/proto/backup, zero runtime readers",
+   "migration_stage": "4.5"
+  },
+  {
+   "id": "DUP-003",
+   "name": "DuplicateDetectionService",
+   "owner": "Python",
+   "runtime_path": "-",
+   "status": "UNREFERENCED_HELPER",
+   "evidence": "services.py:678; only test caller",
+   "migration_stage": "4.5"
+  },
+  {
+   "id": "FEN-001",
+   "name": "Forward Every N",
+   "owner": "Python",
+   "runtime_path": "forward_interval + atomic counter UPSERT",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "pipeline.py:1036-1084; F-05 (runs after all filters)",
+   "migration_stage": "4.5"
+  },
+  {
+   "id": "KW-001",
+   "name": "Keyword confirmation/reply",
+   "owner": "Python",
+   "runtime_path": "classify_keyword_trigger + job_kind=keyword_reply",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "services.py:1477; pipeline.py:1298-1330",
+   "migration_stage": "4.5"
+  },
+  {
+   "id": "BRD-001",
+   "name": "Branding hop pipeline side",
+   "owner": "Python",
+   "runtime_path": "branding.py should_hop; _branding_intent",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "pipeline.py:543, 1137-1160",
+   "migration_stage": "4.5"
+  },
+  {
+   "id": "ALB-001",
+   "name": "Album aggregation",
+   "owner": "Python",
+   "runtime_path": "AlbumAggregator LRU+TTL",
+   "status": "PARTIALLY_IMPLEMENTED",
+   "evidence": "F-02: TTL hard-coded 2.0s at dispatcher.py:96; rule field never read",
+   "migration_stage": "4.5"
+  },
+  {
+   "id": "DLV-001",
+   "name": "Durable queue + delivery jobs",
+   "owner": "Python (enqueue) + Go (claim/dispatch)",
+   "runtime_path": "pipeline enqueue; delivery.go",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "durable_queue.py; delivery.go:190-360",
+   "migration_stage": "-"
+  },
+  {
+   "id": "DLV-002",
+   "name": "USER/BOT delivery transport",
+   "owner": "Python + Go",
+   "runtime_path": "entities.py:642 delivery_transport; delivery.go transportFor",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "entities.py:642-663; delivery.go",
+   "migration_stage": "-"
+  },
+  {
+   "id": "DLV-003",
+   "name": "Send idempotency fence",
+   "owner": "Go (durable)",
+   "runtime_path": "FenceClaim before first Telegram side effect",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "delivery.go:238-300",
+   "migration_stage": "-"
+  },
+  {
+   "id": "DLV-004",
+   "name": "Branding stage-1 checkpoint + stage-2 replay",
+   "owner": "Go",
+   "runtime_path": "ensureBrandingStage1",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "delivery.go brand_stage; F-19",
+   "migration_stage": "-"
+  },
+  {
+   "id": "DLV-005",
+   "name": "Per-target rate limit",
+   "owner": "Python + Go",
+   "runtime_path": "targetRateWait (defer, never an attempt)",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "delivery.go:221-232",
+   "migration_stage": "-"
+  },
+  {
+   "id": "SET-000",
+   "name": "SETTING_SPECS registry (76 keys)",
+   "owner": "Python",
+   "runtime_path": "rule_settings.py:96; validated settings API",
+   "status": "FULLY_IMPLEMENTED",
+   "evidence": "a-handoff 1; settings-inventory.json",
+   "migration_stage": "4.x"
+  },
+  {
+   "id": "SET-001",
+   "name": "Settings stored but never read (12 keys)",
+   "owner": "Python",
+   "runtime_path": "debug_mode, process_raw_text, feature_group, sender_type, translate_lang, blacklist_users, whitelist_users, news_digest, button_to_text, ...",
+   "status": "STORED_BUT_UNUSED",
+   "evidence": "a-handoff 1",
+   "migration_stage": "4.x"
+  }
+ ],
+ "feature_count": 64
+}
