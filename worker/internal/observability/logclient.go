@@ -140,6 +140,8 @@ func (c *Client) Emit(level, category, module, message string, attrs ...any) {
 		case "owner_user_id", "user_id": userID = toInt64(value)
 		case "event_type": eventType = fmt.Sprint(value)
 		case "reason_code", "event_code": reasonCode = fmt.Sprint(value)
+		case "module":
+			if value != nil { module = fmt.Sprint(value) }
 		}
 		if secretField.MatchString(key) || isContentField(key) {
 			fields[key] = "[REDACTED]"
