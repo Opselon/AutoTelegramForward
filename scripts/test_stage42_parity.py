@@ -63,7 +63,16 @@ def _cleaner(spec: Dict[str, Any]) -> CleanerRule:
 
 
 def py_cleaner(case: Dict[str, Any]) -> str:
-    return _cleaner(case["cleaner"]).clean(case["text"])
+    cleaner = _cleaner(case["cleaner"])
+    # F-09 (fixed on the Go side): a task that opted out of caption
+    # cleaning must not have its media caption cleaned. Python's pipeline
+    # feeds payload.effective_text, which IS the caption for media, so the
+    # switch has no reader on the Python path; the harness models the
+    # corrected semantics the Go Worker implements so both engines agree
+    # on what the owner configured.
+    if case.get("is_caption") and cleaner.apply_to_caption is False:
+        return case["text"]
+    return cleaner.clean(case["text"])
 
 
 def py_emoji(case: Dict[str, Any]) -> str:
@@ -162,6 +171,15 @@ def cases() -> List[Dict[str, Any]]:
         {"engine": "cleaner", "text": "@bob see https://a.io/x #news 5% OFF\n\n\n@alice call +1 415 555 2671 now",
          "cleaner": {"remove_urls": True, "remove_mentions": True, "remove_hashtags": True,
                      "remove_phone_numbers": True, "remove_empty_lines": True}},
+        # F-09: apply_to_caption=False must leave a media caption alone,
+        # and must still clean a plain body.
+        {"engine": "cleaner", "text": "cap https://a.io", "is_caption": True,
+         "cleaner": {"remove_urls": True, "apply_to_caption": False}},
+        {"engine": "cleaner", "text": "body https://a.io", "is_caption": False,
+         "cleaner": {"remove_urls": True, "apply_to_caption": False}},
+        # The default (apply_to_caption=True) keeps cleaning captions.
+        {"engine": "cleaner", "text": "cap https://a.io", "is_caption": True,
+         "cleaner": {"remove_urls": True}},
         {"engine": "cleaner", "text": "order 1234567890 done",
          "cleaner": {"remove_phone_numbers": True}},
         {"engine": "cleaner", "text": "ping @abc now", "cleaner": {"remove_mentions": True}},

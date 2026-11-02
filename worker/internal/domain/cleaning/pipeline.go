@@ -42,6 +42,33 @@ type Pipeline struct {
 // use: every call works from the caller's own config and input.
 func NewPipeline() *Pipeline { return &Pipeline{} }
 
+// CaptionHint tells the pipeline whether the text it is handed is a media
+// message's caption rather than a plain body.
+//
+// The Python pipeline derives this implicitly — it always feeds
+// payload.effective_text, which IS the caption for media
+// (entities.py:2498) — and so it cannot honor the cleaner's
+// apply_to_caption=False switch: the switch has no reader (finding F-09,
+// "an owner who turns the caption switch off still gets captions
+// cleaned"). The Go side takes the flag seriously instead: when the text
+// is a caption and the task opted out of caption cleaning, the TEXT
+// cleaner is skipped (markup-level options such as strip_buttons still
+// apply, exactly as Python's pipeline applies them outside clean()).
+//
+// Zero value (IsCaption false) is the pre-4.4 behavior: clean everything
+// handed in, which remains correct for a plain-body message.
+type CaptionHint struct {
+	IsCaption bool
+}
+
+// Apply is the compatibility entry point: it runs the pipeline with no
+// caption information, so the text is treated as a plain body and every
+// configured stage runs. Callers that know whether the text is a caption
+// should prefer ApplyText.
+func (p *Pipeline) Apply(raw string, cfg Config, entities []Entity) Result {
+	return p.ApplyText(raw, cfg, entities, CaptionHint{})
+}
+
 // Result is what _apply_transforms returns to its caller: the transformed
 // text, whether the transform pipeline decided the message has nothing left
 // to send, and a short record of which stages changed the text.
@@ -58,20 +85,27 @@ type Result struct {
 	EntitiesDropped bool
 }
 
-// Apply runs the full ordered transform on the raw source text. The caller
-// hands it the payload's effective text (the caption for media, the body
-// otherwise) and the task's resolved configuration; it returns the text the
-// target should receive.
+// ApplyText runs the full ordered transform on the raw source text. The
+// caller hands it the payload's effective text (the caption for media, the
+// body otherwise), the task's resolved configuration, and a caption hint
+// carrying whether that text is a caption. It returns the text the target
+// should receive.
 //
 // It never returns an error. Every Python failure mode here is "deliver what
 // you have and log", and the callers that need to drop use Result.
-func (p *Pipeline) Apply(raw string, cfg Config, entities []Entity) Result {
+func (p *Pipeline) ApplyText(raw string, cfg Config, entities []Entity, ch CaptionHint) Result {
 	text := raw
 	var notes []string
 	ents := entities
 
-	// 1. Cleaner — removal-only, first, never drops.
-	if cfg.Cleaner != nil && cfg.Cleaner.IsActive {
+	// 1. Cleaner — removal-only, first, never drops. F-09: a task that
+	// opted out of caption cleaning must not have its media caption
+	// cleaned. Python's pipeline cannot honor the switch because it feeds
+	// effective_text unconditionally; the Go side reads the payload's own
+	// has_media flag, so it can. strip_buttons still applies — in Python
+	// the pipeline enforces that markup-level option outside clean().
+	skipTextCleaner := ch.IsCaption && cfg.Cleaner != nil && cfg.Cleaner.IsActive && !cfg.Cleaner.ApplyToCaption
+	if !skipTextCleaner && cfg.Cleaner != nil && cfg.Cleaner.IsActive {
 		cleaned := cfg.Cleaner.Clean(text)
 		if cleaned != text {
 			notes = append(notes, "cleaner")

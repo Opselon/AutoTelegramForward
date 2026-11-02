@@ -107,8 +107,16 @@ func (e *Engine) applyTransformPipeline(ctx context.Context, j *job.DeliveryJob,
 		return nil
 	}
 
+	ch := cleaning.CaptionHint{
+		// The effective text for a media message IS its caption
+		// (payload.effective_text, entities.py:2498). The enqueue path
+		// snapshots that text under raw_text, so the only way the pipeline
+		// can tell a caption from a body is the payload's own has_media
+		// flag — the same field Python's effective_text consults.
+		IsCaption: j.Payload.HasMedia(),
+	}
 	cfg := transformConfig(j, r)
-	result := e.transformsPipeline.Apply(raw, cfg, nil)
+	result := e.transformsPipeline.ApplyText(raw, cfg, nil, ch)
 
 	// Record the decision — even the null result, because "which stages
 	// ran" is the answer to "was any message silently skipped?".
