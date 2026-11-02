@@ -642,3 +642,25 @@ see. Detail, root cause and evidence are in `docs/feature-coverage-matrix.md` §
    Status: `FAIL → fixed` (`rule_paused` / `RULE_PAUSED`).
 
 Regression tests: `core/tests/test_combined_pipeline_stages.py` (13 tests, real pipeline + real SQLite).
+---
+
+## Stage 4.0 re-audit (master 35ee530, 2026-11-02)
+
+The statuses above were evidence measured against `sha-9aeb96d` / `sha-649c969`. The
+Stage 4.0 business-logic inventory re-derived every switch against `35ee530`. Results:
+
+- **14 previously-PENDING switches resolved.** The complete grid is
+  `docs/behavior-audit/feature-inventory.json` (64 features) and the per-setting
+  verdicts in `docs/behavior-audit/settings-inventory.json`.
+- **Confirmed defects carried forward as findings** (not fixed in the audit PR, per its
+  scope rules): `dedupe_policy` inert (F-01), album TTL hard-coded (F-02), emoji regex
+  Unicode damage (F-03), `remove_links`/`link_replacement` precedence (F-04), Go
+  `BlockLinks` never populated (F-12), header placeholders dead on the durable path
+  (F-15), `filter_inline_keyboard` unwired (F-16), bound disagreements (F-17).
+  Full register: `docs/behavior-audit/FINDINGS.md`.
+- **Rows 25/26 (keyword reply)** remain as previously documented; the store-level defect
+  described there is fixed and the engine gate is verified reachable
+  (`pipeline.py:1298-1330`).
+- Row 14 (Rename), 15 (Draft), 18 (Delete Task) and the other UI-level switches were
+  outside the Stage 4.0 engine scope and remain as recorded above.
+

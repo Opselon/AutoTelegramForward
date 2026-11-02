@@ -15,6 +15,30 @@ Python Telegram Runtime over a versioned gRPC contract.
 See `docs/architecture/` for the boundary, the job lifecycle, the data
 ownership model and the migration plan; `docs/runbooks/` for operations.
 
+## What the worker actually owns (Stage 4.0 audit, `35ee530`)
+
+The Stage 4.0 business-logic inventory verified the real call graph. For a task that
+reaches this worker:
+
+- **Owned and executed here:** claim → preflight → attached `FilterRule` re-evaluation
+  (`delivery.go:212`) → per-target rate limit (defer) → idempotency fence claim →
+  branding stage 1 post into C with checkpoint → dispatch (USER or BOT transport) →
+  `FenceRecordSent` before commit → durable auto-delete scheduling
+  (`worker/internal/engine/scheduler`).
+- **NOT executed here (baked into the job payload by the Python pipeline):** every
+  ingest-side content policy, cleaner, replace, link and header/footer transform. The
+  package comment at `delivery.go:193-199` is the contract: re-running the task's own
+  transforms here would be a real defect.
+- **`worker/internal/engine/transform` is currently `UNREFERENCED_HELPER`** — the engine
+  is constructed (`delivery.go:87,120`) but no method has a production call site
+  (finding F-08). Its presence is why the audit exists: it looks like a completed port
+  and it is not one. Wiring it is a Stage 4.2–4.4 decision, not a bugfix.
+- **`rule.FilterRule.BlockLinks` is never populated** by the rulestore projection
+  (`rulestore.go:420-462`) — finding F-12. Latent until `ATF_WORKER_ENABLED` defaults on.
+
+Full evidence: `docs/architecture/migration-readiness.md` and
+`docs/behavior-audit/FINDINGS.md`.
+
 ## Build & test
 
 ```bash

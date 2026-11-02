@@ -1,0 +1,84 @@
+%%{init: {'theme':'dark','themeVariables':{'fontSize':'13px'}}}%%
+sequenceDiagram
+    autonumber
+    participant TG as Telegram
+    participant DSP as MessageDispatcher<br/>(dispatcher.py)
+    participant AGG as AlbumAggregator
+    participant PP as DurableMessagePipeline<br/>(pipeline.py)
+    participant MAT as materialize(bot defaults)
+    participant FE as FilterEngine + media gates
+    participant POL as ContentPolicy chain
+    participant XF as _apply_transforms
+    participant ENQ as per-target enqueue
+    participant Q as delivery_jobs
+    participant WV as Go Worker
+    participant RT as Telegram Runtime
+
+    TG->>DSP: raw update (new/edit/reply/album/deleted)
+    alt deleted messages
+        DSP->>DSP: _make_deleted_handler (:237)<br/>never enters pipeline
+    else edited message
+        DSP->>PP: _route_edit (:369) -> sync_engine<br/>mapped? edit target in place + return
+    else reply to mapped msg
+        DSP->>PP: _route_reply (:384) -> sync_engine
+    else album (media_group_id)
+        DSP->>AGG: ingest (:393), TTL 2.0s hard-coded (F-02)
+        AGG->>PP: flush (:406) with album_messages
+    else normal new message
+        DSP->>PP: process(payload, trigger) (:399)
+    end
+
+    PP->>PP: service-message drop (:681-685)
+    PP->>PP: matching_rules per-owner single match (:622-655)
+    PP->>PP: trigger_events filter (:690)
+
+    rect rgb(40,40,70)
+    note over PP,MAT: PER-RULE GATES - every one reads the merged view
+    PP->>MAT: materialize(rule, bot_tokens) (:787) FIRST
+    PP->>PP: paused / auto-paused (:789)
+    PP->>PP: since_ts too-old (:801)
+    PP->>PP: ignore_edits + edit window (:811,824)
+    PP->>PP: skip_history duplicate (:837)
+    PP->>PP: content-dedup claim (:861) released in finally (:752)
+    PP->>FE: FilterRule fetch + owner check (:892-916)
+    FE->>FE: FilterEngine.evaluate (:918)<br/>service / media / block_links / length / keywords / regex
+    PP->>PP: session time-limited DEFER (:935-949)
+    PP->>FE: media_block_reason + link_block_reason (:955)
+    PP->>POL: policy_chain(task+source).evaluate (:974-1016)
+    PP->>PP: forward_every_n slot gate (:1036) AFTER filters
+    end
+
+    rect rgb(30,60,40)
+    note over XF: TRANSFORM - fixed order, never drops (except empty_after_clean)
+    XF->>XF: 1 CleanerRule.clean (:1408)
+    XF->>XF: 2 LinkManagementEngine (:1448) / elif link_replacement (:1456)
+    XF->>XF: 3 remove_emojis flag (:1461)
+    XF->>XF: 4 _clamp_entities (:1464)
+    XF->>XF: 5 empty_after_clean DROP (:1467)
+    XF->>XF: 6 ContentPolicy.transform (:1496)
+    XF->>XF: 7 AI transform (:1524)
+    XF->>XF: 8 replace_text rule.replacements (:1543)
+    XF->>XF: 9 header/footer raw (:1547) - placeholders NOT interpolated (F-15)
+    XF->>XF: 10 watermark / link_buttons / affiliate_kit (:1558)
+    XF->>XF: 11 _clamp_entities final (:1573)
+    end
+
+    loop per target
+        ENQ->>ENQ: is_loop skip (:1168)
+        ENQ->>POL: target-scoped override evaluate + transform (:1197-1220)
+        ENQ->>ENQ: branding hop plan (deduped per text) (:1243)
+        ENQ->>Q: enqueue_delivery (:1256)
+    end
+    ENQ->>ENQ: keyword reply enqueue (secondary) (:1298)
+    ENQ->>PP: mark_processed gated on fan-out (:1366) claim earned (:1398)
+
+    Q->>WV: claim job
+    WV->>WV: preflight (:190-200)
+    WV->>FE: attached FilterRule re-evaluate (:212) - baked text
+    WV->>WV: per-target rate limit DEFER (:221)
+    WV->>WV: idempotency fence claim (:238)
+    WV->>WV: branding stage 1 post into C + checkpoint
+    WV->>RT: dispatch (USER or BOT transport)
+    WV->>WV: FenceRecordSent before commit
+    WV->>WV: scheduleAutoDelete (durable)
+    RT->>TG: deliver

@@ -1,9 +1,28 @@
 # Migration Plan — Strangler-Fig Extraction of the Python Core
 
+> Stage 1 established the execution boundary. Stage 2 made that boundary
+> trustworthy for the real production database and real user configuration.
+> Stage 3 added the BOT transport, the branding hop, and the durable scheduler.
+> **Stage 4.0 (this PR) completed the full business-logic inventory** —
+> `docs/architecture/business-logic-inventory.md`, `behavior-contract.md`,
+> `feature-ownership-matrix.md`, `processing-pipeline.md`,
+> `feature-dependency-graph.md`, `migration-readiness.md`, plus the
+> machine-readable inventories under `docs/behavior-audit/`. Every stage below
+> is now evidence-backed rather than assumed.
+
 > Stage 1 established the execution boundary. Stage 2 makes that boundary
 > trustworthy for the real production database and real user configuration.
 > This is the map for every remaining engine, so a reviewer can see the whole
 > path, not just the current step.
+
+## Style note
+
+This document keeps the original Stage 1–3 narrative intact as the historical record.
+The **current** stage-4 plan, with per-feature readiness, the confirmed-parity findings
+that gate each stage, and the dependency-ordered sequence, lives in
+`docs/architecture/migration-readiness.md`. Where the two disagree on stage scope or
+ordering, `migration-readiness.md` is authoritative — it is derived from the Stage 4.0
+audit of `35ee530`, not from earlier assumptions.
 
 ## The invariant that never breaks
 

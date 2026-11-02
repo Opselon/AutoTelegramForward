@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0.0",
+  "generated_from": "source inspection of master@35ee530cc80cd17d1ac7d702c4e5f5ea8024889a",
+  "source_of_truth": "core/application/pipeline.py, core/infrastructure/telegram/dispatcher.py (verified by coordinator + agents A/B/C/D)",
+  "note": "Derived from source 2026-11-02. Two corrections to the brief's illustrative outline: (1) materialize() precedes EVERY gate; (2) forward_every_n runs AFTER the content-policy chain.",
+  "paths": {
+    "A_new_message_durable": {
+      "owner": ["Python (ingest + transforms)", "Go Worker (delivery)"],
+      "stages": [
+        {"n": 0, "stage": "INGEST", "site": "dispatcher.py:314 _handler", "on_skip": "return"},
+        {"n": 1, "stage": "NORMALIZE", "site": "dispatcher.py:316 payload_from_pyrogram; gap resolution pipeline.py:659-660", "on_skip": "return"},
+        {"n": 2, "stage": "PV autoreply (private chats only)", "site": "dispatcher.py:325-348", "on_skip": "non-terminal for the v27 engine"},
+        {"n": 3, "stage": "EDITED_MESSAGE branch", "site": "dispatcher.py:369 -> _route_edit (273)", "on_skip": "returns when mapped; else fall through"},
+        {"n": 4, "stage": "REPLY branch", "site": "dispatcher.py:384 -> _route_reply (290)", "on_skip": "returns when mapped"},
+        {"n": 5, "stage": "ALBUM branch", "site": "dispatcher.py:393 -> AlbumAggregator.ingest", "on_skip": "returns; flush at 406"},
+        {"n": 6, "stage": "PIPELINE process()", "site": "pipeline.py:633", "on_skip": "service-message drop pipeline.py:681-685"},
+        {"n": 7, "stage": "ROUTING matching_rules (per-owner single match)", "site": "services.py:622-655", "on_skip": "no rule -> stop"},
+        {"n": 8, "stage": "trigger_events filter", "site": "pipeline.py:690", "on_skip": "skip rule"},
+        {"n": 9, "stage": "0. materialize(bot defaults)", "site": "pipeline.py:787", "note": "CORRECTION 1: precedes every gate; all later gates read the merged view"},
+        {"n": 10, "stage": "1. paused / auto-paused", "site": "pipeline.py:789", "on_skip": "audit + stop"},
+        {"n": 11, "stage": "2. since_ts too-old", "site": "pipeline.py:801", "on_skip": "skip"},
+        {"n": 12, "stage": "3. ignore_edits + edit-time window", "site": "pipeline.py:811, 824", "on_skip": "skip"},
+        {"n": 13, "stage": "4. skip_history duplicate-event", "site": "pipeline.py:837", "on_skip": "skip"},
+        {"n": 14, "stage": "5. content-dedup claim", "site": "pipeline.py:861", "on_skip": "skip; released in finally pipeline.py:752"},
+        {"n": 15, "stage": "6. FilterRule fetch + owner check", "site": "pipeline.py:892-916", "on_skip": "filter ignored when not owned"},
+        {"n": 16, "stage": "7. FilterEngine.evaluate", "site": "pipeline.py:918 -> services.py:37", "on_skip": "DROP with reason"},
+        {"n": 17, "stage": "8. session time-limited DEFER (not drop)", "site": "pipeline.py:935-949", "on_skip": "enqueue for later"},
+        {"n": 18, "stage": "9. media/link block reasons", "site": "pipeline.py:955 -> media_filter.py:77,94", "on_skip": "DROP"},
+        {"n": 19, "stage": "10. content-policy chain (task + source) evaluate", "site": "pipeline.py:974-1016", "on_skip": "DROP with reason"},
+        {"n": 20, "stage": "11. forward_every_n slot gate", "site": "pipeline.py:1036-1084", "note": "CORRECTION 2: AFTER all filters; filtered messages consume no slot", "on_skip": "every_n_skip"},
+        {"n": 21, "stage": "TRANSFORM _apply_transforms", "site": "pipeline.py:1401-1580", "sub_order": [
+            "1. CleanerRule.clean (1408) - failure never drops",
+            "2. LinkManagementEngine.apply_to_payload (1448) / elif link_replacement (1456)",
+            "3. FilterEngine.remove_emojis flag path (1461)",
+            "4. _clamp_entities (1464)",
+            "5. empty-after-clean DROP (1467-1486) - the only drop inside transforms",
+            "6. ContentPolicy.transform (1496)",
+            "7. AI transform (1524, gated by ai_config_id + ai_rewrite_active)",
+            "8. FilterEngine.replace_text rule.replacements (1543)",
+            "9. header/footer (1547-1552) - raw, placeholders NOT interpolated (F-15)",
+            "10. AdvancedSettingsEngine.apply_content_transforms (1558) watermark/link_buttons/affiliate_kit",
+            "11. _clamp_entities final (1573)"
+          ]},
+        {"n": 22, "stage": "targets resolve + branding decision (C geometry)", "site": "pipeline.py:1119-1160"},
+        {"n": 23, "stage": "PER-TARGET: is_loop skip (1168)", "site": "pipeline.py:1162-1176", "on_skip": "skip that target only"},
+        {"n": 24, "stage": "PER-TARGET: target-scoped policy evaluate + transform", "site": "pipeline.py:1197-1220", "note": "only target:-prefixed policies, on the transformed text"},
+        {"n": 25, "stage": "PER-TARGET: branding intent/perform (hop plan deduped per distinct text)", "site": "pipeline.py:1243-1254"},
+        {"n": 26, "stage": "PER-TARGET: durable enqueue", "site": "pipeline.py:1256"},
+        {"n": 27, "stage": "keyword reply enqueue (secondary, best-effort)", "site": "pipeline.py:1298-1330"},
+        {"n": 28, "stage": "mark_processed gated on whole fan-out", "site": "pipeline.py:1366-1393"},
+        {"n": 29, "stage": "claim earned", "site": "pipeline.py:1398"},
+        {"n": 30, "stage": "GO WORKER: claim -> preflight", "site": "delivery.go:190-200"},
+        {"n": 31, "stage": "GO WORKER: attached FilterRule re-evaluate (baked payload text)", "site": "delivery.go:212", "note": "F-12: block_links never populated on this path"},
+        {"n": 32, "stage": "GO WORKER: per-target rate limit (defer)", "site": "delivery.go:221-232"},
+        {"n": 33, "stage": "GO WORKER: idempotency fence claim", "site": "delivery.go:238-300"},
+        {"n": 34, "stage": "GO WORKER: branding stage 1 (post into C, checkpoint)", "site": "delivery.go ensureBrandingStage1"},
+        {"n": 35, "stage": "GO WORKER: dispatch (USER or BOT transport)", "site": "delivery.go dispatch"},
+        {"n": 36, "stage": "GO WORKER: FenceRecordSent before commit", "site": "delivery.go"},
+        {"n": 37, "stage": "GO WORKER: scheduleAutoDelete (durable)", "site": "delivery.go scheduleAutoDelete"}
+      ]
+    },
+    "B_direct_delivery": {
+      "owner": ["Python"],
+      "note": "No durable queue configured (standalone/mock mode); pipeline.py:1335 sets enqueued_any and the dispatcher._send path delivers directly through the Pyrogram client."
+    },
+    "C_edit_delete_reply_sync": {
+      "owner": ["Python"],
+      "note": "dispatcher.py:369/384 route to sync_engine (message_map). Edits re-run transform_text (sync_engine.py:261) - the ONLY production caller of the legacy 9-step transform besides gRPC preview. Deletes never enter the pipeline (dispatcher.py:237)."
+    },
+    "D_album": {
+      "owner": ["Python"],
+      "note": "dispatcher.py:393 ingest into AlbumAggregator (bounded LRU, TTL hard-coded 2.0s - F-02), flush at :406 with album_messages attached, then the normal durable path. Albums consume ONE forward_every_n slot."
+    },
+    "E_go_worker": {
+      "owner": ["Go Worker"],
+      "note": "Re-evaluates ONLY the attached FilterRule (delivery.go:212) and per-target TargetOverride (transform.ApplyTargetOverride). Per delivery.go:193-199 the ingest-side content policies and transforms are baked into the job payload. F-08: transform package helpers are UNREFERENCED_HELPER; F-12: BlockLinks never populated."
+    }
+  }
+}

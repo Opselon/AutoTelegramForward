@@ -1,0 +1,800 @@
+{
+ "schema_version": "1.0.0",
+ "generated_from": "source inspection of master@35ee530cc80cd17d1ac7d702c4e5f5ea8024889a",
+ "description": "Deterministic, synthetic, privacy-safe behavior fixtures pinning CURRENT behavior. These are characterization fixtures: they record what the code does today, including the divergences. Where Python and Go disagree, the disagreement is kept visible.",
+ "principles": [
+  "Synthetic: no real chat ids, no real tokens, no production data.",
+  "Deterministic: same input -> same output, no clock dependency except where noted.",
+  "Independent of live Telegram accounts and production database rows.",
+  "Reusable across Python and Go: every fixture names the engine and the expected output for each language."
+ ],
+ "fixtures": [
+  {
+   "id": "FLT-LEX-01",
+   "engine": "FilterEngine.evaluate",
+   "group": "filter-rule",
+   "description": "Regex block and regex require both configured - require-any semantics",
+   "input": {
+    "text": "gold price rose today",
+    "rule": {
+     "regex_block": [
+      "\\bsilver\\b"
+     ],
+     "regex_require": [
+      "\\bgold\\b|\\boil\\b"
+     ]
+    }
+   },
+   "expected_python": {
+    "action": "ALLOW",
+    "reason": "filter_passed"
+   },
+   "expected_go": {
+    "action": "Allow",
+    "reason": "filter_passed"
+   },
+   "notes": "rx_require is require-any: one matching pattern satisfies it.",
+   "executable": "both",
+   "go_engine": "filter.Engine.Evaluate"
+  },
+  {
+   "id": "FLT-LEX-02",
+   "engine": "FilterEngine.evaluate",
+   "group": "filter-rule",
+   "description": "Invalid blocking regex fails CLOSED (drop, not crash)",
+   "input": {
+    "text": "hello",
+    "rule": {
+     "regex_block": [
+      "(unclosed"
+     ]
+    }
+   },
+   "expected_python": {
+    "action": "DROP",
+    "reason": "invalid_regex_block:(unclosed"
+   },
+   "expected_go": {
+    "action": "Drop",
+    "reason": "invalid_regex_block:(unclosed"
+   },
+   "notes": "services.py:138-145 logs [FILTER_ENGINE:INVALID_REGEX] and fails closed.",
+   "executable": "both",
+   "go_engine": "filter.Engine.Evaluate"
+  },
+  {
+   "id": "FLT-LEGACY-01",
+   "engine": "FilterEngine.evaluate",
+   "group": "filter-rule",
+   "description": "Legacy regex_patterns with blacklist keywords acts as blocking",
+   "input": {
+    "text": "buy spam now",
+    "rule": {
+     "blacklist_keywords": [
+      "spam"
+     ],
+     "regex_patterns": [
+      "\\bspam\\b"
+     ]
+    }
+   },
+   "expected_python": {
+    "action": "DROP",
+    "reason": "blacklist_keyword"
+   },
+   "expected_go": {
+    "action": "Drop",
+    "reason": "blacklist_keyword"
+   },
+   "notes": "legacy list becomes rx_block only when blacklist set and whitelist empty (services.py:104-116, filter.go:172-181). (Input text updated to contain spam so blocking regex/blacklist is exercised).",
+   "executable": "both",
+   "go_engine": "filter.Engine.Evaluate"
+  },
+  {
+   "id": "FLT-LEGACY-02",
+   "engine": "FilterEngine.evaluate",
+   "group": "filter-rule",
+   "description": "Legacy regex_patterns with whitelist keywords acts as requirement",
+   "input": {
+    "text": "silver update",
+    "rule": {
+     "whitelist_keywords": [
+      "silver"
+     ],
+     "regex_patterns": [
+      "\\bgold\\b"
+     ]
+    }
+   },
+   "expected_python": {
+    "action": "DROP",
+    "reason": "regex_mismatch"
+   },
+   "expected_go": {
+    "action": "Drop",
+    "reason": "regex_mismatch"
+   },
+   "notes": "gold absent -> regex_mismatch, not whitelist_mismatch: order checks regex AFTER whitelist.",
+   "executable": "both",
+   "go_engine": "filter.Engine.Evaluate"
+  },
+  {
+   "id": "FLT-DISABLED-01",
+   "engine": "ContentPolicy vs FilterRule",
+   "group": "content-policy",
+   "description": "Parked list (blacklist_off) is skipped by ContentPolicy; FilterRule has no such switch",
+   "input": {
+    "text": "this mentions spam freely",
+    "policy": {
+     "blacklist_words": [
+      "spam"
+     ],
+     "blacklist_off": true
+    }
+   },
+   "expected_python": {
+    "allowed": true,
+    "reason": "policy_passed"
+   },
+   "notes": "blacklist_off lives on ContentPolicy (content_policy.py:855). FilterRule.evaluate has no equivalent - the two systems differ; this fixture pins that boundary.",
+   "executable": "python"
+  },
+  {
+   "id": "FLT-PERSIAN-01",
+   "engine": "FilterEngine.evaluate",
+   "group": "unicode",
+   "description": "Persian keyword with Arabic Yeh folding",
+   "input": {
+    "text": "تخفیف ویژه امروز",
+    "rule": {
+     "blacklist_keywords": [
+      "تخفيف"
+     ]
+    }
+   },
+   "input_note": "text uses Persian ی (U+06CC) in تخفیف; needle uses Arabic ي (U+064A) in تخفيف. fold_text (content_policy.py:131) normalizes the variants.",
+   "expected_python": {
+    "action": "DROP",
+    "reason": "blacklist_keyword"
+   },
+   "notes": "fold_text at content_policy.py:131 normalizes Arabic/Persian letter variants; contains_word applies it.",
+   "executable": "python"
+  },
+  {
+   "id": "POL-PHRASE-01",
+   "engine": "ContentPolicy.evaluate",
+   "group": "content-policy",
+   "description": "Whitelist phrase mode with double spaces/newlines between words",
+   "input": {
+    "text": "breaking   news\n\nhere",
+    "policy": {
+     "whitelist_words": [
+      "breaking news"
+     ],
+     "whitelist_mode": "phrase"
+    }
+   },
+   "expected_python": {
+    "allowed": true,
+    "reason": "policy_passed"
+   },
+   "notes": "contains_word collapses whitespace variation before matching (content_policy.py:164).",
+   "executable": "python"
+  },
+  {
+   "id": "POL-ALL-01",
+   "engine": "ContentPolicy.evaluate",
+   "group": "content-policy",
+   "description": "Whitelist all-mode: every word must be present",
+   "input": {
+    "text": "gold and silver",
+    "policy": {
+     "whitelist_words": [
+      "gold",
+      "oil"
+     ],
+     "whitelist_mode": "all"
+    }
+   },
+   "expected_python": {
+    "allowed": false,
+    "reason": "whitelist_missing:oil"
+   },
+   "notes": "content_policy.py:856-865.",
+   "executable": "python"
+  },
+  {
+   "id": "POL-EMPTY-01",
+   "engine": "ContentPolicy.evaluate",
+   "group": "content-policy",
+   "description": "Empty allow-list means allow-all, never deny-all",
+   "input": {
+    "text": "anything",
+    "policy": {
+     "whitelist_words": [],
+     "whitelist_mode": "any"
+    }
+   },
+   "expected_python": {
+    "allowed": true,
+    "reason": "policy_inactive"
+   },
+   "notes": "has_rules is false when lists are empty, so is_active short-circuits.",
+   "executable": "python"
+  },
+  {
+   "id": "CLN-FULL-01",
+   "engine": "CleanerRule.clean",
+   "group": "cleaner",
+   "description": "Full cleaner order on one message",
+   "input": {
+    "text": "@bob see https://a.io/x #news 5% OFF\n\n\n@alice call +1 415 555 2671 now",
+    "cleaner": {
+     "remove_urls": true,
+     "remove_mentions": true,
+     "remove_hashtags": true,
+     "remove_phone_numbers": true,
+     "remove_empty_lines": true
+    }
+   },
+   "expected_python_output": "@bob see 5% OFF\n call now",
+   "notes": "Cleaner order entities.py:2391-2405: urls -> mentions -> hashtags -> emojis -> phones -> unconditional [ \\t]{2,} -> empty lines -> \\n{3,}. (@bob is 3 chars so cleaner @\\w{4,64} preserves it; see F-07).",
+   "executable": "python"
+  },
+  {
+   "id": "CLN-PHONE-01",
+   "engine": "CleanerRule.clean",
+   "group": "cleaner",
+   "description": "Bare 10-digit product id is deliberately preserved",
+   "input": {
+    "text": "order 1234567890 done",
+    "cleaner": {
+     "remove_phone_numbers": true
+    }
+   },
+   "expected_python_output": "order 1234567890 done",
+   "expected_go_output": "order  done",
+   "notes": "HIGH divergence F-07: Python _strip_phone_numbers requires a '+' or a separator inside; Go phoneRegex \\+?\\d[\\d\\s\\-()]{7,18}\\d eats the id. Divergence kept visible.",
+   "executable": "both",
+   "go_engine": "transform (phoneRegex — UNREFERENCED_HELPER)"
+  },
+  {
+   "id": "CLN-MENTION-01",
+   "engine": "CleanerRule.clean",
+   "group": "cleaner",
+   "description": "Mention length bound divergence between cleaner and legacy/Go",
+   "input": {
+    "text": "ping @abc now",
+    "cleaner": {
+     "remove_mentions": true
+    }
+   },
+   "expected_python_output": "ping @abc now",
+   "expected_python_legacy_output": "ping  now",
+   "notes": "Cleaner uses {4,64} (entities.py:101) so @abc survives; legacy services.py:27 and Go transform.go:28 use {3,32} so they strip it. F-07.",
+   "executable": "python",
+   "go_engine": "transform (usernameRegex — UNREFERENCED_HELPER)"
+  },
+  {
+   "id": "CLN-HASHTAG-01",
+   "engine": "CleanerRule.clean",
+   "group": "cleaner",
+   "description": "Hashtag regex divergence on hyphenated tag",
+   "input": {
+    "text": "trend #hello-world now",
+    "cleaner": {
+     "remove_hashtags": true
+    }
+   },
+   "expected_python_output": "trend -world now",
+   "expected_go_output": "trend  now",
+   "notes": "Cleaner #\\w+ (entities.py:102) stops at the hyphen; Go #[^\\s#@]+ (transform.go:24) consumes it. F-07. (Go hashtag removal leaves un-collapsed double space without Tidy).",
+   "executable": "both",
+   "go_engine": "transform (hashtagRegex — UNREFERENCED_HELPER)"
+  },
+  {
+   "id": "UNI-EMOJI-01",
+   "engine": "EMOJI_REGEX / _CLEANER_EMOJI_RE / Go emojiRegex",
+   "group": "emoji",
+   "description": "ZWJ family emoji leaves dangling joiners",
+   "input": {
+    "text": "👨‍👩‍👧"
+   },
+   "expected_python_output": "‍‍",
+   "expected_go_output": "‍‍",
+   "notes": "F-03, verified by coordinator execution 2026-11-02: ZWJ (U+200D) is BMP and not matched, so family sequences are shredded. (Expectation uses actual U+200D runes, not JSON-escaped string).",
+   "executable": "both",
+   "go_engine": "transform.RemoveEmojis"
+  },
+  {
+   "id": "UNI-EMOJI-02",
+   "engine": "EMOJI_REGEX",
+   "group": "emoji",
+   "description": "Keycap sequence leaves dangling U+20E3",
+   "input": {
+    "text": "5️⃣"
+   },
+   "expected_python_output": "5⃣",
+   "expected_go_output": "5⃣",
+   "notes": "F-03: 5 is BMP (kept), U+FE0F variation selector removed, U+20E3 combining keycap is BMP (kept).",
+   "executable": "both",
+   "go_engine": "transform.RemoveEmojis"
+  },
+  {
+   "id": "UNI-EMOJI-03",
+   "engine": "EMOJI_REGEX",
+   "group": "emoji",
+   "description": "Non-emoji supplementary-plane script is destroyed (collateral damage)",
+   "input": {
+    "text": "𒀀 cuneiform"
+   },
+   "expected_python_output": " cuneiform",
+   "expected_go_output": " cuneiform",
+   "notes": "F-03: [\\U00010000-\\U0010ffff] matches ALL non-BMP characters, not just emoji.",
+   "executable": "both",
+   "go_engine": "transform.RemoveEmojis"
+  },
+  {
+   "id": "UNI-EMOJI-04",
+   "engine": "EMOJI_REGEX",
+   "group": "emoji",
+   "description": "Persian and Arabic text adjacent to emoji survives; double space left",
+   "input": {
+    "text": "سلام 🌟 دنیا"
+   },
+   "expected_python_output": "سلام  دنیا",
+   "expected_go_output": "سلام  دنیا",
+   "notes": "Coordinator-verified. The regex does not touch Arabic/Persian; note the double space the removal leaves.",
+   "executable": "both",
+   "go_engine": "transform.RemoveEmojis"
+  },
+  {
+   "id": "UNI-EMOJI-05",
+   "engine": "EMOJI_REGEX",
+   "group": "emoji",
+   "description": "Arrows and combining marks are NOT removed",
+   "input": {
+    "text": "a ← b, á"
+   },
+   "expected_python_output": "a ← b, á",
+   "notes": "U+2190 (arrow) and combining marks are outside every alternation. Pins that the pattern is too narrow AND too broad.",
+   "executable": "python"
+  },
+  {
+   "id": "UNI-LEN-01",
+   "engine": "length bounds",
+   "group": "unicode",
+   "description": "Python len() and Go len() count differently once supplementary characters appear",
+   "input": {
+    "text": "سلام دنیا 🌟"
+   },
+   "python_len_codepoints": 11,
+   "go_len_bytes": 22,
+   "go_runes": 11,
+   "notes": "len() in Python counts codepoints; Go len() counts bytes and 12 runes. Every length-bound setting (min/max_message_length, caption_max_length) must declare which unit it promises - Go filter.go uses byte len() today. (11 codepoints, 22 UTF-8 bytes: 10 Arabic/space bytes + 4-byte astral emoji U+1F31F).",
+   "executable": "meta"
+  },
+  {
+   "id": "RPL-PRIORITY-01",
+   "engine": "apply_replacements",
+   "group": "replace",
+   "description": "Priority decides the # -> ## then ## -> x composition",
+   "input": {
+    "text": "# sale",
+    "replacements": [
+     {
+      "source": "#",
+      "to": "##"
+     },
+     {
+      "source": "##",
+      "to": "x"
+     }
+    ]
+   },
+   "expected_python_output": "x sale",
+   "expected_python_output_reversed_insertion": "## sale",
+   "notes": "Both default-priority so insertion order decides (stable sort, text_replace.py:435). Same-priority insertion order IS the observable contract; priority is the documented escape hatch.",
+   "executable": "python"
+  },
+  {
+   "id": "RPL-SMART-CASE-01",
+   "engine": "apply_replacements",
+   "group": "replace",
+   "description": "Exact-case pass happens first, case-insensitive only as fallback",
+   "input": {
+    "text": "discount 10% DISCOUNT 20%",
+    "replacements": [
+     {
+      "source": "DISCOUNT",
+      "to": "SALE"
+     }
+    ]
+   },
+   "expected_python_output": "discount 10% SALE 20%",
+   "notes": "text_replace.py:385-390: `DISCOUNT in text` is true so str.replace handles both occurrences exactly. (Exact case DISCOUNT matches uppercase only via str.replace; see text_replace.py:385).",
+   "executable": "python"
+  },
+  {
+   "id": "RPL-SMART-CASE-02",
+   "engine": "apply_replacements",
+   "group": "replace",
+   "description": "Mixed case falls back to case-insensitive single pass",
+   "input": {
+    "text": "discount 10% DISCOUNT 20%",
+    "replacements": [
+     {
+      "source": "Discount",
+      "to": "Sale"
+     }
+    ]
+   },
+   "expected_python_output": "Sale 10% Sale 20%",
+   "notes": "Exact form absent -> re.sub IGNORECASE replaces both.",
+   "executable": "python"
+  },
+  {
+   "id": "RPL-DELETION-01",
+   "engine": "apply_replacements",
+   "group": "replace",
+   "description": "Empty replacement deletes the matched span",
+   "input": {
+    "text": "hello world",
+    "replacements": [
+     {
+      "source": "world",
+      "to": ""
+     }
+    ]
+   },
+   "expected_python_output": "hello ",
+   "notes": "Trailing space is NOT stripped by the replace engine (downstream stages may).",
+   "executable": "python"
+  },
+  {
+   "id": "RPL-BACKREF-01",
+   "engine": "apply_replacements",
+   "group": "replace",
+   "description": "Regex entry uses backreferences; literal entry renders backslash literally",
+   "input_b": {
+    "text": "a\\1b",
+    "replacements": [
+     {
+      "source": "a\\1b",
+      "to": "KEPT"
+     }
+    ]
+   },
+   "expected_b_python_output": "KEPT",
+   "notes": "_literal_replacement (text_replace.py:402): regex entries pass the template through; literal entries escape backslashes so \\1 renders as \\1. (source key without re: prefix for text_replace regex mode).",
+   "input": {
+    "text": "item: apple",
+    "replacements": [
+     {
+      "source": "(\\w+): (\\w+)",
+      "to": "\\1 is \\2",
+      "mode": "regex"
+     }
+    ]
+   },
+   "expected_python_output": "item is apple",
+   "executable": "python"
+  },
+  {
+   "id": "RPL-INVALID-01",
+   "engine": "apply_replacements",
+   "group": "replace",
+   "description": "Invalid regex entry is skipped, text unchanged, never raises",
+   "input": {
+    "text": "hello",
+    "replacements": [
+     {
+      "source": "re:(unclosed",
+      "to": "x",
+      "mode": "regex"
+     }
+    ]
+   },
+   "expected_python_output": "hello",
+   "notes": "apply_entry catches re.error, logs [PIPELINE:REPLACE], returns text (text_replace.py:391-397).",
+   "executable": "python"
+  },
+  {
+   "id": "LNK-GATE-01",
+   "engine": "block_links gates",
+   "group": "links",
+   "description": "tg:// and ftp:// pass the FilterEngine gate but drop under has_link (F-14)",
+   "input": {
+    "text": "see tg://resolve?domain=x",
+    "block_links": true
+   },
+   "expected_filter_engine": "pass (not matched by URL_REGEX)",
+   "expected_link_block_reason": "DROP link_blocked",
+   "notes": "F-14, coordinator-verified by execution: URL_REGEX does not match tg://, _RE_LINK does.",
+   "executable": "python"
+  },
+  {
+   "id": "LNK-GATE-02",
+   "engine": "block_links gates",
+   "group": "links",
+   "description": "FilterEngine gate treats @mention as a link; has_link does not (F-14)",
+   "input": {
+    "text": "email @user hi",
+    "block_links": true
+   },
+   "expected_filter_engine": "DROP link_blocked",
+   "expected_link_block_reason": "pass",
+   "notes": "URL_REGEX contains @[A-Za-z0-9_]{3,32} as an alternation (services.py:25-30), _RE_LINK does not.",
+   "executable": "python"
+  },
+  {
+   "id": "LNK-OVERRIDE-01",
+   "engine": "target-scoped policy override",
+   "group": "links",
+   "description": "Target override remove_links deletes usernames in Go but not in Python (F-13)",
+   "input": {
+    "text": "see @bob and https://a.io",
+    "target_override": {
+     "remove_links": true
+    }
+   },
+   "expected_python_output": "see @bob and",
+   "expected_go_output": "see  and",
+   "notes": "Python remove_urls keeps @mentions; Go urlRegex includes the mention alternation. (Go ApplyTargetOverride without Tidy leaves un-collapsed whitespace).",
+   "executable": "both",
+   "go_engine": "transform.ApplyTargetOverride"
+  },
+  {
+   "id": "LNK-REMOVE-LINKS-01",
+   "engine": "pipeline transform stage 2",
+   "group": "links",
+   "description": "remove_links=true silently ignores link_replacement on the durable path (F-04)",
+   "input": {
+    "text": "visit https://a.io now",
+    "rule": {
+     "remove_links": true,
+     "link_replacement": "[LINK]"
+    }
+   },
+   "expected_python_durable_output": "visit now",
+   "expected_python_legacy_output": "visit [LINK] now",
+   "notes": "pipeline.py:1438 if/elif: remove_links wins on the durable path; services.py:268-271 gives replacement precedence on the legacy path. (LinkManagementEngine collapses multiple spaces to single space).",
+   "executable": "python"
+  },
+  {
+   "id": "ADV-HEADER-01",
+   "engine": "pipeline header/footer",
+   "group": "advanced",
+   "description": "Placeholders are NOT interpolated on the durable path (F-15)",
+   "input": {
+    "text": "body",
+    "rule": {
+     "header": "From [[chat_title]] on {date}"
+    }
+   },
+   "expected_python_durable_output": "From [[chat_title]] on {date}\n\nbody",
+   "expected_python_preview_output": "From <chat title> on 2026-11-02 ...",
+   "notes": "pipeline.py:1547 applies the header raw; HeaderFormatter runs only via transform_text (gRPC TestRule, edit-sync). The preview lies about production.",
+   "executable": "python"
+  },
+  {
+   "id": "POL-TARGET-01",
+   "engine": "policy_chain per-target",
+   "group": "content-policy",
+   "description": "One event to two targets: target override rejects only its own copy",
+   "input": {
+    "text": "gold update",
+    "targets": [
+     "-100111",
+     "-100222"
+    ],
+    "target_policies": {
+     "-100222": {
+      "blacklist_words": [
+       "gold"
+      ]
+     }
+    }
+   },
+   "expected": {
+    "-100111": "delivered",
+    "-100222": "target_filtered"
+   },
+   "notes": "pipeline.py:1197-1214: only the target:-prefixed override is re-decided, on the transformed text; the other target still receives it.",
+   "executable": "python"
+  },
+  {
+   "id": "POL-SOURCE-01",
+   "engine": "policy_chain source scope",
+   "group": "content-policy",
+   "description": "Source override adds a constraint; it cannot relax the task policy",
+   "input": {
+    "text": "gold",
+    "task_policy": {
+     "blacklist_words": [
+      "silver"
+     ]
+    },
+    "source_policy": {
+     "-100333": {
+      "whitelist_words": [
+       "oil"
+      ]
+     }
+    }
+   },
+   "expected_python": {
+    "allowed": false,
+    "reason": "whitelist_mismatch"
+   },
+   "notes": "Additive-only: both must allow (pipeline.py:974-1016).",
+   "executable": "python"
+  },
+  {
+   "id": "MEDIA-CAPTION-01",
+   "engine": "effective_text",
+   "group": "captions",
+   "description": "Media-only message: caption is the effective text",
+   "input": {
+    "has_media": true,
+    "caption": "cap text",
+    "text": ""
+   },
+   "expected_effective_text": "cap text",
+   "notes": "entities.py:2498-2502. This is why apply_to_caption=False cannot disable caption cleaning (F-09).",
+   "executable": "python"
+  },
+  {
+   "id": "ALB-ALBUM-01",
+   "engine": "AlbumAggregation",
+   "group": "albums",
+   "description": "Album consumes exactly one forward_every_n slot",
+   "input": {
+    "album_messages": 3,
+    "forward_every_n": 2
+   },
+   "expected": "1 slot consumed, 3 delivered together",
+   "notes": "The FEN gate runs after aggregation (pipeline.py:1036 is after album flush).",
+   "executable": "schema"
+  },
+  {
+   "id": "DUP-CONTENT-01",
+   "engine": "content dedup",
+   "group": "dedup",
+   "description": "Duplicate content with a different message id is dropped under the same rule",
+   "input": {
+    "text": "same body",
+    "rule_id": "r1",
+    "msg_id_a": 100,
+    "msg_id_b": 101
+   },
+   "expected": {
+    "first": "delivered",
+    "second": "dropped as duplicate"
+   },
+   "notes": "Fingerprint is rule-scoped body+media kind (pipeline.py:267), not message id.",
+   "executable": "schema"
+  },
+  {
+   "id": "DUP-POLICY-01",
+   "engine": "dedupe_policy column",
+   "group": "dedup",
+   "description": "dedupe_policy has no runtime effect (F-01)",
+   "input": {
+    "dedupe_policy": "DISABLED"
+   },
+   "expected": "identical behavior to STRICT - column is STORED_BUT_UNUSED",
+   "notes": "Persisted by SQLite/Postgres/proto/backup, zero runtime consumers.",
+   "executable": "schema"
+  },
+  {
+   "id": "FEN-01",
+   "engine": "forward_every_n",
+   "group": "forward-every-n",
+   "description": "N=1 is a byte-for-byte no-op (no row, no read)",
+   "input": {
+    "forward_every_n": 1
+   },
+   "expected": "every message forwarded; rule_counters untouched",
+   "notes": "pipeline.py:1036-1084.",
+   "executable": "schema"
+  },
+  {
+   "id": "FEN-02",
+   "engine": "forward_every_n",
+   "group": "forward-every-n",
+   "description": "A filtered message consumes no slot",
+   "input": {
+    "forward_every_n": 2,
+    "message_dropped_by_filter": true
+   },
+   "expected": "counter not advanced",
+   "notes": "F-05: the gate runs after every filter.",
+   "executable": "schema"
+  },
+  {
+   "id": "KW-REPLY-01",
+   "engine": "classify_keyword_trigger",
+   "group": "keyword-reply",
+   "description": "Keyword match on source text schedules the reply as its own job",
+   "input": {
+    "text": "gold flash sale",
+    "rule": {
+     "keyword_confirmation": true,
+     "keyword_reply": "noted",
+     "whitelist": [
+      "gold"
+     ]
+    }
+   },
+   "expected": {
+    "forward": "delivered normally",
+    "reply": "enqueued with job_kind=keyword_reply"
+   },
+   "notes": "pipeline.py:1298-1330. The reply is secondary/best-effort and never drops the forward.",
+   "executable": "python"
+  },
+  {
+   "id": "ADV-AUTODELETE-01",
+   "engine": "get_auto_delete_seconds bounds",
+   "group": "advanced",
+   "description": "Registry bound (604800) and engine bound (31_536_000) disagree (F-17)",
+   "input": {
+    "auto_delete_seconds": 2000000
+   },
+   "expected_registry_clamped": 604800,
+   "expected_engine_value": 2000000,
+   "notes": "The registry clamps at write (max 604800); at execution get_auto_delete_seconds applies min(ttl, 31_536_000), so 2_000_000 survives. F-17.",
+   "executable": "python"
+  },
+  {
+   "id": "PAUSED-01",
+   "engine": "pipeline gates",
+   "group": "routing",
+   "description": "A paused rule stops before any transform runs",
+   "input": {
+    "is_paused": true
+   },
+   "expected": {
+    "outcome": "RULE_PAUSED audit record",
+    "transforms_run": false
+   },
+   "notes": "pipeline.py:789 is before the FILTER stage.",
+   "executable": "schema"
+  },
+  {
+   "id": "SVC-01",
+   "engine": "FilterEngine.evaluate",
+   "group": "filter-rule",
+   "description": "Service message with no attached filter is dropped",
+   "input": {
+    "is_service": true,
+    "filter_rule": null
+   },
+   "expected_python": {
+    "action": "DROP",
+    "reason": "service_message_dropped"
+   },
+   "expected_go": {
+    "action": "Drop",
+    "reason": "service_message_dropped"
+   },
+   "notes": "services.py:61-66; filter.go:85-96.",
+   "executable": "both",
+   "go_engine": "filter.Engine.Evaluate"
+  },
+  {
+   "id": "HEADER-FOOTER-DEDUP-01",
+   "engine": "apply_header_footer",
+   "group": "advanced",
+   "description": "Duplicate header insertion is prevented",
+   "input": {
+    "text": "HDR\n\nbody",
+    "header": "HDR"
+   },
+   "expected_python_output": "HDR\n\nbody",
+   "notes": "services.py:241-252: startswith check prevents re-prepending.",
+   "executable": "python"
+  }
+ ]
+}

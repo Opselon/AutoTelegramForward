@@ -1,0 +1,39 @@
+%%{init: {'theme':'dark','themeVariables':{'fontSize':'13px'}}}%%
+flowchart LR
+    classDef full fill:#1a3a5c,stroke:#4a9,color:#eef
+    classDef partial fill:#3a3a1a,stroke:#aa4,color:#ffd
+    classDef dead fill:#4a2020,stroke:#c44,color:#fcc
+    classDef stored fill:#3a2a1a,stroke:#c84,color:#fec
+
+    subgraph PY[Python]
+        direction TB
+        P1[FilterEngine.evaluate<br/>services.py:37]:::full
+        P2[ContentPolicy<br/>content_policy.py:691]:::full
+        P3[CleanerRule.clean<br/>entities.py:2335]:::full
+        P4[LinkManagementEngine<br/>services.py:758]:::full
+        P5[Replace apply_replacements<br/>text_replace.py:415]:::full
+        P6[AdvancedSettingsEngine<br/>services.py:1409]:::full
+        P7[SmartRoutingEngine<br/>services.py:415]:::full
+        P8[HeaderFormatter placeholders<br/>services.py:320]:::dead
+        P9[dedupe_policy column<br/>entities.py:244]:::stored
+        P10[DuplicateDetectionService<br/>services.py:678]:::dead
+        P11[FilterEngine.transform_text<br/>services.py:194 LEGACY]:::partial
+    end
+
+    subgraph GO[Go Worker]
+        direction TB
+        G1[filter.Engine.Evaluate<br/>filter.go:84]:::full
+        G2[branding stage 1+2<br/>delivery.go]:::full
+        G3[fence + scheduler<br/>delivery.go / scheduler]:::full
+        G4[transform package<br/>RemoveEmojis etc]:::dead
+        G5[BlockLinks field<br/>rule.go:101 EMPTY]:::dead
+        G6[LinkPolicy / domains / rewrite]:::dead
+    end
+
+    PY -->|job payload baked| GO
+    G1 -.->|F-11 order differs| P1
+    G5 -.->|F-12 never populated| P1
+    G4 -.->|F-08 unreachable| P3
+    G6 -.->|F-18 absent| P4
+    P8 -.->|F-15 durable path skips it| P6
+    P11 -.->|edit-sync + gRPC preview only| P1
