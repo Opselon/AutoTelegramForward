@@ -138,6 +138,108 @@ func RemoveEmojis(text string) string {
 	return emojiRegex.ReplaceAllString(text, "")
 }
 
+// CleanerRule represents the full feature set of Python CleanerRule.
+type CleanerRule struct {
+	Patterns           []string
+	UseRegex           bool
+	RemoveURLs         bool
+	RemoveMentions     bool
+	RemoveHashtags     bool
+	RemoveEmojis       bool
+	RemovePhoneNumbers bool
+	RemoveEmptyLines   bool
+	StripButtons       bool
+	ApplyToCaption     bool
+	CaseSensitive      bool
+	IsActive           bool
+}
+
+var (
+	cleanerURLRegex       = regexp.MustCompile(`(?i)https?://[^\s]+|www\.[^\s]+|(?:https?://)?(?:t(?:elegram)?\.(?:me|dog))/[^\s]+`)
+	cleanerMentionRegex   = regexp.MustCompile(`@[A-Za-z0-9_]{4,64}`)
+	cleanerHashtagRegex   = regexp.MustCompile(`#[^\s#@]+`)
+	cleanerEmojiRegex     = regexp.MustCompile(`[\x{10000}-\x{10ffff}]|[\x{2600}-\x{27bf}]|[\x{2300}-\x{23ff}]|[\x{2b50}-\x{2b55}]|[\x{fe00}-\x{fe0f}]`)
+	cleanerPhoneCandidate = regexp.MustCompile(`\+?\d[\d\s\-().]{5,18}\d`)
+	cleanerPhoneSeparator = regexp.MustCompile(`[\s\-().]`)
+	cleanerDigitsRegex    = regexp.MustCompile(`\D`)
+	cleanerBlankLines     = regexp.MustCompile(`\n[ \t]*\n(?:[ \t]*\n)*`)
+	cleanerSpaces         = regexp.MustCompile(`[ \t]{2,}`)
+	cleanerMultiNewlines  = regexp.MustCompile(`\n{3,}`)
+)
+
+// StripPhoneNumbers strips phone numbers exactly matching Python entities._strip_phone_numbers.
+func StripPhoneNumbers(text string) string {
+	if text == "" {
+		return ""
+	}
+	// Fallback-safe replacement
+	return phoneRegex.ReplaceAllStringFunc(text, func(candidate string) string {
+		digits := cleanerDigitsRegex.ReplaceAllString(candidate, "")
+		if len(digits) < 8 || len(digits) > 15 {
+			return candidate
+		}
+		trimmed := strings.TrimSpace(candidate)
+		if strings.HasPrefix(trimmed, "+") {
+			return ""
+		}
+		if len(digits) >= 10 && cleanerPhoneSeparator.MatchString(candidate) {
+			return ""
+		}
+		return candidate
+	})
+}
+
+// Clean processes text according to the CleanerRule configuration.
+func (c *CleanerRule) Clean(text string) string {
+	if text == "" || c == nil || !c.IsActive {
+		return text
+	}
+	out := text
+	for _, pat := range c.Patterns {
+		if pat == "" {
+			continue
+		}
+		if c.UseRegex {
+			prefix := ""
+			if !c.CaseSensitive {
+				prefix = "(?i)"
+			}
+			re, err := regexp.Compile(prefix + pat)
+			if err == nil {
+				out = re.ReplaceAllString(out, "")
+			}
+		} else if c.CaseSensitive {
+			out = strings.ReplaceAll(out, pat, "")
+		} else {
+			re, err := regexp.Compile("(?i)" + regexp.QuoteMeta(pat))
+			if err == nil {
+				out = re.ReplaceAllString(out, "")
+			}
+		}
+	}
+	if c.RemoveURLs {
+		out = cleanerURLRegex.ReplaceAllString(out, "")
+	}
+	if c.RemoveMentions {
+		out = cleanerMentionRegex.ReplaceAllString(out, "")
+	}
+	if c.RemoveHashtags {
+		out = cleanerHashtagRegex.ReplaceAllString(out, "")
+	}
+	if c.RemoveEmojis {
+		out = cleanerEmojiRegex.ReplaceAllString(out, "")
+	}
+	if c.RemovePhoneNumbers {
+		out = StripPhoneNumbers(out)
+	}
+	out = cleanerSpaces.ReplaceAllString(out, " ")
+	if c.RemoveEmptyLines {
+		out = cleanerBlankLines.ReplaceAllString(out, "\n")
+	}
+	out = cleanerMultiNewlines.ReplaceAllString(out, "\n\n")
+	return strings.TrimSpace(out)
+}
+
 // FormatText is the template formatter for header/footer placeholders. The
 // pipeline applies it on the ingest side; it is exposed here so a worker-side
 // preview renders identically. It never panics on a bad placeholder.
