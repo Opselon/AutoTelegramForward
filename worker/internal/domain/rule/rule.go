@@ -5,6 +5,8 @@ package rule
 
 import "time"
 
+import "atf/worker/internal/domain/cleaning"
+
 // ForwardRule is the execution-relevant projection of a forward_rules row.
 //
 // Only the fields the *delivery* decision reads are carried. Anything else
@@ -58,6 +60,14 @@ type ForwardRule struct {
 	AlbumMode string
 	// TopicID is the forum thread (0 = General / none).
 	TopicID int64
+
+	// Transform is the task's text-transform configuration — cleaner, link
+	// policy, emoji flag, content-policy rewrite, replacements,
+	// header/footer and advanced transforms — resolved out of the metadata
+	// blob by the rule store the same way the Python ForwardRule resolves it
+	// in _apply_transforms. The delivery engine consumes it when the Worker
+	// owns the transform stage (Stage 4.2).
+	Transform cleaning.Config
 
 	// BlockLinks mirrors the task-level metadata flag the Python pipeline
 	// gates at pipeline.py:957 via media_filter.link_block_reason, which

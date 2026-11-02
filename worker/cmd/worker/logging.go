@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"atf/worker/internal/domain/cleaning"
 	"atf/worker/internal/observability"
 )
 
@@ -151,4 +152,54 @@ func firstNonEmptyEnv(keys ...string) string {
 		}
 	}
 	return ""
+}
+
+// transformDecisionLogger is the bridge between the transform pipeline's
+// structured decision records and the two sinks a Worker event has: the
+// shared Rust Log Monitor (through the observability client) and the
+// container's own JSON stdout.
+//
+// It implements cleaning.DecisionRecorder, so the domain package never
+// learns about gRPC, protobuf or slog — the decision shape is the contract,
+// and this adapter is where it becomes a log line.
+type transformDecisionLogger struct {
+	central *observability.Client
+	log     *slog.Logger
+}
+
+// RecordDecision fans one decision out to both sinks. It never blocks the
+// delivery pipeline: Emit enqueues into the central client's bounded queue,
+// and slog's stdout handler is non-blocking by construction. A failure in
+// either sink is swallowed on purpose — the decision is diagnostic
+// information, never a delivery dependency.
+func (l *transformDecisionLogger) RecordDecision(ctx context.Context, event cleaning.DecisionEvent) {
+	attrs := []any{
+		"rule_id", event.RuleID,
+		"correlation_id", event.CorrelationID,
+		"owner_user_id", event.OwnerUserID,
+		"source_id", event.SourceID,
+		"target_id", event.TargetID,
+		"decision", event.Decision,
+		"reason_code", event.ReasonCode,
+		"stages", strings.Join(event.StageNames, ","),
+	}
+	for key, value := range event.Detail {
+		// Detail is the free-form diagnostic context. The central logger
+		// redacts secret-shaped keys itself; here the values are lengths and
+		// counts by construction, never message content.
+		attrs = append(attrs, key, value)
+	}
+
+	switch event.Level {
+	case "WARN":
+		l.log.Warn(event.Message, attrs...)
+	case "ERROR":
+		l.log.Error(event.Message, attrs...)
+	default:
+		l.log.Info(event.Message, attrs...)
+	}
+
+	if l.central != nil {
+		l.central.Emit(event.Level, event.Category, "worker.transform", event.Message, attrs...)
+	}
 }

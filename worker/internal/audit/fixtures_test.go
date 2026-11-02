@@ -272,13 +272,16 @@ func MetaClaims(raw map[string]any) [][2]any {
 const ExpectedTotal = 43
 
 // ExpectedCounts is the per-routing-class population of the fixture file.
-// `both` counts the fixtures the Go harness must actually execute: 4 filter
-// decisions on filter.Engine.Evaluate, 4 RemoveEmojis emoji outputs, 2
-// regex-library outputs (phone/hashtag), 1 ApplyTargetOverride rewrite and
-// the SVC-01 service-message drop.
+// `both` counts the fixtures the Go harness must actually execute: filter
+// decisions, the cleaner/link/emoji regex library, the replacements engine
+// and the ApplyTargetOverride rewrite.
+//
+// Stage 4.2 reclassified eight fixtures (CLN-FULL-01, CLN-MENTION-01 and
+// the RPL-* family) from python to both: the Go cleaning package now owns
+// parity-tested engines for them, so each carries an expected_go_output.
 var ExpectedCounts = map[Executable]int{
-	ExecPython: 24,
-	ExecBoth:   12,
+	ExecPython: 16,
+	ExecBoth:   20,
 	ExecMeta:   1,
 	ExecSchema: 6,
 	// ExecUnclassified is a hard failure, never a count.
@@ -287,6 +290,10 @@ var ExpectedCounts = map[Executable]int{
 // RequiredFixtures is the ids of the fixtures whose absence would mean a
 // pinned behaviour silently stopped being pinned. The audit's findings
 // reference these by name, so losing one invalidates the register.
+//
+// The list doubles as the freeze set for the `both` classification (see
+// TestFixtureClassificationIsFrozen): a fixture may only become `both` when
+// it is added here, which is the review gate for a new Go parity verdict.
 var RequiredFixtures = []string{
 	// Filter engine parity (FLT-*): the Go port's reason for existing.
 	"FLT-LEX-01", "FLT-LEX-02", "FLT-LEGACY-01", "FLT-LEGACY-02",
@@ -300,6 +307,13 @@ var RequiredFixtures = []string{
 	// Length-unit claim (UNI-LEN-01) is the meta fixture: no Go parity verdict,
 	// but its numbers are asserted from the Go side in the summary test.
 	"UNI-LEN-01",
+	// Stage 4.2: the cleaner and replacements fixtures reclassified from
+	// python to both, each carrying an expected_go_output the Go cleaning
+	// package is parity-tested against
+	// (scripts/test_stage42_parity.py, worker/internal/domain/cleaning).
+	"CLN-FULL-01",
+	"RPL-PRIORITY-01", "RPL-SMART-CASE-01", "RPL-SMART-CASE-02",
+	"RPL-DELETION-01", "RPL-BACKREF-01", "RPL-INVALID-01",
 }
 
 // ExpectedGroups is every coverage group the audit catalogued.
@@ -329,6 +343,13 @@ var SupportedFixtures = []string{
 	"CLN-PHONE-01", "CLN-HASHTAG-01",
 	// transform.ApplyTargetOverride, the F-13 divergence.
 	"LNK-OVERRIDE-01",
+	// Stage 4.2: the Go cleaning pipeline (worker/internal/domain/cleaning)
+	// now owns parity-tested engines for the full cleaner and the
+	// replacements family. Each of these is executed by
+	// cleaning_fixture_test.go against the real production package.
+	"CLN-FULL-01", "CLN-MENTION-01",
+	"RPL-PRIORITY-01", "RPL-SMART-CASE-01", "RPL-SMART-CASE-02",
+	"RPL-DELETION-01", "RPL-BACKREF-01", "RPL-INVALID-01",
 }
 
 // --- typed accessors for the engine harnesses --------------------------------

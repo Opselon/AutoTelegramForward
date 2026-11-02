@@ -179,6 +179,21 @@ func run() (runErr error) {
 		RPCTimeout:            60 * time.Second,
 	})
 
+	// Stage 4.2: the transform-stage strangler switch. The Worker only
+	// re-runs the text-transform pipeline when the deployment moved that
+	// boundary; a job the Python pipeline already transformed carries its
+	// own "do not re-transform" marker, so this is belt-and-braces on top of
+	// a per-job contract.
+	delivery.SetWorkerOwnsTransforms(cfg.WorkerTransforms)
+	log.Info("transform ownership configured", "worker_owns_transforms", cfg.WorkerTransforms)
+
+	// The transform pipeline's decisions ride the same central Logger the
+	// delivery events use: one sink, one correlation vocabulary, and the
+	// Logger's own bounded-queue backpressure instead of a second client.
+	if centralLogs != nil {
+		engine.SetDecisionRecorder(&transformDecisionLogger{central: centralLogs, log: log})
+	}
+
 	schedulerLog := &slogLogger{log: log, module: "worker.scheduler"}
 	schedEngine := scheduler.New(schedStore, gateway, schedulerLog, &schedCounters{}, workerID(), "", scheduler.Defaults())
 

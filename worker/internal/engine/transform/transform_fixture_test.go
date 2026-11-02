@@ -120,6 +120,23 @@ func TestTransformFixtureSetIsComplete(t *testing.T) {
 		if fx.Engine == "FilterEngine.evaluate" {
 			continue
 		}
+		// Stage 4.2: the cleaner and replacements fixtures are owned by
+		// worker/internal/domain/cleaning, which runs them against the
+		// parity-tested cleaning pipeline rather than this package's
+		// per-target override. Excluding them by engine keeps this harness
+		// the complete statement of what transform runs, without weakening
+		// the completeness check for either side.
+		//
+		// CLN-PHONE-01 and CLN-HASHTAG-01 are the exception: their engine
+		// string is also "CleanerRule.clean", but this harness executes
+		// them at the REGEX level (the F-07 divergence is a pattern-level
+		// claim), so they stay in this package's set.
+		if fx.Engine == "CleanerRule.clean" && fx.ID != "CLN-PHONE-01" && fx.ID != "CLN-HASHTAG-01" {
+			continue
+		}
+		if fx.Engine == "apply_replacements" {
+			continue
+		}
 		got = append(got, fx.ID)
 	}
 	if !sameSet(got, TransformFixtureIDs) {

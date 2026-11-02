@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"atf/worker/internal/domain/cleaning"
 	"atf/worker/internal/domain/job"
 	"atf/worker/internal/domain/policy"
 	"atf/worker/internal/domain/rule"
@@ -86,10 +87,19 @@ type Engine struct {
 	scheduler  scheduler.Store
 	filters    *filter.Engine
 	transforms *transform.Engine
-	log        Logger
-	metrics    Metrics
-	opts       Options
-	workerID   string
+	// transformsPipeline is the Stage 4.2 transform authority: the ordered
+	// cleaner / link / policy / replace / header / advanced pipeline the
+	// Python _apply_transforms ported. It is stateless and shared across
+	// jobs, exactly like the filter engine.
+	transformsPipeline *cleaning.Pipeline
+	// decisions records transform-pipeline decisions to the central Rust
+	// Log Monitor. It is optional: a nil recorder (through RecorderOr) makes
+	// every event a no-op, which is how the unit tests run.
+	decisions cleaning.DecisionRecorder
+	log       Logger
+	metrics   Metrics
+	opts      Options
+	workerID  string
 
 	mu      sync.Mutex
 	rate    map[string][]time.Time // per-target send timestamps
@@ -113,19 +123,29 @@ func New(store queue.Store, rules rule.Store, gateway telegraph.Gateway, schedul
 		opts.RPCTimeout = 60 * time.Second
 	}
 	return &Engine{
-		store:      store,
-		rules:      rules,
-		gateway:    gateway,
-		scheduler:  scheduler,
-		filters:    filter.New(),
-		transforms: transform.New(),
-		log:        log,
-		metrics:    metrics,
-		opts:       opts,
-		workerID:   workerID,
-		rate:       map[string][]time.Time{},
-		scratch:    scratchDir,
+		store:              store,
+		rules:              rules,
+		gateway:            gateway,
+		scheduler:          scheduler,
+		filters:            filter.New(),
+		transforms:         transform.New(),
+		transformsPipeline: cleaning.NewPipeline(),
+		decisions:          cleaning.RecorderOr(nil),
+		log:                log,
+		metrics:            metrics,
+		opts:               opts,
+		workerID:           workerID,
+		rate:               map[string][]time.Time{},
+		scratch:            scratchDir,
 	}
+}
+
+// SetDecisionRecorder installs the central-log recorder the transform
+// pipeline reports through. The Worker main calls it once after
+// constructing the engine; a nil recorder is explicitly allowed and
+// disables central recording without affecting delivery.
+func (e *Engine) SetDecisionRecorder(recorder cleaning.DecisionRecorder) {
+	e.decisions = cleaning.RecorderOr(recorder)
 }
 
 // Process executes one claimed job end to end.
@@ -240,6 +260,31 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 		_ = e.store.MarkFailed(ctx, j.ID, "Filter: link_blocked")
 		e.metrics.Outcome("failed")
 		return nil
+	}
+
+	// 2c. Stage 4.2: the transform pipeline. When the Worker owns the
+	// transform stage, the delivery text it is about to send is recomputed
+	// here from the RAW payload snapshot — not from the baked payload text,
+	// which the Python ingest path already transformed once and which must
+	// never be transformed a second time (the "raw input, never
+	// double-transform" rule).
+	//
+	// The gate is a per-process switch plus a per-job marker:
+	//
+	//   - ATF_WORKER_TRANSFORMS moves the whole boundary at once. It is
+	//     unset by default, so a rollout is a config flip and a rollback is
+	//     unsetting one variable — no redeploy, no migration.
+	//   - A job whose payload carries "transforms_version" was enqueued by a
+	//     Python pipeline that already applied the transform stage, so the
+	//     Worker applies nothing: it is a pre-4.2 job and re-running the
+	//     pipeline would double-apply every cleaner/replacement.
+	//
+	// An empty-after-clean result is the pipeline's one drop: the stages
+	// removed everything and the message has nothing left to send.
+	if e.ownsTransforms(j) {
+		if err := e.applyTransformPipeline(ctx, j, r, logger); err != nil {
+			return err
+		}
 	}
 
 	// 3. Per-target rate limit. A throttled target is a defer (the lane is

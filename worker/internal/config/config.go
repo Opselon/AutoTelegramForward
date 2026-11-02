@@ -21,6 +21,15 @@ type Config struct {
 	// nothing. Flipping it moves queue ownership without any code change.
 	WorkerEnabled bool
 
+	// WorkerTransforms is the Stage 4.2 strangler-fig switch for the
+	// text-transform pipeline. Default false: the Python ingest pipeline
+	// applies _apply_transforms and the job payload carries the result.
+	// Setting it moves the transform stage into the Worker, which re-runs
+	// the identical ordered stages against the payload's raw snapshot.
+	// Independent of WorkerEnabled so the two boundaries can be flipped
+	// in either order.
+	WorkerTransforms bool
+
 	// DatabaseURL (PostgreSQL) takes precedence when set; otherwise the
 	// worker opens the same SQLite atf.db the Python Core writes.
 	DatabaseURL string
@@ -67,6 +76,7 @@ type Config struct {
 func FromEnv() (*Config, error) {
 	c := &Config{
 		WorkerEnabled:          envBool("ATF_WORKER_ENABLED", false),
+		WorkerTransforms:       envBool("ATF_WORKER_TRANSFORMS", false),
 		DatabaseURL:            os.Getenv("ATF_DATABASE_URL"),
 		DBPath:                 envStr("ATF_DB_PATH", "/app/data/atf.db"),
 		PostgresAll:            envBool("ATF_POSTGRES_ALL", false),

@@ -180,6 +180,16 @@ jobs:
           # hand-picked subset.
           go test ./... -timeout 300s
           go test -race ./... -timeout 600s
+      - name: Stage 4.2 cross-language parity
+        # The differential harness runs the same cases through the real
+        # Python production engines and the real Go production engines and
+        # asserts byte-for-byte agreement. It is the migration's completion
+        # bar for the transform stage: a divergence here is a behavioral
+        # regression in either engine, not a test failure in one.
+        working-directory: worker
+        run: |
+          cd "$GITHUB_WORKSPACE"
+          python3 scripts/test_stage42_parity.py
       - name: Generated protobuf is up to date
         # The Go and Python stubs are committed (both consumers compile from
         # the same .proto). Regenerate and diff, so a contract change that

@@ -342,6 +342,15 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		// Projecting it here is what lets the delivery preflight enforce the
 		// same gate the Python pipeline already enforced at ingest.
 		extra.BlockLinks = metaBool(extra.Metadata, "block_links", false)
+
+		// Stage 4.2: the transform configuration the Python pipeline resolves
+		// out of the same blob in _apply_transforms. The Worker re-runs the
+		// transform pipeline on the RAW payload text when it owns the
+		// transform stage (ATF_WORKER_TRANSFORMS), so it must read the exact
+		// view the Python ForwardRule exposes — including the merged
+		// cleaner_config + legacy flag resolution Python's build_cleaner()
+		// performs, which is why this call is not a plain key lookup.
+		extra.Transform = transformConfigFromMetadata(extra.Metadata)
 	}
 
 	// auto_pause is not a column: the engine records it inside the task's
