@@ -1,646 +1,1397 @@
 {
- "schema_version": "3.0.0",
- "generated_from": "source inspection of master@35ee530cc80cd17d1ac7d702c4e5f5ea8024889a",
- "generated_at": "2026-11-02",
- "supersedes": {
-  "previous_version": "1.0.0",
-  "previous_generated_from": "master@d05f059",
-  "commits_behind": 440
- },
- "method": "Four parallel agents on non-overlapping scopes; every agent claim re-verified by the coordinator against source or by execution. See docs/behavior-audit/ for the full evidence trail.",
- "lifecycle_states": [
-  "RECEIVED",
-  "VALIDATING",
-  "AUTHORIZED",
-  "ACCEPTED",
-  "IN_PROGRESS",
-  "RETRY_WAIT",
-  "SUCCEEDED",
-  "FAILED",
-  "CANCELLED",
-  "OUTCOME_UNCONFIRMED"
- ],
- "engines": {
-  "note": "Five independent text/decision systems exist. See docs/behavior-audit/COORDINATOR_VOCABULARY.md.",
-  "filter_rule": {
-   "py": "core/domain/services.py:37 FilterEngine.evaluate",
-   "go": "worker/internal/engine/filter/filter.go:84",
-   "go_called_from": "worker/internal/engine/delivery/delivery.go:212"
-  },
-  "content_policy": {
-   "py": "core/domain/content_policy.py:691 ContentPolicy",
-   "go": null,
-   "go_note": "Not re-evaluated at delivery; baked into payload (delivery.go:193-199)"
-  },
-  "cleaner": {
-   "py": "core/domain/entities.py:2335 CleanerRule.clean",
-   "go": "worker/internal/engine/transform/transform.go RemoveEmojis etc.",
-   "go_note": "UNREFERENCED_HELPER - no production callers"
-  },
-  "link_engine": {
-   "py": "core/domain/services.py:758 LinkManagementEngine",
-   "go": null
-  },
-  "legacy_transform_text": {
-   "py": "core/domain/services.py:194 FilterEngine.transform_text",
-   "go": null,
-   "prod_callers": [
-    "sync_engine.py:261 (edit sync)",
-    "servicers.py:1523 (gRPC TestRule preview)"
-   ],
-   "note": "NOT on the durable pipeline"
-  }
- },
- "features": [
-  {
-   "id": "FLT-001",
-   "name": "FilterRule attached-filter evaluation",
-   "owner": "Python (ingest) + Go (delivery)",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "pipeline.py:918 -> FilterEngine.evaluate (services.py:37); delivery.go:212 -> filter.Engine.Evaluate",
-   "evidence": "services.py:37-190; filter.go:84-222; F-11/F-12",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "FLT-002",
-   "name": "FilterRule service-message drop",
-   "owner": "Python + Go",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "FilterEngine.evaluate step 1",
-   "evidence": "services.py:61-66; filter.go:85-96",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "FLT-003",
-   "name": "FilterRule media allow/deny",
-   "owner": "Python + Go",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "FilterEngine.evaluate steps 2-3",
-   "evidence": "services.py:69-77; filter.go:106-135",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "FLT-004",
-   "name": "FilterRule block_links",
-   "owner": "Python only at delivery",
-   "status": "PARTIALLY_IMPLEMENTED",
-   "runtime_entry_point": "pipeline.py:957 link_block_reason; FilterEngine services.py:79",
-   "evidence": "F-12: Go rulestore never populates rule.FilterRule.BlockLinks (rulestore.go:420-462)",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "FLT-005",
-   "name": "FilterRule min/max length bounds",
-   "owner": "Python + Go",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "FilterEngine.evaluate steps 4-5",
-   "evidence": "services.py:83-87; filter.go:137-141; F-11 (order differs)",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "FLT-006",
-   "name": "FilterRule blacklist/whitelist keywords",
-   "owner": "Python + Go",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "FilterEngine.evaluate steps 6-7 via content_policy.contains_word",
-   "evidence": "services.py:89-95; filter.go:143-160",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "FLT-007",
-   "name": "FilterRule regex_block / regex_require",
-   "owner": "Python + Go",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "FilterEngine.evaluate steps 8-9, compile_user_regex, fails closed",
-   "evidence": "services.py:99-170; filter.go:163-208",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "FLT-008",
-   "name": "FilterRule regex_patterns legacy compat",
-   "owner": "Python + Go",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "legacy list becomes block or require depending on keyword shape",
-   "evidence": "services.py:104-116; filter.go:172-181",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "FLT-009",
-   "name": "FilterRule is_enabled (v30 park)",
-   "owner": "Python + Go",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "evaluation skipped when disabled",
-   "evidence": "services.py:68-72; filter.go:98-103",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "POL-001",
-   "name": "ContentPolicy master switch",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "content_policy.evaluate is_active (enabled None/True/False semantics)",
-   "evidence": "content_policy.py:823-829",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "POL-002",
-   "name": "blacklist_off / whitelist_off per-list switches (v30)",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "evaluate skips a parked list but keeps its words",
-   "evidence": "content_policy.py:823, 855-906",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "POL-003",
-   "name": "whitelist_mode any/all/phrase",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "evaluate per mode; phrase joins words with a space",
-   "evidence": "content_policy.py:856-875",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "POL-004",
-   "name": "Policy match flags (case_sensitive/word_boundary/normalize)",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "fold_text + needle patterns incl. Arabic/Persian folding",
-   "evidence": "content_policy.py:131-258",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "POL-005",
-   "name": "ContentPolicy regex block/require with ReDoS guard",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "compile_user_regex, _hostile_pattern, bounded_search 8192",
-   "evidence": "content_policy.py:312-352, 100-118",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "POL-006",
-   "name": "policy_chain (task + source + target override)",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "entities.py:1380; additive-only constraints",
-   "evidence": "entities.py:1380-1402; pipeline.py:974, 1197-1205",
-   "migration_stage": "4.5"
-  },
-  {
-   "id": "POL-007",
-   "name": "ContentPolicy.transform (remove_links/strip/replacements)",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "single-pass composition (opposite of RPL sequential)",
-   "evidence": "content_policy.py:907-944, 979-1006",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "MED-001",
-   "name": "Unified media gate (block flags + allow list)",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "media_block_reason; allow-list takes precedence",
-   "evidence": "media_filter.py:65-92",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "MED-002",
-   "name": "link_block_reason task-level gate",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "has_link() predicate",
-   "evidence": "media_filter.py:94-99; pipeline.py:957; F-14",
-   "migration_stage": "4.1"
-  },
-  {
-   "id": "CLN-001",
-   "name": "Cleaner master switch + build_cleaner",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "cleaner_enabled derives True from legacy flags",
-   "evidence": "entities.py:927, 808-880",
-   "migration_stage": "4.2"
-  },
-  {
-   "id": "CLN-002",
-   "name": "CleanerRule patterns (literal/regex, case)",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "clean() pattern pass, re.error swallowed",
-   "evidence": "entities.py:2380-2391",
-   "migration_stage": "4.2"
-  },
-  {
-   "id": "CLN-003",
-   "name": "Cleaner URL/mention/hashtag/emoji/phone/empty-line",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "clean() in fixed order",
-   "evidence": "entities.py:2391-2405",
-   "migration_stage": "4.2"
-  },
-  {
-   "id": "CLN-004",
-   "name": "Cleaner strip_buttons (inline keyboard)",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "applied by pipeline, not by clean()",
-   "evidence": "pipeline.py:1424-1431",
-   "migration_stage": "4.2"
-  },
-  {
-   "id": "CLN-005",
-   "name": "Cleaner apply_to_caption=False",
-   "owner": "Python",
-   "status": "PARTIALLY_IMPLEMENTED",
-   "runtime_entry_point": "flag stored but engine sees caption via effective_text",
-   "evidence": "F-09; entities.py:2366, 2498-2502",
-   "migration_stage": "4.2"
-  },
-  {
-   "id": "CLN-006",
-   "name": "Cleaner cleaner_config blob",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "config key wins over legacy flag",
-   "evidence": "entities.py:796, 1017-1073",
-   "migration_stage": "4.2"
-  },
-  {
-   "id": "RPL-001",
-   "name": "ReplaceEntry storage compat (legacy/structured/rid-keyed)",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "to_value/to_rule_value/entry_from_value/normalize_map",
-   "evidence": "text_replace.py:109-209, 247-338",
-   "migration_stage": "4.3"
-  },
-  {
-   "id": "RPL-002",
-   "name": "Literal + regex modes, flags i/c/m/s/x, whole-word",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "compile_entry",
-   "evidence": "text_replace.py:350-373",
-   "migration_stage": "4.3"
-  },
-  {
-   "id": "RPL-003",
-   "name": "Exact-case-first (smart case) legacy behavior",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "apply_entry literal branch",
-   "evidence": "text_replace.py:385-390",
-   "migration_stage": "4.3"
-  },
-  {
-   "id": "RPL-004",
-   "name": "Priority ordering, stable ties, sequential application",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "apply_replacements sorts by -priority, stable",
-   "evidence": "text_replace.py:415-439",
-   "migration_stage": "4.3"
-  },
-  {
-   "id": "RPL-005",
-   "name": "Replace management (ReplaceRuleService, all surfaces)",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "create/validate/store/edit/enable/priority/duplicate/delete",
-   "evidence": "core/application/replace_rules.py; grpc_server/replace_servicer.py; replace_bot_ui.py",
-   "migration_stage": "4.3"
-  },
-  {
-   "id": "UNI-001",
-   "name": "Emoji removal (3 byte-identical regex copies)",
-   "owner": "Python + Go (identical output)",
-   "status": "INCOMPATIBLE",
-   "runtime_entry_point": "EMOJI_REGEX services.py:31; _CLEANER_EMOJI_RE entities.py:103; Go transform.go:33",
-   "evidence": "F-03: destroys non-emoji SMP, leaves ZWJ/keycap fragments",
-   "migration_stage": "4.2"
-  },
-  {
-   "id": "UNI-002",
-   "name": "Go transform package emoji/hashtag/username helpers",
-   "owner": "Go",
-   "status": "UNREFERENCED_HELPER",
-   "runtime_entry_point": "RemoveEmojis/Hashtags/Usernames/Tidy/Clamp",
-   "evidence": "F-08: delivery.go:87,120 constructs the engine but no method is called",
-   "migration_stage": "4.2"
-  },
-  {
-   "id": "LNK-001",
-   "name": "LinkPolicy 8-value enum + fail-closed resolve",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "value_objects.py:151; services.py:1001",
-   "evidence": "services.py:1001-1028",
-   "migration_stage": "4.4"
-  },
-  {
-   "id": "LNK-002",
-   "name": "Domain allowlist/blocklist, subdomain match",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "matches_domain",
-   "evidence": "services.py:822-835",
-   "migration_stage": "4.4"
-  },
-  {
-   "id": "LNK-003",
-   "name": "Link rewrite map",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "process_text_and_entities _rewrite_url",
-   "evidence": "services.py:836-1000",
-   "migration_stage": "4.4"
-  },
-  {
-   "id": "LNK-004",
-   "name": "SSRF/private-IP URL safety",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "is_safe_url",
-   "evidence": "services.py:769-805",
-   "migration_stage": "4.4"
-  },
-  {
-   "id": "LNK-005",
-   "name": "UTF-16 entity offset shifting",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "_shifted",
-   "evidence": "services.py:973-1000",
-   "migration_stage": "4.4"
-  },
-  {
-   "id": "LNK-006",
-   "name": "Inline keyboard URL-button filtering",
-   "owner": "Python",
-   "status": "UNREFERENCED_HELPER",
-   "runtime_entry_point": "filter_inline_keyboard",
-   "evidence": "F-16: zero production callers across core/web/api/mobile/worker",
-   "migration_stage": "4.4"
-  },
-  {
-   "id": "LNK-007",
-   "name": "remove_links (cleaner toggle) + link_replacement precedence",
-   "owner": "Python",
-   "status": "PARTIALLY_IMPLEMENTED",
-   "runtime_entry_point": "pipeline if/elif vs legacy precedence",
-   "evidence": "F-04: pipeline.py:1438 vs services.py:268-271",
-   "migration_stage": "4.2/4.4"
-  },
-  {
-   "id": "ADV-001",
-   "name": "Watermark (append, dedup, 200 cap)",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "apply_content_transforms step 1",
-   "evidence": "services.py:1441-1458; pipeline.py:1558",
-   "migration_stage": "4.4"
-  },
-  {
-   "id": "ADV-002",
-   "name": "Link buttons add-on",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "apply_content_transforms step 2 + is_addon_enabled",
-   "evidence": "services.py:1460-1470",
-   "migration_stage": "4.4"
-  },
-  {
-   "id": "ADV-003",
-   "name": "Affiliate kit URL prefixing",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "apply_content_transforms step 3",
-   "evidence": "services.py:1472-1484",
-   "migration_stage": "4.4"
-  },
-  {
-   "id": "ADV-004",
-   "name": "Header/Footer (durable path)",
-   "owner": "Python",
-   "status": "PARTIALLY_IMPLEMENTED",
-   "runtime_entry_point": "pipeline.py:1547 apply_header_footer",
-   "evidence": "F-15: placeholders never interpolated on the durable path",
-   "migration_stage": "4.4"
-  },
-  {
-   "id": "ADV-005",
-   "name": "Header/Footer placeholder interpolation",
-   "owner": "Python",
-   "status": "LEGACY_ONLY",
-   "runtime_entry_point": "HeaderFormatter.format_text",
-   "evidence": "F-15: only transform_text (sync_engine/gRPC preview) calls it",
-   "migration_stage": "4.4"
-  },
-  {
-   "id": "ADV-006",
-   "name": "Auto-delete TTL",
-   "owner": "Python (in-memory) + Go (durable scheduler)",
-   "status": "DUPLICATED",
-   "runtime_entry_point": "get_auto_delete_seconds; scheduleAutoDelete",
-   "evidence": "F-17 bounds disagree; F-19 Python loop lost on restart",
-   "migration_stage": "4.5"
-  },
-  {
-   "id": "ADV-007",
-   "name": "Edit time window",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "is_edit_within_window",
-   "evidence": "services.py:1513-1531; pipeline.py:820",
-   "migration_stage": "4.5"
-  },
-  {
-   "id": "ADV-008",
-   "name": "Dispatch delay",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "get_dispatch_delay",
-   "evidence": "services.py:1538; F-17 bound disagreement",
-   "migration_stage": "4.4"
-  },
-  {
-   "id": "AI-001",
-   "name": "AI rewrite (config, gate, fallback policy)",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "pipeline.py:1616 _run_ai_transform; 1724 _handle_ai_fallback",
-   "evidence": "pipeline.py:1616-1800; entities.py:427 AIFallbackPolicy",
-   "migration_stage": "4.4"
-  },
-  {
-   "id": "RT-001",
-   "name": "SmartRoutingEngine rule matching",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "services.py:415; per-owner single match; multi_route",
-   "evidence": "services.py:415-655",
-   "migration_stage": "4.5"
-  },
-  {
-   "id": "RT-002",
-   "name": "Loop prevention per target",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "is_loop skip (not drop)",
-   "evidence": "pipeline.py:1162-1176",
-   "migration_stage": "4.5"
-  },
-  {
-   "id": "EVT-001",
-   "name": "Event lifecycle (10 update types)",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "dispatcher.py:314-404 branch order",
-   "evidence": "c-handoff 1; dispatcher.py",
-   "migration_stage": "4.5"
-  },
-  {
-   "id": "DUP-001",
-   "name": "Content fingerprint dedup (claim/release)",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "claim_content_hash + _release_content_claim in finally",
-   "evidence": "pipeline.py:861, 752",
-   "migration_stage": "4.5"
-  },
-  {
-   "id": "DUP-002",
-   "name": "dedupe_policy STRICT/RELAXED/DISABLED",
-   "owner": "Python",
-   "status": "STORED_BUT_UNUSED",
-   "runtime_entry_point": "-",
-   "evidence": "F-01: persisted by SQLite/Postgres/proto/backup, zero runtime readers",
-   "migration_stage": "4.5"
-  },
-  {
-   "id": "DUP-003",
-   "name": "DuplicateDetectionService",
-   "owner": "Python",
-   "status": "UNREFERENCED_HELPER",
-   "runtime_entry_point": "-",
-   "evidence": "services.py:678; only test caller",
-   "migration_stage": "4.5"
-  },
-  {
-   "id": "FEN-001",
-   "name": "Forward Every N",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "forward_interval + atomic counter UPSERT",
-   "evidence": "pipeline.py:1036-1084; F-05 (runs after all filters)",
-   "migration_stage": "4.5"
-  },
-  {
-   "id": "KW-001",
-   "name": "Keyword confirmation/reply",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "classify_keyword_trigger + job_kind=keyword_reply",
-   "evidence": "services.py:1477; pipeline.py:1298-1330",
-   "migration_stage": "4.5"
-  },
-  {
-   "id": "BRD-001",
-   "name": "Branding hop pipeline side",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "branding.py should_hop; _branding_intent",
-   "evidence": "pipeline.py:543, 1137-1160",
-   "migration_stage": "4.5"
-  },
-  {
-   "id": "ALB-001",
-   "name": "Album aggregation",
-   "owner": "Python",
-   "status": "PARTIALLY_IMPLEMENTED",
-   "runtime_entry_point": "AlbumAggregator LRU+TTL",
-   "evidence": "F-02: TTL hard-coded 2.0s at dispatcher.py:96; rule field never read",
-   "migration_stage": "4.5"
-  },
-  {
-   "id": "DLV-001",
-   "name": "Durable queue + delivery jobs",
-   "owner": "Python (enqueue) + Go (claim/dispatch)",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "pipeline enqueue; delivery.go",
-   "evidence": "durable_queue.py; delivery.go:190-360",
-   "migration_stage": "-"
-  },
-  {
-   "id": "DLV-002",
-   "name": "USER/BOT delivery transport",
-   "owner": "Python + Go",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "entities.py:642 delivery_transport; delivery.go transportFor",
-   "evidence": "entities.py:642-663; delivery.go",
-   "migration_stage": "-"
-  },
-  {
-   "id": "DLV-003",
-   "name": "Send idempotency fence",
-   "owner": "Go (durable)",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "FenceClaim before first Telegram side effect",
-   "evidence": "delivery.go:238-300",
-   "migration_stage": "-"
-  },
-  {
-   "id": "DLV-004",
-   "name": "Branding stage-1 checkpoint + stage-2 replay",
-   "owner": "Go",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "ensureBrandingStage1",
-   "evidence": "delivery.go brand_stage; F-19",
-   "migration_stage": "-"
-  },
-  {
-   "id": "DLV-005",
-   "name": "Per-target rate limit",
-   "owner": "Python + Go",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "targetRateWait (defer, never an attempt)",
-   "evidence": "delivery.go:221-232",
-   "migration_stage": "-"
-  },
-  {
-   "id": "SET-000",
-   "name": "SETTING_SPECS registry (76 keys)",
-   "owner": "Python",
-   "status": "FULLY_IMPLEMENTED",
-   "runtime_entry_point": "rule_settings.py:96; validated settings API",
-   "evidence": "a-handoff 1; settings-inventory.json",
-   "migration_stage": "4.x"
-  },
-  {
-   "id": "SET-001",
-   "name": "Settings stored but never read (12 keys)",
-   "owner": "Python",
-   "status": "STORED_BUT_UNUSED",
-   "runtime_entry_point": "debug_mode, process_raw_text, feature_group, sender_type, translate_lang, blacklist_users, whitelist_users, news_digest, button_to_text, ...",
-   "evidence": "a-handoff 1",
-   "migration_stage": "4.x"
-  }
- ],
- "feature_count": 64,
- "known_gaps": [
-  "Central Logger is SQLite-owned; PostgreSQL event persistence for audit events is delivered via the audit_events/outbox tables in the core PostgreSQL schema, not by migrating the Logger itself.",
-  "Raw message bodies are deliberately NOT persisted to logs (minimum-necessary principle); message content is represented by ids, hashes, and type metadata.",
-  "Telegram delivery guarantees are Telegram-bound: exactly-once cannot be proven; UNKNOWN is a first-class outcome.",
-  "Go worker delivery does not re-evaluate ContentPolicy or apply any task-level transform; the transform package is UNREFERENCED_HELPER (F-08).",
-  "Go rulestore never populates FilterRule.BlockLinks (F-12) - latent divergence until Worker activation defaults on.",
-  "Emoji removal pattern is byte-identical in Python and Go and destroys non-emoji SMP characters and shreds ZWJ/keycap sequences (F-03).",
-  "Header/footer placeholders are not interpolated on the durable pipeline; only the gRPC preview and edit-sync paths expand them (F-15).",
-  "The legacy FilterEngine.transform_text orchestrator (services.py:194) is NOT the durable pipeline's transform path; documentation before this audit described the wrong pipeline.",
-  "link_policy / domain_allowlist / domain_blocklist / link_rewrite_map are not in SETTING_SPECS, so the validated settings API cannot write them.",
-  "filter_inline_keyboard has zero production callers: a link policy strips link text but leaves inline URL buttons (F-16).",
-  "dedupe_policy is persisted by SQLite, PostgreSQL, the proto contract and backup/restore, and read by nothing (F-01)."
- ]
+  "schema_version": "3.0.0",
+  "generated_from": "source inspection of master@35ee530cc80cd17d1ac7d702c4e5f5ea8024889a",
+  "generated_at": "2026-11-02",
+  "supersedes": {
+    "previous_version": "1.0.0",
+    "previous_generated_from": "master@d05f059",
+    "commits_behind": 440
+  },
+  "lifecycle_states": [
+    "RECEIVED",
+    "VALIDATING",
+    "AUTHORIZED",
+    "ACCEPTED",
+    "IN_PROGRESS",
+    "RETRY_WAIT",
+    "SUCCEEDED",
+    "FAILED",
+    "CANCELLED",
+    "OUTCOME_UNCONFIRMED"
+  ],
+  "features": [
+    {
+      "id": "FLT-001",
+      "name": "FilterRule attached-filter evaluation",
+      "entry_points": [
+        "pipeline.py:918 -> FilterEngine.evaluate (services.py:37)",
+        "delivery.go:212 -> filter.Engine.Evaluate"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "filter_rules"
+      ],
+      "completion_condition": "services.py:37-190; filter.go:84-222; F-11/F-12",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python (ingest) + Go (delivery)",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "FLT-002",
+      "name": "FilterRule service-message drop",
+      "entry_points": [
+        "FilterEngine.evaluate step 1"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "filter_rules"
+      ],
+      "completion_condition": "services.py:61-66; filter.go:85-96",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python + Go",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "FLT-003",
+      "name": "FilterRule media allow / deny",
+      "entry_points": [
+        "FilterEngine.evaluate steps 2-3"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "filter_rules"
+      ],
+      "completion_condition": "services.py:69-77; filter.go:106-135",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python + Go",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "FLT-004",
+      "name": "FilterRule block_links",
+      "entry_points": [
+        "pipeline.py:957 link_block_reason",
+        "FilterEngine services.py:79"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "filter_rules"
+      ],
+      "completion_condition": "F-12: Go rulestore never populates rule.FilterRule.BlockLinks (rulestore.go:420-462)",
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "audit_status": "PARTIALLY_IMPLEMENTED",
+      "owner": "Python only at delivery",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "FLT-005",
+      "name": "FilterRule min / max length bounds",
+      "entry_points": [
+        "FilterEngine.evaluate steps 4-5"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "filter_rules"
+      ],
+      "completion_condition": "services.py:83-87; filter.go:137-141; F-11 (order differs)",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python + Go",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "FLT-006",
+      "name": "FilterRule blacklist / whitelist keywords",
+      "entry_points": [
+        "FilterEngine.evaluate steps 6-7 via content_policy.contains_word"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "filter_rules"
+      ],
+      "completion_condition": "services.py:89-95; filter.go:143-160",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python + Go",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "FLT-007",
+      "name": "FilterRule regex_block / regex_require",
+      "entry_points": [
+        "FilterEngine.evaluate steps 8-9, compile_user_regex, fails closed"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "filter_rules"
+      ],
+      "completion_condition": "services.py:99-170; filter.go:163-208",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python + Go",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "FLT-008",
+      "name": "FilterRule regex_patterns legacy compat",
+      "entry_points": [
+        "legacy list becomes block or require depending on keyword shape"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "filter_rules"
+      ],
+      "completion_condition": "services.py:104-116; filter.go:172-181",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python + Go",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "FLT-009",
+      "name": "FilterRule is_enabled (v30 park)",
+      "entry_points": [
+        "evaluation skipped when disabled"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "filter_rules"
+      ],
+      "completion_condition": "services.py:68-72; filter.go:98-103",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python + Go",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "POL-001",
+      "name": "ContentPolicy master switch",
+      "entry_points": [
+        "content_policy.evaluate is_active (enabled None/True/False semantics)"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "content_policy.py:823-829",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "POL-002",
+      "name": "blacklist_off / whitelist_off per-list switches (v30)",
+      "entry_points": [
+        "evaluate skips a parked list but keeps its words"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "content_policy.py:823, 855-906",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "POL-003",
+      "name": "whitelist_mode any / all / phrase",
+      "entry_points": [
+        "evaluate per mode",
+        "phrase joins words with a space"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "content_policy.py:856-875",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "POL-004",
+      "name": "Policy match flags (case_sensitive / word_boundary / normalize)",
+      "entry_points": [
+        "fold_text + needle patterns incl. Arabic/Persian folding"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "content_policy.py:131-258",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "POL-005",
+      "name": "ContentPolicy regex block / require with ReDoS guard",
+      "entry_points": [
+        "compile_user_regex, _hostile_pattern, bounded_search 8192"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "content_policy.py:312-352, 100-118",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "POL-006",
+      "name": "policy_chain (task + source + target override)",
+      "entry_points": [
+        "entities.py:1380",
+        "additive-only constraints"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "entities.py:1380-1402; pipeline.py:974, 1197-1205",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.5"
+    },
+    {
+      "id": "POL-007",
+      "name": "ContentPolicy transform (remove_links / strip / replacements)",
+      "entry_points": [
+        "single-pass composition (opposite of RPL sequential)"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "content_policy.py:907-944, 979-1006",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "MED-001",
+      "name": "Unified media gate (block flags + allow list)",
+      "entry_points": [
+        "media_block_reason",
+        "allow-list takes precedence"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "media_filter.py:65-92",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "MED-002",
+      "name": "link_block_reason task-level gate",
+      "entry_points": [
+        "has_link() predicate"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "media_filter.py:94-99; pipeline.py:957; F-14",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.1"
+    },
+    {
+      "id": "CLN-001",
+      "name": "Cleaner master switch + build_cleaner",
+      "entry_points": [
+        "cleaner_enabled derives True from legacy flags"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "entities.py:927, 808-880",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.2"
+    },
+    {
+      "id": "CLN-002",
+      "name": "CleanerRule patterns (literal / regex, case)",
+      "entry_points": [
+        "clean() pattern pass, re.error swallowed"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "entities.py:2380-2391",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.2"
+    },
+    {
+      "id": "CLN-003",
+      "name": "Cleaner URL / mention / hashtag / emoji / phone / empty-line",
+      "entry_points": [
+        "clean() in fixed order"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "entities.py:2391-2405",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.2"
+    },
+    {
+      "id": "CLN-004",
+      "name": "Cleaner strip_buttons (inline keyboard)",
+      "entry_points": [
+        "applied by pipeline, not by clean()"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "pipeline.py:1424-1431",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.2"
+    },
+    {
+      "id": "CLN-005",
+      "name": "Cleaner apply_to_caption = False",
+      "entry_points": [
+        "flag stored but engine sees caption via effective_text"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "F-09; entities.py:2366, 2498-2502",
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "audit_status": "PARTIALLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.2"
+    },
+    {
+      "id": "CLN-006",
+      "name": "Cleaner cleaner_config blob",
+      "entry_points": [
+        "config key wins over legacy flag"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "entities.py:796, 1017-1073",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.2"
+    },
+    {
+      "id": "RPL-001",
+      "name": "ReplaceEntry storage compat (legacy / structured / rid-keyed)",
+      "entry_points": [
+        "to_value/to_rule_value/entry_from_value/normalize_map"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "text_replace.py:109-209, 247-338",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.3"
+    },
+    {
+      "id": "RPL-002",
+      "name": "Literal + regex modes, flags i / c / m / s / x, whole-word",
+      "entry_points": [
+        "compile_entry"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "text_replace.py:350-373",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.3"
+    },
+    {
+      "id": "RPL-003",
+      "name": "Exact-case-first (smart case) legacy behavior",
+      "entry_points": [
+        "apply_entry literal branch"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "text_replace.py:385-390",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.3"
+    },
+    {
+      "id": "RPL-004",
+      "name": "Priority ordering, stable ties, sequential application",
+      "entry_points": [
+        "apply_replacements sorts by -priority, stable"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "text_replace.py:415-439",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.3"
+    },
+    {
+      "id": "RPL-005",
+      "name": "Replace management (ReplaceRule Service, all surfaces)",
+      "entry_points": [
+        "create/validate/store/edit/enable/priority/duplicate/delete"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "core/application/replace_rules.py; grpc_server/replace_servicer.py; replace_bot_ui.py",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.3"
+    },
+    {
+      "id": "UNI-001",
+      "name": "Emoji removal (3 byte-identical regex copies)",
+      "entry_points": [
+        "EMOJI_REGEX services.py:31",
+        "_CLEANER_EMOJI_RE entities.py:103",
+        "Go transform.go:33"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "F-03: destroys non-emoji SMP, leaves ZWJ/keycap fragments",
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "audit_status": "INCOMPATIBLE",
+      "owner": "Python + Go (identical output)",
+      "migration_stage": "4.2"
+    },
+    {
+      "id": "UNI-002",
+      "name": "Go transform package emoji / hashtag / username helpers",
+      "entry_points": [
+        "RemoveEmojis/Hashtags/Usernames/Tidy/Clamp"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "F-08: delivery.go:87,120 constructs the engine but no method is called",
+      "implementation_status": "NOT_IMPLEMENTED",
+      "audit_status": "UNREFERENCED_HELPER",
+      "owner": "Go",
+      "migration_stage": "4.2"
+    },
+    {
+      "id": "LNK-001",
+      "name": "LinkPolicy 8-value enum + fail-closed resolve",
+      "entry_points": [
+        "value_objects.py:151",
+        "services.py:1001"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "services.py:1001-1028",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.4"
+    },
+    {
+      "id": "LNK-002",
+      "name": "Domain allowlist / blocklist, subdomain match",
+      "entry_points": [
+        "matches_domain"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "services.py:822-835",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.4"
+    },
+    {
+      "id": "LNK-003",
+      "name": "Link rewrite map",
+      "entry_points": [
+        "process_text_and_entities _rewrite_url"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "services.py:836-1000",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.4"
+    },
+    {
+      "id": "LNK-004",
+      "name": "SSRF / private-IP URL safety",
+      "entry_points": [
+        "is_safe_url"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "services.py:769-805",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.4"
+    },
+    {
+      "id": "LNK-005",
+      "name": "UTF-16 entity offset shifting",
+      "entry_points": [
+        "_shifted"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "services.py:973-1000",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.4"
+    },
+    {
+      "id": "LNK-006",
+      "name": "Inline keyboard URL-button filtering",
+      "entry_points": [
+        "filter_inline_keyboard"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "F-16: zero production callers across core/web/api/mobile/worker",
+      "implementation_status": "NOT_IMPLEMENTED",
+      "audit_status": "UNREFERENCED_HELPER",
+      "owner": "Python",
+      "migration_stage": "4.4"
+    },
+    {
+      "id": "LNK-007",
+      "name": "remove_links (cleaner toggle) + link_replacement precedence",
+      "entry_points": [
+        "pipeline if/elif vs legacy precedence"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "F-04: pipeline.py:1438 vs services.py:268-271",
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "audit_status": "PARTIALLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.2/4.4"
+    },
+    {
+      "id": "ADV-001",
+      "name": "Watermark (append, dedup, 200 cap)",
+      "entry_points": [
+        "apply_content_transforms step 1"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "services.py:1441-1458; pipeline.py:1558",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.4"
+    },
+    {
+      "id": "ADV-002",
+      "name": "Link buttons add-on",
+      "entry_points": [
+        "apply_content_transforms step 2 + is_addon_enabled"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "services.py:1460-1470",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.4"
+    },
+    {
+      "id": "ADV-003",
+      "name": "Affiliate kit URL prefixing",
+      "entry_points": [
+        "apply_content_transforms step 3"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "services.py:1472-1484",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.4"
+    },
+    {
+      "id": "ADV-004",
+      "name": "Header / Footer (durable path)",
+      "entry_points": [
+        "pipeline.py:1547 apply_header_footer"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "F-15: placeholders never interpolated on the durable path",
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "audit_status": "PARTIALLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.4"
+    },
+    {
+      "id": "ADV-005",
+      "name": "Header / Footer placeholder interpolation",
+      "entry_points": [
+        "HeaderFormatter.format_text"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "F-15: only transform_text (sync_engine/gRPC preview) calls it",
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "audit_status": "LEGACY_ONLY",
+      "owner": "Python",
+      "migration_stage": "4.4"
+    },
+    {
+      "id": "ADV-006",
+      "name": "Auto-delete TTL",
+      "entry_points": [
+        "get_auto_delete_seconds",
+        "scheduleAutoDelete"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "F-17 bounds disagree; F-19 Python loop lost on restart",
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "audit_status": "DUPLICATED",
+      "owner": "Python (in-memory) + Go (durable scheduler)",
+      "migration_stage": "4.5"
+    },
+    {
+      "id": "ADV-007",
+      "name": "Edit time window",
+      "entry_points": [
+        "is_edit_within_window"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "services.py:1513-1531; pipeline.py:820",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.5"
+    },
+    {
+      "id": "ADV-008",
+      "name": "Dispatch delay",
+      "entry_points": [
+        "get_dispatch_delay"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "services.py:1538; F-17 bound disagreement",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.4"
+    },
+    {
+      "id": "AI-001",
+      "name": "AI rewrite (config, gate, fallback policy)",
+      "entry_points": [
+        "pipeline.py:1616 _run_ai_transform",
+        "1724 _handle_ai_fallback"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "pipeline.py:1616-1800; entities.py:427 AIFallbackPolicy",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.4"
+    },
+    {
+      "id": "RT-001",
+      "name": "SmartRoutingEngine rule matching",
+      "entry_points": [
+        "services.py:415",
+        "per-owner single match",
+        "multi_route"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "services.py:415-655",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.5"
+    },
+    {
+      "id": "RT-002",
+      "name": "Loop prevention per target",
+      "entry_points": [
+        "is_loop skip (not drop)"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "pipeline.py:1162-1176",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.5"
+    },
+    {
+      "id": "EVT-001",
+      "name": "Event lifecycle (10 update types)",
+      "entry_points": [
+        "dispatcher.py:314-404 branch order"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "c-handoff 1; dispatcher.py",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.5"
+    },
+    {
+      "id": "DUP-001",
+      "name": "Content fingerprint dedup (claim / release)",
+      "entry_points": [
+        "claim_content_hash + _release_content_claim in finally"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "pipeline.py:861, 752",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.5"
+    },
+    {
+      "id": "DUP-002",
+      "name": "dedupe_policy STRICT / RELAXED / DISABLED",
+      "entry_points": [
+        "-"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "F-01: persisted by SQLite/Postgres/proto/backup, zero runtime readers",
+      "implementation_status": "NOT_IMPLEMENTED",
+      "audit_status": "STORED_BUT_UNUSED",
+      "owner": "Python",
+      "migration_stage": "4.5"
+    },
+    {
+      "id": "DUP-003",
+      "name": "DuplicateDetection Service",
+      "entry_points": [
+        "-"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "services.py:678; only test caller",
+      "implementation_status": "NOT_IMPLEMENTED",
+      "audit_status": "UNREFERENCED_HELPER",
+      "owner": "Python",
+      "migration_stage": "4.5"
+    },
+    {
+      "id": "FEN-001",
+      "name": "Forward Every N",
+      "entry_points": [
+        "forward_interval + atomic counter UPSERT"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "pipeline.py:1036-1084; F-05 (runs after all filters)",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.5"
+    },
+    {
+      "id": "KW-001",
+      "name": "Keyword confirmation / reply",
+      "entry_points": [
+        "classify_keyword_trigger + job_kind=keyword_reply"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "services.py:1477; pipeline.py:1298-1330",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.5"
+    },
+    {
+      "id": "BRD-001",
+      "name": "Branding hop pipeline side",
+      "entry_points": [
+        "branding.py should_hop",
+        "_branding_intent"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "pipeline.py:543, 1137-1160",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.5"
+    },
+    {
+      "id": "ALB-001",
+      "name": "Album aggregation",
+      "entry_points": [
+        "AlbumAggregator LRU+TTL"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "F-02: TTL hard-coded 2.0s at dispatcher.py:96; rule field never read",
+      "implementation_status": "PARTIALLY_IMPLEMENTED",
+      "audit_status": "PARTIALLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.5"
+    },
+    {
+      "id": "DLV-001",
+      "name": "Durable queue + delivery jobs",
+      "entry_points": [
+        "pipeline enqueue",
+        "delivery.go"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "durable_queue.py; delivery.go:190-360",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python (enqueue) + Go (claim/dispatch)",
+      "migration_stage": "-"
+    },
+    {
+      "id": "DLV-002",
+      "name": "USER / BOT delivery transport",
+      "entry_points": [
+        "entities.py:642 delivery_transport",
+        "delivery.go transportFor"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "entities.py:642-663; delivery.go",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python + Go",
+      "migration_stage": "-"
+    },
+    {
+      "id": "DLV-003",
+      "name": "Send idempotency fence",
+      "entry_points": [
+        "FenceClaim before first Telegram side effect"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "delivery.go:238-300",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Go (durable)",
+      "migration_stage": "-"
+    },
+    {
+      "id": "DLV-004",
+      "name": "Branding stage-1 checkpoint + stage-2 replay",
+      "entry_points": [
+        "ensureBrandingStage1"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "delivery.go brand_stage; F-19",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Go",
+      "migration_stage": "-"
+    },
+    {
+      "id": "DLV-005",
+      "name": "Per-target rate limit",
+      "entry_points": [
+        "targetRateWait (defer, never an attempt)"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "delivery.go:221-232",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python + Go",
+      "migration_stage": "-"
+    },
+    {
+      "id": "SET-000",
+      "name": "SETTING_SPECS registry (76 keys)",
+      "entry_points": [
+        "rule_settings.py:96",
+        "validated settings API"
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "a-handoff 1; settings-inventory.json",
+      "implementation_status": "IMPLEMENTED",
+      "audit_status": "FULLY_IMPLEMENTED",
+      "owner": "Python",
+      "migration_stage": "4.x"
+    },
+    {
+      "id": "SET-001",
+      "name": "Settings stored but never read (12 keys)",
+      "entry_points": [
+        "debug_mode, process_raw_text, feature_group, sender_type, translate_lang, blacklist_users, whitelist_users, news_digest, button_to_text, ..."
+      ],
+      "clients": [
+        "web",
+        "bot",
+        "mobile",
+        "api"
+      ],
+      "db_tables": [
+        "forward_rules"
+      ],
+      "completion_condition": "a-handoff 1",
+      "implementation_status": "NOT_IMPLEMENTED",
+      "audit_status": "STORED_BUT_UNUSED",
+      "owner": "Python",
+      "migration_stage": "4.x"
+    }
+  ],
+  "known_gaps": [
+    "Central Logger is SQLite-owned; PostgreSQL event persistence for audit events is delivered via the audit_events/outbox tables in the core PostgreSQL schema, not by migrating the Logger itself.",
+    "Raw message bodies are deliberately NOT persisted to logs (minimum-necessary principle); message content is represented by ids, hashes, and type metadata.",
+    "Telegram delivery guarantees are Telegram-bound: exactly-once cannot be proven; UNKNOWN is a first-class outcome.",
+    "Go worker delivery does not re-evaluate ContentPolicy or apply any task-level transform; the transform package is UNREFERENCED_HELPER (F-08).",
+    "Go rulestore never populates FilterRule.BlockLinks (F-12) - latent divergence until Worker activation defaults on.",
+    "Emoji removal pattern is byte-identical in Python and Go and destroys non-emoji SMP characters and shreds ZWJ/keycap sequences (F-03).",
+    "Header/footer placeholders are not interpolated on the durable pipeline; only the gRPC preview and edit-sync paths expand them (F-15).",
+    "The legacy FilterEngine.transform_text orchestrator (services.py:194) is NOT the durable pipeline's transform path; documentation before this audit described the wrong pipeline.",
+    "link_policy / domain_allowlist / domain_blocklist / link_rewrite_map are not in SETTING_SPECS, so the validated settings API cannot write them.",
+    "filter_inline_keyboard has zero production callers: a link policy strips link text but leaves inline URL buttons (F-16).",
+    "dedupe_policy is persisted by SQLite, PostgreSQL, the proto contract and backup/restore, and read by nothing (F-01)."
+  ]
 }
