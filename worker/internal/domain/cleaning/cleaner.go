@@ -92,12 +92,19 @@ type Config struct {
 	Replacements []ReplacementEntry
 
 	// Header / Footer are the task's header and footer text
-	// (pipeline.py:1547). Applied raw: the Python durable path deliberately
-	// does NOT interpolate placeholders (finding F-15), and this port
-	// preserves that behavior rather than importing the gRPC preview's
-	// expansion.
+	// (pipeline.py:1547). Applied by the pipeline WITH placeholder
+	// interpolation (Stage 4.4 closes F-15): when HeaderVars is nil the
+	// templates are applied raw — the pre-4.4 durable-path behavior,
+	// preserved so a caller that has no message snapshot cannot
+	// accidentally render half-expanded placeholders.
 	Header string
 	Footer string
+	// HeaderVars / HeaderTask are the message- and task-level variables
+	// the header templates render against. Nil means "no snapshot
+	// available", and the pipeline responds by applying the templates
+	// without expansion.
+	HeaderVars *HeaderVars
+	HeaderTask HeaderTask
 
 	// Watermark / LinkButtons / AffiliateKit are the advanced content
 	// transforms (services.py apply_content_transforms, applied at

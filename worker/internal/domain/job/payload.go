@@ -258,9 +258,28 @@ func (p *Payload) EffectiveText() string { return p.str("effective_text", "") }
 // build the source link.
 func (p *Payload) SourceChatUsername() string { return p.str("source_chat_username", "") }
 
+// SourceChatID is the source chat's id exactly as the enqueue path
+// snapshotted it — a string, because Telegram supergroup ids carry the
+// -100 prefix that makes them not-a-number the pipeline can compare.
+func (p *Payload) SourceChatID() string { return p.str("source_chat_id", "") }
+
 // SourceChatTitle is the source chat's display name, snapshotted at ingest.
 func (p *Payload) SourceChatTitle() string { return p.str("source_chat_title", "") }
 
 // SourceDate is the epoch-seconds timestamp of the source message, for the
 // {date} header placeholder.
 func (p *Payload) SourceDate() int64 { return int64(p.num("source_date", 0)) }
+
+// SenderName is the source message author's display name, for the
+// {sender_name} / {FROM_USER} header placeholders.
+func (p *Payload) SenderName() string { return p.str("sender_name", "") }
+
+// mapField reads a JSON object field.
+func (p *Payload) mapField(key string) map[string]any {
+	if v, ok := p.raw[key]; ok {
+		if m, ok := v.(map[string]any); ok {
+			return m
+		}
+	}
+	return nil
+}

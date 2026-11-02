@@ -40,6 +40,7 @@ from core.domain.entities import CleanerRule, ForwardRule, MessagePayload  # noq
 from core.domain.services import (  # noqa: E402
     AdvancedSettingsEngine,
     FilterEngine,
+    HeaderFormatter,
     LinkManagementEngine,
 )
 from core.domain.text_replace import apply_replacements  # noqa: E402
@@ -112,6 +113,31 @@ def py_header_footer(case: Dict[str, Any]) -> str:
                                        footer=case.get("footer", ""))
 
 
+def py_header_template(case: Dict[str, Any]) -> str:
+    """HeaderFormatter.format_text — the placeholder renderer.
+
+    The message fields the renderer reads come from the case, not from a
+    live payload, so the comparison is deterministic (the source date is
+    always set; a zero date would make Python fall back to the render
+    clock and the case would be flaky by construction).
+    """
+    from core.domain.entities import MessagePayload
+    from core.domain.value_objects import MediaType
+
+    rule = _rule_with(name=case.get("rule_name", ""))
+    payload = MessagePayload(
+        message_id=case.get("message_id", 0),
+        chat_id=case.get("chat_id", ""),
+        text=case.get("text", ""),
+        media_type=MediaType.TEXT,
+        chat_title=case.get("chat_title", ""),
+        chat_username=case.get("chat_username", ""),
+        sender_name=case.get("sender_name", ""),
+        date=case.get("date", 0),
+    )
+    return HeaderFormatter.format_text(case["template"], rule, payload)
+
+
 ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "cleaner": py_cleaner,
     "emoji": py_emoji,
@@ -121,6 +147,7 @@ ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "replacements": py_replacements,
     "advanced": py_advanced,
     "header_footer": py_header_footer,
+    "header_template": py_header_template,
 }
 
 # ---------------------------------------------------------------------------
@@ -224,7 +251,27 @@ def cases() -> List[Dict[str, Any]]:
         {"engine": "advanced", "text": "body",
          "metadata": {"watermark_text": "© me", "paid_addons": {}}},
 
-        # --- header / footer
+        # --- header / footer templates (HeaderFormatter.format_text, the
+        # --- Stage 4.4 F-15 fix: the durable path now renders the
+        # --- placeholders the preview always promised)
+        {"engine": "header_template", "template": "From [[chat_title]] on {date}",
+         "chat_id": "-1001234567890", "chat_title": "News Channel", "date": 1730000000},
+        {"engine": "header_template", "template": "{source_link}",
+         "chat_id": "-1001234567890", "chat_username": "newschannel", "message_id": 55},
+        {"engine": "header_template", "template": "{ORIGIN_NAME_URL} {ORIGIN_POST_ID} {ORIGIN_USERNAME}",
+         "chat_id": "-1001234567890", "chat_username": "newschannel", "message_id": 55,
+         "chat_title": "News Channel"},
+        {"engine": "header_template", "template": "{rule_name} {category} {sender_name}",
+         "chat_id": "-1001234567890", "chat_title": "News", "rule_name": "My Task",
+         "sender_name": "Alice"},
+        # A private channel: no @username, so the link takes the /c/ form.
+        {"engine": "header_template", "template": "{source_link} {chat_title}",
+         "chat_id": "-1001234567890", "message_id": 7},
+        # An unknown placeholder stays visible; an empty value renders empty.
+        {"engine": "header_template", "template": "{unknown} stays",
+         "chat_id": "-1001234567890", "chat_title": "News", "date": 1730000000},
+
+        # --- header / footer (the dedup wrapper)
         {"engine": "header_footer", "text": "body", "header": "HDR"},
         {"engine": "header_footer", "text": "HDR\n\nbody", "header": "HDR"},
         {"engine": "header_footer", "text": "body", "footer": "FTR"},
@@ -291,7 +338,11 @@ def main() -> int:
         if py_out != go_out:
             divergent += 1
             print(f"DIVERGENT case {index} ({case['engine']}):")
-            print(f"  input : {case['text']!r}")
+            # A case's identity field differs per engine (a transform case
+            # carries its text, a template case its template), so print the
+            # pair the case itself names.
+            identity = case.get("text", case.get("template", ""))
+            print(f"  input : {identity!r}")
             print(f"  python: {py_out!r}")
             print(f"  go    : {go_out!r}")
     total = len(case_list)

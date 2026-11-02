@@ -214,5 +214,50 @@ func transformConfig(j *job.DeliveryJob, r *rule.ForwardRule) cleaning.Config {
 	// The target-scoped override applies to this target's copy alone, so
 	// the pipeline has to know which target's text it is transforming.
 	cfg.TargetChatID = j.TargetChatID
+
+	// Stage 4.4: the header/footer templates render against the message
+	// snapshot the enqueue path took. The payload carries every input the
+	// renderer reads, so a restart renders the same header the ingest
+	// path would have — and the same one the preview showed.
+	if cfg.Header != "" || cfg.Footer != "" {
+		p := &j.Payload
+		cfg.HeaderVars = &cleaning.HeaderVars{
+			SourceChatID:       p.SourceChatID(),
+			SourceChatUsername: p.SourceChatUsername(),
+			SourceChatTitle:    p.SourceChatTitle(),
+			SourceMessageID:    j.SourceMessageID,
+			SourceDate:         p.SourceDate(),
+			SenderName:         p.SenderName(),
+			EffectiveText:      p.EffectiveText(),
+		}
+		if origin := p.ForwardOrigin(); origin != nil {
+			if from, ok := origin["from_chat_id"].(string); ok {
+				cfg.HeaderVars.ForwardFromChat = from
+			}
+		}
+		cfg.HeaderTask = cleaning.HeaderTask{
+			Name:     ruleName(r),
+			Category: r.MessageCategory,
+		}
+	}
 	return cfg
+}
+
+// ruleName is the {rule_name} placeholder's value: the task's display name,
+// or Python's f"Rule-{rule.id[:8]}" fallback when the task has none
+// (services.py:359). It lives next to the only caller rather than on the
+// rule projection because the fallback is a rendering decision, not a
+// property of the task.
+func ruleName(r *rule.ForwardRule) string {
+	if r == nil {
+		return ""
+	}
+	if name := strings.TrimSpace(r.Name); name != "" {
+		return name
+	}
+	id := r.ID
+	if len(id) > 8 {
+		id = id[:8]
+	}
+	return "Rule-" + id
 }

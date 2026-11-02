@@ -161,12 +161,28 @@ func (p *Pipeline) Apply(raw string, cfg Config, entities []Entity) Result {
 		}
 	}
 
-	// 7. Header / footer — raw. The durable path deliberately does NOT
-	// interpolate placeholders (F-15: HeaderFormatter runs only on the
-	// legacy/preview path); this port preserves production behavior instead
-	// of importing the preview's expansion.
+	// 7. Header / footer. Stage 4.4 closes finding F-15: the Python durable
+	// path applied these RAW ("From [[chat_title]]" stayed literal) while
+	// only the preview and the edit-sync path ran the formatter, so an
+	// owner's {source_link} reached the target unexpanded. The Worker now
+	// renders the placeholders the same way the preview always did.
+	//
+	// An unknown placeholder is left in place rather than removed (Python's
+	// loop replaces only the keys it knows), and an empty header/footer
+	// applies nothing — including the no-duplicate-duplication guard
+	// applyHeaderFooter already implements.
 	if cfg.Header != "" || cfg.Footer != "" {
-		next := applyHeaderFooter(text, cfg.Header, cfg.Footer)
+		header := cfg.Header
+		footer := cfg.Footer
+		if cfg.HeaderVars != nil {
+			if header != "" {
+				header = FormatHeader(header, cfg.HeaderTask, *cfg.HeaderVars)
+			}
+			if footer != "" {
+				footer = FormatHeader(footer, cfg.HeaderTask, *cfg.HeaderVars)
+			}
+		}
+		next := applyHeaderFooter(text, header, footer)
 		if next != text {
 			text = next
 			notes = append(notes, "header_footer")

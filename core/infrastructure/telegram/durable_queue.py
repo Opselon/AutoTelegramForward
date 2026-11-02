@@ -420,6 +420,13 @@ class DurableQueueManager:
             "source_chat_username": str(getattr(payload, "chat_username", "") or ""),
             "source_chat_title": str(getattr(payload, "chat_title", "") or ""),
             "source_date": int(getattr(payload, "date", 0) or 0),
+            # Stage 4.4: the remaining HeaderFormatter inputs. sender_name
+            # and the forward origin are the only other variables the
+            # template renderer reads that are not already on the payload,
+            # and a placeholder that renders empty is a rendering bug the
+            # owner sees immediately — so they ride the snapshot too.
+            "sender_name": str(getattr(payload, "sender_name", "") or ""),
+            "forward_origin": dict(getattr(payload, "forward_origin", None) or {}) or None,
             # --- Branding hop (A -> C -> B) ----------------------------------
             # Already performed on the dispatch path; the worker only repeats it
             # so B receives a forward of C instead of the original source.

@@ -182,15 +182,31 @@ inconsistently depending on which gate asks. Classification: **conflicting
 specifications**. Action: **Stage 4.1b** — typed link classification, NOT one
 broad regex.
 
-## F-15 — `HeaderFormatter` placeholders never run on durable path — **VERIFIED**
+## F-15 — `HeaderFormatter` placeholders never run on durable path — **FIXED (Stage 4.4, Go side)**
+
+Original finding (unchanged, still accurate for the Python path):
 `pipeline.py:1547-1552` applies header/footer raw; coordinator grep found zero
 `HeaderFormatter` references in `pipeline.py` or `use_cases.py`. Only
 `transform_text` (`services.py:307-309`) formats placeholders, and the durable
 pipeline never calls `transform_text`. The gRPC `TestRule` preview
 (`servicers.py:1523`) shows expanded placeholders.
 Customer impact: an owner writing `{source_link}` sees it posted literally, while
-the in-product preview shows it expanded.
-Classification: **real customer impact**. Action: Stage 4.4.
+the in-product preview shows it expanded. Classification: **real customer impact**.
+
+**Stage 4.4 resolution.** `worker/internal/domain/cleaning.FormatHeader` is a
+byte-identical port of `HeaderFormatter.format_text` (all 20 placeholders, the
+`{x}` and `[[x]]` spellings, the private-channel `/c/<id>` link form, the
+message-time `{date}`, the unknown-placeholder passthrough). The Go transform
+pipeline renders the header/footer through it whenever the Worker owns the
+transform stage — closing the preview/production gap for every deployment that
+sets `ATF_WORKER_TRANSFORMS`. The Python durable path keeps the raw behavior
+until the boundary moves, exactly as the strangler-fig model requires: one
+authoritative path per job, never both.
+
+Cross-language parity for the renderer is proven by
+`scripts/test_stage42_parity.py` (6 header-template cases, including the
+private-channel link and the unknown-placeholder passthrough), executed against
+the real Python `HeaderFormatter` and the Go port.
 
 ## F-16 — `filter_inline_keyboard` has zero production callers — **VERIFIED**
 `services.py:1065`; coordinator grep across `core`, `web`, `api`, `mobile`,

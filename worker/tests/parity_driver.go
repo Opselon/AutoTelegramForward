@@ -42,6 +42,16 @@ type testCase struct {
 	Metadata     map[string]any    `json:"metadata"`
 	Header       string            `json:"header"`
 	Footer       string            `json:"footer"`
+	// header_template cases: the template and the message snapshot it
+	// renders against (the Stage 4.4 F-15 fix).
+	Template     string            `json:"template"`
+	ChatID       string            `json:"chat_id"`
+	ChatUsername string            `json:"chat_username"`
+	ChatTitle    string            `json:"chat_title"`
+	MessageID    int64             `json:"message_id"`
+	Date         int64             `json:"date"`
+	RuleName     string            `json:"rule_name"`
+	SenderName   string            `json:"sender_name"`
 }
 
 type result struct {
@@ -235,6 +245,21 @@ func runCase(c testCase) string {
 	case "header_footer":
 		cfg.Header = c.Header
 		cfg.Footer = c.Footer
+	case "header_template":
+		// The F-15 fix: the template renders against the message snapshot
+		// the case carries, exactly as the delivery engine builds it from
+		// the durable payload.
+		cfg.Header = c.Template
+		cfg.HeaderVars = &cleaning.HeaderVars{
+			SourceChatID:       c.ChatID,
+			SourceChatUsername: c.ChatUsername,
+			SourceChatTitle:    c.ChatTitle,
+			SourceMessageID:    c.MessageID,
+			SourceDate:         c.Date,
+			SenderName:         c.SenderName,
+			EffectiveText:      c.Text,
+		}
+		cfg.HeaderTask = cleaning.HeaderTask{Name: c.RuleName}
 	default:
 		return ""
 	}
