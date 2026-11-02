@@ -264,6 +264,12 @@ services:
     environment:
       # The switch. Unset = the Python loop owns delivery execution.
       ATF_WORKER_ENABLED: ${ATF_WORKER_ENABLED:-0}
+      # Central structured logs are sent to the same Rust Logger used by Core/API.
+      # Logger availability never blocks delivery; the Worker buffers/retries asynchronously.
+      ATF_LOGGER_ADDR: ${ATF_LOGGER_ADDR:-logger:50052}
+      ATF_LOGGER_INGEST_TOKEN: ${ATF_LOGGER_INGEST_TOKEN:-}
+      ATF_LOG_LEVELS: ${ATF_LOG_LEVELS:-}
+      LOG_LEVEL: ${LOG_LEVEL:-}
       # The shared internal RPC secret — the same value the Go API already
       # uses against the core. Empty + enabled = refuse to start, on purpose.
       ATF_CORE_RPC_TOKEN: ${ATF_CORE_RPC_TOKEN:-}
