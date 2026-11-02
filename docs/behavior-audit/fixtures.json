@@ -239,7 +239,8 @@
    },
    "expected_python_output": "@bob see 5% OFF\n call now",
    "notes": "Cleaner order entities.py:2391-2405: urls -> mentions -> hashtags -> emojis -> phones -> unconditional [ \\t]{2,} -> empty lines -> \\n{3,}. (@bob is 3 chars so cleaner @\\w{4,64} preserves it; see F-07).",
-   "executable": "python"
+   "executable": "both",
+   "expected_go_output": "@bob see 5% OFF\n call now"
   },
   {
    "id": "CLN-PHONE-01",
@@ -272,8 +273,9 @@
    "expected_python_output": "ping @abc now",
    "expected_python_legacy_output": "ping  now",
    "notes": "Cleaner uses {4,64} (entities.py:101) so @abc survives; legacy services.py:27 and Go transform.go:28 use {3,32} so they strip it. F-07.",
-   "executable": "python",
-   "go_engine": "transform (usernameRegex — UNREFERENCED_HELPER)"
+   "executable": "both",
+   "go_engine": "transform (usernameRegex — UNREFERENCED_HELPER)",
+   "expected_go_output": "ping @abc now"
   },
   {
    "id": "CLN-HASHTAG-01",
@@ -395,7 +397,8 @@
    "expected_python_output": "x sale",
    "expected_python_output_reversed_insertion": "## sale",
    "notes": "Both default-priority so insertion order decides (stable sort, text_replace.py:435). Same-priority insertion order IS the observable contract; priority is the documented escape hatch.",
-   "executable": "python"
+   "executable": "both",
+   "expected_go_output": "x sale"
   },
   {
    "id": "RPL-SMART-CASE-01",
@@ -413,7 +416,8 @@
    },
    "expected_python_output": "discount 10% SALE 20%",
    "notes": "text_replace.py:385-390: `DISCOUNT in text` is true so str.replace handles both occurrences exactly. (Exact case DISCOUNT matches uppercase only via str.replace; see text_replace.py:385).",
-   "executable": "python"
+   "executable": "both",
+   "expected_go_output": "discount 10% SALE 20%"
   },
   {
    "id": "RPL-SMART-CASE-02",
@@ -431,7 +435,8 @@
    },
    "expected_python_output": "Sale 10% Sale 20%",
    "notes": "Exact form absent -> re.sub IGNORECASE replaces both.",
-   "executable": "python"
+   "executable": "both",
+   "expected_go_output": "Sale 10% Sale 20%"
   },
   {
    "id": "RPL-DELETION-01",
@@ -449,7 +454,8 @@
    },
    "expected_python_output": "hello ",
    "notes": "Trailing space is NOT stripped by the replace engine (downstream stages may).",
-   "executable": "python"
+   "executable": "both",
+   "expected_go_output": "hello "
   },
   {
    "id": "RPL-BACKREF-01",
@@ -478,7 +484,8 @@
     ]
    },
    "expected_python_output": "item is apple",
-   "executable": "python"
+   "executable": "both",
+   "expected_go_output": "item is apple"
   },
   {
    "id": "RPL-INVALID-01",
@@ -497,7 +504,8 @@
    },
    "expected_python_output": "hello",
    "notes": "apply_entry catches re.error, logs [PIPELINE:REPLACE], returns text (text_replace.py:391-397).",
-   "executable": "python"
+   "executable": "both",
+   "expected_go_output": "hello"
   },
   {
    "id": "LNK-GATE-01",

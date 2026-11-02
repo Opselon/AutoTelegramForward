@@ -74,13 +74,22 @@ Customer impact: text is cleaned differently depending on which path handles it.
 Classification: **conflicting specifications** across three engines.
 Action: Stage 4.2/4.1 unify.
 
-## F-08 — Go `transform` package UNREFERENCED at delivery time — **VERIFIED**
+## F-08 — Go `transform` package UNREFERENCED at delivery time — **FIXED (Stage 4.2)**
 `delivery.go:87,120` constructs `*transform.Engine`; coordinator grep confirms
 `ApplyTargetOverride`, `RemoveEmojis`, `Hashtags`, `Usernames`, `Tidy`, `Clamp`,
-`HasLink`, `FormatText` have no production call sites. Per `delivery.go:193-199`
-the ingest side bakes transforms into the job payload — so this is intended for
-Stage 3, but the package doc overstates it. Classification: **architectural
-cleanup + migration scope**. Action: wire or prune in Stage 4.2–4.4.
+`HasLink`, `FormatText` have no production call sites — for the *per-target
+override*. Per `delivery.go:193-199` the ingest side bakes transforms into the
+job payload, which was the intended Stage 3 boundary.
+
+**Stage 4.2 resolution.** The Go Worker now owns the transform pipeline
+itself (`worker/internal/domain/cleaning`), wired to the production path by
+`delivery.applyTransformPipeline` under the `ATF_WORKER_TRANSFORMS`
+strangler-fig switch. The transform package's per-target override is
+unchanged (still the F-13-pinned divergence fixture). The
+cleaner/replacement/emoji/link engines that were "unreferenced" are now the
+package the worker dispatches through, with byte-for-byte parity against
+the Python engines proven by `scripts/test_stage42_parity.py` (49/49
+cases) and the reclassified both-class fixtures.
 
 ## F-09 — `apply_to_caption=False` cannot disable caption cleaning — **VERIFIED**
 Reproduced by execution: `CleanerRule(apply_to_caption=False, remove_urls=True)`

@@ -241,3 +241,26 @@ func (p *Payload) stringListAny(key string) []any {
 
 // OwnerUserID is the tenant the delivery belongs to, for log attribution.
 func (p *Payload) OwnerUserID() int64 { return int64(p.num("owner_user_id", 0)) }
+
+// EffectiveText is the source message's own text: the caption when the
+// source carried media, otherwise the body. Python's MessagePayload computes
+// it at ingest (entities.py effective_text) and snapshotted it into the job
+// payload, so a Go re-derivation from text/caption would be a guess: read
+// what the ingest side actually saw.
+//
+// The Worker evaluates task-level transforms against this raw form (never
+// against the already-transformed delivery text) when it owns the transform
+// stage — the same input the Python pipeline applied them to.
+func (p *Payload) EffectiveText() string { return p.str("effective_text", "") }
+
+// SourceChatUsername is the source chat's @username ("" for private
+// channels), snapshotted at ingest. Header placeholder rendering needs it to
+// build the source link.
+func (p *Payload) SourceChatUsername() string { return p.str("source_chat_username", "") }
+
+// SourceChatTitle is the source chat's display name, snapshotted at ingest.
+func (p *Payload) SourceChatTitle() string { return p.str("source_chat_title", "") }
+
+// SourceDate is the epoch-seconds timestamp of the source message, for the
+// {date} header placeholder.
+func (p *Payload) SourceDate() int64 { return int64(p.num("source_date", 0)) }

@@ -91,6 +91,13 @@ class PipelineContext:
     rule: Optional[ForwardRule] = None
     filter_result: Optional[EvaluationResult] = None
     transformed_text: Optional[str] = None
+    # Stage 4.2: the RAW effective text snapshot carried when the Go Worker
+    # owns the transform stage (ATF_WORKER_TRANSFORMS). The enqueue path
+    # writes it into the payload as ``raw_text`` so the Worker re-runs the
+    # pipeline against exactly the input Python would have used. Empty
+    # means Python applied the transform stage itself and the payload's
+    # ``text`` is the already-transformed result.
+    raw_transform_input: str = ""
     target_jobs: Dict[str, DeliveryJob] = field(default_factory=dict)
     stage_results: List[StageResult] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
@@ -539,6 +546,28 @@ class DurableMessagePipeline:
         ("durable first, side effect second"), moves.
         """
         return os.environ.get("ATF_WORKER_ENABLED", "").strip().lower() in ("1", "true", "yes", "on")
+
+    def _worker_owns_transforms(self) -> bool:
+        """Whether the Go Worker owns the text-transform stage (Stage 4.2).
+
+        A second strangler-fig switch, independent of delivery execution:
+
+        * ``ATF_WORKER_TRANSFORMS`` unset — the Python pipeline keeps
+          applying ``_apply_transforms`` and the job payload carries the
+          *result*, marked with ``transforms_version`` so the Worker never
+          re-runs a stage that already ran.
+        * ``ATF_WORKER_TRANSFORMS`` set — the Python pipeline skips the
+          transform stage, the payload carries the *raw* source text
+          (``raw_text``), and the Go Worker re-runs the identical ordered
+          stages against that durable snapshot.
+
+        Both shapes execute correctly under either switch position: a job
+        carrying ``transforms_version`` is never re-transformed by the
+        Worker, and a job carrying ``raw_text`` is never transformed by
+        Python. That is what makes the flip safe to set and unset at any
+        time — a rollback is one environment variable, not a redeploy.
+        """
+        return os.environ.get("ATF_WORKER_TRANSFORMS", "").strip().lower() in ("1", "true", "yes", "on")
 
     def _branding_intent(self, rule: ForwardRule, reason: str, text: str = "") -> Optional[Dict[str, Any]]:
         """The hop plan the Worker *executes*, without posting anything here.
@@ -1084,35 +1113,62 @@ class DurableMessagePipeline:
             )
 
         # 5. TRANSFORM
-        t0 = time.monotonic()
-        try:
-            transformed = await self._apply_transforms(ctx, payload, rule, eval_res)
-            if transformed is None:
-                # Message was dropped or deferred by transform policy (e.g. AI fallback DROP or RETRY)
-                self.metrics.failed_total += 1
-                logger.warning(
-                    "[PIPELINE:TRANSFORM] [%s] Rule %s transform policy returned None for msg %s (dropped or deferred)",
-                    ctx.correlation_id[:8], rule.id[:8], payload.message_id,
-                )
-                return
-            # Output validation: validate max length
-            max_limit = 1024 if payload.has_media else 4096
-            if len(transformed) > max_limit:
-                transformed = transformed[:max_limit]
-            ctx.transformed_text = transformed
-            ctx.record_stage(PipelineStage.TRANSFORM, True, reason="transformed", duration_ms=(time.monotonic() - t0) * 1000)
-            self.metrics.transformed_total += 1
-            logger.info(
-                "[PIPELINE:TRANSFORM] [%s] Rule %s transformed msg %s: text_len %d -> %d (ai=%s, took %.2fms)",
-                ctx.correlation_id[:8], rule.id[:8], payload.message_id,
-                len(payload.effective_text or ""), len(transformed),
-                bool(getattr(rule, "ai_rewrite_active", bool(rule.ai_config_id))), (time.monotonic() - t0) * 1000,
+        #
+        # Stage 4.2 boundary: when the Go Worker owns the transform stage,
+        # Python MUST NOT apply it here — applying it and letting the Worker
+        # re-apply it would double-transform the message, and the two engines
+        # would then race on which result survives. Python instead snapshots
+        # the RAW effective text onto the context; the enqueue path writes
+        # it into the payload as ``raw_text``, and the Worker re-runs the
+        # identical ordered stages against that durable snapshot.
+        #
+        # A job carrying ``raw_text`` never gets a Python transform; a job
+        # carrying ``transforms_version`` never gets a Go one. Both shapes
+        # are correct under either switch position.
+        if self._worker_owns_transforms():
+            ctx.raw_transform_input = payload.effective_text or ""
+            ctx.transformed_text = ctx.raw_transform_input
+            ctx.record_stage(
+                PipelineStage.TRANSFORM,
+                True,
+                reason="deferred_to_worker",
+                duration_ms=0.0,
             )
-        except Exception as exc:
-            ctx.record_stage(PipelineStage.TRANSFORM, False, reason="transform_error", error=str(exc))
-            self.metrics.failed_total += 1
-            logger.exception("[%s] Transform error: %s", ctx.correlation_id, exc)
-            return
+            logger.info(
+                "[PIPELINE:TRANSFORM] [%s] Rule %s msg %s: transform stage deferred to the Go Worker "
+                "(ATF_WORKER_TRANSFORMS) — enqueueing the raw snapshot",
+                ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+            )
+        else:
+            t0 = time.monotonic()
+            try:
+                transformed = await self._apply_transforms(ctx, payload, rule, eval_res)
+                if transformed is None:
+                    # Message was dropped or deferred by transform policy (e.g. AI fallback DROP or RETRY)
+                    self.metrics.failed_total += 1
+                    logger.warning(
+                        "[PIPELINE:TRANSFORM] [%s] Rule %s transform policy returned None for msg %s (dropped or deferred)",
+                        ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+                    )
+                    return
+                # Output validation: validate max length
+                max_limit = 1024 if payload.has_media else 4096
+                if len(transformed) > max_limit:
+                    transformed = transformed[:max_limit]
+                ctx.transformed_text = transformed
+                ctx.record_stage(PipelineStage.TRANSFORM, True, reason="transformed", duration_ms=(time.monotonic() - t0) * 1000)
+                self.metrics.transformed_total += 1
+                logger.info(
+                    "[PIPELINE:TRANSFORM] [%s] Rule %s transformed msg %s: text_len %d -> %d (ai=%s, took %.2fms)",
+                    ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+                    len(payload.effective_text or ""), len(transformed),
+                    bool(getattr(rule, "ai_rewrite_active", bool(rule.ai_config_id))), (time.monotonic() - t0) * 1000,
+                )
+            except Exception as exc:
+                ctx.record_stage(PipelineStage.TRANSFORM, False, reason="transform_error", error=str(exc))
+                self.metrics.failed_total += 1
+                logger.exception("[%s] Transform error: %s", ctx.correlation_id, exc)
+                return
 
         # 6. ENQUEUE (Durable Delivery Jobs per target)
         t0 = time.monotonic()

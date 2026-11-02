@@ -44,6 +44,18 @@ from .media_reference import extract_media_reference, send_media_reference
 logger = logging.getLogger("atf.durable_queue")
 
 
+#: Stage 4.2 — the version of the Python text-transform pipeline.
+#:
+#: Written into every job payload whose transform stage Python applied, and
+#: read by the Go Worker as "do not re-run the transform pipeline: this
+#: payload's ``text`` is already the transformed result". Bumping the number
+#: is a coordinated Python+Go change: the Worker's check is presence-based
+#: (any non-empty value means "Python transformed"), so a bump never strands
+#: an old job, and a job written by a pre-4.2 pipeline simply carries no
+#: value at all — which the Worker treats the same way.
+TRANSFORMS_PIPELINE_VERSION = "py-1"
+
+
 class DeliveryBlockedError(RuntimeError):
     """Every permitted delivery method failed and *nothing* was sent.
 
@@ -331,6 +343,13 @@ class DurableQueueManager:
         if not album_ids:
             album_ids = [int(payload.message_id)]
 
+        # Stage 4.2 transform-boundary payload keys (see the comment where
+        # they are written, below). Exactly one of the two is set: the Go
+        # Worker re-runs the transform stage only when it owns it AND the
+        # payload carries a raw snapshot; a payload marked with a version
+        # is Python-transformed and must be delivered as-is.
+        raw_text, transforms_version = self._transform_boundary_payload(text)
+
         payload_dict = {
             "session_id": rule.session_id,
             "source_chat_id": str(payload.chat_id),
@@ -375,6 +394,32 @@ class DurableQueueManager:
             # re-copy or re-forward the source message's media.
             "is_reply": job_kind != "forward",
             "correlation_id": correlation_id or getattr(payload, "correlation_id", "") or "",
+            # --- Stage 4.2: the transform execution boundary ------------------
+            # Exactly one engine applies the text-transform stage. The
+            # payload tells the Worker which side that was, so neither
+            # double-applies:
+            #
+            #   raw_text          — the RAW effective text. Present when the
+            #                       Go Worker owns the transform stage, and
+            #                       the signal that it must re-run the
+            #                       pipeline against this snapshot.
+            #   transforms_version — present when PYTHON already applied the
+            #                       stage, and the signal that the Worker
+            #                       must deliver the payload's ``text`` as-is.
+            #
+            # A job written before Stage 4.2 carries neither key; the
+            # Worker treats it exactly like a transforms_version job (the
+            # Python pipeline always transformed in that world), so the
+            # handover is forward-compatible with every queued job.
+            "raw_text": raw_text,
+            "transforms_version": transforms_version,
+            # The source-text metadata the Go transform pipeline needs to
+            # reproduce the Python stages byte-for-byte: header
+            # placeholders, chat titles and the message's own date. Small,
+            # never message content beyond what ``text`` already carries.
+            "source_chat_username": str(getattr(payload, "chat_username", "") or ""),
+            "source_chat_title": str(getattr(payload, "chat_title", "") or ""),
+            "source_date": int(getattr(payload, "date", 0) or 0),
             # --- Branding hop (A -> C -> B) ----------------------------------
             # Already performed on the dispatch path; the worker only repeats it
             # so B receives a forward of C instead of the original source.
@@ -446,6 +491,32 @@ class DurableQueueManager:
             self._notify_event.set()
 
         return enqueued
+
+    def _transform_boundary_payload(self, text: str) -> tuple:
+        """Stage 4.2: decide which transform-side payload keys the job carries.
+
+        Returns ``(raw_text, transforms_version)`` — exactly one of the two
+        is meaningful:
+
+        * ``ATF_WORKER_TRANSFORMS`` set — Python did not run the transform
+          stage, so the payload must carry the RAW text the Go Worker
+          re-runs the pipeline against. ``raw_text`` is the caller's
+          untransformed snapshot.
+        * otherwise — Python applied the transform stage itself, and the
+          payload's ``text`` IS the transformed result. It is marked with
+          the pipeline version so the Worker knows to deliver it as-is and
+          never re-run a stage.
+
+        The switch is read at enqueue time, not at startup, so flipping it
+        takes effect on the next message without a restart — the same
+        liveness property ``ATF_WORKER_ENABLED`` has.
+        """
+        if os.environ.get("ATF_WORKER_TRANSFORMS", "").strip().lower() in ("1", "true", "yes", "on"):
+            # The caller-supplied text IS the raw snapshot in this mode:
+            # the pipeline deferred the transform stage and set
+            # ctx.transformed_text to the raw input.
+            return str(text or ""), None
+        return None, TRANSFORMS_PIPELINE_VERSION
 
     async def _enqueue_atomic(self, mapping: MessageMapping, job: DeliveryJob) -> bool:
         """v12.3 (ACID atomicity): write the delivery job and its message mapping

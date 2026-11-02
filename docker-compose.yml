@@ -264,6 +264,13 @@ services:
     environment:
       # The switch. Unset = the Python loop owns delivery execution.
       ATF_WORKER_ENABLED: ${ATF_WORKER_ENABLED:-0}
+      # Stage 4.2 switch: unset = the Python pipeline owns the text-transform
+      # stage and the job payload carries the transformed result. Set = the
+      # payload carries the RAW text and this worker re-runs the identical
+      # ordered stages. Independent of ATF_WORKER_ENABLED, so the two
+      # boundaries can move in either order; a job's payload always tells the
+      # worker which side transformed it, so neither setting can double-apply.
+      ATF_WORKER_TRANSFORMS: ${ATF_WORKER_TRANSFORMS:-0}
       # Central structured logs are sent to the same Rust Logger used by Core/API.
       # Logger availability never blocks delivery; the Worker buffers/retries asynchronously.
       ATF_LOGGER_ADDR: ${ATF_LOGGER_ADDR:-logger:50052}
