@@ -461,7 +461,7 @@ func (c *Chain) Evaluate(text, media string) Decision {
 			// Label the deny with the policy that produced it, so the source
 			// of a drop is visible in one read instead of a policy-by-policy
 			// replay. The Python reason string is preserved verbatim.
-			return c.label(d)
+			return c.label(d, p)
 		}
 		allowed = true
 	}
@@ -475,34 +475,27 @@ func (c *Chain) Evaluate(text, media string) Decision {
 // string is untouched — a blacklist hit is still "blacklist:<word>", exactly
 // the Python vocabulary — and the policy that objected is recorded in
 // Matched, which a decision consumer may ignore.
-func (c *Chain) label(d Decision) Decision {
+//
+// The policy passed in is the one that denied, not the chain's first member:
+// a target override's drop must be attributed to the target override, not to
+// the task policy that happened to be listed first.
+func (c *Chain) label(d Decision, p *ContentPolicy) Decision {
 	d.Matched = append([]string{}, d.Matched...)
 	if len(d.Matched) == 0 {
 		d.Matched = []string{""}
 	}
-	d.Matched[0] = d.Matched[0] + "	" + sourceLabel(c.firstSource())
+	d.Matched[0] = d.Matched[0] + "	" + sourceLabel(p)
 	return d
 }
 
-// firstSource finds the provenance label of the first policy in the chain,
-// for the deny note. A task policy with no explicit source is "task".
-func (c *Chain) firstSource() string {
-	for _, p := range c.policies {
-		if p == nil {
-			continue
-		}
-		if p.Source != "" {
-			return p.Source
-		}
+// sourceLabel normalizes a policy's provenance for the deny note: an empty
+// Source is the task policy itself, so it reads as "task".
+func sourceLabel(p *ContentPolicy) string {
+	if p == nil {
 		return "task"
+	}
+	if p.Source != "" {
+		return p.Source
 	}
 	return "task"
-}
-
-// sourceLabel normalizes a provenance label for the note.
-func sourceLabel(s string) string {
-	if s == "" {
-		return "task"
-	}
-	return s
 }

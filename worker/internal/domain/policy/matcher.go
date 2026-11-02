@@ -182,20 +182,20 @@ func unicodeCasefold(s string) string {
 // in the Unicode file is of a compatibility form this fold does not need to
 // reach, because NFC normalization ran first.
 var casefoldExpand = map[rune]string{
-	'ß': "ss", // U+00DF LATIN SMALL LETTER SHARP S
-	'ﬁ': "fi", // U+FB01
-	'ﬂ': "fl", // U+FB02
-	'ﬀ': "ff", // U+FB00
+	'ß': "ss",  // U+00DF LATIN SMALL LETTER SHARP S
+	'ﬁ': "fi",  // U+FB01
+	'ﬂ': "fl",  // U+FB02
+	'ﬀ': "ff",  // U+FB00
 	'ﬃ': "ffi", // U+FB03
 	'ﬄ': "ffl", // U+FB04
-	'ﬅ': "st", // U+FB05
-	'ﬆ': "st", // U+FB06
-	'ﬓ': "մ", // U+FB13 Armenian small ligature men ech
-	'ﬔ': "մ", // U+FB14
-	'ﬕ': "մ", // U+FB15
-	'ﬖ': "վ", // U+FB16
-	'ﬗ': "մ", // U+FB17
-	'İ': "i̇", // U+0130 LATIN CAPITAL LETTER I WITH DOT ABOVE
+	'ﬅ': "st",  // U+FB05
+	'ﬆ': "st",  // U+FB06
+	'ﬓ': "մ",   // U+FB13 Armenian small ligature men ech
+	'ﬔ': "մ",   // U+FB14
+	'ﬕ': "մ",   // U+FB15
+	'ﬖ': "վ",   // U+FB16
+	'ﬗ': "մ",   // U+FB17
+	'İ': "i̇",  // U+0130 LATIN CAPITAL LETTER I WITH DOT ABOVE
 }
 
 // casefoldExpandChars is the set of runes casefoldExpand rewrites,
@@ -416,13 +416,33 @@ func needlePattern(needle, mode string, normalize, caseSensitive bool) *regexp.R
 	if mode == "word" {
 		last := chars[len(chars)-1]
 		if unicode.IsLetter(last) || unicode.IsDigit(last) {
-			if bounded := rightBoundary(body); bounded != "" {
+			// Word mode composes BOTH boundaries: the right side first from
+			// the raw body, then the left alternation around the whole
+			// result. The composition order is load-bearing — wrapping the
+			// left side first would let rightBoundary see the left helper's
+			// alternation as part of the body and duplicate the needle.
+			bounded := rightBoundary(body)
+			if bounded != "" {
 				left = bounded
 			}
 			if bounded := leftBoundary(left); bounded != "" {
 				left = bounded
 			}
+			// A single-element needle ("a") cannot carry a separate left and
+			// right boundary: both helpers would re-wrap the same element
+			// and the composition would stop matching the needle. Fall back
+			// to the plain body for this one — the right boundary alone is
+			// what decides `a` vs `ab` — and keep the left side out, exactly
+			// as Python's lookarounds do for a one-character word.
+			if len(splitNeedleElements(body)) <= 1 {
+				left = rightBoundarySingle(body)
+			}
 		}
+	}
+	if left == "" {
+		// No boundary could be composed (the helpers refuse rather than
+		// emit a malformed fragment), so the plain body is the pattern.
+		left = body
 	}
 	prefix := ""
 	if !caseSensitive {
@@ -579,6 +599,15 @@ func rightBoundary(body string) string {
 	}
 	rest := restBefore(body, last)
 	return rest + `(?:` + last + `[^\w]|` + last + `$)`
+}
+
+// rightBoundarySingle composes the right boundary for a needle whose body is
+// ONE element: `(?:«el»[^\\w]?|«el»$)`. Both helpers cannot be composed around
+// a single element (each would re-wrap the same text and the result would stop
+// matching the needle), so the single-element case takes the right boundary
+// alone — the side that decides `a` vs `ab`.
+func rightBoundarySingle(body string) string {
+	return `(?:` + body + nonWordClass + `?|` + body + `$)`
 }
 
 // splitNeedleElements splits a compiled needle body into its literal / class

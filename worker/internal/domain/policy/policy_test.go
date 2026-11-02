@@ -117,8 +117,9 @@ func byID(records []fixtureRecord) map[string]*fixtureRecord {
 func policyFromMap(t *testing.T, raw map[string]any) *ContentPolicy {
 	t.Helper()
 	p := &ContentPolicy{
-		WordBoundary: true, // from_dict: absent means on
-		Normalize:    true, // from_dict: absent means on
+		WordBoundary:  true,         // from_dict: absent means on
+		Normalize:     true,         // from_dict: absent means on
+		WhitelistMode: WhitelistAny, // from_dict: absent means "any"
 	}
 	if raw == nil {
 		return p
@@ -372,13 +373,15 @@ func TestContentPolicyCheckOrder(t *testing.T) {
 		{
 			// Length counts code points, not bytes: a Persian message is not
 			// "longer" in Go than in Python (the UNI-LEN-01 claim).
-			name:   "min_length uses code points",
-			modify: func(p *ContentPolicy) { p.MinLength = 4 },
+			// 4 code points / 12 UTF-8 bytes: a byte count would read 12
+			// and pass min_length=5; the codepoint count reads 4 and drops.
+			name:   "min_length counts code points not bytes",
+			modify: func(p *ContentPolicy) { p.MinLength = 5 },
 			text:   "کتاب", media: "text", want: "too_short:4",
 		},
 		{
-			name:   "min_length counts code points not bytes",
-			modify: func(p *ContentPolicy) { p.MinLength = 5 },
+			name:   "min_length passes at exactly the codepoint count",
+			modify: func(p *ContentPolicy) { p.MinLength = 4 },
 			text:   "کتاب", media: "text", want: "policy_passed",
 		},
 		{
