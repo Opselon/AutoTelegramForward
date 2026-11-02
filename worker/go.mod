@@ -3,9 +3,13 @@ module atf/worker
 // The last line of defence for "it builds here": the toolchain that produced
 // the committed go.sum. A machine on an older patch of the same Go release
 // downloads this one instead of silently building with something else.
-go 1.26.0
+go 1.27
 
 toolchain go1.27.2
+
+require autoforward v0.0.0
+
+replace autoforward => ../api
 
 require (
 	github.com/jackc/pgx/v5 v5.12.0
