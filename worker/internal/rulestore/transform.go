@@ -74,13 +74,44 @@ func transformConfigFromMetadata(meta map[string]any, metadataJSON string) clean
 	if cfg.Watermark == "" {
 		cfg.Watermark = metaStr(meta, "watermark", "")
 	}
+	// The paid-addon entitlement gate (entities.py:1843 is_addon_enabled):
+	// a client-supplied flag is never trusted on its own — the addon must
+	// be marked enabled in the persisted rule metadata, and this projection
+	// is the single enforcement point the Go pipeline consults. Fail
+	// closed: an absent or non-dict paid_addons block means the transform
+	// never runs, so a request that claims an entitlement it was not
+	// granted cannot reach the target text.
 	cfg.LinkButtons = buildLinkButtons(meta["link_buttons"])
+	if !addonEnabled(meta, "link_buttons") {
+		cfg.LinkButtons = nil
+	}
 	if ak, ok := meta["affiliate_kit"].(map[string]any); ok {
-		if metaBool(ak, "enabled", false) {
+		if metaBool(ak, "enabled", false) && addonEnabled(meta, "affiliate_kit") {
 			cfg.AffiliateKit = &cleaning.AffiliateKit{Prefix: metaStr(ak, "prefix", "")}
 		}
 	}
 	return cfg
+}
+
+// addonEnabled is ForwardRule.is_addon_enabled (entities.py:1843): the
+// addon must be marked enabled in the persisted metadata's paid_addons
+// block. A client-supplied flag alone is never sufficient.
+func addonEnabled(meta map[string]any, key string) bool {
+	addons, ok := meta["paid_addons"].(map[string]any)
+	if !ok {
+		return false
+	}
+	return metaBool(addons, key, false)
+}
+
+// ProbeTransform exposes the real metadata projection for cross-language
+// parity testing. The differential harness must exercise the same code path
+// the delivery engine consults — including the paid-addon entitlement gate —
+// rather than a hand-built Config that would silently bypass it. It is
+// exported for that purpose only; production resolves the projection
+// through the rulestore's own rule loading.
+func ProbeTransform(meta map[string]any, metadataJSON string) cleaning.Config {
+	return transformConfigFromMetadata(meta, metadataJSON)
 }
 
 // hasLegacyCleanerFlags is Python build_cleaner's "any legacy cleaner

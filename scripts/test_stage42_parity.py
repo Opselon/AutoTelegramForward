@@ -250,6 +250,15 @@ def cases() -> List[Dict[str, Any]]:
         # The add-on gate: paid_addons off means the transform never runs.
         {"engine": "advanced", "text": "body",
          "metadata": {"watermark_text": "© me", "paid_addons": {}}},
+        # The gate applies to the PAID add-ons only. link_buttons and
+        # affiliate_kit without their entitlement render nothing; the
+        # watermark (not a paid add-on) is unaffected.
+        {"engine": "advanced", "text": "body",
+         "metadata": {"link_buttons": [{"text": "Join", "url": "https://t.me/x"}],
+                      "paid_addons": {}}},
+        {"engine": "advanced", "text": "see https://a.io/x now",
+         "metadata": {"affiliate_kit": {"enabled": True, "prefix": "https://aff.io/"},
+                      "paid_addons": {}}},
 
         # --- header / footer templates (HeaderFormatter.format_text, the
         # --- Stage 4.4 F-15 fix: the durable path now renders the
