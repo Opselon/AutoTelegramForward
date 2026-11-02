@@ -190,6 +190,12 @@ def cases() -> List[Dict[str, Any]]:
         # --- apply_replacements (RPL-* family)
         {"engine": "replacements", "text": "# sale",
          "replacements": {"#": "##", "##": "x"}},
+        # The same entries in the opposite storage order compose the other
+        # way: same-priority insertion order IS the observable contract
+        # (RPL-PRIORITY-01's notes), and a Go map decode would silently
+        # re-order it.
+        {"engine": "replacements", "text": "# sale",
+         "replacements": {"##": "x", "#": "##"}},
         {"engine": "replacements", "text": "discount 10% DISCOUNT 20%",
          "replacements": {"DISCOUNT": "SALE"}},
         {"engine": "replacements", "text": "discount 10% DISCOUNT 20%",

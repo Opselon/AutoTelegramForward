@@ -211,5 +211,8 @@ func transformConfig(j *job.DeliveryJob, r *rule.ForwardRule) cleaning.Config {
 	cfg.RuleID = r.ID
 	cfg.OwnerUserID = r.OwnerUserID
 	cfg.HasMedia = j.Payload.HasMedia()
+	// The target-scoped override applies to this target's copy alone, so
+	// the pipeline has to know which target's text it is transforming.
+	cfg.TargetChatID = j.TargetChatID
 	return cfg
 }

@@ -558,3 +558,68 @@ func contains(list []string, want string) bool {
 	}
 	return false
 }
+
+// --- the target-scoped override ----------------------------------------------
+
+func TestTargetOverrideAppliesToItsOwnTarget(t *testing.T) {
+	// The Python fan-out applies the matching target entry's rewrite to
+	// one target's copy alone (pipeline.py:1276-1285). The Worker must do
+	// the same: an override for -1002 rewrites the text bound for -1002
+	// and leaves an identical job for -1003 alone.
+	p := NewPipeline()
+	cfg := Config{
+		TargetOverrides: map[string]*ContentPolicy{
+			"-1002": {RemoveLinks: true},
+		},
+	}
+	// The target with the override: the URL is stripped.
+	cfg.TargetChatID = "-1002"
+	res := p.Apply("see https://a.io now", cfg, nil)
+	if res.Text != "see now" {
+		t.Errorf("target override must apply to its own target: got %q", res.Text)
+	}
+	if !contains(res.StageNotes, "target_override") {
+		t.Errorf("expected the target_override stage note, got %v", res.StageNotes)
+	}
+	// A different target: the same text is untouched.
+	cfg.TargetChatID = "-1003"
+	if got := p.Apply("see https://a.io now", cfg, nil); got.Text != "see https://a.io now" {
+		t.Errorf("a foreign target must not be rewritten: got %q", got.Text)
+	}
+}
+
+func TestTargetOverrideRunsAfterTaskPolicy(t *testing.T) {
+	// chain[1:] is the Python order: the task policy first, then the
+	// override on the policy's result. An override that strips a word the
+	// task policy already removed is a no-op, not a second removal.
+	p := NewPipeline()
+	cfg := Config{
+		ContentPolicy: &ContentPolicy{StripWords: []string{"spam"}},
+		TargetOverrides: map[string]*ContentPolicy{
+			"-1002": {StripWords: []string{"offer"}},
+		},
+		TargetChatID: "-1002",
+	}
+	got := p.Apply("buy spam offer now", cfg, nil)
+	if want := "buy now"; got.Text != want {
+		t.Errorf("policy+override order: got %q, want %q", got.Text, want)
+	}
+}
+
+func TestChatKeyNormalizesIdForms(t *testing.T) {
+	// Python _chat_key: -100123 as int, float and string are one chat; an
+	// @username passes through. The override map the rulestore builds and
+	// the lookup the pipeline performs must agree on every spelling.
+	cases := map[string]string{
+		"-100123":  "-100123",
+		"-100123 ": "-100123",
+		"-100123.0": "-100123",
+		"@channel": "@channel",
+		"":         "",
+	}
+	for in, want := range cases {
+		if got := chatKey(in); got != want {
+			t.Errorf("chatKey(%q): got %q, want %q", in, got, want)
+		}
+	}
+}

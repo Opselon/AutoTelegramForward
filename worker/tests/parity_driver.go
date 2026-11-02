@@ -15,6 +15,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -32,6 +33,12 @@ type testCase struct {
 	RewriteMap   map[string]string `json:"rewrite_map"`
 	Replacement  string            `json:"replacement"`
 	Replacements map[string]any    `json:"replacements"`
+	// orderedReplacements carries the replacements in the order the case
+	// file wrote them. json.Unmarshal discards JSON object key order, so
+	// the plain Replacements field cannot express the order-dependent
+	// composition RPL-PRIORITY-01 pins; the ordered decoder fills this
+	// field instead.
+	orderedReplacements []orderedPair `json:"-"`
 	Metadata     map[string]any    `json:"metadata"`
 	Header       string            `json:"header"`
 	Footer       string            `json:"footer"`
@@ -125,6 +132,59 @@ func entriesFromMap(raw map[string]any) []cleaning.ReplacementEntry {
 	return entries
 }
 
+// orderedEntriesFromMap is the order-preserving twin of entriesFromMap.
+// The parity harness reads the case list from JSON, and Python's
+// replacements map applies same-priority entries in insertion order
+// (RPL-PRIORITY-01) — an order Go's map[string]any throws away. The
+// harness relies on its own JSON key order, so this helper takes the pairs
+// the ordered decoder produced instead of a decoded map.
+func orderedEntriesFromMap(pairs []orderedPair) []cleaning.ReplacementEntry {
+	entries := make([]cleaning.ReplacementEntry, 0, len(pairs))
+	for _, pair := range pairs {
+		entry := cleaning.ReplacementEntry{Find: pair.key}
+		opts := optionsMap(pair.value)
+		if opts != nil {
+			entry.Replace = strField(opts, "to")
+			if mode := strField(opts, "mode"); mode == "regex" {
+				entry.IsRegex = true
+			}
+			if flags, ok := opts["flags"].(string); ok {
+				for _, ch := range flags {
+					if ch == 'i' {
+						entry.IgnoreCase = true
+					}
+				}
+			}
+			if boolField(opts, "whole_word") {
+				entry.WholeWord = true
+			}
+		} else if text, ok := pair.value.(string); ok {
+			entry.Replace = text
+		}
+		entries = append(entries, entry)
+	}
+	return entries
+}
+
+// optionsMap converts an ordered object's value into the map form the
+// string/bool helpers above read, or nil when the value is not an object.
+func optionsMap(value any) map[string]any {
+	pairs, ok := value.([]orderedPair)
+	if !ok {
+		return nil
+	}
+	out := make(map[string]any, len(pairs))
+	for _, pair := range pairs {
+		switch inner := pair.value.(type) {
+		case []orderedPair:
+			out[pair.key] = optionsMap(inner)
+		default:
+			out[pair.key] = inner
+		}
+	}
+	return out
+}
+
 func runCase(c testCase) string {
 	engine := cleaning.NewPipeline()
 	cfg := cleaning.Config{}
@@ -149,7 +209,15 @@ func runCase(c testCase) string {
 	case "replace_links":
 		cfg.LinkReplacement = c.Replacement
 	case "replacements":
-		cfg.Replacements = entriesFromMap(c.Replacements)
+		// Order-preserving: same-priority entries apply in the order the
+		// case file wrote them, exactly as Python's apply_replacements
+		// reads a dict. The plain map field is the fallback for cases that
+		// carry no inner objects (where order is unobservable).
+		if ordered := orderedCaseReplacements(c); len(ordered) > 0 {
+			cfg.Replacements = ordered
+		} else {
+			cfg.Replacements = entriesFromMap(c.Replacements)
+		}
 	case "advanced":
 		cfg.Watermark = strField(c.Metadata, "watermark_text")
 		if buttons, ok := c.Metadata["link_buttons"].([]any); ok {
@@ -176,8 +244,12 @@ func runCase(c testCase) string {
 
 func main() {
 	var cases []testCase
+	// Decode the array token-stream style so every case's replacements
+	// object keeps the key order the harness wrote it in. json.Unmarshal
+	// into []testCase would discard that order — the exact order
+	// Python's apply_replacements relies on (RPL-PRIORITY-01).
 	dec := json.NewDecoder(os.Stdin)
-	if err := dec.Decode(&cases); err != nil {
+	if err := readCasesOrdered(dec, &cases); err != nil {
 		fmt.Fprintln(os.Stderr, "decode cases:", err)
 		os.Exit(2)
 	}
@@ -191,4 +263,164 @@ func main() {
 		fmt.Fprintln(os.Stderr, "encode results:", err)
 		os.Exit(2)
 	}
+}
+
+// readCasesOrdered decodes the case array, filling each case's
+// orderedReplacements from the ordered decoder so the replacements engine
+// sees the entries in document order. The structured fields still come
+// from a plain decode of the same array, which keeps the driver's schema
+// handling in one place.
+func readCasesOrdered(dec *json.Decoder, out *[]testCase) error {
+	token, err := dec.Token()
+	if err != nil {
+		return err
+	}
+	delim, ok := token.(json.Delim)
+	if !ok || delim != '[' {
+		return fmt.Errorf("expected a JSON array of cases, got %v", token)
+	}
+	for dec.More() {
+		var c testCase
+		buffered, err := decodeCaseValue(dec)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(buffered, &c); err != nil {
+			return err
+		}
+		c.orderedReplacements = extractOrderedReplacements(buffered)
+		*out = append(*out, c)
+	}
+	if _, err := dec.Token(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// decodeCaseValue reads one array element's raw JSON bytes so the case
+// can be decoded twice: once into the struct (for fields) and once
+// through the ordered decoder (for key order).
+func decodeCaseValue(dec *json.Decoder) ([]byte, error) {
+	var raw json.RawMessage
+	if err := dec.Decode(&raw); err != nil {
+		return nil, err
+	}
+	return []byte(raw), nil
+}
+
+// extractOrderedReplacements reads the "replacements" object of one case
+// in document order.
+func extractOrderedReplacements(raw []byte) []orderedPair {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	pairs, err := decodeOrderedObject(dec)
+	if err != nil {
+		return nil
+	}
+	for _, pair := range pairs {
+		if pair.key == "replacements" {
+			if inner, ok := pair.value.([]orderedPair); ok {
+				return inner
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
+// ordered_pair is one JSON object key with its decoded value, in document
+// order. json.Unmarshal into map[string]any discards key order, which the
+// replacements contract depends on (RPL-PRIORITY-01).
+type orderedPair struct {
+	key   string
+	value any
+}
+
+// decodeOrderedObject reads a JSON object as key/value pairs in document
+// order. Values that are objects recurse as []orderedPair; scalars decode
+// with the plain token reader.
+func decodeOrderedObject(dec *json.Decoder) ([]orderedPair, error) {
+	token, err := dec.Token()
+	if err != nil {
+		return nil, err
+	}
+	delim, ok := token.(json.Delim)
+	if !ok || delim != '{' {
+		return nil, fmt.Errorf("expected a JSON object, got %v", token)
+	}
+	pairs := []orderedPair{}
+	for dec.More() {
+		keyToken, err := dec.Token()
+		if err != nil {
+			return nil, err
+		}
+		key, ok := keyToken.(string)
+		if !ok {
+			return nil, fmt.Errorf("expected an object key, got %v", keyToken)
+		}
+		value, err := decodeOrderedValue(dec)
+		if err != nil {
+			return nil, err
+		}
+		pairs = append(pairs, orderedPair{key: key, value: value})
+	}
+	if _, err := dec.Token(); err != nil { // the closing '}'
+		return nil, err
+	}
+	return pairs, nil
+}
+
+// decodeOrderedValue reads one value; nested objects keep their key order
+// as []orderedPair and scalars come back as plain Go values.
+func decodeOrderedValue(dec *json.Decoder) (any, error) {
+	token, err := dec.Token()
+	if err != nil {
+		return nil, err
+	}
+	if delim, ok := token.(json.Delim); ok {
+		if delim == '{' {
+			return decodeOrderedObjectRest(dec)
+		}
+		return nil, fmt.Errorf("unexpected JSON array inside the case object")
+	}
+	switch value := token.(type) {
+	case string, bool, nil:
+		return value, nil
+	default:
+		// json.Number and any other scalar token type: hand it through.
+		return value, nil
+	}
+}
+
+// decodeOrderedObjectRest reads an object's body once its '{' is consumed.
+func decodeOrderedObjectRest(dec *json.Decoder) ([]orderedPair, error) {
+	pairs := []orderedPair{}
+	for dec.More() {
+		keyToken, err := dec.Token()
+		if err != nil {
+			return nil, err
+		}
+		key, ok := keyToken.(string)
+		if !ok {
+			return nil, fmt.Errorf("expected an object key, got %v", keyToken)
+		}
+		value, err := decodeOrderedValue(dec)
+		if err != nil {
+			return nil, err
+		}
+		pairs = append(pairs, orderedPair{key: key, value: value})
+	}
+	if _, err := dec.Token(); err != nil { // the closing '}'
+		return nil, err
+	}
+	return pairs, nil
+}
+
+// orderedCaseReplacements reads the replacements map from one case in the
+// order the case file wrote it, so the parity harness exercises the same
+// order-dependent composition Python's apply_replacements does.
+func orderedCaseReplacements(c testCase) []cleaning.ReplacementEntry {
+	if c.orderedReplacements == nil {
+		return nil
+	}
+	return orderedEntriesFromMap(c.orderedReplacements)
 }

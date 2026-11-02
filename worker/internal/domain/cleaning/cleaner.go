@@ -52,6 +52,12 @@ type Config struct {
 	RuleID     string
 	OwnerUserID int64
 
+	// TargetChatID is the chat this delivery is bound for. The transform
+	// pipeline is per-target: the target-scoped override applies to this
+	// target's copy of the text alone, so the pipeline must know which
+	// target that is.
+	TargetChatID string
+
 	// Cleaner is the materialized CleanerRule (ForwardRule.build_cleaner),
 	// or nil when the task has the cleaner disabled/empty.
 	Cleaner *CleanerRule
@@ -99,6 +105,14 @@ type Config struct {
 	Watermark    string
 	LinkButtons  []LinkButton
 	AffiliateKit *AffiliateKit
+
+	// TargetOverrides are the target-scoped content policies keyed by
+	// normalized chat id. The Python fan-out applies the matching entry's
+	// rewrite to one target's copy of the text (pipeline.py:1276-1285);
+	// the Worker applies it to the job's own target when it owns the
+	// transform stage. An entry that is absent never relaxes anything —
+	// it simply does not apply to that target.
+	TargetOverrides map[string]*ContentPolicy
 
 	// SplitLongCaption mirrors the task's split_long_caption flag. The
 	// dispatch stage consumes the pipeline result; the caption split itself
