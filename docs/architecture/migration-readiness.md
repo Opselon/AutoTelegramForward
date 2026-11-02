@@ -4,7 +4,10 @@
 This is a plan, not an implementation. Nothing in this PR changes runtime behavior.
 
 Per-feature readiness: `docs/behavior-audit/feature-inventory.json`
-(`migration_stage` per feature). Findings: `docs/behavior-audit/FINDINGS.md`.
+(`migration_stage` per feature). Findings: `docs/behavior-audit/FINDINGS.md` and
+the finalized status register `docs/behavior-audit/FINDINGS_STATUS.md`.
+The concrete engineering plan for the first stage is in
+`docs/architecture/stage-4.1-implementation-plan.md`.
 
 ---
 

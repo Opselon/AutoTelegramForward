@@ -17,11 +17,15 @@ rejected — see the `DOWNGRADED` section of `FINDINGS.md`.
 | File | Content |
 |---|---|
 | `COORDINATOR_VOCABULARY.md` | shared feature-ID scheme, the five-engine synthesis, verified pipeline orders |
-| `FINDINGS.md` | 19 coordinator-verified findings (F-01 … F-19), severity, fix pointers, downgrades |
+| `FINDINGS.md` | initial 19 coordinator-verified findings (F-01 … F-19) |
+| `FINDINGS_STATUS.md` | **Final status register for F-01 through F-21** (verified by execution), Phase B.1 emoji double-processing resolution |
 | `feature-inventory.json` | 64 features: owner, runtime path, status, evidence, migration stage |
 | `settings-inventory.json` | all 89 settings (76 `SETTING_SPECS` + 13 first-class) |
+| `settings-persistence-audit.md` | Phase F read-only persistence audit of all 89 settings across SQLite/PostgreSQL/Proto/API |
 | `pipeline-order.json` | source-verified stage order for all 5 paths (37 stages) |
-| `fixtures.json` | 43 deterministic characterization fixtures |
+| `fixtures.json` | 43 deterministic characterization fixtures with verified production expectations |
+| `fixture-coverage.json` | Phase D machine-readable fixture coverage report (37 executable, 12 Go-mapped, 8 divergences) |
+| `fixture-coverage.md` | Phase D human-readable fixture coverage and reachability gap report |
 | `diagrams/event-ingestion.mmd` | Mermaid sequence diagram, update → confirmed delivery |
 | `diagrams/message-processing.mmd` | processing-stage flow with dead-code callouts |
 | `diagrams/parity-map.mmd` | Python/Go ownership and divergence map |
@@ -29,11 +33,23 @@ rejected — see the `DOWNGRADED` section of `FINDINGS.md`.
 | `_handoff/b-cleaner-replace.md` | Agent B: cleaner, emoji/unicode, replace engine |
 | `_handoff/c-routing-pipeline.md` | Agent C: event lifecycle, pipeline order, dedup, FEN, keyword, branding |
 | `_handoff/d-advanced-surfaces.md` | Agent D: advanced settings, links, AI, delivery, 7 control surfaces |
+| `_handoff/_fixture-contract.md` | Shared schema, routing tokens, and integrity gates for test runners |
 
 The human-readable architecture documents that consume this bundle live in
-`docs/architecture/`: `business-logic-inventory.md`, `behavior-contract.md`,
-`feature-ownership-matrix.md`, `processing-pipeline.md`,
-`feature-dependency-graph.md`, `migration-readiness.md`.
+`docs/architecture/`:
+- `business-logic-inventory.md`
+- `behavior-contract.md`
+- `feature-ownership-matrix.md`
+- `processing-pipeline.md`
+- `feature-dependency-graph.md`
+- `migration-readiness.md`
+- `stage-4.1-implementation-plan.md` (Phase G Stage 4.1 readiness plan)
+
+Executable test infrastructure:
+- `core/tests/audit/` (Python fixture schema validator & executable runner — 96 passing tests)
+- `worker/internal/audit/` (Go fixture loader, schema validator, and unsupported feature reporter)
+- `worker/internal/engine/filter/filter_fixture_test.go` (Go FilterRule executable tests)
+- `worker/internal/engine/transform/transform_fixture_test.go` (Go transform/emoji executable tests)
 
 ## The headline discovery
 
