@@ -23,7 +23,14 @@ import (
 // its decoded metadata blob. It never returns an error and never panics: a
 // malformed blob means "no transform configured", the same answer Python's
 // build_cleaner gives when the config will not coerce.
-func transformConfigFromMetadata(meta map[string]any) cleaning.Config {
+//
+// The raw blob string is taken alongside the decoded map because JSON
+// object key order is load-bearing for the replacements map: Python's dict
+// preserves insertion order and text_replace applies same-priority entries
+// in it (RPL-PRIORITY-01 is the pinned evidence), while Go's
+// map[string]any discards it at decode time. Replacements are therefore
+// re-decoded from the raw string with order kept.
+func transformConfigFromMetadata(meta map[string]any, metadataJSON string) cleaning.Config {
 	cfg := cleaning.Config{}
 
 	if cfgBlob, ok := meta["cleaner_config"].(map[string]any); ok {
@@ -45,7 +52,13 @@ func transformConfigFromMetadata(meta map[string]any) cleaning.Config {
 		cfg.ContentPolicy = buildContentPolicy(policyBlob)
 	}
 	cfg.TargetOverrides = buildTargetOverrides(policyBlob, meta)
-	cfg.Replacements = buildReplacements(meta["replacements"])
+	// The ordered re-decode: same-priority entries keep the order the task
+	// stored them in, the order the Python engine applies them in.
+	if replacements, ordered := orderedReplacements(metadataJSON, "replacements"); len(replacements) > 0 || ordered {
+		cfg.Replacements = replacements
+	} else {
+		cfg.Replacements = buildReplacements(meta["replacements"])
+	}
 	cfg.Header = metaStr(meta, "header", "")
 	cfg.Footer = metaStr(meta, "footer", "")
 	// The Go API stores the panel's header/footer under these names; the

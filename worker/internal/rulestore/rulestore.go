@@ -221,6 +221,10 @@ type extendedForwardRule struct {
 	*rule.ForwardRule
 	FilterRuleID string
 	Metadata     map[string]any
+	// MetadataJSON is the raw metadata blob, kept verbatim because JSON
+	// object key order is part of the replacements contract (Python dict
+	// insertion order decides tie-breaks) and Go's map drops it.
+	MetadataJSON string
 }
 
 // getRule reads one forward_rules row from whichever backend owns it.
@@ -308,6 +312,13 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		var meta map[string]any
 		if err := json.Unmarshal([]byte(metadataJSON.String), &meta); err == nil {
 			extra.Metadata = meta
+			// Stage 4.2: the raw blob is kept because JSON object key
+			// order is load-bearing for the replacements map (Python's
+			// dict preserves insertion order and text_replace applies
+			// same-priority entries in it). Go's map[string]any loses
+			// that order at decode time, so the ordered re-decode in
+			// transformConfigFromMetadata reads this string instead.
+			extra.MetadataJSON = metadataJSON.String
 		}
 	}
 
@@ -350,7 +361,7 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		// view the Python ForwardRule exposes — including the merged
 		// cleaner_config + legacy flag resolution Python's build_cleaner()
 		// performs, which is why this call is not a plain key lookup.
-		extra.Transform = transformConfigFromMetadata(extra.Metadata)
+		extra.Transform = transformConfigFromMetadata(extra.Metadata, extra.MetadataJSON)
 	}
 
 	// auto_pause is not a column: the engine records it inside the task's
