@@ -334,6 +334,14 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		extra.AlbumMode = strings.ToLower(strings.TrimSpace(metaStr(extra.Metadata, "album_mode", "album")))
 		extra.TopicID = metaInt64(extra.Metadata, "topic_id", 0)
 		extra.CustomCaptionTemplate = metaStr(extra.Metadata, "custom_caption_template", "")
+		// block_links is a task-level flag with no column on either table:
+		// the Python ForwardRule entity resolves it out of the metadata blob
+		// (entities.py: block_links = bool(metadata.get("block_links", False))),
+		// and the pipeline gates on it via media_filter.link_block_reason
+		// (pipeline.py:957) whether or not the task has an attached filter.
+		// Projecting it here is what lets the delivery preflight enforce the
+		// same gate the Python pipeline already enforced at ingest.
+		extra.BlockLinks = metaBool(extra.Metadata, "block_links", false)
 	}
 
 	// auto_pause is not a column: the engine records it inside the task's
@@ -369,6 +377,38 @@ func metaInt64(meta map[string]any, key string, def int64) int64 {
 			return int64(n)
 		case int64:
 			return n
+		}
+	}
+	return def
+}
+
+// metaBool reads a boolean field from a decoded metadata blob, mirroring the
+// Python entity's own accessor (bool(self.metadata.get(key, def))). JSON
+// decodes booleans as Go bool, but the blob is free-form: a 0/1 integer or
+// the string "true" still means what the writer meant, and a value the
+// reader cannot interpret as a boolean falls back to the default rather than
+// silently switching the flag off.
+func metaBool(meta map[string]any, key string, def bool) bool {
+	v, ok := meta[key]
+	if !ok {
+		return def
+	}
+	switch b := v.(type) {
+	case bool:
+		return b
+	case float64:
+		return b != 0
+	case int:
+		return b != 0
+	case int64:
+		return b != 0
+	case string:
+		s := strings.ToLower(strings.TrimSpace(b))
+		if s == "true" {
+			return true
+		}
+		if s == "false" {
+			return false
 		}
 	}
 	return def

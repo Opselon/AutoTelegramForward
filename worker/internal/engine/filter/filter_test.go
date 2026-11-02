@@ -193,3 +193,172 @@ func TestUserRegexIsBounded(t *testing.T) {
 		}
 	}
 }
+
+// TestLengthBoundsCountCodepointsNotBytes is the F-12 length-semantics fix:
+// Python's len(text) counts Unicode CODE POINTS, while Go's len(string)
+// counts UTF-8 BYTES. A byte-counting port drops every Persian, Arabic and
+// emoji message at a different boundary than the Python engine drops it at —
+// so the same task forwards a different set of messages depending on which
+// engine picked the job up. سلام دنیا is 9 codepoints but 17 UTF-8 bytes.
+func TestLengthBoundsCountCodepointsNotBytes(t *testing.T) {
+	e := New()
+
+	cases := []struct {
+		name       string
+		text       string
+		min, max   int
+		wantAction Action
+		wantReason string
+	}{
+		// The regression: Python len() counts codepoints, Go len() counts
+		// UTF-8 bytes. سلام دنیا is 9 codepoints but 17 bytes, so a max of
+		// 9 dropped it under the byte count (17 > 9) while Python forwards
+		// it. Both boundaries are pinned on both sides.
+		{
+			name:       "persian 9 codepoints passes a max of 9 (17 bytes would have dropped)",
+			text:       "سلام دنیا",
+			max:        9,
+			wantAction: Allow,
+			wantReason: "filter_passed",
+		},
+		{
+			name:       "persian 9 codepoints passes a min of 9",
+			text:       "سلام دنیا",
+			min:        9,
+			wantAction: Allow,
+			wantReason: "filter_passed",
+		},
+		{
+			name:       "persian 10 codepoints violates a max of 9 even though a byte count sees 19",
+			text:       "سلام دنیا.",
+			max:        9,
+			wantAction: Drop,
+			wantReason: "too_long",
+		},
+		{
+			name:       "persian 8 codepoints violates a min of 9",
+			text:       "سلام دنی",
+			min:        9,
+			wantAction: Drop,
+			wantReason: "too_short",
+		},
+		// Astral-plane emoji: one codepoint, four UTF-8 bytes. This is the
+		// case where byte-counting is most visibly wrong — a 4096-codepoint
+		// Telegram limit would be enforced at 4096 bytes instead.
+		{
+			name:       "single astral emoji is one codepoint, not four bytes",
+			text:       "🌟",
+			min:        1,
+			max:        1,
+			wantAction: Allow,
+			wantReason: "filter_passed",
+		},
+		{
+			name:       "three emoji are three codepoints, not twelve bytes",
+			text:       "🌟🌟🌟",
+			max:        3,
+			wantAction: Allow,
+			wantReason: "filter_passed",
+		},
+		{
+			name:       "four emoji violate a max of 3 (12 bytes would pass a byte bound of 12)",
+			text:       "🌟🌟🌟🌟",
+			max:        3,
+			wantAction: Drop,
+			wantReason: "too_long",
+		},
+		// Arabic: same shape, different script, so a Hebrew/Urdu regression
+		// cannot hide behind "Persian-only".
+		{
+			name:       "arabic phrase counts its letters, not its bytes",
+			text:       "مرحبا بالعالم",
+			max:        13,
+			wantAction: Allow,
+			wantReason: "filter_passed",
+		},
+		{
+			name:       "arabic 13 codepoints plus one violates a max of 13",
+			text:       "مرحبا بالعالم!",
+			max:        13,
+			wantAction: Drop,
+			wantReason: "too_long",
+		},
+		// Mixed scripts in one message — the realistic shape of a caption.
+		// "hi 🌟 world" is 10 codepoints (13 UTF-8 bytes).
+		{
+			name:       "mixed ascii and astral emoji count together as codepoints",
+			text:       "hi 🌟 world",
+			max:        10,
+			wantAction: Allow,
+			wantReason: "filter_passed",
+		},
+		{
+			name:       "mixed ascii and astral emoji at 10 codepoints violates a max of 9",
+			text:       "hi 🌟 world",
+			max:        9,
+			wantAction: Drop,
+			wantReason: "too_long",
+		},
+		{
+			name:       "english still drops too_short (the regression must not break this)",
+			text:       "hi",
+			min:        10,
+			wantAction: Drop,
+			wantReason: "too_short",
+		},
+		{
+			name:       "english still drops too_long",
+			text:       "this text is definitely more than ten characters",
+			max:        10,
+			wantAction: Drop,
+			wantReason: "too_long",
+		},
+		{
+			name:       "english max boundary is inclusive at exactly max",
+			text:       "ten chars.",
+			max:        10,
+			wantAction: Allow,
+			wantReason: "filter_passed",
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &rule.FilterRule{IsEnabled: true, MinMessageLength: tt.min, MaxMessageLength: tt.max}
+			got := e.Evaluate(tt.text, "text", false, f)
+			if got.Action != tt.wantAction {
+				t.Errorf("action = %s, want %s (reason %q)", got.Action, tt.wantAction, got.Reason)
+			}
+			if tt.wantReason != "" && got.Reason != tt.wantReason {
+				t.Errorf("reason = %q, want %q", got.Reason, tt.wantReason)
+			}
+		})
+	}
+}
+
+// TestLengthBoundaryIsCodepointExact pins the exact boundary against the
+// fixture's documented counts (UNI-LEN-01): "سلام دنیا 🌟" is 11 codepoints
+// and 22 UTF-8 bytes. The old byte-length code enforced max_message_length=11
+// as 22>11 → too_long, dropping a message the Python engine forwards.
+func TestLengthBoundaryIsCodepointExact(t *testing.T) {
+	e := New()
+	text := "سلام دنیا 🌟"
+
+	// 11 codepoints: the exact boundary must pass.
+	got := e.Evaluate(text, "text", false, &rule.FilterRule{IsEnabled: true, MaxMessageLength: 11})
+	if got.Action != Allow {
+		t.Errorf("max=11 on an 11-codepoint text: action = %s (reason %q), want Allow — Python len() is 11", got.Action, got.Reason)
+	}
+
+	// 12 codepoints: one over the boundary must drop.
+	got = e.Evaluate(text+"x", "text", false, &rule.FilterRule{IsEnabled: true, MaxMessageLength: 11})
+	if got.Action != Drop || got.Reason != "too_long" {
+		t.Errorf("max=11 on a 12-codepoint text: action = %s reason %q, want Drop/too_long", got.Action, got.Reason)
+	}
+
+	// And the min side of the same boundary: 11 codepoints satisfies min=11.
+	got = e.Evaluate(text, "text", false, &rule.FilterRule{IsEnabled: true, MinMessageLength: 11})
+	if got.Action != Allow {
+		t.Errorf("min=11 on an 11-codepoint text: action = %s (reason %q), want Allow", got.Action, got.Reason)
+	}
+}

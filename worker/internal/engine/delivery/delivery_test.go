@@ -607,3 +607,206 @@ func TestMediaScratchIsPerJob(t *testing.T) {
 		t.Errorf("distinct scratch paths = %d, want 2 (per-job uniqueness)", len(paths))
 	}
 }
+
+// --- task-level block_links (F-12) -------------------------------------------
+
+// blockLinksRules is a rule.Store double whose task projection carries the
+// task-level block_links flag, with NO attached filter. That is the F-12
+// shape: a task whose owner blocked links from the bot UI, which stores the
+// flag in the task's metadata blob (there is no filter_rules column for it
+// in any migration), and which may well have no filter attached at all.
+type blockLinksRules struct {
+	blockLinks bool
+}
+
+func (b blockLinksRules) GetByID(ruleID string) (*rule.ForwardRule, *rule.FilterRule, error) {
+	return &rule.ForwardRule{
+		ID:         ruleID,
+		IsActive:   true,
+		BlockLinks: b.blockLinks,
+	}, nil, nil
+}
+
+// jobReason reads the persisted error_detail of a terminal job, the column
+// the engine writes its drop reasons into.
+func jobReason(t *testing.T, s queue.Store, jobID string) string {
+	t.Helper()
+	db := storeDBOf(t, s)
+	var reason string
+	if err := db.QueryRow(`SELECT error_detail FROM delivery_jobs WHERE id=?`, jobID).Scan(&reason); err != nil {
+		t.Fatalf("read error_detail of %s: %v", jobID, err)
+	}
+	return reason
+}
+
+// TestTaskBlockLinksDropsLinkBearingJob: a task with block_links set and NO
+// attached filter must still drop a link-bearing job at delivery time, as a
+// permanent failure with the link_blocked reason — the projection of the
+// Python pipeline's link_block_reason gate (pipeline.py:957). Before F-12
+// the Go projection did not carry the flag at all, so the worker forwarded
+// exactly the messages the task's owner had blocked.
+func TestTaskBlockLinksDropsLinkBearingJob(t *testing.T) {
+	h := newHarness(t)
+	h.engine.rules = blockLinksRules{blockLinks: true}
+
+	j := &job.DeliveryJob{
+		ID: "rblk:c:20:t", RuleID: "rblk", SourceChatID: "c", SourceMessageID: 20,
+		TargetChatID: "t", Status: job.StatusPending, MaxAttempts: 5,
+		Payload: *jobPayload(map[string]any{"text": "see https://example.com/x now"}),
+	}
+	h.enqueue(t, j)
+
+	if err := h.engine.Process(context.Background(), j); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+
+	assertJobStatus(t, h.store, j.ID, string(job.StatusFailed))
+	if h.metrics.failed != 1 {
+		t.Errorf("failed = %d, want 1", h.metrics.failed)
+	}
+	if got := jobReason(t, h.store, j.ID); !strings.Contains(got, "link_blocked") {
+		t.Errorf("job reason = %q, want it to contain link_blocked", got)
+	}
+	if len(h.gateway.Recorded()) != 0 {
+		t.Error("a link-blocked job was dispatched to Telegram")
+	}
+}
+
+// TestTaskBlockLinksAllowsCleanJob: the gate is about links, not about the
+// task — a clean message on a block_links task forwards normally, so the
+// projection cannot be a blanket drop.
+func TestTaskBlockLinksAllowsCleanJob(t *testing.T) {
+	h := newHarness(t)
+	h.engine.rules = blockLinksRules{blockLinks: true}
+
+	j := &job.DeliveryJob{
+		ID: "rblk:c:21:t", RuleID: "rblk", SourceChatID: "c", SourceMessageID: 21,
+		TargetChatID: "t", Status: job.StatusPending, MaxAttempts: 5,
+		Payload: *jobPayload(map[string]any{"text": "a perfectly ordinary message"}),
+	}
+	h.enqueue(t, j)
+
+	if err := h.engine.Process(context.Background(), j); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	assertJobStatus(t, h.store, j.ID, string(job.StatusSent))
+	if h.metrics.sent != 1 {
+		t.Errorf("sent = %d, want 1", h.metrics.sent)
+	}
+}
+
+// TestTaskBlockLinksAlsoCoversTheCanonicalLinkShapes: the predicate is the
+// pipeline's own (content_policy._RE_LINK, the has_link behind
+// link_block_reason), NOT the FilterEngine's URL_REGEX. The two disagree,
+// and that disagreement is F-14: URL_REGEX passes tg:// and ftp:// while
+// has_link blocks them, and URL_REGEX blocks a bare @mention while has_link
+// does not. The task-level gate must follow the pipeline, so tg:// and
+// ftp:// are blocked and a plain @mention is not.
+func TestTaskBlockLinksAlsoCoversTheCanonicalLinkShapes(t *testing.T) {
+	blocked := []struct {
+		name, text string
+	}{
+		{"tg deep link", "open tg://resolve?domain=x"},
+		{"ftp link", "fetch ftp://files.example.com/a"},
+		{"telegram.me link", "via telegram.me/example"},
+		{"telegram.dog link", "via telegram.dog/example"},
+		{"bare www", "see www.example.com here"},
+		{"t.me path", "follow t.me/example"},
+	}
+	for _, c := range blocked {
+		t.Run("blocked/"+c.name, func(t *testing.T) {
+			h := newHarness(t)
+			h.engine.rules = blockLinksRules{blockLinks: true}
+			j := &job.DeliveryJob{
+				ID: "rblk:c:22:t:" + c.name, RuleID: "rblk", SourceChatID: "c",
+				SourceMessageID: 22, TargetChatID: "t", Status: job.StatusPending,
+				MaxAttempts: 5,
+				Payload:     *jobPayload(map[string]any{"text": c.text}),
+			}
+			h.enqueue(t, j)
+			if err := h.engine.Process(context.Background(), j); err != nil {
+				t.Fatalf("process: %v", err)
+			}
+			assertJobStatus(t, h.store, j.ID, string(job.StatusFailed))
+			if got := jobReason(t, h.store, j.ID); !strings.Contains(got, "link_blocked") {
+				t.Errorf("reason = %q, want link_blocked", got)
+			}
+		})
+	}
+
+	// A bare @mention is NOT a link for the task gate: URL_REGEX's
+	// @[A-Za-z0-9]{3,32} alternation is the F-14 shape that wrongly dropped
+	// mentions the owner never asked to block.
+	t.Run("allowed/bare mention is not a link", func(t *testing.T) {
+		h := newHarness(t)
+		h.engine.rules = blockLinksRules{blockLinks: true}
+		j := &job.DeliveryJob{
+			ID: "rblk:c:23:t", RuleID: "rblk", SourceChatID: "c", SourceMessageID: 23,
+			TargetChatID: "t", Status: job.StatusPending, MaxAttempts: 5,
+			Payload: *jobPayload(map[string]any{"text": "email @user hi"}),
+		}
+		h.enqueue(t, j)
+		if err := h.engine.Process(context.Background(), j); err != nil {
+			t.Fatalf("process: %v", err)
+		}
+		assertJobStatus(t, h.store, j.ID, string(job.StatusSent))
+	})
+}
+
+// TestTaskWithoutBlockLinksForwardsLinks: the default. A task that never set
+// the flag forwards a link-bearing message — the gate must be opt-in by the
+// task's own metadata, exactly as Python reads it.
+func TestTaskWithoutBlockLinksForwardsLinks(t *testing.T) {
+	h := newHarness(t)
+	h.engine.rules = blockLinksRules{blockLinks: false}
+
+	j := &job.DeliveryJob{
+		ID: "rblk:c:24:t", RuleID: "rblk", SourceChatID: "c", SourceMessageID: 24,
+		TargetChatID: "t", Status: job.StatusPending, MaxAttempts: 5,
+		Payload: *jobPayload(map[string]any{"text": "see https://example.com/x now"}),
+	}
+	h.enqueue(t, j)
+
+	if err := h.engine.Process(context.Background(), j); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	assertJobStatus(t, h.store, j.ID, string(job.StatusSent))
+	if h.metrics.sent != 1 {
+		t.Errorf("sent = %d, want 1", h.metrics.sent)
+	}
+}
+
+// TestTaskBlockLinksDropLeavesNoFenceClaim: the preflight gate runs BEFORE
+// the send-side fence is claimed, and a permanent drop must close the job
+// with MarkFailed. A drop that only deferred (or that left a CLAIMED fence
+// row behind) would have the stale-claim sweep convert the job to UNKNOWN
+// and block a delivery that never touched Telegram until a human reconciles
+// it — the exact failure mode the preflight ordering exists to prevent.
+func TestTaskBlockLinksDropLeavesNoFenceClaim(t *testing.T) {
+	h := newHarness(t)
+	h.engine.rules = blockLinksRules{blockLinks: true}
+
+	j := &job.DeliveryJob{
+		ID: "rblk:c:25:t", RuleID: "rblk", SourceChatID: "c", SourceMessageID: 25,
+		TargetChatID: "t", Status: job.StatusPending, MaxAttempts: 5,
+		Payload: *jobPayload(map[string]any{"text": "see https://example.com/x now"}),
+	}
+	h.enqueue(t, j)
+
+	if err := h.engine.Process(context.Background(), j); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	assertJobStatus(t, h.store, j.ID, string(job.StatusFailed))
+
+	// No fence row may be left mid-flight for this job: the drop happened
+	// before any claim, so a later claim must resolve to dispatch (or the
+	// row must not exist at all), never to in-flight/stale.
+	key := job.AttemptKey{RuleID: "rblk", SourceChatID: "c", SourceMessageID: 25, TargetChatID: "t"}
+	outcome, _, err := h.store.FenceClaim(context.Background(), key, "probe", float64(time.Now().Add(time.Minute).Unix()))
+	if err != nil {
+		t.Fatalf("fence claim: %v", err)
+	}
+	if outcome == job.FenceInFlight || outcome == job.FenceStale {
+		t.Errorf("a link-blocked drop left a fence row in %s state — the job is unresolved", outcome)
+	}
+}
