@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -448,6 +449,106 @@ func TestEmptyRuleIDIsAnError(t *testing.T) {
 	store := newTestStore(t)
 	if _, _, err := store.GetByID(""); err == nil {
 		t.Error("an empty rule id must be an explicit error, not a nil-rule lookup")
+	}
+}
+
+// --- task-level block_links (F-12) -------------------------------------------
+
+// TestBlockLinksProjectedFromTaskMetadata: block_links is a TASK-level flag
+// with no column on filter_rules (or forward_rules) in any migration. The
+// Python ForwardRule entity resolves it out of the metadata JSON blob
+// (entities.py: block_links = bool(metadata.get("block_links", False))), and
+// the pipeline gates on it via media_filter.link_block_reason
+// (pipeline.py:957) whether or not the task has an attached filter. The store
+// must project it the same way, or the Go delivery path would forward the
+// links an owner blocked — the F-12 verdict: an existing intended feature
+// missing from the Go projection.
+func TestBlockLinksProjectedFromTaskMetadata(t *testing.T) {
+	cases := []struct {
+		name     string
+		metadata string
+		want     bool
+	}{
+		{"metadata true projects true", `{"block_links": true}`, true},
+		{"metadata false projects false", `{"block_links": false}`, false},
+		{"metadata without the key projects false", `{"album_mode": "split"}`, false},
+		{"empty metadata object projects false", `{}`, false},
+		// A null is what a JSON writer produces when the flag was never set;
+		// Python's .get(key, False) maps it to False, and so must the Go
+		// projection — never to an error and never to a drop.
+		{"explicit null projects false", `{"block_links": null}`, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			store := newTestStore(t)
+			insertRuleWithMetadata(t, store.rulesDB, "blk-"+strings.ReplaceAll(c.name, " ", "-"), c.metadata)
+			r, _, err := store.GetByID("blk-" + strings.ReplaceAll(c.name, " ", "-"))
+			if err != nil || r == nil {
+				t.Fatalf("GetByID: rule=%v err=%v", r, err)
+			}
+			if r.BlockLinks != c.want {
+				t.Errorf("BlockLinks = %v, want %v (metadata %s)", r.BlockLinks, c.want, c.metadata)
+			}
+		})
+	}
+}
+
+// TestBlockLinksSurvivesAlongsideOtherMetadata: the flag rides in the same
+// blob as the transport/shape fields the store already resolves, so
+// projecting it must not disturb them — and vice versa.
+func TestBlockLinksSurvivesAlongsideOtherMetadata(t *testing.T) {
+	store := newTestStore(t)
+	meta := `{"delivery_transport": "BOT", "bot_token_id": "tok-7", "album_mode": "split", "block_links": true}`
+	insertRuleWithMetadata(t, store.rulesDB, "blk-full", meta)
+
+	r, _, err := store.GetByID("blk-full")
+	if err != nil || r == nil {
+		t.Fatalf("GetByID: rule=%v err=%v", r, err)
+	}
+	if !r.BlockLinks {
+		t.Error("BlockLinks was not projected from a metadata blob carrying other fields")
+	}
+	if r.DeliveryTransport != "BOT" || r.BotTokenID != "tok-7" || r.AlbumMode != "split" {
+		t.Errorf("sibling metadata fields disturbed: transport=%q token=%q album=%q",
+			r.DeliveryTransport, r.BotTokenID, r.AlbumMode)
+	}
+}
+
+// TestBlockLinksAppliesWithoutAttachedFilter: the Python pipeline gates on
+// the TASK flag regardless of an attached filter, so the projection must
+// survive on a row with no filter_rule_id — that is the whole point of F-12:
+// a task whose owner blocked links but attached no filter must still block.
+func TestBlockLinksAppliesWithoutAttachedFilter(t *testing.T) {
+	store := newTestStore(t)
+	insertRuleWithMetadata(t, store.rulesDB, "blk-nofilter", `{"block_links": true}`)
+
+	r, f, err := store.GetByID("blk-nofilter")
+	if err != nil {
+		t.Fatalf("GetByID: %v", err)
+	}
+	if r == nil {
+		t.Fatal("nil rule")
+	}
+	if !r.BlockLinks {
+		t.Fatal("BlockLinks was not projected on a rule with no attached filter")
+	}
+	if f != nil {
+		t.Errorf("a rule with no filter_rule_id returned a filter: %+v", f)
+	}
+}
+
+// insertRuleWithMetadata writes a forward_rules row whose metadata blob is
+// used VERBATIM. The suite's shared insertRule helper rewrites its argument
+// into an auto_pause sub-blob; the block_links projection reads the top-level
+// keys, so the F-12 fixtures need the blob exactly as the Python entity
+// would store it.
+func insertRuleWithMetadata(t *testing.T, db *sql.DB, id, metadata string) {
+	t.Helper()
+	if _, err := db.Exec(`INSERT OR REPLACE INTO forward_rules
+		(id, session_id, is_active, is_paused, paused_until, forward_mode, content_mode, filter_rule_id, metadata)
+		VALUES (?,?,?,?,?,?,?,?,?)`,
+		id, "s1", true, false, 0, "COPY_MESSAGE", "AUTO", sql.NullString{}, metadata); err != nil {
+		t.Fatalf("insert rule %s: %v", id, err)
 	}
 }
 

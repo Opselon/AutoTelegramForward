@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"atf/worker/internal/domain/job"
+	"atf/worker/internal/domain/policy"
 	"atf/worker/internal/domain/rule"
 	"atf/worker/internal/engine/filter"
 	"atf/worker/internal/engine/scheduler"
@@ -215,6 +216,30 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 			e.metrics.Outcome("failed")
 			return nil
 		}
+	}
+
+	// 2b. Task-level block_links gate (F-12). This is the projection of the
+	// task's own `block_links` metadata flag, NOT the attached filter's: the
+	// pipeline enforces it at pipeline.py:957 via
+	// media_filter.link_block_reason(rule, text) regardless of whether the
+	// task has a filter attached, so a task whose owner blocked links but
+	// attached no filter must not forward them. The flag is projected out of
+	// the task's metadata blob by the rule store (no column exists for it).
+	//
+	// The link predicate is the canonical one — Python's
+	// content_policy._RE_LINK (has_link), NOT the FilterEngine's URL_REGEX:
+	// the two disagree (the F-14 divergence), and the pipeline's
+	// link_block_reason gate is the semantics being projected here.
+	//
+	// A drop here is a permanent decision about this content: no send ever
+	// happens, before the fence is claimed, so it must not leave an
+	// unresolved fence claim behind — MarkFailed, exactly like the filter
+	// drop above it.
+	if r.BlockLinks && policy.HasLink(j.Payload.Text()) {
+		logger.Info("job dropped by task-level block_links at delivery time")
+		_ = e.store.MarkFailed(ctx, j.ID, "Filter: link_blocked")
+		e.metrics.Outcome("failed")
+		return nil
 	}
 
 	// 3. Per-target rate limit. A throttled target is a defer (the lane is

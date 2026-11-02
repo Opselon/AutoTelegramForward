@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/text/unicode/norm"
 
@@ -135,10 +136,14 @@ func (e *Engine) Evaluate(text string, mediaType string, isService bool, f *rule
 		}
 	}
 
-	if f.MinMessageLength > 0 && len(text) < f.MinMessageLength {
+	// Length bounds count Unicode CODE POINTS, not UTF-8 bytes: Python's
+	// len(text) is codepoints, so a byte count would drop every Persian,
+	// Arabic and emoji message at a different boundary than the Python
+	// engine drops it at (سلام دنیا = 9 codepoints but 17 bytes).
+	if f.MinMessageLength > 0 && utf8.RuneCountInString(text) < f.MinMessageLength {
 		return drop("too_short")
 	}
-	if f.MaxMessageLength > 0 && len(text) > f.MaxMessageLength {
+	if f.MaxMessageLength > 0 && utf8.RuneCountInString(text) > f.MaxMessageLength {
 		return drop("too_long")
 	}
 

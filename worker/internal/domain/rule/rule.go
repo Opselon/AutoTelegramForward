@@ -59,6 +59,18 @@ type ForwardRule struct {
 	// TopicID is the forum thread (0 = General / none).
 	TopicID int64
 
+	// BlockLinks mirrors the task-level metadata flag the Python pipeline
+	// gates at pipeline.py:957 via media_filter.link_block_reason, which
+	// reads ForwardRule.block_links — itself the metadata key
+	// `block_links` (entities.py), NOT a column. The persisted
+	// filter_rules row has no block_links column in any migration, so this
+	// flag is projected at load time from the task's metadata blob by the
+	// rule store. It must stay on the task projection: Python applies it
+	// whether or not the task has an attached FilterRule, and the delivery
+	// preflight must do the same or a task with no filter would forward
+	// links its owner blocked.
+	BlockLinks bool
+
 	// Metadata is the task's metadata JSON blob. It carries the
 	// branding_hop sub-blob and the metadata-resolved transport/shape fields
 	// the Core's ForwardRule entity reads out of it, so the worker reads the
@@ -98,7 +110,16 @@ type FilterRule struct {
 	DropService       bool
 	MinMessageLength  int
 	MaxMessageLength  int
-	BlockLinks        bool
+	// BlockLinks on a FilterRule mirrors the task's own flag projected at
+	// load time (see ForwardRule.BlockLinks) — it is NOT a filter_rules
+	// column: no migration ever added one, and Python's FilterRule entity
+	// has no such field (its getattr(filter_rule,"block_links",False) at
+	// services.py:79 therefore always reads False). The engine still
+	// honours it for the attached-filter path, but the authoritative task
+	// gate is the delivery preflight's ForwardRule.BlockLinks check, which
+	// fires whether or not a filter is attached — matching the Python
+	// pipeline's link_block_reason gate at pipeline.py:957.
+	BlockLinks bool
 }
 
 // Store is the read-only interface the queue worker uses to re-check a task
