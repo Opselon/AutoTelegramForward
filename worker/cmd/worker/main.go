@@ -95,11 +95,12 @@ func run() (runErr error) {
 	// Logger and the Python Core emit, so one collector handles every
 	// service. Fields carry correlation/job/rule ids, never message content
 	// or credentials.
-	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: workerLogLevel(),
-	}))
+	stdoutHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	Level: workerLogLevel(),
+})
 
 	centralLogs, logErr := observability.NewFromEnv()
+	log := slog.New(&fanoutHandler{stdout: stdoutHandler, central: centralLogs, module: "worker.main"})
 	if logErr != nil {
 		log.Warn("central Logger client could not be initialized; stdout logging remains active", "error", logErr)
 	} else if centralLogs != nil {
@@ -168,7 +169,7 @@ func run() (runErr error) {
 	}
 	defer schedStore.Close()
 
-	deliveryLog := &slogLogger{log: log, central: centralLogs, module: "worker.delivery"}
+	deliveryLog := &slogLogger{log: log, module: "worker.delivery"}
 	engine := delivery.New(store, rules, gateway, schedStore, deliveryLog, &counters{}, workerID(), cfg.MediaDir, delivery.Options{
 		NumWorkers:            cfg.NumWorkers,
 		BatchSize:             cfg.BatchSize,
@@ -178,7 +179,7 @@ func run() (runErr error) {
 		RPCTimeout:            60 * time.Second,
 	})
 
-	schedulerLog := &slogLogger{log: log, central: centralLogs, module: "worker.scheduler"}
+	schedulerLog := &slogLogger{log: log, module: "worker.scheduler"}
 	schedEngine := scheduler.New(schedStore, gateway, schedulerLog, &schedCounters{}, workerID(), "", scheduler.Defaults())
 
 	tracker := health.NewTracker()
@@ -433,50 +434,6 @@ func dbLabel(cfg *config.Config) string {
 }
 
 // --- adapters: keep the engine free of logging/metrics plumbing ------------ //
-
-type slogLogger struct {
-	log     *slog.Logger
-	central *observability.Client
-	module  string
-}
-
-func (l *slogLogger) Info(msg string, args ...any) {
-	l.log.Info(msg, args...)
-	if l.central != nil {
-		l.central.Emit("INFO", "", l.module, msg, args...)
-	}
-}
-func (l *slogLogger) Warn(msg string, args ...any) {
-	l.log.Warn(msg, args...)
-	if l.central != nil {
-		l.central.Emit("WARN", "", l.module, msg, args...)
-	}
-}
-func (l *slogLogger) Error(msg string, args ...any) {
-	l.log.Error(msg, args...)
-	if l.central != nil {
-		l.central.Emit("ERROR", "", l.module, msg, args...)
-	}
-}
-
-// workerLogLevel controls the local JSON stream. Central collection is
-// separately governed by ATF_LOG_LEVELS / LOG_LEVEL in the log client.
-func workerLogLevel() slog.Level {
-	level := strings.ToLower(strings.TrimSpace(os.Getenv("LOG_LEVEL")))
-	if level == "" { level = strings.ToLower(strings.TrimSpace(os.Getenv("ATF_WORKER_LOG_LEVEL"))) }
-	switch level {
-	case "trace", "debug":
-		return slog.LevelDebug
-	case "warn", "warning":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	case "info", "":
-		return slog.LevelInfo
-	default:
-		return slog.LevelInfo
-	}
-}
 
 type counters struct {
 	mu        sync.Mutex
