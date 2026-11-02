@@ -53,12 +53,26 @@ type testCase struct {
 	Date         int64             `json:"date"`
 	RuleName     string            `json:"rule_name"`
 	SenderName   string            `json:"sender_name"`
+	// is_caption marks a cleaner case's text as a media caption, for the
+	// F-09 apply_to_caption switch the pipeline honors.
+	IsCaption    bool              `json:"is_caption"`
 }
 
 type result struct {
 	Index  int    `json:"index"`
 	Output string `json:"output"`
 	Error  string `json:"error"`
+}
+
+// boolFieldDefault reads a bool with an explicit default, for the flags
+// whose Python entity default is not false.
+func boolFieldDefault(m map[string]any, key string, def bool) bool {
+	if v, ok := m[key]; ok {
+		if b, ok := v.(bool); ok {
+			return b
+		}
+	}
+	return def
 }
 
 func boolField(m map[string]any, key string) bool {
@@ -126,8 +140,12 @@ func cleanerFromMap(m map[string]any) *cleaning.CleanerRule {
 		RemovePhoneNumbers: boolField(m, "remove_phone_numbers"),
 		RemoveEmptyLines:   boolField(m, "remove_empty_lines"),
 		StripButtons:       boolField(m, "strip_buttons"),
-		CaseSensitive:      boolField(m, "case_sensitive"),
-		IsActive:           true,
+		// Python's entity default is True (entities.py:2366): an absent
+		// flag cleans captions, and only an explicit false opts out. That
+		// is what the F-09 skip key tests.
+		ApplyToCaption: boolFieldDefault(m, "apply_to_caption", true),
+		CaseSensitive:  boolField(m, "case_sensitive"),
+		IsActive:       true,
 	}
 }
 
@@ -216,11 +234,17 @@ func runCase(c testCase) string {
 	cfg := cleaning.Config{}
 	switch c.Engine {
 	case "cleaner":
-		// The cleaner engine is exercised directly: the pipeline's other
-		// stages are inert when no flag is set.
+		// The cleaner engine runs through the pipeline so a caption case
+		// exercises the F-09 apply_to_caption switch (the pipeline's
+		// other stages are inert when no flag is set, so routing it
+		// through does not change any other cleaner case).
 		cleaner := cleanerFromMap(c.Cleaner)
 		if cleaner == nil {
 			return c.Text
+		}
+		cfg.Cleaner = cleaner
+		if c.IsCaption {
+			return engine.ApplyText(c.Text, cfg, nil, cleaning.CaptionHint{IsCaption: true}).Text
 		}
 		return cleaner.Clean(c.Text)
 	case "emoji":
@@ -282,7 +306,10 @@ func runCase(c testCase) string {
 	default:
 		return ""
 	}
-	result := engine.Apply(c.Text, cfg, nil)
+	// F-09: a caption case runs through ApplyText so the pipeline can
+	// honor apply_to_caption=False; a body case keeps the plain entry
+	// point (which is ApplyText with a zero hint).
+	result := engine.ApplyText(c.Text, cfg, nil, cleaning.CaptionHint{IsCaption: c.IsCaption})
 	return result.Text
 }
 

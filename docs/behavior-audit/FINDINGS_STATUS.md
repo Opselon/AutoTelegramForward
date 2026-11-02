@@ -91,13 +91,27 @@ package the worker dispatches through, with byte-for-byte parity against
 the Python engines proven by `scripts/test_stage42_parity.py` (49/49
 cases) and the reclassified both-class fixtures.
 
-## F-09 — `apply_to_caption=False` cannot disable caption cleaning — **VERIFIED**
+## F-09 — `apply_to_caption=False` cannot disable caption cleaning — **FIXED (Stage 4.4, Go side)**
+
+Original finding (still accurate for the Python path):
 Reproduced by execution: `CleanerRule(apply_to_caption=False, remove_urls=True)`
 still strips `https://a.io` from a caption, because the pipeline feeds
 `payload.effective_text` (`entities.py:2498`), which IS the caption for media
 messages. Customer impact: an owner who turns the caption switch off still gets
 captions cleaned. Classification: **missing functionality** (flag has no effect).
-Action: Stage 4.2.
+
+**Stage 4.4 resolution.** The Go pipeline takes the flag seriously. It gets a
+`cleaning.CaptionHint{IsCaption}` from the payload's own `has_media` flag — the
+same field Python's `effective_text` consults — and when the text is a caption
+and the task's cleaner opted out (`ApplyToCaption=false`), the text cleaner is
+skipped. Markup-level options (`strip_buttons`) still apply, exactly as Python's
+pipeline enforces them outside `clean()`. `Apply()` keeps the pre-4.4 entry
+point (no hint = treat as body), so no existing caller changes behavior.
+
+Cross-language parity is pinned by `scripts/test_stage42_parity.py`: caption-
+vs-body cases for both switch states, plus
+`worker/internal/domain/cleaning/cleaning_test.go` tests covering the skip, the
+opted-in default, the inactive-cleaner guard, and the compatibility entry point.
 
 ## F-10 — Feature catalog stale — **FIXED_IN_EXISTING_CODE**
 `docs/feature_catalog.json` regenerated from `35ee530` in this PR (schema v3.0.0,

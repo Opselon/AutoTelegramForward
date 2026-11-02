@@ -368,6 +368,71 @@ func TestPipelineHeaderStaysRawWithoutVars(t *testing.T) {
 	}
 }
 
+func TestPipelineCaptionCleanerSkipF09(t *testing.T) {
+	// F-09 (Stage 4.4, Go side): a task that opted out of caption cleaning
+	// must not have its media caption cleaned. Python's pipeline feeds
+	// payload.effective_text — which IS the caption for media — so the
+	// switch has no reader there and the owner's setting is dead. The Go
+	// side reads the payload's has_media flag and honors it.
+	p := NewPipeline()
+	cleaner := &CleanerRule{IsActive: true, RemoveURLs: true, ApplyToCaption: false}
+	cfg := Config{Cleaner: cleaner}
+
+	// A caption: the cleaner is skipped, the URL survives.
+	got := p.ApplyText("cap https://a.io", cfg, nil, CaptionHint{IsCaption: true})
+	if got.Text != "cap https://a.io" {
+		t.Errorf("F-09: caption must be left alone, got %q", got.Text)
+	}
+	if contains(got.StageNotes, "cleaner") {
+		t.Errorf("F-09: cleaner stage must not run on an opted-out caption, notes %v", got.StageNotes)
+	}
+
+	// The same configuration still cleans a plain body: the switch scopes
+	// the cleaner, it does not disable it.
+	got = p.ApplyText("body https://a.io", cfg, nil, CaptionHint{})
+	if got.Text != "body" {
+		t.Errorf("body must still be cleaned, got %q", got.Text)
+	}
+}
+
+func TestPipelineCaptionCleanerAppliesWhenEnabled(t *testing.T) {
+	// The default (apply_to_caption=true, entities.py:2366) keeps the old
+	// behavior: a caption IS cleaned. This is the compatibility guarantee
+	// for every task that never touched the switch.
+	p := NewPipeline()
+	cfg := Config{Cleaner: &CleanerRule{IsActive: true, RemoveURLs: true, ApplyToCaption: true}}
+	got := p.ApplyText("cap https://a.io", cfg, nil, CaptionHint{IsCaption: true})
+	if got.Text != "cap" {
+		t.Errorf("opted-in caption must be cleaned, got %q", got.Text)
+	}
+}
+
+func TestPipelineCaptionCleanerInactiveCleaner(t *testing.T) {
+	// An inactive cleaner is skipped regardless of the caption hint — the
+	// F-09 guard must not become a way for a caption to bypass a cleaner
+	// the task disabled for a different reason (it is off entirely, so
+	// there is nothing to bypass; pinning it keeps the skip condition a
+	// conjunction, not an accidental override).
+	p := NewPipeline()
+	cfg := Config{Cleaner: &CleanerRule{IsActive: false, RemoveURLs: true, ApplyToCaption: false}}
+	got := p.ApplyText("cap https://a.io", cfg, nil, CaptionHint{IsCaption: true})
+	if got.Text != "cap https://a.io" {
+		t.Errorf("inactive cleaner must never run, got %q", got.Text)
+	}
+}
+
+func TestPipelineApplyWithoutCaptionHintPreservesBehavior(t *testing.T) {
+	// The compatibility entry point: no hint means "treat it as a body",
+	// so even an apply_to_caption=False cleaner runs. Callers that hand in
+	// a caption must use ApplyText.
+	p := NewPipeline()
+	cfg := Config{Cleaner: &CleanerRule{IsActive: true, RemoveURLs: true, ApplyToCaption: false}}
+	got := p.Apply("cap https://a.io", cfg, nil)
+	if got.Text != "cap" {
+		t.Errorf("Apply must treat the text as a body, got %q", got.Text)
+	}
+}
+
 func TestHeaderFormatterRendersEveryPlaceholder(t *testing.T) {
 	// Every variable Python's HeaderFormatter exposes, rendered against
 	// one message snapshot, compared to the Python output captured from
