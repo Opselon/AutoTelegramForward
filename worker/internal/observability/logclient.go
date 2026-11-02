@@ -30,7 +30,7 @@ const (
 
 var (
 	secretField = regexp.MustCompile("(?i)(token|password|secret|api[_-]?hash|api[_-]?key|authorization|session[_-]?string|cookie)")
-	secretValue = regexp.MustCompile("(?i)(token|password|secret|api[_-]?hash|api[_-]?key|authorization)\\s*[:=]\\s*[^,\\s;]+")
+	secretValue = regexp.MustCompile("(?i)(token|password|secret|api[_-]?hash|api[_-]?key|authorization)\\s*[:=]\\s*(?:bearer\\s+)?[^,\\s;]+")
 )
 
 type Client struct {
