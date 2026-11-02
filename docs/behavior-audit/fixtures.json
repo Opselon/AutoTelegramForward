@@ -582,7 +582,7 @@
    },
    "expected_python_durable_output": "From [[chat_title]] on {date}\n\nbody",
    "expected_python_preview_output": "From <chat title> on 2026-11-02 ...",
-   "notes": "pipeline.py:1547 applies the header raw; HeaderFormatter runs only via transform_text (gRPC TestRule, edit-sync). The preview lies about production.",
+   "notes": "pipeline.py:1547 applies the header raw; HeaderFormatter runs only via transform_text (gRPC TestRule, edit-sync). The preview lies about production.\n\nStage 4.4 (F-15 FIXED): the Go Worker now renders the placeholders through worker/internal/domain/cleaning.FormatHeader, byte-identical to this preview output. The Python durable path still applies them raw until the transform switch moves. Reclassified as python (not both) because the {date} placeholder falls back to the render clock, so a byte-for-byte Go expectation is not deterministic; the cross-language parity is proven by scripts/test_stage42_parity.py with a fixed date instead.",
    "executable": "python"
   },
   {

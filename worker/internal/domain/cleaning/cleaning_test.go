@@ -335,16 +335,108 @@ func TestPipelineHeaderFooterDedup(t *testing.T) {
 	}
 }
 
-func TestPipelineHeaderFooterRawPlaceholders(t *testing.T) {
-	// ADV-HEADER-01 (F-15): the durable path applies the header RAW —
-	// placeholders are NOT interpolated. The gRPC TestRule preview lies
-	// about this, and the fixture pins both answers. A Go port that
-	// interpolated placeholders would silently change production behavior.
+func TestPipelineHeaderPlaceholdersRenderWhenVarsPresent(t *testing.T) {
+	// Stage 4.4 closes F-15: the durable path now renders the placeholders
+	// the preview always promised — "From [[chat_title]] on {date}" no
+	// longer reaches the target literally. (The ADV-HEADER-01 fixture pins
+	// the OLD Python behavior; the Go side now renders and the fixture is
+	// due for the same flip this test documents.)
+	p := NewPipeline()
+	cfg := Config{
+		Header: "From [[chat_title]] on {date}",
+		HeaderVars: &HeaderVars{SourceChatID: "-1001234567890", SourceChatTitle: "News Channel", SourceDate: 1730000000},
+	}
+	got := p.Apply("body", cfg, nil)
+	want := "From News Channel on 2024-10-27 03:33 UTC\n\nbody"
+	if got.Text != want {
+		t.Errorf("F-15 fix: got %q, want %q", got.Text, want)
+	}
+	if !contains(got.StageNotes, "header_footer") {
+		t.Errorf("expected the header_footer stage note, got %v", got.StageNotes)
+	}
+}
+
+func TestPipelineHeaderStaysRawWithoutVars(t *testing.T) {
+	// A caller with no message snapshot (the parity harness's header_footer
+	// cases, and any test that builds a Config by hand) keeps the
+	// pre-4.4 raw behavior: half-rendered output is worse than none.
 	p := NewPipeline()
 	got := p.Apply("body", Config{Header: "From [[chat_title]] on {date}"}, nil)
 	want := "From [[chat_title]] on {date}\n\nbody"
 	if got.Text != want {
-		t.Errorf("ADV-HEADER-01: placeholders must stay raw, got %q, want %q", got.Text, want)
+		t.Errorf("raw fallback: got %q, want %q", got.Text, want)
+	}
+}
+
+func TestHeaderFormatterRendersEveryPlaceholder(t *testing.T) {
+	// Every variable Python's HeaderFormatter exposes, rendered against
+	// one message snapshot, compared to the Python output captured from
+	// the real engine (core.domain.services.HeaderFormatter.format_text).
+	vars := HeaderVars{
+		SourceChatID:       "-1001234567890",
+		SourceChatUsername: "newschannel",
+		SourceChatTitle:    "News Channel",
+		SourceMessageID:    55,
+		SourceDate:         1730000000,
+		SenderName:         "Alice",
+		SenderID:           "4242",
+	}
+	task := HeaderTask{Name: "My Task", Category: "ALL"}
+	cases := []struct{ template, want string }{
+		{"From [[chat_title]] on {date} — {source_link} by {sender_name} | {rule_name} {category}",
+			"From News Channel on 2024-10-27 03:33 UTC — https://t.me/newschannel/55 by Alice | My Task ALL"},
+		{"{ORIGIN_NAME_URL} {ORIGIN_POST_ID} {ORIGIN_USERNAME} {SOURCE_NAME} {SENDER_CHAT}",
+			"[News Channel](https://t.me/newschannel/55) 55 @newschannel News Channel -1001234567890"},
+		{"{rule_name} {category} {source_chat} {ORIGIN_USERID} {ORIGIN_CHAT_ID} {ORIGIN_POST_DATE} {FROM_USER}",
+			"My Task ALL -1001234567890 4242 -1001234567890 2024-10-27 03:33 UTC Alice"},
+		// Python's format_text also .strip()s the result, so the trailing
+		// space a join would leave is trimmed on both engines.
+		{"{FORWARD_FROM_CHAT} {ORIGIN_TEXT}",
+			"-1001234567890"},
+		{"{unknown_placeholder}",
+			"{unknown_placeholder}"}, // unknown stays, Python leaves it too
+		{"", ""}, // empty template renders empty
+	}
+	for _, c := range cases {
+		if got := FormatHeader(c.template, task, vars); got != c.want {
+			t.Errorf("FormatHeader(%q): got %q, want %q", c.template, got, c.want)
+		}
+	}
+}
+
+func TestHeaderFormatterPrivateChannelLink(t *testing.T) {
+	// A private channel has no @username: the link falls back to Telegram's
+	// /c/<internal id> form, and the date falls back to "now" when the
+	// message carries no timestamp.
+	vars := HeaderVars{SourceChatID: "-1001234567890", SourceMessageID: 7}
+	out := FormatHeader("{source_link} {chat_title}", HeaderTask{}, vars)
+	if !strings.Contains(out, "https://t.me/c/1234567890/7") {
+		t.Errorf("private channel link: got %q", out)
+	}
+	if !strings.Contains(out, "-1001234567890") {
+		t.Errorf("chat id fallback title: got %q", out)
+	}
+}
+
+func TestHeaderFormatterRuleNameFallback(t *testing.T) {
+	// Python: rule_name = rule.name or f"Rule-{rule.id[:8]}". A task with
+	// no name renders the id-derived label, so an unconfigured rule still
+	// produces a readable header.
+	out := FormatHeader("{rule_name}", HeaderTask{}, HeaderVars{})
+	if out != "" {
+		t.Errorf("an empty task name renders empty at the formatter level: got %q", out)
+	}
+	// The delivery engine supplies the fallback (ruleName), not the
+	// formatter: the formatter is a pure renderer and the fallback is a
+	// rule projection decision. The ruleName tests live with the engine.
+}
+
+func TestHeaderFormatterDateUsesMessageTime(t *testing.T) {
+	// {date} is the SOURCE message's time, not the render time; only a
+	// message with no timestamp falls back to now.
+	vars := HeaderVars{SourceDate: 1730000000}
+	if got := FormatHeader("{date}", HeaderTask{}, vars); got != "2024-10-27 03:33 UTC" {
+		t.Errorf("source date: got %q", got)
 	}
 }
 

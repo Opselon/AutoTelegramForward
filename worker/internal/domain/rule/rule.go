@@ -61,6 +61,13 @@ type ForwardRule struct {
 	// TopicID is the forum thread (0 = General / none).
 	TopicID int64
 
+	// Name is the task's display name, resolved out of the metadata blob
+	// the same way the Python ForwardRule's name field is
+	// (sqlite_repositories.py: name=str(meta.get("name") or "")). The
+	// header placeholder renderer needs it: {rule_name} falls back to
+	// "Rule-<id[:8]>" when it is empty, exactly as Python does.
+	Name string
+
 	// Transform is the task's text-transform configuration — cleaner, link
 	// policy, emoji flag, content-policy rewrite, replacements,
 	// header/footer and advanced transforms — resolved out of the metadata

@@ -354,6 +354,11 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		// same gate the Python pipeline already enforced at ingest.
 		extra.BlockLinks = metaBool(extra.Metadata, "block_links", false)
 
+		// Stage 4.4: the task's display name lives in the metadata blob
+		// (sqlite_repositories.py loads it as name=str(meta.get("name"))).
+		// The header placeholder renderer reads it for {rule_name}.
+		extra.Name = metaStr(extra.Metadata, "name", "")
+
 		// Stage 4.2: the transform configuration the Python pipeline resolves
 		// out of the same blob in _apply_transforms. The Worker re-runs the
 		// transform pipeline on the RAW payload text when it owns the
