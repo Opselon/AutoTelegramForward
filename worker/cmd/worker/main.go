@@ -37,6 +37,7 @@ import (
 	"atf/worker/internal/engine/delivery"
 	"atf/worker/internal/engine/scheduler"
 	"atf/worker/internal/health"
+	"atf/worker/internal/observability"
 	"atf/worker/internal/queue"
 	"atf/worker/internal/rulestore"
 	"atf/worker/internal/telegraph"
@@ -89,14 +90,28 @@ func probeHealth(addr string) int {
 	return 0
 }
 
-func run() error {
+func run() (runErr error) {
 	// Single, structured sink: JSON to stdout, the same format the Rust
 	// Logger and the Python Core emit, so one collector handles every
 	// service. Fields carry correlation/job/rule ids, never message content
 	// or credentials.
-	log := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
+	stdoutHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	Level: workerLogLevel(),
+})
+
+	centralLogs, logErr := observability.NewFromEnv()
+	log := slog.New(&fanoutHandler{stdout: stdoutHandler, central: centralLogs, module: "worker.main"})
+	if logErr != nil {
+		log.Warn("central Logger client could not be initialized; stdout logging remains active", "error", logErr)
+	} else if centralLogs != nil {
+		log.Info("central Logger client initialized", "address", os.Getenv("ATF_LOGGER_ADDR"))
+		defer func() {
+			if runErr != nil {
+				centralLogs.Emit("ERROR", "system", "worker.main", "worker startup or runtime failed", "error", runErr)
+			}
+			centralLogs.Close()
+		}()
+	}
 
 	cfg, err := config.FromEnv()
 	if err != nil {
@@ -154,7 +169,8 @@ func run() error {
 	}
 	defer schedStore.Close()
 
-	engine := delivery.New(store, rules, gateway, schedStore, &slogLogger{log}, &counters{}, workerID(), cfg.MediaDir, delivery.Options{
+	deliveryLog := &slogLogger{log: log, module: "worker.delivery"}
+	engine := delivery.New(store, rules, gateway, schedStore, deliveryLog, &counters{}, workerID(), cfg.MediaDir, delivery.Options{
 		NumWorkers:            cfg.NumWorkers,
 		BatchSize:             cfg.BatchSize,
 		LeaseDuration:         time.Duration(cfg.LeaseSeconds * float64(time.Second)),
@@ -163,7 +179,8 @@ func run() error {
 		RPCTimeout:            60 * time.Second,
 	})
 
-	schedEngine := scheduler.New(schedStore, gateway, &slogLogger{log}, &schedCounters{}, workerID(), "", scheduler.Defaults())
+	schedulerLog := &slogLogger{log: log, module: "worker.scheduler"}
+	schedEngine := scheduler.New(schedStore, gateway, schedulerLog, &schedCounters{}, workerID(), "", scheduler.Defaults())
 
 	tracker := health.NewTracker()
 	healthSrv := health.NewServer(cfg.ListenAddr, tracker, func(ctx context.Context) error {
@@ -417,12 +434,6 @@ func dbLabel(cfg *config.Config) string {
 }
 
 // --- adapters: keep the engine free of logging/metrics plumbing ------------ //
-
-type slogLogger struct{ log *slog.Logger }
-
-func (l *slogLogger) Info(msg string, args ...any)  { l.log.Info(msg, args...) }
-func (l *slogLogger) Warn(msg string, args ...any)  { l.log.Warn(msg, args...) }
-func (l *slogLogger) Error(msg string, args ...any) { l.log.Error(msg, args...) }
 
 type counters struct {
 	mu        sync.Mutex

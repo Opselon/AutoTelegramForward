@@ -1,0 +1,154 @@
+package main
+
+import (
+	"context"
+	"log/slog"
+	"os"
+	"strings"
+
+	"atf/worker/internal/observability"
+)
+
+// fanoutHandler keeps the JSON container stream and the shared Rust Log Monitor
+// fed from the same slog records. Central logging is asynchronous and applies
+// its own bounded severity policy; a Logger outage never blocks Worker work.
+type fanoutHandler struct {
+	stdout slog.Handler
+	central *observability.Client
+	module string
+	attrs []slog.Attr
+	groups []string
+}
+
+func (h *fanoutHandler) Enabled(ctx context.Context, level slog.Level) bool {
+	return h.stdout.Enabled(ctx, level) || h.central != nil
+}
+
+func (h *fanoutHandler) Handle(ctx context.Context, record slog.Record) error {
+	var err error
+	if h.stdout.Enabled(ctx, record.Level) {
+		err = h.stdout.Handle(ctx, record)
+	}
+	if h.central == nil {
+		return err
+	}
+	fields := make([]any, 0, (len(h.attrs)+record.NumAttrs())*2)
+	prefix := strings.Join(h.groups, ".")
+	for _, attr := range h.attrs {
+		appendSlogAttr(&fields, prefix, attr)
+	}
+	record.Attrs(func(attr slog.Attr) bool {
+		appendSlogAttr(&fields, prefix, attr)
+		return true
+	})
+	h.central.Emit(slogLevelName(record.Level), "", h.module, record.Message, fields...)
+	return err
+}
+
+func (h *fanoutHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	combined := make([]slog.Attr, 0, len(h.attrs)+len(attrs))
+	combined = append(combined, h.attrs...)
+	combined = append(combined, attrs...)
+	return &fanoutHandler{
+		stdout: h.stdout.WithAttrs(attrs), central: h.central,
+		module: h.module, attrs: combined, groups: append([]string(nil), h.groups...),
+	}
+}
+
+func (h *fanoutHandler) WithGroup(name string) slog.Handler {
+	if name == "" {
+		return h
+	}
+	groups := append([]string(nil), h.groups...)
+	groups = append(groups, name)
+	return &fanoutHandler{
+		stdout: h.stdout.WithGroup(name), central: h.central,
+		module: h.module, attrs: append([]slog.Attr(nil), h.attrs...), groups: groups,
+	}
+}
+
+func appendSlogAttr(dst *[]any, prefix string, attr slog.Attr) {
+	value := attr.Value.Resolve()
+	if value.Kind() == slog.KindGroup {
+		group := attr.Key
+		if group != "" && prefix != "" {
+			group = prefix + "." + group
+		} else if group == "" {
+			group = prefix
+		}
+		for _, nested := range value.Group() {
+			appendSlogAttr(dst, group, nested)
+		}
+		return
+	}
+	key := attr.Key
+	if prefix != "" {
+		if key != "" {
+			key = prefix + "." + key
+		} else {
+			key = prefix
+		}
+	}
+	if key != "" {
+		*dst = append(*dst, key, value.Any())
+	}
+}
+
+func slogLevelName(level slog.Level) string {
+	switch {
+	case level >= slog.LevelError+4:
+		return "CRITICAL"
+	case level >= slog.LevelError:
+		return "ERROR"
+	case level >= slog.LevelWarn:
+		return "WARN"
+	case level >= slog.LevelInfo:
+		return "INFO"
+	case level >= slog.LevelDebug:
+		return "DEBUG"
+	default:
+		return "TRACE"
+	}
+}
+
+// slogLogger adapts delivery/scheduler's narrow interface to the shared slog
+// pipeline while tagging each event with its owning Worker subsystem.
+type slogLogger struct {
+	log *slog.Logger
+	module string
+}
+
+func (l *slogLogger) Info(msg string, args ...any) {
+	l.log.Info(msg, append(args, "module", l.module)...)
+}
+func (l *slogLogger) Warn(msg string, args ...any) {
+	l.log.Warn(msg, append(args, "module", l.module)...)
+}
+func (l *slogLogger) Error(msg string, args ...any) {
+	l.log.Error(msg, append(args, "module", l.module)...)
+}
+
+func workerLogLevel() slog.Level {
+	level := strings.ToLower(strings.TrimSpace(firstNonEmptyEnv("LOG_LEVEL", "ATF_WORKER_LOG_LEVEL")))
+	switch level {
+	case "trace", "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	case "info", "":
+		return slog.LevelInfo
+	default:
+		return slog.LevelInfo
+	}
+}
+
+func firstNonEmptyEnv(keys ...string) string {
+	for _, key := range keys {
+		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+			return value
+		}
+	}
+	return ""
+}

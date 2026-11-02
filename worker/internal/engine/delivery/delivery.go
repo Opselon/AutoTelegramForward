@@ -163,13 +163,13 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 		return nil
 	}
 	if r == nil {
-		logger.Info("rule no longer exists — dropping job")
+		logger.Warn("rule no longer exists — dropping job", "decision", "DROP", "reason_code", "RULE_NOT_FOUND")
 		_ = e.store.MarkFailed(ctx, j.ID, "Rule no longer exists")
 		e.metrics.Outcome("failed")
 		return nil
 	}
 	if !r.IsActive {
-		logger.Info("rule is disabled — dropping job")
+		logger.Warn("rule is disabled — dropping job", "decision", "DROP", "reason_code", "RULE_DISABLED")
 		_ = e.store.MarkFailed(ctx, j.ID, "Rule disabled")
 		e.metrics.Outcome("failed")
 		return nil
@@ -177,7 +177,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	if r.AutoPauseReason != "" {
 		// The engine paused the task for a dead source/target; the message
 		// cannot be delivered until the owner fixes the chat.
-		logger.Info("rule is auto-paused — dropping job", "reason", r.AutoPauseReason)
+		logger.Warn("rule is auto-paused — dropping job", "decision", "DROP", "reason_code", "RULE_AUTO_PAUSED", "reason", r.AutoPauseReason)
 		_ = e.store.MarkFailed(ctx, j.ID, "Task paused: "+r.AutoPauseReason)
 		e.metrics.Outcome("failed")
 		return nil
@@ -195,7 +195,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 				backoff = rem
 			}
 		}
-		logger.Info("rule is paused — postponing job", "backoff", backoff.String())
+		logger.Warn("rule is paused — postponing job", "decision", "DEFER", "reason_code", "RULE_PAUSED", "backoff", backoff.String())
 		_ = e.store.Defer(ctx, j.ID, "Rule paused", backoff)
 		e.metrics.Outcome("retried")
 		return nil
@@ -211,7 +211,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 		text := j.Payload.Text()
 		res := e.filters.Evaluate(text, j.Payload.MediaType(), false, f)
 		if res.Action == filter.Drop {
-			logger.Info("job dropped by attached filter at delivery time", "reason", res.Reason)
+			logger.Warn("job dropped by attached filter at delivery time", "decision", "DROP", "reason_code", "FILTER_RULE_REJECTED", "filter_reason", res.Reason, "filter_id", f.ID)
 			_ = e.store.MarkFailed(ctx, j.ID, "Filter: "+res.Reason)
 			e.metrics.Outcome("failed")
 			return nil
@@ -236,7 +236,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	// unresolved fence claim behind — MarkFailed, exactly like the filter
 	// drop above it.
 	if r.BlockLinks && policy.HasLink(j.Payload.Text()) {
-		logger.Info("job dropped by task-level block_links at delivery time")
+		logger.Warn("job dropped by task-level block_links at delivery time", "decision", "DROP", "reason_code", "LINK_BLOCKED")
 		_ = e.store.MarkFailed(ctx, j.ID, "Filter: link_blocked")
 		e.metrics.Outcome("failed")
 		return nil
@@ -246,7 +246,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	// released and the job re-enters after the window), never an attempt —
 	// and never a fence claim.
 	if wait := e.targetRateWait(j.TargetChatID); wait > 0 {
-		logger.Info("target is throttled — deferring", "wait", wait.String())
+		logger.Warn("target is throttled — deferring", "decision", "DEFER", "reason_code", "TARGET_RATE_LIMIT", "wait", wait.String())
 		_ = e.store.Defer(ctx, j.ID, "Target rate-limited", wait)
 		e.metrics.Outcome("retried")
 		return nil
@@ -888,6 +888,7 @@ func (e *Engine) jobLogger(j *job.DeliveryJob) Logger {
 		"correlation_id", j.Payload.CorrelationID(),
 		"job_id", j.ID,
 		"rule_id", j.RuleID,
+		"owner_user_id", j.Payload.OwnerUserID(),
 		"target_chat_id", j.TargetChatID,
 		"source_chat_id", j.SourceChatID,
 		"source_message_id", j.SourceMessageID,
