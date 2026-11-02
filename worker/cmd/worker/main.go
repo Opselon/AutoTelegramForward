@@ -90,7 +90,7 @@ func probeHealth(addr string) int {
 	return 0
 }
 
-func run() error {
+func run() (runErr error) {
 	// Single, structured sink: JSON to stdout, the same format the Rust
 	// Logger and the Python Core emit, so one collector handles every
 	// service. Fields carry correlation/job/rule ids, never message content
@@ -104,7 +104,12 @@ func run() error {
 		log.Warn("central Logger client could not be initialized; stdout logging remains active", "error", logErr)
 	} else if centralLogs != nil {
 		log.Info("central Logger client initialized", "address", os.Getenv("ATF_LOGGER_ADDR"))
-		defer centralLogs.Close()
+		defer func() {
+			if runErr != nil {
+				centralLogs.Emit("ERROR", "system", "worker.main", "worker startup or runtime failed", "error", runErr)
+			}
+			centralLogs.Close()
+		}()
 	}
 
 	cfg, err := config.FromEnv()
@@ -437,15 +442,21 @@ type slogLogger struct {
 
 func (l *slogLogger) Info(msg string, args ...any) {
 	l.log.Info(msg, args...)
-	if l.central != nil { l.central.Emit("INFO", "", l.module, msg, args...) }
+	if l.central != nil {
+		l.central.Emit("INFO", "", l.module, msg, args...)
+	}
 }
 func (l *slogLogger) Warn(msg string, args ...any) {
 	l.log.Warn(msg, args...)
-	if l.central != nil { l.central.Emit("WARN", "", l.module, msg, args...) }
+	if l.central != nil {
+		l.central.Emit("WARN", "", l.module, msg, args...)
+	}
 }
 func (l *slogLogger) Error(msg string, args ...any) {
 	l.log.Error(msg, args...)
-	if l.central != nil { l.central.Emit("ERROR", "", l.module, msg, args...) }
+	if l.central != nil {
+		l.central.Emit("ERROR", "", l.module, msg, args...)
+	}
 }
 
 // workerLogLevel controls the local JSON stream. Central collection is
@@ -454,11 +465,16 @@ func workerLogLevel() slog.Level {
 	level := strings.ToLower(strings.TrimSpace(os.Getenv("LOG_LEVEL")))
 	if level == "" { level = strings.ToLower(strings.TrimSpace(os.Getenv("ATF_WORKER_LOG_LEVEL"))) }
 	switch level {
-	case "trace", "debug": return slog.LevelDebug
-	case "warn", "warning": return slog.LevelWarn
-	case "error": return slog.LevelError
-	case "info", "": return slog.LevelInfo
-	default: return slog.LevelInfo
+	case "trace", "debug":
+		return slog.LevelDebug
+	case "warn", "warning":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	case "info", "":
+		return slog.LevelInfo
+	default:
+		return slog.LevelInfo
 	}
 }
 
