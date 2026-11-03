@@ -319,13 +319,14 @@ func (c *Client) ForwardMessages(ctx context.Context, sessionID string, targetCh
 }
 
 // CopyMessage performs a clean copy of one message.
-func (c *Client) CopyMessage(ctx context.Context, sessionID string, targetChatID, fromChatID, messageID int64, caption string, threadID int64) (int64, *telegraph.DeliveryFailure) {
+func (c *Client) CopyMessage(ctx context.Context, sessionID string, targetChatID, fromChatID, messageID int64, caption string, threadID int64, dropSourceButtons bool) (int64, *telegraph.DeliveryFailure) {
 	callCtx, cancel := c.ctxWithMeta(ctx, "", "", nil)
 	defer cancel()
 	resp, err := c.gateway.CopyMessage(callCtx, &pb.CopyMessageRequest{
 		Meta: newJob("", "", nil).meta(), SessionId: sessionID,
 		TargetChatId: targetChatID, FromChatId: fromChatID,
 		MessageId: messageID, Caption: caption, MessageThreadId: threadID,
+		DropSourceButtons: dropSourceButtons,
 	})
 	if err != nil {
 		return 0, transportFailure(err)
@@ -337,13 +338,14 @@ func (c *Client) CopyMessage(ctx context.Context, sessionID string, targetChatID
 }
 
 // CopyMessages copies several messages one-for-one.
-func (c *Client) CopyMessages(ctx context.Context, sessionID string, targetChatID, fromChatID int64, messageIDs []int64, caption string, threadID int64) ([]int64, *telegraph.DeliveryFailure) {
+func (c *Client) CopyMessages(ctx context.Context, sessionID string, targetChatID, fromChatID int64, messageIDs []int64, caption string, threadID int64, dropSourceButtons bool) ([]int64, *telegraph.DeliveryFailure) {
 	callCtx, cancel := c.ctxWithMeta(ctx, "", "", nil)
 	defer cancel()
 	resp, err := c.gateway.CopyMessages(callCtx, &pb.CopyMessagesRequest{
 		Meta: newJob("", "", nil).meta(), SessionId: sessionID,
 		TargetChatId: targetChatID, FromChatId: fromChatID,
 		MessageIds: messageIDs, Caption: caption, MessageThreadId: threadID,
+		DropSourceButtons: dropSourceButtons,
 	})
 	if err != nil {
 		return nil, transportFailure(err)

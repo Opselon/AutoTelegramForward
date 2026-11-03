@@ -133,8 +133,17 @@ class PyrogramAdapter:
     async def copy_message(
         self, target_chat_id: Any, from_chat_id: Any, message_id: int,
         caption: Optional[str] = None, message_thread_id: int = 0,
+        drop_source_buttons: bool = False,
     ) -> Tuple[int, Optional[errors.TelegramOperationError]]:
-        """A clean copy of one message (no original author header)."""
+        """A clean copy of one message (no original author header).
+
+        ``drop_source_buttons`` removes the source message's inline
+        keyboard from the copy. Pyrogram re-sends ``self.reply_markup`` by
+        default, so without this the link policy would strip link text
+        while every URL button under the message still reached the target
+        (finding F-16). An explicit ``None`` is what suppresses it — the
+        sentinel pyrogram's ``message.copy`` checks for.
+        """
         kwargs: dict = {}
         if message_thread_id and message_thread_id > 0:
             kwargs["message_thread_id"] = int(message_thread_id)
@@ -142,6 +151,10 @@ class PyrogramAdapter:
         # whatever the source carries" — the two are different instructions.
         if caption is not None:
             kwargs["caption"] = caption
+        if drop_source_buttons:
+            # pyrogram's message.copy keeps the source markup unless the
+            # caller passes an explicit (possibly None) reply_markup.
+            kwargs["reply_markup"] = None
         try:
             res = await self._client.copy_message(
                 chat_id=_chat(target_chat_id),
@@ -156,11 +169,13 @@ class PyrogramAdapter:
     async def copy_messages(
         self, target_chat_id: Any, from_chat_id: Any, message_ids: List[int],
         caption: Optional[str] = None, message_thread_id: int = 0,
+        drop_source_buttons: bool = False,
     ) -> Tuple[List[int], Optional[errors.TelegramOperationError]]:
         ids: List[int] = []
         for message_id in message_ids:
             sent, ferr = await self.copy_message(
                 target_chat_id, from_chat_id, message_id, caption, message_thread_id,
+                drop_source_buttons=drop_source_buttons,
             )
             if ferr is not None:
                 return ids, ferr

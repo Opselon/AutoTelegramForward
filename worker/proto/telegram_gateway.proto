@@ -276,6 +276,10 @@ message CopyMessageRequest {
   string caption = 6;
   // forum topic thread inside the target supergroup (0 = General / none)
   int64 message_thread_id = 7;
+  // Stage 4.4 (F-16): the link policy decided the source message's inline
+  // URL buttons must not reach this target. Pyrogram's copy_message re-sends
+  // the source keyboard by default, so the runtime has to be told to drop it.
+  bool drop_source_buttons = 8;
 }
 
 message CopyMessagesRequest {
@@ -287,6 +291,8 @@ message CopyMessagesRequest {
   // single caption shared by the whole group (mirrors copy_media_group)
   string caption = 6;
   int64 message_thread_id = 7;
+  // Stage 4.4 (F-16): see CopyMessageRequest — drop the source keyboard.
+  bool drop_source_buttons = 8;
 }
 
 message CopyMessagesResponse {
