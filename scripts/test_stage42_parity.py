@@ -26,10 +26,12 @@ Exit code 0 = every case agrees. Anything else prints the divergences.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -308,6 +310,12 @@ def py_album_window(case: Dict[str, Any]) -> str:
     return f"limit={'true' if complete_at_limit else 'false'} deadline_window={window:.3f} items={len(group.messages)}"
 
 
+def _fingerprint_for(payload: "MessagePayload") -> str:
+    """The real DurableMessagePipeline content fingerprint (pipeline.py:274)."""
+    from core.application.pipeline import _content_fingerprint
+
+    return _content_fingerprint(payload)
+
 def py_dedup(case: Dict[str, Any]) -> str:
     """Stage 4.5 (W3) — the duplicate-filters engine.
 
@@ -340,6 +348,10 @@ def py_dedup(case: Dict[str, Any]) -> str:
             media_type=MediaType[case.get("media_type", "TEXT").upper()],
         )
         payload.media_group_id = case.get("media_group_id") or None
+        # _content_fingerprint is a module-level function in the pipeline
+        # module (pipeline.py:274), not a method on the pipeline class.
+        from core.application.pipeline import _content_fingerprint
+
         return _content_fingerprint(payload)
 
     if op == "claim_release":
@@ -363,7 +375,7 @@ def py_dedup(case: Dict[str, Any]) -> str:
                     message_id=1, chat_id="-1", text=case.get("text", ""),
                     media_type=MediaType.TEXT,
                 )
-                content_hash = _content_fingerprint(payload)
+                content_hash = _fingerprint_for(payload)
 
                 async def run() -> str:
                     first = await repo.claim_content_hash(rule_id, content_hash)
@@ -408,29 +420,6 @@ ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "header_template": py_header_template,
     "filter_engine": py_filter_engine,
     "ai_gate": py_ai_gate,
-    "keyword": py_keyword,
-    "album_window": py_album_window,
-
-
-    "dedup": py_dedup,}
-
-# ---------------------------------------------------------------------------
-# The case list — every entry executed by BOTH engines.
-# ---------------------------------------------------------------------------
-
-
-ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
-    "cleaner": py_cleaner,
-    "emoji": py_emoji,
-    "link_policy": py_link_policy,
-    "remove_urls": py_remove_urls,
-    "replace_links": py_replace_links,
-    "replacements": py_replacements,
-    "advanced": py_advanced,
-    "header_footer": py_header_footer,
-    "header_template": py_header_template,
-    "filter_engine": py_filter_engine,
-    "ai_gate": py_ai_gate,
     # Stage 4.5 W4: the keyword-reply trigger and the album window.
     "keyword": py_keyword,
     "album_window": py_album_window,
@@ -440,7 +429,15 @@ ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "matches_source": py_matches_source,
     "all_targets": py_all_targets,
     "check_loop": py_check_loop,
+    # Stage 4.5 W3: the dedup plane (content fingerprint + claim/release).
+    "dedup": py_dedup,
 }
+
+
+# ---------------------------------------------------------------------------
+# The case list — every entry executed by BOTH engines.
+# ---------------------------------------------------------------------------
+
 
 
 # ---------------------------------------------------------------------------
