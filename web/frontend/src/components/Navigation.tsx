@@ -1,12 +1,12 @@
 /**
- * Dashboard navigation: a persistent sidebar on wide screens, a drawer below
- * 1024 px (the `--bp-md` token).
+ * Dashboard navigation: a persistent sidebar on wide screens, a drawer plus a
+ * bottom tab bar below 1024 px (the `--bp-md` token).
  *
- * One component renders both, because the alternative — a desktop rail and a
- * separate mobile tab strip — drifted: labels existed twice, the active state
- * was computed twice, and the strip scrolled horizontally off the page at
- * 360 px while the rail did not. Here the DOM is one list; CSS decides whether
- * it is docked or off-canvas.
+ * One component renders the rail and the drawer, because the alternative — a
+ * desktop rail and a separate mobile tab strip — drifted: labels existed twice,
+ * the active state was computed twice, and the strip scrolled horizontally off
+ * the page at 360 px while the rail did not. The drawer list and the rail are
+ * the same DOM; CSS decides whether it is docked or off-canvas.
  *
  * The drawer is a real modal surface, not a CSS trick:
  *
@@ -17,9 +17,23 @@
  *   the page behind the scrim;
  * - the page behind it does not scroll (`body.style.overflow`), so a touch drag
  *   on the scrim cannot move the dashboard under it.
+ *
+ * The shell upgrades:
+ *
+ * - **Grouped navigation** — destinations arrive tagged with a group; the rail
+ *   renders a heading per group so fifteen tabs read as four areas instead of
+ *   one long undifferentiated list. The drawer keeps the same grouping.
+ * - **Collapsible rail** — on wide screens the sidebar can collapse to an icon
+ *   rail; labels stay in the accessibility tree (`.visually-hidden`, not
+ *   `display: none`, so audits still read thirteen named destinations) and the
+ *   choice persists across sessions via the shell.
+ * - **Bottom tab bar** — mobile gets its own primary surface: the four highest
+ * -traffic destinations plus a "More" button that opens the full drawer. It is
+ *   rendered from the same `items` data, so a tab cannot exist in one surface
+ *   and be missing from the other.
  */
 import { useCallback, useEffect, useRef } from 'react'
-import { Menu, X } from 'lucide-react'
+import { Menu, MoreHorizontal, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { makeT, type UiLang } from '../locales/engine'
 
@@ -40,6 +54,8 @@ export type TabId =
   | 'admin'
   | 'settings'
 
+export type NavGroupId = 'workspace' | 'automation' | 'operations' | 'administration'
+
 export interface NavItem {
   id: TabId
   /** Already resolved through the catalog by the shell. */
@@ -47,6 +63,14 @@ export interface NavItem {
   icon: ReactNode
   /** Rendered as a count pill; the jobs tab uses it. */
   badge?: number
+  /** Area this destination belongs to; ungrouped items render without a heading. */
+  group?: NavGroupId
+}
+
+export interface NavGroup {
+  id: NavGroupId
+  /** Already resolved through the catalog by the shell. */
+  label: string
 }
 
 const FOCUSABLE =
@@ -80,19 +104,81 @@ export function NavTrigger({
   )
 }
 
+/**
+ * The bottom tab bar for narrow viewports. `primary` holds at most four
+ * destinations — enough for a thumb, few enough to stay legible at 360 px;
+ * everything else lives one tap away in the drawer ("More").
+ */
+export function MobileNav({
+  primary,
+  active,
+  onSelect,
+  onOpenDrawer,
+  lang,
+}: {
+  primary: NavItem[]
+  active: TabId
+  onSelect: (id: TabId) => void
+  onOpenDrawer: () => void
+  lang: UiLang
+}) {
+  const t = makeT(lang)
+  return (
+    <nav className="mobile-nav" aria-label={t('ui_nav_secondary')}>
+      {primary.slice(0, 4).map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          className={`mobile-nav__item${active === item.id ? ' is-active' : ''}`}
+          aria-current={active === item.id ? 'page' : undefined}
+          onClick={() => onSelect(item.id)}
+        >
+          <span className="mobile-nav__icon" aria-hidden="true">
+            {item.icon}
+            {item.badge && item.badge > 0 ? (
+              <span className="mobile-nav__badge">{item.badge > 99 ? '99+' : item.badge}</span>
+            ) : null}
+          </span>
+          <span className="mobile-nav__label">{item.label}</span>
+        </button>
+      ))}
+      <button
+        type="button"
+        className="mobile-nav__item"
+        onClick={onOpenDrawer}
+        aria-haspopup="dialog"
+        aria-controls="app-navigation"
+      >
+        <span className="mobile-nav__icon" aria-hidden="true">
+          <MoreHorizontal size={20} />
+        </span>
+        <span className="mobile-nav__label">{t('ui_more_navigation')}</span>
+      </button>
+    </nav>
+  )
+}
+
 export function Navigation({
   items,
+  groups,
   active,
   onSelect,
   open,
   onOpenChange,
+  collapsed = false,
+  onCollapsedChange,
   lang,
 }: {
   items: NavItem[]
+  /** Group headings, in display order; items without a group render first. */
+  groups?: NavGroup[]
   active: TabId
   onSelect: (id: TabId) => void
   open: boolean
   onOpenChange: (open: boolean) => void
+  /** Icon-only rail on wide screens; harmless (ignored by CSS) in the drawer. */
+  collapsed?: boolean
+  onCollapsedChange?: (collapsed: boolean) => void
   lang: UiLang
 }) {
   const t = makeT(lang)
@@ -193,6 +279,49 @@ export function Navigation({
     return () => mql.removeEventListener('change', onChange)
   }, [onOpenChange])
 
+  // Walk the items once, emitting a heading before the first item of every
+  // group. Ungrouped items keep the flat list of the original shell.
+  const rows: ReactNode[] = []
+  const emitted = new Set<NavGroupId>()
+  for (const item of items) {
+    const group = groups?.find((g) => g.id === item.group)
+    if (group && !emitted.has(group.id)) {
+      emitted.add(group.id)
+      rows.push(
+        <p
+          key={`group-${group.id}`}
+          className="nav-group-label"
+          aria-hidden="true"
+        >
+          {group.label}
+        </p>,
+      )
+    }
+    rows.push(
+      <button
+        key={item.id}
+        type="button"
+        className={`nav-item${active === item.id ? ' is-active' : ''}`}
+        aria-current={active === item.id ? 'page' : undefined}
+        onClick={() => {
+          onSelect(item.id)
+          close()
+        }}
+        title={collapsed ? item.label : undefined}
+      >
+        <span className="nav-item__icon" aria-hidden="true">
+          {item.icon}
+        </span>
+        <span className={`nav-item__label${collapsed ? ' visually-hidden' : ''}`}>{item.label}</span>
+        {item.badge && item.badge > 0 ? (
+          <span className={`nav-item__badge${collapsed ? ' nav-item__badge--dot' : ''}`}>
+            {collapsed ? '' : item.badge}
+          </span>
+        ) : null}
+      </button>,
+    )
+  }
+
   return (
     <>
       {open ? (
@@ -209,30 +338,26 @@ export function Navigation({
       <aside
         ref={asideRef}
         id="app-navigation"
-        className={`app-sidebar${open ? ' is-open' : ''}`}
+        className={`app-sidebar${open ? ' is-open' : ''}${collapsed ? ' is-collapsed' : ''}`}
         aria-label={t('ui_nav_primary')}
       >
         <nav className="app-sidebar__nav">
-          {items.map((item) => (
+          {rows}
+          {onCollapsedChange ? (
             <button
-              key={item.id}
               type="button"
-              className={`nav-item${active === item.id ? ' is-active' : ''}`}
-              aria-current={active === item.id ? 'page' : undefined}
-              onClick={() => {
-                onSelect(item.id)
-                close()
-              }}
+              className="btn btn--ghost btn--icon sidebar-collapse"
+              aria-label={collapsed ? t('ui_expand_sidebar') : t('ui_collapse_sidebar')}
+              aria-pressed={collapsed}
+              onClick={() => onCollapsedChange(!collapsed)}
             >
-              <span className="nav-item__icon" aria-hidden="true">
-                {item.icon}
-              </span>
-              <span className="nav-item__label">{item.label}</span>
-              {item.badge && item.badge > 0 ? (
-                <span className="nav-item__badge">{item.badge}</span>
-              ) : null}
+              {collapsed ? (
+                <PanelLeftOpen size={18} aria-hidden="true" />
+              ) : (
+                <PanelLeftClose size={18} aria-hidden="true" />
+              )}
             </button>
-          ))}
+          ) : null}
         </nav>
       </aside>
     </>

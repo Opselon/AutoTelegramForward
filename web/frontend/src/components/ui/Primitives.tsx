@@ -17,7 +17,7 @@
  *   accessible name.
  */
 import type { CSSProperties, MouseEvent, ReactNode } from 'react'
-import { AlertTriangle, Inbox, Loader2 } from 'lucide-react'
+import { AlertTriangle, Inbox, Loader2, Search, X } from 'lucide-react'
 import { makeT, type UiLang } from '../../locales/engine'
 
 /* ----------------------------------------------------------------- Card --- */
@@ -253,8 +253,187 @@ export function ErrorState({
   )
 }
 
-/* ---------------------------------------------------------------- Toast --- */
+/* ---------------------------------------------------- StatusIndicator --- */
 
+export type StatusTone = 'success' | 'warning' | 'danger' | 'info' | 'neutral' | 'unknown'
+
+/**
+ * Runtime-state dot with an operator label. The six tones map to the runtime
+ * visibility contract (running / degraded / unavailable / feature-disabled /
+ * not-configured / unknown): the caller owns the words, this owns only the
+ * shape, so the same status reads identically on every screen. `unknown` gets
+ * its own tone — an unavailable health endpoint must never paint as healthy.
+ */
+export function StatusIndicator({
+  tone = 'neutral',
+  pulse = false,
+  label,
+  title,
+}: {
+  tone?: StatusTone
+  /** Slow breathing animation for live states — suppressed by the reduced-motion rule. */
+  pulse?: boolean
+  label: ReactNode
+  title?: string
+}) {
+  return (
+    <span className={`status-indicator status-indicator--${tone}`} title={title}>
+      <span className={`status-indicator__dot${pulse ? ' status-indicator__dot--pulse' : ''}`} aria-hidden="true" />
+      <span className="status-indicator__label">{label}</span>
+    </span>
+  )
+}
+
+/* ---------------------------------------------------- SegmentedControl --- */
+
+export interface SegmentedOption<V extends string> {
+  value: V
+  label: ReactNode
+}
+
+/**
+ * A compact exclusive choice between 2–5 flat options (table/list, status
+ * filters). Buttons carry `aria-pressed` — a radiogroup without roving focus
+ * would be a worse keyboard contract than an honest toggle set.
+ */
+export function SegmentedControl<V extends string>({
+  options,
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  options: SegmentedOption<V>[]
+  value: V
+  onChange: (value: V) => void
+  ariaLabel: string
+}) {
+  return (
+    <div className="segmented" role="group" aria-label={ariaLabel}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          className={`segmented__option${option.value === value ? ' is-selected' : ''}`}
+          aria-pressed={option.value === value}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+/* ---------------------------------------------------------- SearchInput --- */
+
+/**
+ * Debounce is the caller's policy; this owns the shape — a real search field
+ * with a clear button that appears only when there is something to clear.
+ */
+export function SearchInput({
+  value,
+  onChange,
+  placeholder,
+  ariaLabel,
+  clearLabel,
+  id,
+}: {
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  ariaLabel: string
+  /** The clear button's accessible name — a localized "clear" from the caller. */
+  clearLabel?: string
+  id?: string
+}) {
+  return (
+    <div className="search-input">
+      <Search size={14} className="search-input__icon" aria-hidden="true" />
+      <input
+        id={id}
+        type="search"
+        className="input-field search-input__field"
+        value={value}
+        placeholder={placeholder}
+        aria-label={ariaLabel}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {value ? (
+        <button
+          type="button"
+          className="btn btn--ghost btn--icon btn--sm search-input__clear"
+          onClick={() => onChange('')}
+        >
+          <X size={14} aria-hidden="true" />
+          <span className="visually-hidden">{clearLabel ?? ariaLabel}</span>
+        </button>
+      ) : null}
+    </div>
+  )
+}
+
+/* ---------------------------------------------------- ProgressIndicator --- */
+
+/**
+ * Determinate progress (0–100) with an honest indeterminate mode: no value
+ * means "working, size unknown", never a fake 99%.
+ */
+export function ProgressIndicator({
+  value,
+  label,
+  title,
+}: {
+  /** 0–100, or undefined for indeterminate. */
+  value?: number
+  label: ReactNode
+  title?: string
+}) {
+  const determinate = typeof value === 'number' && Number.isFinite(value)
+  const clamped = determinate ? Math.min(100, Math.max(0, value as number)) : undefined
+  return (
+    <div
+      className="progress"
+      role="progressbar"
+      aria-valuemin={determinate ? 0 : undefined}
+      aria-valuemax={determinate ? 100 : undefined}
+      aria-valuenow={determinate ? clamped : undefined}
+      title={title}
+    >
+      <span className="progress__label">{label}</span>
+      <span className={`progress__track${determinate ? '' : ' progress__track--indeterminate'}`}>
+        {determinate ? <span className="progress__fill" style={{ inlineSize: `${clamped}%` }} /> : null}
+      </span>
+    </div>
+  )
+}
+
+/* ----------------------------------------------------------- PageHeader --- */
+
+/**
+ * One page heading pattern: title, optional description, action slot. Panels
+ * stop hand-rolling `.hero-container` variants that each drift their own way.
+ */
+export function PageHeader({
+  title,
+  description,
+  actions,
+}: {
+  title: ReactNode
+  description?: ReactNode
+  actions?: ReactNode
+}) {
+  return (
+    <header className="page-header">
+      <div className="page-header__text">
+        <h2 className="page-header__title">{title}</h2>
+        {description ? <p className="page-header__description">{description}</p> : null}
+      </div>
+      {actions ? <div className="page-header__actions">{actions}</div> : null}
+    </header>
+  )
+}
+
+/* ---------------------------------------------------------------- Toast --- */
 export type ToastTone = 'success' | 'danger'
 
 /**

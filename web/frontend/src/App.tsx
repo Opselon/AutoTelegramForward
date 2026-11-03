@@ -29,7 +29,7 @@ import type { ForwardRule, Session, AIConfig, AIProviderInfo, SaveAIConfigReques
 import { getToken, applySession } from './session'
 import { applyTheme, preferredTheme, toggleTheme, type Theme } from './theme'
 import { PanelBoundary } from './components/PanelBoundary'
-import { Navigation, NavTrigger, type NavItem, type TabId } from './components/Navigation'
+import { Navigation, NavTrigger, MobileNav, type NavGroup, type NavItem, type TabId } from './components/Navigation'
 import { ProviderKeyCheck, UserBar } from './components/ShellWidgets'
 import { Toast } from './components/ui/Primitives'
 import { ConfirmDialog } from './components/ConfirmDialog'
@@ -1318,31 +1318,65 @@ export function App({ me }: { me?: MeInfo } = {}) {
     return [...new Set(loadFailures.map((f) => labels[f] || f))]
   }, [loadFailures, t])
 
-  // The navigation is data, not markup: one list feeds the docked rail and the
-  // drawer, so a tab cannot exist in one and be missing from the other.
+  // The navigation is data, not markup: one list feeds the docked rail, the
+  // drawer and the mobile bottom bar, so a tab cannot exist in one surface and
+  // be missing from the others. Each destination is tagged with the area it
+  // belongs to; the rail renders a heading per area.
   const [navOpen, setNavOpen] = useState(false)
+  // Collapsed icon rail — a wide-screen preference, persisted across sessions.
+  const [navCollapsed, setNavCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('atf_nav_collapsed') === '1'
+    } catch {
+      return false
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem('atf_nav_collapsed', navCollapsed ? '1' : '0')
+    } catch {}
+  }, [navCollapsed])
   const navItems: NavItem[] = useMemo(() => {
     const items: NavItem[] = [
-      { id: 'system', label: t('ui_system'), icon: <Activity size={18} /> },
-      { id: 'rules', label: t('ui_rules_routes'), icon: <Layers size={18} /> },
-      { id: 'simulator', label: t('ui_smart_simulator'), icon: <PlayCircle size={18} /> },
-      { id: 'ai', label: t('ui_ai_intelligence'), icon: <Sparkles size={18} /> },
-      { id: 'pv', label: t('ui_pv_assistant'), icon: <HeartPulse size={18} /> },
-      { id: 'autoreply', label: t('ui_autoreply'), icon: <Bot size={18} /> },
-      { id: 'replace', label: t('ui_replace'), icon: <Replace size={18} /> },
-      { id: 'filters', label: t('ui_advanced_filters'), icon: <Filter size={18} /> },
-      { id: 'sessions', label: t('ui_telegram_sessions'), icon: <Users size={18} /> },
-      { id: 'jobs', label: t('ui_my_jobs'), icon: <ListTodo size={18} />, badge: jobsPending },
-      { id: 'queue', label: t('ui_queue_dlq'), icon: <Activity size={18} /> },
-      { id: 'devops', label: t('ui_devops_logs'), icon: <Server size={18} /> },
-      { id: 'audit', label: t('ui_audit_events'), icon: <Shield size={18} /> },
-      { id: 'settings', label: t('ui_client_settings'), icon: <Sliders size={18} /> },
+      { id: 'system', label: t('ui_system'), icon: <Activity size={18} />, group: 'workspace' },
+      { id: 'rules', label: t('ui_rules_routes'), icon: <Layers size={18} />, group: 'workspace' },
+      { id: 'simulator', label: t('ui_smart_simulator'), icon: <PlayCircle size={18} />, group: 'automation' },
+      { id: 'ai', label: t('ui_ai_intelligence'), icon: <Sparkles size={18} />, group: 'automation' },
+      { id: 'pv', label: t('ui_pv_assistant'), icon: <HeartPulse size={18} />, group: 'automation' },
+      { id: 'autoreply', label: t('ui_autoreply'), icon: <Bot size={18} />, group: 'automation' },
+      { id: 'replace', label: t('ui_replace'), icon: <Replace size={18} />, group: 'automation' },
+      { id: 'filters', label: t('ui_advanced_filters'), icon: <Filter size={18} />, group: 'automation' },
+      { id: 'sessions', label: t('ui_telegram_sessions'), icon: <Users size={18} />, group: 'operations' },
+      { id: 'jobs', label: t('ui_my_jobs'), icon: <ListTodo size={18} />, badge: jobsPending, group: 'workspace' },
+      { id: 'queue', label: t('ui_queue_dlq'), icon: <Activity size={18} />, group: 'operations' },
+      { id: 'devops', label: t('ui_devops_logs'), icon: <Server size={18} />, group: 'operations' },
+      { id: 'audit', label: t('ui_audit_events'), icon: <Shield size={18} />, group: 'operations' },
+      { id: 'settings', label: t('ui_client_settings'), icon: <Sliders size={18} />, group: 'administration' },
     ]
     if (currentUser?.is_admin) {
-      items.push({ id: 'admin', label: t('ui_master_admin'), icon: <ShieldAlert size={18} /> })
+      items.push({ id: 'admin', label: t('ui_master_admin'), icon: <ShieldAlert size={18} />, group: 'administration' })
     }
     return items
   }, [lang, currentUser?.is_admin, jobsPending])
+
+  const navGroups: NavGroup[] = useMemo(
+    () => [
+      { id: 'workspace', label: t('ui_nav_group_workspace') },
+      { id: 'automation', label: t('ui_nav_group_automation') },
+      { id: 'operations', label: t('ui_nav_group_operations') },
+      { id: 'administration', label: t('ui_nav_group_administration') },
+    ],
+    [lang],
+  )
+
+  // Mobile primary surface: the four highest-traffic destinations; everything
+  // else is one "More" tap away in the drawer.
+  const mobilePrimary: NavItem[] = useMemo(() => {
+    const ids: TabId[] = ['rules', 'jobs', 'queue', 'system']
+    return ids
+      .map((id) => navItems.find((item) => item.id === id))
+      .filter((item): item is NavItem => item !== undefined)
+  }, [navItems])
 
   return (
     <div dir={isRtl ? 'rtl' : 'ltr'} className="app-shell">
@@ -1495,10 +1529,13 @@ export function App({ me }: { me?: MeInfo } = {}) {
       <div className="app-body">
         <Navigation
           items={navItems}
+          groups={navGroups}
           active={activeTab}
           onSelect={setActiveTab}
           open={navOpen}
           onOpenChange={setNavOpen}
+          collapsed={navCollapsed}
+          onCollapsedChange={setNavCollapsed}
           lang={lang}
         />
         <main id="main-content" className="app-main" tabIndex={-1}>
@@ -1636,6 +1673,16 @@ export function App({ me }: { me?: MeInfo } = {}) {
       )}
 
         </main>
+
+        {/* Mobile bottom tab bar: primary destinations + a "More" that opens
+            the full drawer. CSS shows it only below the docking breakpoint. */}
+        <MobileNav
+          primary={mobilePrimary}
+          active={activeTab}
+          onSelect={setActiveTab}
+          onOpenDrawer={() => setNavOpen(true)}
+          lang={lang}
+        />
       </div>
 
       {/* 1:1 PARITY TASK OVERVIEW & ADVANCED SETTINGS MODAL */}
