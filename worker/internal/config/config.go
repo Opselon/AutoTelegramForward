@@ -197,3 +197,13 @@ func (u urlValues) String() string {
 	}
 	return sb.String()
 }
+
+// ClaimsEnabled reports whether this worker may claim delivery jobs.
+//
+// The strangler-fig switch: when ATF_WORKER_ENABLED is unset the Python Core's
+// own queue loop owns delivery execution (durable_queue.py:221 stands down only
+// when the flag IS set), so a worker that claimed anyway would run both engines
+// on one queue at once — the double-execution hazard the switch exists to
+// prevent. Centralized here so the claim loop, the health surface and any test
+// all read one answer.
+func ClaimsEnabled(cfg *Config) bool { return cfg.WorkerEnabled }
