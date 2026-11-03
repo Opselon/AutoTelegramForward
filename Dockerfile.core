@@ -12,6 +12,11 @@ RUN --mount=type=cache,id=atf-core-pip,target=/root/.cache/pip pip install -r re
 
 COPY proto/ ./proto/
 COPY core/ ./core/
+# The Telegram transport gateway the Go Worker consumes: telegram_runtime is
+# served IN-PROCESS by core.main (see serve_telegram_runtime), so the package
+# must ship in this image. Without it the gateway reports "unavailable" and
+# the worker has no transport to send through.
+COPY telegram_runtime/ ./telegram_runtime/
 # The product version this build reports. The Go API image ships the same file
 # at /etc/atf/VERSION and points ATF_VERSION_FILE at it; the core resolves it
 # from the same locations, so the file has to be there for /api/stats to agree
