@@ -34,6 +34,7 @@ import (
 
 	"atf/worker/internal/config"
 	"atf/worker/internal/domain/job"
+	"atf/worker/internal/engine/counters"
 	"atf/worker/internal/engine/delivery"
 	"atf/worker/internal/engine/scheduler"
 	"atf/worker/internal/health"
@@ -96,8 +97,8 @@ func run() (runErr error) {
 	// service. Fields carry correlation/job/rule ids, never message content
 	// or credentials.
 	stdoutHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-	Level: workerLogLevel(),
-})
+		Level: workerLogLevel(),
+	})
 
 	centralLogs, logErr := observability.NewFromEnv()
 	log := slog.New(&fanoutHandler{stdout: stdoutHandler, central: centralLogs, module: "worker.main"})
@@ -169,8 +170,21 @@ func run() (runErr error) {
 	}
 	defer schedStore.Close()
 
+	// Stage 4.5 (W2): the forward-every-N cadence store. Same backend
+	// selection as every other durable store — the queue's database owns
+	// rule_counters on both backends, so the worker reads and advances the
+	// SAME rows the Python Core advances. The store is optional only in the
+	// engine (a missing port forwards everything); here a startup failure
+	// is a startup failure, because a worker that cannot persist a cadence
+	// would silently drift from the Python sequence it shares.
+	cadenceStore, err := openCountersStore(context.Background(), cfg)
+	if err != nil {
+		return err
+	}
+	defer cadenceStore.Close()
+
 	deliveryLog := &slogLogger{log: log, module: "worker.delivery"}
-	engine := delivery.New(store, rules, gateway, schedStore, deliveryLog, &counters{}, workerID(), cfg.MediaDir, delivery.Options{
+	engine := delivery.New(store, rules, gateway, schedStore, deliveryLog, &metricsCounters{}, workerID(), cfg.MediaDir, delivery.Options{
 		NumWorkers:            cfg.NumWorkers,
 		BatchSize:             cfg.BatchSize,
 		LeaseDuration:         time.Duration(cfg.LeaseSeconds * float64(time.Second)),
@@ -178,6 +192,7 @@ func run() (runErr error) {
 		MaxPerMinutePerTarget: cfg.MaxPerMinutePerTarget,
 		RPCTimeout:            60 * time.Second,
 	})
+	engine.SetCounters(cadenceStore)
 
 	// Stage 4.2: the transform-stage strangler switch. The Worker only
 	// re-runs the text-transform pipeline when the deployment moved that
@@ -470,7 +485,7 @@ func dbLabel(cfg *config.Config) string {
 
 // --- adapters: keep the engine free of logging/metrics plumbing ------------ //
 
-type counters struct {
+type metricsCounters struct {
 	mu        sync.Mutex
 	sent      int64
 	retried   int64
@@ -482,7 +497,7 @@ type counters struct {
 	waitCount int64
 }
 
-func (c *counters) Outcome(kind string) {
+func (c *metricsCounters) Outcome(kind string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	switch kind {
@@ -497,14 +512,14 @@ func (c *counters) Outcome(kind string) {
 	}
 }
 
-func (c *counters) ObserveRPC(operation string, seconds float64) {
+func (c *metricsCounters) ObserveRPC(operation string, seconds float64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.rpcCount++
 	c.rpcSum += seconds
 }
 
-func (c *counters) ObserveWait(seconds float64) {
+func (c *metricsCounters) ObserveWait(seconds float64) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if seconds > 0 && !math.IsNaN(seconds) {
@@ -537,6 +552,36 @@ func openSchedulerStore(ctx context.Context, cfg *config.Config) (scheduler.Stor
 	if err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("init sqlite scheduler store: %w", err)
+	}
+	return s, nil
+}
+
+// openCountersStore opens the forward-every-N cadence store (rule_counters)
+// on the backend the queue uses — the same table the Python Core advances,
+// so the two engines share one sequence per task. The table comes from the
+// Core's bootstrap (SQLite migration v27 / initialize_postgres_schema);
+// the worker only verifies it exists, never creates production schema.
+func openCountersStore(ctx context.Context, cfg *config.Config) (counters.Store, error) {
+	if cfg.DatabaseURL != "" {
+		conn, err := sql.Open("pgx", cfg.DatabaseURL)
+		if err != nil {
+			return nil, fmt.Errorf("open postgres counters store: %w", redactDSN(err))
+		}
+		s, err := counters.NewPostgres(conn)
+		if err != nil {
+			conn.Close()
+			return nil, fmt.Errorf("init postgres counters store: %w", redactDSN(err))
+		}
+		return s, nil
+	}
+	conn, err := sql.Open("sqlite3", cfg.DSN())
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite counters store: %w", err)
+	}
+	s, err := counters.NewSQLite(conn)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("init sqlite counters store: %w", err)
 	}
 	return s, nil
 }

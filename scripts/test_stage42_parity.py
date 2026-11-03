@@ -241,6 +241,29 @@ def py_album_window(case: Dict[str, Any]) -> str:
     return f"limit={'true' if complete_at_limit else 'false'} deadline_window={window:.3f} items={len(group.messages)}"
 
 
+def py_fen(case: Dict[str, Any]) -> str:
+    """Forward-Every-N cadence arithmetic (core/domain/forward_interval.py).
+
+    The clamp is the projection every write source funnels through, and the
+    slot arithmetic decides delivery; pinning both against the Go port keeps
+    the two engines from drifting on which messages a task forwards.
+    """
+    from core.domain.forward_interval import (
+        clamp_forward_every_n,
+        owns_slot,
+        slots_until_next,
+    )
+
+    every_n = clamp_forward_every_n(case.get("fen_value"))
+    owns = owns_slot(case.get("fen_sequence", 0), every_n)
+    # Go's formatter spells booleans in lower case; match it so the
+    # comparison is on the decision, not the spelling.
+    if case.get("fen_slots"):
+        return (f"clamp={every_n} owns={str(owns).lower()} "
+                f"slots={slots_until_next(case.get('fen_sequence', 0), every_n)}")
+    return f"clamp={every_n} owns={str(owns).lower()}"
+
+
 ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "cleaner": py_cleaner,
     "emoji": py_emoji,
@@ -255,6 +278,7 @@ ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "ai_gate": py_ai_gate,
     "keyword": py_keyword,
     "album_window": py_album_window,
+    "fen": py_fen,
 }
 
 # ---------------------------------------------------------------------------
@@ -543,6 +567,68 @@ def cases() -> List[Dict[str, Any]]:
         {"engine": "album_window", "window": 0.0, "items": 3},
         # The Python unit test's own TTL.
         {"engine": "album_window", "window": 0.05, "items": 2},
+
+        # --- Forward-Every-N (core/domain/forward_interval.py): the clamp
+        # --- must land every write-source shape on the same interval both
+        # --- engines do, and the slot arithmetic must agree on which
+        # --- messages a task forwards.
+        # The inert default and the plain configured interval.
+        {"engine": "fen", "fen_value": None, "fen_sequence": 3},
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 6},
+        # Garbage: None, empty string, non-numeric string, a boolean (True
+        # is not 1 — both engines fail open to the default), a list and a
+        # dict (Python's float() raises TypeError on both).
+        {"engine": "fen", "fen_value": "", "fen_sequence": 2},
+        {"engine": "fen", "fen_value": "abc", "fen_sequence": 2},
+        {"engine": "fen", "fen_value": True, "fen_sequence": 1},
+        {"engine": "fen", "fen_value": False, "fen_sequence": 4},
+        {"engine": "fen", "fen_value": [5], "fen_sequence": 1},
+        {"engine": "fen", "fen_value": {"n": 5}, "fen_sequence": 1},
+        # NaN and inf as WRITTEN VALUES (JSON cannot carry the literals, so
+        # these are the hand-edited-row spellings an operator actually
+        # types; the float NaN/inf branches are pinned by the unit tests
+        # on both sides).
+        {"engine": "fen", "fen_value": "nan", "fen_sequence": 2},
+        {"engine": "fen", "fen_value": "inf", "fen_sequence": 2},
+        {"engine": "fen", "fen_value": "-inf", "fen_sequence": 2},
+        {"engine": "fen", "fen_value": "1e400", "fen_sequence": 2},
+        # Below the minimum: 0, negative, a sub-one float. All fail open
+        # to 1, never to 0 — a 0 stride would break the cadence.
+        {"engine": "fen", "fen_value": 0, "fen_sequence": 1},
+        {"engine": "fen", "fen_value": -3, "fen_sequence": 1},
+        {"engine": "fen", "fen_value": 0.4, "fen_sequence": 1},
+        # Over the maximum: capped at 1000, not rejected (a hand-edited
+        # row must not silence the task).
+        {"engine": "fen", "fen_value": 1001, "fen_sequence": 1},
+        {"engine": "fen", "fen_value": 50000, "fen_sequence": 1},
+        # A numeric string with whitespace: float() accepts it, so both
+        # engines must read 7.
+        {"engine": "fen", "fen_value": "  7  ", "fen_sequence": 8},
+        # Digit separators: Python's float() accepts "1_000" between
+        # digits and refuses every other underscore spelling, so the Go
+        # clamp must agree on all of them.
+        {"engine": "fen", "fen_value": "1_000", "fen_sequence": 1001},
+        {"engine": "fen", "fen_value": "1__000", "fen_sequence": 1},
+        {"engine": "fen", "fen_value": "1000_", "fen_sequence": 1},
+        # owns_slot sequences: N=5 forwards 1, 6, 11 and holds the rest.
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 1},
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 5},
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 6},
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 11},
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 12},
+        # A non-positive sequence never owns a slot (an unreadable counter
+        # must not forward twice in a row).
+        {"engine": "fen", "fen_value": 4, "fen_sequence": 0},
+        {"engine": "fen", "fen_value": 4, "fen_sequence": -2},
+        # N=1 is inert: every sequence owns a slot, even a non-positive one.
+        {"engine": "fen", "fen_value": 1, "fen_sequence": 0},
+        {"engine": "fen", "fen_value": 1, "fen_sequence": 17},
+        # slots_until_next: the UI-copy formula. SlotsUntilNext(2, 5) == 4
+        # (messages 3, 4, 5, 6 still have to come; 6 is forwarded).
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 2, "fen_slots": True},
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 6, "fen_slots": True},
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 1, "fen_slots": True},
+        {"engine": "fen", "fen_value": 3, "fen_sequence": 4, "fen_slots": True},
     ]
 
 

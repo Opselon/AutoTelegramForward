@@ -238,12 +238,12 @@ func TestEndToEndTransformedDelivery(t *testing.T) {
 	})
 
 	j := transformJob(map[string]any{
-		"raw_text":      "see https://a.io/x now",
-		"text":          "see https://a.io/x now",
-		"forward_mode":  "COPY_MESSAGE",
-		"content_mode":  "AUTO",
-		"has_media":     false,
-		"media_type":    "text",
+		"raw_text":         "see https://a.io/x now",
+		"text":             "see https://a.io/x now",
+		"forward_mode":     "COPY_MESSAGE",
+		"content_mode":     "AUTO",
+		"has_media":        false,
+		"media_type":       "text",
 		"fallback_enabled": true,
 	})
 	insertJobRow(t, store, j)
@@ -280,7 +280,7 @@ func transformRuleWith(cfg cleaning.Config) *rule.ForwardRule {
 
 // captureDecisions records decision events for assertions.
 type captureDecisions struct {
-	events      []cleaning.DecisionEvent
+	events       []cleaning.DecisionEvent
 	dropDecision string
 	dropReason   string
 	last         cleaning.DecisionEvent

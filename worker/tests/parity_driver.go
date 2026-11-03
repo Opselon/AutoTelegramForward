@@ -23,6 +23,7 @@ import (
 
 	"atf/worker/internal/domain/album"
 	"atf/worker/internal/domain/cleaning"
+	"atf/worker/internal/domain/forwardinterval"
 	"atf/worker/internal/domain/reply"
 	"atf/worker/internal/domain/rule"
 	"atf/worker/internal/engine/filter"
@@ -70,6 +71,17 @@ type testCase struct {
 	// of pieces in the in-flight group.
 	Window float64 `json:"window"`
 	Items  int     `json:"items"`
+	// fen cases: the raw forward_every_n value exactly as a hand-edited
+	// row or an older client would store it (any JSON shape), and the
+	// 1-based sequence position to test against the interval. The clamp
+	// must land every one of these shapes on the same number both
+	// engines do.
+	FENValue    any `json:"fen_value"`
+	FENSequence int `json:"fen_sequence"`
+	// fen_slots reports slots_until_next alongside owns_slot, so the
+	// harness pins the UI-copy formula too (it never decides delivery,
+	// but the two engines must still agree on it).
+	FENSlots bool `json:"fen_slots"`
 }
 
 type result struct {
@@ -408,6 +420,19 @@ func runCase(c testCase) string {
 		completeByLimit := d.Reason == "album_limit" || c.Items >= album.MaxGroupItems
 		return fmt.Sprintf("limit=%v deadline_window=%.3f items=%d",
 			completeByLimit, s.Window, c.Items)
+	case "fen":
+		// The forward-every-N cadence arithmetic. Both the clamp (any
+		// JSON shape -> a legal interval) and the slot arithmetic run
+		// through the real production functions the delivery gate
+		// consults, never a hand-built answer — a clamp that disagreed
+		// would silently change which messages a task forwards.
+		everyN := forwardinterval.Clamp(c.FENValue)
+		owns := forwardinterval.OwnsSlot(c.FENSequence, everyN)
+		if c.FENSlots {
+			return fmt.Sprintf("clamp=%d owns=%t slots=%d", everyN, owns,
+				forwardinterval.SlotsUntilNext(c.FENSequence, everyN))
+		}
+		return fmt.Sprintf("clamp=%d owns=%t", everyN, owns)
 	default:
 		return ""
 	}
