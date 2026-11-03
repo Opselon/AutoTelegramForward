@@ -76,6 +76,20 @@ type ForwardRule struct {
 	// owns the transform stage (Stage 4.2).
 	Transform cleaning.Config
 
+	// AIConfigID names the AI provider configuration the task rewrites
+	// through ("" = no AI transform). A real forward_rules column, both
+	// backends. The task rewrites at all only when AIRewriteActive says so:
+	// a config id alone used to mean "rewrite", which ignored the owner's
+	// panel switch and the paid-addon veto (the bug ai_rewrite_active was
+	// written to fix — entities.py:1681).
+	AIConfigID string
+	// AIRewriteActive is ForwardRule.ai_rewrite_active (entities.py:1681):
+	// the single authority for "does this task rewrite text with an LLM?".
+	// A config id alone means "rewrite with this config" (API clients,
+	// backups and the AI menu rely on that), with the paid-addons switch as
+	// the explicit veto on top.
+	AIRewriteActive bool
+
 	// BlockLinks mirrors the task-level metadata flag the Python pipeline
 	// gates at pipeline.py:957 via media_filter.link_block_reason, which
 	// reads ForwardRule.block_links — itself the metadata key

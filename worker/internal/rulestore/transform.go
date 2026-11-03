@@ -399,3 +399,9 @@ func goChatKey(chatID string) string {
 	}
 	return trimmed
 }
+
+// ProbeAIRewriteActive exposes the ai_rewrite_active gate for cross-language
+// parity testing, the same purpose ProbeTransform serves.
+func ProbeAIRewriteActive(aiConfigID string, meta map[string]any) bool {
+	return aiRewriteActive(aiConfigID, meta)
+}

@@ -73,7 +73,8 @@ func applyRuleSchema(t *testing.T, db *sql.DB) {
 			use_intermediate INTEGER NOT NULL DEFAULT 0,
 			message_category TEXT NOT NULL DEFAULT 'ALL',
 			detection_criteria TEXT NOT NULL DEFAULT '{}',
-			split_long_caption INTEGER NOT NULL DEFAULT 1
+			split_long_caption INTEGER NOT NULL DEFAULT 1,
+			ai_config_id TEXT NOT NULL DEFAULT ''
 		)`,
 		`CREATE TABLE IF NOT EXISTS filter_rules (
 			id TEXT PRIMARY KEY,
@@ -377,6 +378,10 @@ func TestLegacyRowWithoutV30Columns(t *testing.T) {
 		`ALTER TABLE forward_rules ADD COLUMN message_category TEXT NOT NULL DEFAULT 'ALL'`,
 		`ALTER TABLE forward_rules ADD COLUMN detection_criteria TEXT NOT NULL DEFAULT '{}'`,
 		`ALTER TABLE forward_rules ADD COLUMN split_long_caption INTEGER NOT NULL DEFAULT 1`,
+		// ai_config_id ships with the v1 schema (database.py:44) but is
+		// declared here so the harness exercises the same forward-compat
+		// path the production reads take.
+		`ALTER TABLE forward_rules ADD COLUMN ai_config_id TEXT NOT NULL DEFAULT ''`,
 		`CREATE TABLE filter_rules (
 			id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '',
 			whitelist_keywords TEXT NOT NULL DEFAULT '[]',
