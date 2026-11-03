@@ -2,11 +2,13 @@ package delivery
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"atf/worker/internal/domain/aiconfig"
 	"atf/worker/internal/domain/cleaning"
 	"atf/worker/internal/domain/job"
+	"atf/worker/internal/domain/prompt"
 	"atf/worker/internal/domain/rule"
 	"atf/worker/internal/infra/aiprovider"
 )
@@ -90,6 +92,22 @@ func (e *Engine) aiRewriteHooks(ctx context.Context, j *job.DeliveryJob, r *rule
 	return e.aiRewriteFor(ctx, j, r, logger), e.aiFallbackFor(j, r, logger)
 }
 
+// targetPromptFor resolves the effective prompt template ID and version
+// for this specific delivery target, checking per-target overrides before
+// falling back to the task rule's default.
+func (e *Engine) targetPromptFor(j *job.DeliveryJob, r *rule.ForwardRule) (string, int) {
+	if r == nil {
+		return "", 0
+	}
+	targetKey := goChatKey(j.TargetChatID)
+	if targetKey != "" && r.TargetPromptOverrides != nil {
+		if override, ok := r.TargetPromptOverrides[targetKey]; ok && strings.TrimSpace(override.PromptID) != "" {
+			return strings.TrimSpace(override.PromptID), override.PromptVersion
+		}
+	}
+	return strings.TrimSpace(r.AIPromptID), r.AIPromptVersion
+}
+
 // aiRewriteFor builds the rewrite closure: one guarded provider call
 // through the orchestrator, mapped onto the pipeline's AIRewriter
 // signature. The classification travels back as a cleaning.AIError so
@@ -107,13 +125,42 @@ func (e *Engine) aiRewriteFor(ctx context.Context, j *job.DeliveryJob, r *rule.F
 		if timeout <= 0 {
 			timeout = aiprovider.DefaultTimeout
 		}
+
+		promptID, promptVer := e.targetPromptFor(j, r)
+		systemPrompt := ""
+		userTemplate := "{text}"
+		targetLang := "auto"
+
+		if e.promptStore != nil && promptID != "" {
+			preview, err := prompt.PreviewPrompt(ctx, e.promptStore, promptID, text, promptVer, r.OwnerUserID)
+			if err != nil {
+				logger.Warn("could not resolve prompt template",
+					"stage", "PIPELINE:AI_REWRITE:PROMPT_WARN",
+					"correlation_id", j.Payload.CorrelationID(),
+					"rule_id", r.ID,
+					"prompt", promptID,
+					"error", err.Error(),
+				)
+			} else if preview != nil {
+				systemPrompt = preview.SystemPrompt
+				userTemplate = preview.RenderedUserPrompt
+				promptVer = preview.Version
+				if preview.TargetLanguage != "" {
+					targetLang = preview.TargetLanguage
+				}
+			}
+		}
+
 		request := aiprovider.Request{
 			Text:           text,
-			TargetLanguage: "auto",
+			SystemPrompt:   systemPrompt,
+			UserTemplate:   userTemplate,
+			PromptID:       promptID,
+			PromptVersion:  promptVer,
+			TargetLanguage: targetLang,
 			TimeoutSeconds: timeout,
 			CorrelationID:  j.Payload.CorrelationID(),
 			IsCaption:      j.Payload.HasMedia(),
-			PromptVersion:  r.AIPromptVersion,
 			MaxLength:      1024,
 		}
 		if j.Payload.HasMedia() {
@@ -124,9 +171,15 @@ func (e *Engine) aiRewriteFor(ctx context.Context, j *job.DeliveryJob, r *rule.F
 			request.MaxLength = 4096
 		}
 		logger.Info("initiating AI rewrite",
-			"stage", "PIPELINE:AI_REWRITE:START", "rule_id", r.ID, "cfg", r.AIConfigID,
-			"prompt", orEmpty(r.AIPromptID, "default"), "prompt_version", r.AIPromptVersion,
-			"timeout_s", timeout, "caption", j.Payload.HasMedia())
+			"stage", "PIPELINE:AI_REWRITE:START",
+			"correlation_id", j.Payload.CorrelationID(),
+			"rule_id", r.ID,
+			"cfg", r.AIConfigID,
+			"prompt", orEmpty(promptID, "default"),
+			"prompt_version", promptVer,
+			"timeout_s", timeout,
+			"caption", j.Payload.HasMedia(),
+		)
 		if e.aiMetrics != nil {
 			e.aiMetrics.AITransform("total")
 		}
@@ -136,17 +189,28 @@ func (e *Engine) aiRewriteFor(ctx context.Context, j *job.DeliveryJob, r *rule.F
 				e.aiMetrics.AITransform("success")
 			}
 			logger.Info("AI rewrite succeeded",
-				"stage", "PIPELINE:AI_REWRITE:SUCCESS", "rule_id", r.ID, "cfg", r.AIConfigID,
-				"out_len", len(resp.TransformedText), "model", orEmpty(resp.ModelUsed, "unknown"),
-				"failover", resp.IsFailover, "duration_ms", resp.ExecutionDurationMS)
+				"stage", "PIPELINE:AI_REWRITE:SUCCESS",
+				"correlation_id", j.Payload.CorrelationID(),
+				"rule_id", r.ID,
+				"cfg", r.AIConfigID,
+				"out_len", len(resp.TransformedText),
+				"model", orEmpty(resp.ModelUsed, "unknown"),
+				"failover", resp.IsFailover,
+				"duration_ms", resp.ExecutionDurationMS,
+			)
 			return resp.TransformedText, nil
 		}
 		if e.aiMetrics != nil {
 			e.aiMetrics.AITransform("failed")
 		}
 		logger.Warn("AI transform failed",
-			"stage", "PIPELINE:AI_REWRITE:FAILED", "rule_id", r.ID, "cfg", r.AIConfigID,
-			"error_code", resp.ErrorCode, "error", resp.ErrorMessage)
+			"stage", "PIPELINE:AI_REWRITE:FAILED",
+			"correlation_id", j.Payload.CorrelationID(),
+			"rule_id", r.ID,
+			"cfg", r.AIConfigID,
+			"error_code", resp.ErrorCode,
+			"error", resp.ErrorMessage,
+		)
 		return "", &cleaning.AIError{Code: resp.ErrorCode, Message: resp.ErrorMessage}
 	}
 }
@@ -161,8 +225,13 @@ func (e *Engine) aiFallbackFor(j *job.DeliveryJob, r *rule.ForwardRule, logger L
 	return func(ctx context.Context, original string, classification string, message string) (string, bool) {
 		policy := r.AIFallbackPolicy
 		logger.Warn("AI failed — applying fallback policy",
-			"stage", "PIPELINE:AI_REWRITE:FALLBACK", "rule_id", r.ID,
-			"error_code", classification, "policy", policy, "in_len", len(original))
+			"stage", "PIPELINE:AI_REWRITE:FALLBACK",
+			"correlation_id", j.Payload.CorrelationID(),
+			"rule_id", r.ID,
+			"error_code", classification,
+			"policy", policy,
+			"in_len", len(original),
+		)
 		if e.aiMetrics != nil {
 			e.aiMetrics.AIFallback(policy)
 		}
@@ -200,6 +269,25 @@ func (e *Engine) SetAITransformer(t *aiprovider.Transformer, configs aiconfig.St
 	e.aiTransformer = t
 	e.aiConfigs = configs
 	e.aiMetrics = metrics
+}
+
+// SetPromptStore installs the prompt template store for prompt_id resolution.
+func (e *Engine) SetPromptStore(ps prompt.Store) {
+	e.promptStore = ps
+}
+
+func goChatKey(chatID string) string {
+	trimmed := strings.TrimSpace(chatID)
+	if trimmed == "" {
+		return ""
+	}
+	if n, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+		return strconv.FormatInt(n, 10)
+	}
+	if f, err := strconv.ParseFloat(trimmed, 64); err == nil {
+		return strconv.FormatInt(int64(f), 10)
+	}
+	return trimmed
 }
 
 // aiWiring reports whether the AI stage can run at all: a transformer

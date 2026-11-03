@@ -207,6 +207,7 @@ except ImportError:
             return object()
 
     _httpx = _FakeHTTPX()  # type: ignore
+    sys.modules["httpx"] = _httpx
 
 
 class _ParityAIConfigRepo:
@@ -251,6 +252,11 @@ class _ScriptedAIProvider:
         kind, payload = self.outcomes[index]
         if kind == "ok":
             return payload
+        if kind == "echo_system":
+            if "Instructions:\n" in text:
+                parts = text.split("Instructions:\n", 1)[1]
+                return parts.split("\nTarget Language:", 1)[0].strip()
+            return ""
         if kind == "status":
             request = _httpx.Request("POST", "http://parity.invalid/v1/chat/completions")
             response = _httpx.Response(int(payload), request=request)
@@ -279,7 +285,8 @@ def _ai_exec_configs(case: Dict[str, Any]) -> Dict[str, Any]:
         params = dict(
             id=cid, provider=AIProviderType.OPENAI, model="m-" + cid,
             api_key="sk-" + cid, is_enabled=True, owner_user_id=owner,
-            system_prompt="", user_prompt_template="{text}",
+            system_prompt="You are an intelligent editor. Clean up and improve the text while keeping the original meaning.",
+            user_prompt_template="{text}",
         )
         params.update(kw)
         return AIConfig(**params)
@@ -366,6 +373,119 @@ def py_ai_exec(case: Dict[str, Any]) -> str:
         f"provider={provider_used or 'none'} "
         f"model={response.model_used or 'none'}"
     )
+
+
+class _ParityPromptRepo:
+    def __init__(self, raw_prompts: Dict[str, Any], owner: int = 42) -> None:
+        from core.domain.entities import PromptTemplate, PromptVersion
+        self.templates: Dict[str, PromptTemplate] = {}
+        self.versions: Dict[str, Dict[int, PromptVersion]] = {}
+        self.owner = owner
+        for pid, data in raw_prompts.items():
+            t_owner = int(data.get("owner_user_id", owner))
+            self.templates[pid] = PromptTemplate(
+                id=pid,
+                name=data.get("name", pid),
+                system_prompt=data.get("system_prompt", ""),
+                user_prompt_template=data.get("user_prompt_template", "{text}"),
+                target_language=data.get("target_language", "en"),
+                current_version=int(data.get("current_version", 1)),
+                is_system=bool(data.get("is_system", False)),
+                owner_user_id=t_owner,
+                created_at=100,
+                updated_at=100,
+            )
+            if "versions" in data:
+                self.versions[pid] = {}
+                for v_str, v_data in data["versions"].items():
+                    v_num = int(v_str)
+                    self.versions[pid][v_num] = PromptVersion(
+                        id=f"{pid}-v{v_num}",
+                        prompt_id=pid,
+                        version=v_num,
+                        system_prompt=v_data.get("system_prompt", ""),
+                        user_prompt_template=v_data.get("user_prompt_template", "{text}"),
+                        created_at=100,
+                    )
+
+    async def get_template(self, template_id: str):
+        t = self.templates.get(template_id)
+        if not t:
+            return None
+        if not t.is_system and t.owner_user_id != self.owner:
+            return None
+        return t
+
+    async def get_version(self, prompt_id: str, version: int):
+        return self.versions.get(prompt_id, {}).get(version)
+
+
+def py_channel_rewrite(case: Dict[str, Any]) -> str:
+    from core.application.pipeline import DurableMessagePipeline, PipelineContext
+    from core.application.prompt_service import PromptService
+    from core.domain.entities import EvaluationResult, ForwardRule, MessagePayload
+    from core.domain.value_objects import MediaType
+    from core.infrastructure.ai.circuit_breaker import CircuitBreakerRegistry
+    from core.infrastructure.ai.transformer import AITransformer
+    from core.infrastructure.ai.validator import AIOutputValidator
+
+    owner = int(case.get("owner_user_id", 42))
+    cfg_id = case.get("ai_config_id", "cfg-1")
+
+    provider = _ScriptedAIProvider(_ai_exec_outcomes(case))
+    transformer = AITransformer(
+        _ParityAIConfigRepo(_ai_exec_configs(case)),
+        CircuitBreakerRegistry(),
+        AIOutputValidator(),
+        _ScriptedAIFactory(provider),
+    )
+
+    prompt_repo = _ParityPromptRepo(case.get("prompts") or {}, owner=owner)
+    prompt_service = PromptService(prompt_repo)
+
+    pipeline = DurableMessagePipeline(
+        rule_repo=None,
+        filter_repo=None,
+        ai_transformer=transformer,
+        prompt_service=prompt_service,
+    )
+
+    rule = ForwardRule(id="r", session_id="s", source_chat_id="-1", target_chat_id="-2")
+    rule.owner_user_id = owner
+    rule.ai_config_id = cfg_id
+    rule.ai_fallback_policy = case.get("ai_fallback_policy", "DROP")
+    rule.ai_prompt_version = int(case.get("ai_prompt_version", 0))
+    rule.ai_timeout_seconds = float(case.get("ai_timeout_seconds", 5.0))
+    rule.metadata = dict(case.get("metadata") or {})
+    if case.get("prompt_id"):
+        rule.metadata["prompt_id"] = case["prompt_id"]
+    if case.get("smart_ai_rewrite") is not None:
+        rule.metadata["smart_ai_rewrite"] = case["smart_ai_rewrite"]
+    if case.get("paid_addons") is not None:
+        rule.paid_addons = case["paid_addons"]
+    if case.get("replacements"):
+        rule.replacements = case["replacements"]
+    if case.get("header"):
+        rule.header = case["header"]
+    if case.get("footer"):
+        rule.footer = case["footer"]
+
+    has_media = bool(case.get("has_media") or case.get("is_caption"))
+    payload = MessagePayload(
+        message_id=1,
+        chat_id="-1",
+        text="" if has_media else case["text"],
+        caption=case["text"] if has_media else "",
+        media_type=MediaType.PHOTO if has_media else MediaType.TEXT,
+        has_media=has_media,
+    )
+
+    ctx = PipelineContext(correlation_id="parity-corr-id")
+    eval_res = EvaluationResult()
+    out = asyncio.run(pipeline._apply_transforms(ctx, payload, rule, eval_res))
+    if out is None:
+        return "<DROPPED>"
+    return out
 
 
 def py_filter_engine(case: Dict[str, Any]) -> str:
@@ -1008,6 +1128,8 @@ ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "effective_settings": py_effective_settings,
     # Stage 5 (W4): the AI provider execution path (transform + fallback).
     "ai_exec": py_ai_exec,
+    # Stage 5 (W3): channel-to-channel AI rewriting with prompt resolution.
+    "channel_rewrite": py_channel_rewrite,
 }
 
 
@@ -1528,6 +1650,161 @@ def cases() -> List[Dict[str, Any]]:
          "settings_owner": 5094837833,
          "settings_bots": [],
          "metadata": {"bot_token_id": "tok-gone"}},
+
+        # --- Stage 5 (W3): channel_rewrite engine end-to-end transform cases
+        # 1. Basic success case: plain text transformed by provider
+        {
+            "engine": "channel_rewrite",
+            "text": "Hello world from channel",
+            "ai_config_id": "cfg-1",
+            "provider_script": [["ok", "Transformed text output"]],
+        },
+        # 2. Fallback: SEND_ORIGINAL returns the original input text
+        {
+            "engine": "channel_rewrite",
+            "text": "Keep this original message",
+            "ai_config_id": "cfg-1",
+            "ai_fallback_policy": "SEND_ORIGINAL",
+            "provider_script": [["status", 401]],
+        },
+        # 3. Fallback: DROP drops the message (<DROPPED>)
+        {
+            "engine": "channel_rewrite",
+            "text": "Drop this failed message",
+            "ai_config_id": "cfg-1",
+            "ai_fallback_policy": "DROP",
+            "provider_script": [["status", 500]],
+        },
+        # 4. Fallback: RETRY drops the message from delivery (<DROPPED>)
+        {
+            "engine": "channel_rewrite",
+            "text": "Retry this later",
+            "ai_config_id": "cfg-1",
+            "ai_fallback_policy": "RETRY",
+            "provider_script": [["raise", "rate limited"]],
+        },
+        # 5. Fallback: QUARANTINE drops the message from delivery (<DROPPED>)
+        {
+            "engine": "channel_rewrite",
+            "text": "Quarantine this suspicious rewrite",
+            "ai_config_id": "cfg-1",
+            "ai_fallback_policy": "QUARANTINE",
+            "provider_script": [["status", 403]],
+        },
+        # 6. Caption vs body (is_caption=True)
+        {
+            "engine": "channel_rewrite",
+            "text": "Photo caption to rewrite",
+            "is_caption": True,
+            "ai_config_id": "cfg-1",
+            "provider_script": [["ok", "Rewritten photo caption"]],
+        },
+        # 7. Media vs plain length limit: caption path truncates long outputs at 1024
+        {
+            "engine": "channel_rewrite",
+            "text": "Short caption input",
+            "has_media": True,
+            "ai_config_id": "cfg-1",
+            "provider_script": [["ok", ("A " * 600).strip()]],
+        },
+        # 8a. Prompt ID resolution with version pinning: v1 pinned
+        {
+            "engine": "channel_rewrite",
+            "text": "Input for v1",
+            "ai_config_id": "cfg-1",
+            "prompt_id": "p-pin",
+            "ai_prompt_version": 1,
+            "prompts": {
+                "p-pin": {
+                    "system_prompt": "System Prompt V2",
+                    "current_version": 2,
+                    "versions": {
+                        "1": {"system_prompt": "System Prompt V1"},
+                        "2": {"system_prompt": "System Prompt V2"},
+                    },
+                }
+            },
+            "provider_script": [["echo_system", ""]],
+        },
+        # 8b. Prompt ID resolution with version pinning: v2 pinned
+        {
+            "engine": "channel_rewrite",
+            "text": "Input for v2",
+            "ai_config_id": "cfg-1",
+            "prompt_id": "p-pin",
+            "ai_prompt_version": 2,
+            "prompts": {
+                "p-pin": {
+                    "system_prompt": "System Prompt V2",
+                    "current_version": 2,
+                    "versions": {
+                        "1": {"system_prompt": "System Prompt V1"},
+                        "2": {"system_prompt": "System Prompt V2"},
+                    },
+                }
+            },
+            "provider_script": [["echo_system", ""]],
+        },
+        # 8c. Prompt ID resolution: version 0 resolves latest active version (v2)
+        {
+            "engine": "channel_rewrite",
+            "text": "Input for latest",
+            "ai_config_id": "cfg-1",
+            "prompt_id": "p-pin",
+            "ai_prompt_version": 0,
+            "prompts": {
+                "p-pin": {
+                    "system_prompt": "System Prompt V2",
+                    "current_version": 2,
+                    "versions": {
+                        "1": {"system_prompt": "System Prompt V1"},
+                        "2": {"system_prompt": "System Prompt V2"},
+                    },
+                }
+            },
+            "provider_script": [["echo_system", ""]],
+        },
+        # 9. Pipeline ordering: AI rewrite runs BEFORE replacements
+        {
+            "engine": "channel_rewrite",
+            "text": "original text before ai",
+            "ai_config_id": "cfg-1",
+            "replacements": {"ai_output_token": "final_replacement_applied"},
+            "provider_script": [["ok", "body with ai_output_token inside"]],
+        },
+        # 10. Pipeline ordering: AI rewrite runs BEFORE header and footer
+        {
+            "engine": "channel_rewrite",
+            "text": "raw body",
+            "ai_config_id": "cfg-1",
+            "header": "PREFIX",
+            "footer": "SUFFIX",
+            "provider_script": [["ok", "rewritten body"]],
+        },
+        # 11. Gate: smart_ai_rewrite=False bypasses AI provider completely
+        {
+            "engine": "channel_rewrite",
+            "text": "deliver this unchanged",
+            "ai_config_id": "cfg-1",
+            "smart_ai_rewrite": False,
+            "provider_script": [["ok", "should never be called"]],
+        },
+        # 12. Foreign-owned prompt template: refused and falls back to default prompt
+        {
+            "engine": "channel_rewrite",
+            "text": "msg for foreign template",
+            "ai_config_id": "cfg-1",
+            "owner_user_id": 42,
+            "prompt_id": "p-foreign",
+            "prompts": {
+                "p-foreign": {
+                    "system_prompt": "Foreign Secret System Prompt",
+                    "owner_user_id": 99,
+                    "is_system": False,
+                }
+            },
+            "provider_script": [["echo_system", ""]],
+        },
     ]
 
 

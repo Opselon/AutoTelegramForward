@@ -37,6 +37,7 @@ import (
 	"atf/worker/internal/domain/dedup"
 	"atf/worker/internal/domain/job"
 	"atf/worker/internal/domain/policy"
+	"atf/worker/internal/domain/prompt"
 	"atf/worker/internal/domain/reply"
 	"atf/worker/internal/domain/routing"
 	"atf/worker/internal/domain/rule"
@@ -126,6 +127,9 @@ type Engine struct {
 	// transformer resolves through. Nil alongside a nil transformer; the
 	// pair is installed together by SetAITransformer.
 	aiConfigs aiconfig.Store
+	// promptStore is the owner-scoped prompt template and version repository.
+	// Optional: nil falls back to config-level prompts.
+	promptStore prompt.Store
 	// aiMetrics counts the AI rewrite and fallback outcomes in the
 	// Python pipeline's own vocabulary (ai_transforms_*,
 	// ai_fallback_*). Nil is "no recorder".

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"atf/worker/internal/domain/cleaning"
+	"atf/worker/internal/domain/rule"
 )
 
 // transform.go resolves the task's text-transform configuration out of the
@@ -362,6 +363,51 @@ func buildTargetOverrides(policyBlob map[string]any, meta map[string]any) map[st
 			continue
 		}
 		out[goChatKey(key)] = buildContentPolicy(blob)
+	}
+	return out
+}
+
+// buildTargetPromptOverrides reads per-target prompt overrides from target_policies
+// or target_prompts in task metadata.
+func buildTargetPromptOverrides(policyBlob map[string]any, meta map[string]any) map[string]rule.TargetPrompt {
+	out := make(map[string]rule.TargetPrompt)
+
+	if raw := nestedPolicyKey(policyBlob, meta, "target_policies"); raw != nil {
+		for key, item := range raw {
+			blob, ok := item.(map[string]any)
+			if !ok {
+				continue
+			}
+			pid := metaStr(blob, "prompt_id", "")
+			if pid != "" {
+				ver := metaIntDefault(blob, "ai_prompt_version", 0)
+				out[goChatKey(key)] = rule.TargetPrompt{PromptID: pid, PromptVersion: ver}
+			}
+		}
+	}
+
+	if raw := nestedPolicyKey(nil, meta, "target_prompts"); raw != nil {
+		for key, item := range raw {
+			switch v := item.(type) {
+			case string:
+				if strings.TrimSpace(v) != "" {
+					out[goChatKey(key)] = rule.TargetPrompt{PromptID: strings.TrimSpace(v), PromptVersion: 0}
+				}
+			case map[string]any:
+				pid := metaStr(v, "prompt_id", "")
+				if pid != "" {
+					ver := metaIntDefault(v, "ai_prompt_version", 0)
+					if ver == 0 {
+						ver = metaIntDefault(v, "prompt_version", 0)
+					}
+					out[goChatKey(key)] = rule.TargetPrompt{PromptID: pid, PromptVersion: ver}
+				}
+			}
+		}
+	}
+
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }
