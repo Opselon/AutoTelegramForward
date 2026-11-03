@@ -19,6 +19,7 @@ import {
   Cable,
   Check,
   ChevronDown,
+  ClipboardList,
   Copy,
   Database,
   Download,
@@ -596,7 +597,9 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
         <div className="ops-console">
           {(!Array.isArray(logs) || logs.length === 0) ? (
             <div className="ops-console__empty">
-              <div style={{ fontSize: 'var(--type-xl)', marginBlockEnd: 'var(--space-2)' }}>📋</div>
+              <div style={{ marginBlockEnd: 'var(--space-2)', display: 'flex', justifyContent: 'center' }} aria-hidden="true">
+                <ClipboardList size={26} />
+              </div>
               <div>{t('ui_no_log_events_matching_current_filters')}</div>
             </div>
           ) : (

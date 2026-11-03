@@ -69,7 +69,7 @@ export function JobsPanel({
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
     refresh()

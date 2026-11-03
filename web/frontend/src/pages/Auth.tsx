@@ -1,10 +1,10 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { ArrowRightLeft, Eye, EyeOff, Filter, Moon, Radio, Sparkles, Sun } from 'lucide-react'
 import { api } from '../api'
 import { LanguagePicker } from '../components/LanguagePicker'
 
 import { applySession } from '../session'
-import { isRtlLang, makeT, preferredLang, rememberLang, type UiLang } from '../locales/engine'
+import { ensureLangLoaded, isLangLoaded, isRtlLang, makeT, preferredLang, rememberLang, type UiLang } from '../locales/engine'
 import { preferredTheme, toggleTheme, type Theme } from '../theme'
 
 /**
@@ -23,6 +23,23 @@ export default function Auth({ onLogin }: { onLogin: () => void }) {
   // stored choice wins, then the browser's own language, then English. A
   // hardcoded 'fa' here rendered Persian to everybody who had never chosen.
   const [lang, setLang] = useState<UiLang>(() => preferredLang())
+  // A switch on this screen must fetch the catalog chunk and follow the
+  // document, not only the state: boot ensures the stored language, so a
+  // first-time switch to another one used to render English until reload.
+  const [, setLangEpoch] = useState(0)
+  useEffect(() => {
+    document.documentElement.lang = lang
+    document.documentElement.dir = isRtlLang(lang) ? 'rtl' : 'ltr'
+    if (!isLangLoaded(lang)) {
+      let alive = true
+      void ensureLangLoaded(lang).then(() => {
+        if (alive) setLangEpoch((n) => n + 1)
+      })
+      return () => {
+        alive = false
+      }
+    }
+  }, [lang])
   const [isRegister, setIsRegister] = useState(false)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')

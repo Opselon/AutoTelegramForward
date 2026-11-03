@@ -104,7 +104,7 @@ export function ChatPicker({ sessionId, lang, alreadyIn, onPick, onClose }: Prop
     // `t` is re-created per render by makeT; the failure text only depends on
     // the language, so keying on `lang` keeps the callback stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sessionId, query, lang],
+    [sessionId, query, lang, t],
   )
 
   // Server-side search, debounced: the query is what the *server* filters on, so

@@ -24,11 +24,13 @@ import {
   Activity,
   AlertTriangle,
   CheckCircle2,
+  Crown,
   Layers,
   ListTodo,
   Plus,
   Send,
   Server,
+  User,
   Users,
   X,
 } from 'lucide-react'
@@ -89,7 +91,9 @@ export function HomePanel({ d }: { d: DashboardCtx }) {
     }
   }, [])
 
-  const failedChecks = setup ? setup.checks.filter((c) => !c.set).length : 0
+  // `checks` is optional in the payload shape (the audit's D1 class: one
+  // missing field must not blank the home tab), so guard the read.
+  const failedChecks = setup?.checks?.filter((c) => !c.set).length ?? 0
 
   // ---- recent activity: the newest ERROR/WARN events, one-shot -------------
   const [recentAlerts, setRecentAlerts] = useState<LogItem[] | null>(null)
@@ -189,7 +193,12 @@ export function HomePanel({ d }: { d: DashboardCtx }) {
           <div className="home-hero__text">
             <h2 className="home-hero__greeting">{t('ui_welcome_back')}</h2>
             <p className="home-hero__identity">
-              {currentUser?.is_admin ? '👑 ' : '👤 '}
+              <span
+                className={`home-hero__glyph${currentUser?.is_admin ? ' home-hero__glyph--admin' : ''}`}
+                aria-hidden="true"
+              >
+                {currentUser?.is_admin ? <Crown size={14} /> : <User size={14} />}
+              </span>
               {name}
             </p>
           </div>
