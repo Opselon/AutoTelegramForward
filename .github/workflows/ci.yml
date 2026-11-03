@@ -406,6 +406,15 @@ jobs:
         # per line) in scripts/.web_ui_copy_baseline.txt. Run from the repo root.
         run: node scripts/audit_web_ui_copy.js
 
+      - name: Responsive design-system contract
+        # The 55-check source contract for the design system (tokens, logical
+        # properties, breakpoints, drawer, 44px targets, contrast in both
+        # themes, primitives). Its header always claimed "runs in CI on every
+        # commit" but no workflow actually invoked it — wired up now, so a
+        # token/regression breach fails the PR instead of a manual run.
+        working-directory: web/frontend
+        run: node tests/responsive.contract.test.mjs
+
       - name: Provenance rules
         # Verify how a settings row decides what to show (edit/own/inherited)
         # by running that logic directly, like the Go and Python suites do.
