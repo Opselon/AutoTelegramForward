@@ -13,7 +13,7 @@ import { memo, useCallback, useState, type ReactNode } from 'react'
 import { Edit3, Plus, Trash2 } from 'lucide-react'
 import { api } from '../api'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { Badge, Button, EmptyState } from '../components/ui/Primitives'
+import { Badge, Button, EmptyState, PageHeader } from '../components/ui/Primitives'
 import type { DashboardCtx } from '../App'
 import type { FilterRule } from '../types'
 
@@ -206,24 +206,20 @@ export default function FiltersPanel({ d }: { d: DashboardCtx }) {
   return (
     <>
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                  <div>
-                    <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-                      {t('ui_advanced_content_media_filtering')}
-                    </h2>
-                    <p style={{ fontSize: 'var(--type-sm)', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                      {t('ui_manage_text_blacklists_whitelists_regex_patterns_and_media_type')}
-                    </p>
-                  </div>
-                  {/* New filters start empty: no seeded SPAM keywords to notice. */}
-                  <button
-                    onClick={() => openFilterModal(null)}
-                    className="btn btn-primary"
-                  >
-                    <Plus size={16} />
-                    <span>{t('ui_new_filter_rule')}</span>
-                  </button>
-                </div>
+                <PageHeader
+                  title={t('ui_advanced_content_media_filtering')}
+                  description={t('ui_manage_text_blacklists_whitelists_regex_patterns_and_media_type')}
+                  actions={
+                    /* New filters start empty: no seeded SPAM keywords to notice. */
+                    <button
+                      onClick={() => openFilterModal(null)}
+                      className="btn btn-primary"
+                    >
+                      <Plus size={16} />
+                      <span>{t('ui_new_filter_rule')}</span>
+                    </button>
+                  }
+                />
 
                 <div className="grid-collapse-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
                   {(Array.isArray(filterRules) ? filterRules : []).length === 0 && (

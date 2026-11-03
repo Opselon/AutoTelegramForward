@@ -5,7 +5,7 @@
 import { PromptEditorPanel, ProviderKeyCheck } from '../components/ShellWidgets'
 import { api } from '../api'
 import { Edit3, Plus, Trash2 } from 'lucide-react'
-import { EmptyState } from '../components/ui/Primitives'
+import { EmptyState, PageHeader } from '../components/ui/Primitives'
 import type { DashboardCtx } from '../App'
 
 export default function AiPanel({ d }: { d: DashboardCtx }) {
@@ -23,34 +23,30 @@ export default function AiPanel({ d }: { d: DashboardCtx }) {
   return (
     <>
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                  <div>
-                    <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-                      {t('ui_ai_intelligence_rewriting_engines')}
-                    </h2>
-                    <p style={{ fontSize: 'var(--type-sm)', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                      {t('ui_configure_llm_models_for_auto_rewriting_signal_parsing_and_trans')}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => {
-                      setAiFormData({
-                        provider: 'OPENAI',
-                        model: 'gpt-4o',
-                        temperature: 0.7,
-                        is_enabled: true,
-                        target_language: 'fa',
-                        system_prompt: 'You are an expert financial signal parser and translator.',
-                        user_prompt_template: 'Translate and format this trade signal accurately:\n{text}',
-                      })
-                      setIsAiModalOpen(true)
-                    }}
-                    className="btn btn-primary"
-                  >
-                    <Plus size={16} />
-                    <span>{t('ui_new_ai_engine')}</span>
-                  </button>
-                </div>
+                <PageHeader
+                  title={t('ui_ai_intelligence_rewriting_engines')}
+                  description={t('ui_configure_llm_models_for_auto_rewriting_signal_parsing_and_trans')}
+                  actions={
+                    <button
+                      onClick={() => {
+                        setAiFormData({
+                          provider: 'OPENAI',
+                          model: 'gpt-4o',
+                          temperature: 0.7,
+                          is_enabled: true,
+                          target_language: 'fa',
+                          system_prompt: 'You are an expert financial signal parser and translator.',
+                          user_prompt_template: 'Translate and format this trade signal accurately:\n{text}',
+                        })
+                        setIsAiModalOpen(true)
+                      }}
+                      className="btn btn-primary"
+                    >
+                      <Plus size={16} />
+                      <span>{t('ui_new_ai_engine')}</span>
+                    </button>
+                  }
+                />
 
                 <div className="grid-collapse-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
                   {(Array.isArray(aiConfigs) ? aiConfigs : []).length === 0 && (
