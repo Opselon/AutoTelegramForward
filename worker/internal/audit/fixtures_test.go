@@ -195,7 +195,12 @@ func validateFixture(fx *Fixture, seen map[string]bool) error {
 	if fx.Executable == ExecMeta && len(MetaClaims(fx.raw)) == 0 {
 		return fmt.Errorf("%s: meta fixture declares no numeric claim", fx.ID)
 	}
-	if fx.Executable == ExecBoth && fx.ExpectedGoOutput == "" && len(fx.ExpectedGo) == 0 {
+	// F-03 note: a `both` fixture may legitimately expect the EMPTY string —
+	// UNI-EMOJI-01/02 do, because the whole emoji sequence (ZWJ family,
+	// keycap) is removed. The gate therefore keys on the PRESENCE of the
+	// expected_go_output field, not on its emptiness; only a fixture that
+	// carries no Go expectation at all is malformed.
+	if fx.Executable == ExecBoth && !hasRawKey(fx.raw, "expected_go_output") && len(fx.ExpectedGo) == 0 {
 		return fmt.Errorf("%s: executable=both requires an expected_go* key", fx.ID)
 	}
 
@@ -224,6 +229,18 @@ func executableList() string {
 		parts = append(parts, string(e))
 	}
 	return strings.Join(parts, ", ")
+}
+
+// hasRawKey reports whether the raw fixture object carries a key at all.
+// Presence and emptiness mean different things post-F-03: an expected
+// output of "" is a real expectation (an emoji sequence fully removed),
+// while a missing key is a schema violation.
+func hasRawKey(raw map[string]any, key string) bool {
+	if raw == nil {
+		return false
+	}
+	_, ok := raw[key]
+	return ok
 }
 
 // HasAnyExpectation reports whether a raw record declares any result at all.
@@ -605,7 +622,10 @@ func TestGoCoverageSummary(t *testing.T) {
 		if fx == nil {
 			continue
 		}
-		if !fx.HasGoDecision() && !fx.HasGoOutput() {
+		// F-03: a supported fixture may legitimately expect the empty string
+		// (UNI-EMOJI-01/02 — the whole sequence removed). Presence, not
+		// emptiness, is what "declares an expectation" means here.
+		if !fx.HasGoDecision() && !hasRawKey(fx.raw, "expected_go_output") {
 			t.Errorf("fixture %s is Go-supported but declares no expected_go* key", id)
 		}
 	}
@@ -686,10 +706,13 @@ func TestBothFixturesAreTheOnlyParityVerdicts(t *testing.T) {
 	}
 	for i := range both {
 		fx := &both[i]
-		if !fx.HasGoOutput() && !fx.HasGoDecision() {
+		// F-03: an expected output of "" is a real expectation (a whole
+		// emoji sequence removed), so both halves of the comparison are
+		// tested for PRESENCE, not emptiness.
+		if !hasRawKey(fx.raw, "expected_go_output") && !fx.HasGoDecision() {
 			t.Errorf("both fixture %s has no Go expectation to compare", fx.ID)
 		}
-		hasPy := fx.PythonOutput() != "" || fx.raw["expected_python"] != nil
+		hasPy := fx.PythonOutput() != "" || fx.raw["expected_python"] != nil || hasRawKey(fx.raw, "expected_python_output")
 		if !hasPy {
 			t.Errorf("both fixture %s has no Python expectation to compare", fx.ID)
 		}

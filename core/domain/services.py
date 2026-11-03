@@ -234,7 +234,15 @@ class FilterEngine:
     def remove_emojis(self, text: str) -> str:
         if not text:
             return ""
-        return EMOJI_REGEX.sub("", text).strip()
+        # F-03: the sequence-aware stripper, not the SMP-wide regex. The old
+        # pattern destroyed non-emoji supplementary-plane scripts (cuneiform,
+        # math alphanumerics) and shredded ZWJ families into dangling joiners;
+        # core/domain/emoji_table.py is the same Unicode 15.0.0
+        # Extended_Pictographic table the Go Worker reads, generated from one
+        # source, so the two engines cannot drift.
+        from .emoji_table import strip_emoji
+
+        return strip_emoji(text).strip()
 
     def replace_text(self, text: str, replacements: dict) -> str:
         """Apply the task's replacement entries (literal or regex, with options).

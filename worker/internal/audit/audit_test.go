@@ -139,7 +139,9 @@ func TestEveryFixtureDeclaresAnExpectation(t *testing.T) {
 		if !HasAnyExpectation(fx.raw) {
 			t.Errorf("fixture %s: no expected_* key", fx.ID)
 		}
-		if fx.Executable == ExecBoth && !fx.HasGoDecision() && !fx.HasGoOutput() {
+		if fx.Executable == ExecBoth && !fx.HasGoDecision() && !hasRawKey(fx.raw, "expected_go_output") {
+			// F-03: an expected_go_output of "" is a real expectation (the whole
+			// emoji sequence removed), so presence — not emptiness — is the test.
 			t.Errorf("fixture %s: executable=both without an expected_go* key", fx.ID)
 		}
 	}
