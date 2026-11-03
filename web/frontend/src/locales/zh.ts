@@ -328,6 +328,8 @@ export const zh: Catalog = {
   "ui_blocked_words": "屏蔽词",
   "ui_bot_account": "机器人账号",
   "ui_bot_attached_telegram_accepted": "已绑定{name}——Telegram 已接受。",
+  "ui_bot_defaults": "机器人默认值",
+  "ui_bot_defaults_hint": "该机器人为未固定自身值的任务提供的默认设置。",
   "ui_bot_removed_its_token_is_gone_from_this_account": "机器人已移除。其令牌已从此账号中删除。",
   "ui_brand_c": "品牌 C",
   "ui_branding_hop_triggers_optional": "品牌跳转触发条件（可选）",

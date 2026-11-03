@@ -10,6 +10,7 @@ import type {
   SettingSourceInfo,
 } from '../types'
 import { BotRouteField } from './BotRouteField'
+import { BotDefaultsCard } from './BotDefaultsCard'
 import { badgeFor, canReset, isInherited, rowValue } from '../settingProvenance'
 import { isRtlLang, makeT, type UiLang } from '../locales/engine'
 import { SETTING_GROUPS, SETTING_HELP, SETTING_LABELS } from '../settingLabels.generated'
@@ -450,11 +451,16 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
           </div>
         )}
 
+        {/* What the task's bot supplies by default, in one view — the other
+            half of the provenance badges on the rows below. The id lives in
+            the effective settings (non-inheritable route identifier). */}
+        <BotDefaultsCard botId={settings.bot_token_id} lang={lang} />
+
         {grouped.map(({ group, specs }) => (
           <div key={group} style={{ marginTop: '14px' }}>
             <div
               style={{
-                fontSize: '11px',
+                fontSize: 'var(--type-xs)',
                 fontWeight: 700,
                 color: 'var(--color-info)',
                 textTransform: 'uppercase',

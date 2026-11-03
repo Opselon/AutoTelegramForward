@@ -328,6 +328,8 @@ export const uz: Catalog = {
   "ui_blocked_words": "Bloklangan so'zlar",
   "ui_bot_account": "Bot hisobi",
   "ui_bot_attached_telegram_accepted": "{name} ulandi — Telegram uni qabul qildi.",
+  "ui_bot_defaults": "Bot standartlari",
+  "ui_bot_defaults_hint": "Bu bot o'z qiymatini belgilamagan vazifalarga beradigan narsa.",
   "ui_bot_removed_its_token_is_gone_from_this_account": "Bot olib tashlandi. Uning tokeni bu hisobdan o‘chirildi.",
   "ui_brand_c": "Brend C",
   "ui_branding_hop_triggers_optional": "Brending sakrashi shartlari (ixtiyoriy)",

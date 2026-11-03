@@ -12,6 +12,7 @@ import {
 import { api } from '../api'
 import type { AuditEventEntry } from '../types'
 import { makeT, type UiLang } from '../locales/engine'
+import { PageHeader } from './ui/Primitives'
 
 interface Props {
   lang: UiLang
@@ -88,21 +89,16 @@ export function AuditEventsPanel({ lang }: Props) {
 
   return (
     <div>
-      <div style={{ marginBottom: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-        <div>
-          <h2 style={{ fontSize: 'var(--type-lg)', fontWeight: 800, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: 10 }}>
-            <Activity size={22} color="var(--color-success)" />
-            <span>{t('ui_audit_events_execution_assurance')}</span>
-          </h2>
-          <p style={{ fontSize: '0.825rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
-            {t('ui_durable_postgresql_audit_events_with_correlation_id_search_actua')}
-          </p>
-        </div>
-        <button onClick={fetchEvents} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
-          <RefreshCw size={14} />
-          <span>{t('ui_refresh')}</span>
-        </button>
-      </div>
+      <PageHeader
+        title={t('ui_audit_events_execution_assurance')}
+        description={t('ui_durable_postgresql_audit_events_with_correlation_id_search_actua')}
+        actions={
+          <button onClick={fetchEvents} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
+            <RefreshCw size={14} />
+            <span>{t('ui_refresh')}</span>
+          </button>
+        }
+      />
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>

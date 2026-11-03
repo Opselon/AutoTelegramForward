@@ -2,6 +2,7 @@
  * AI PV auto-responder: presets, rules and the saved config.
  */
 import { Check, MessageSquare } from 'lucide-react'
+import { PageHeader } from '../components/ui/Primitives'
 import type { DashboardCtx } from '../App'
 
 export default function PvPanel({ d }: { d: DashboardCtx }) {
@@ -20,47 +21,47 @@ export default function PvPanel({ d }: { d: DashboardCtx }) {
               <div className="grid-collapse-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 24 }}>
                 {/* Main Controls & Prompt */}
                 <div className="glass-panel" style={{ padding: 24 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <div>
-                      <h2 style={{ fontSize: 'var(--type-xl)', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <MessageSquare size={22} color="var(--color-accent-violet)" />
-                        <span>{t('ui_ai_pv_assistant')}</span>
-                      </h2>
-                      <p style={{ fontSize: 'var(--type-sm)', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                        {t('ui_human_like_conversational_auto_responder_for_telegram_private_me')}
-                      </p>
-                    </div>
-
-                    {/* Instant On/Off Toggle Button */}
-                    <button
-                      onClick={() => handleSavePV({ enabled: !pvConfig?.enabled })}
-                      disabled={pvSaving}
-                      className="btn"
-                      style={{
-                        padding: '8px 16px',
-                        background: pvConfig?.enabled ? 'var(--color-success-soft)' : 'var(--color-danger-soft)',
-                        color: pvConfig?.enabled ? 'var(--color-success)' : 'var(--color-danger)',
-                        border: pvConfig?.enabled ? '1px solid color-mix(in oklab, var(--color-success) 40%, transparent)' : '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)',
-                        fontWeight: 700,
-                        fontSize: 'var(--type-sm)',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <span
+                  <PageHeader
+                    title={
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                        <MessageSquare size={22} color="var(--color-accent-violet)" aria-hidden="true" />
+                        {t('ui_ai_pv_assistant')}
+                      </span>
+                    }
+                    description={t('ui_human_like_conversational_auto_responder_for_telegram_private_me')}
+                    actions={
+                      /* Instant On/Off Toggle Button */
+                      <button
+                        onClick={() => handleSavePV({ enabled: !pvConfig?.enabled })}
+                        disabled={pvSaving}
+                        className="btn"
                         style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          background: pvConfig?.enabled ? 'var(--color-success)' : 'var(--color-danger)',
-                          boxShadow: pvConfig?.enabled ? '0 0 8px var(--color-success)' : 'none',
-                          display: 'inline-block',
-                          marginInlineEnd: 8,
+                          padding: '8px 16px',
+                          background: pvConfig?.enabled ? 'var(--color-success-soft)' : 'var(--color-danger-soft)',
+                          color: pvConfig?.enabled ? 'var(--color-success)' : 'var(--color-danger)',
+                          border: pvConfig?.enabled ? '1px solid color-mix(in oklab, var(--color-success) 40%, transparent)' : '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)',
+                          fontWeight: 700,
+                          fontSize: 'var(--type-sm)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
                         }}
-                      />
-                      <span>{pvConfig?.enabled ? (t('ui_enabled')) : (t('ui_disabled'))}</span>
-                    </button>
-                  </div>
+                      >
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: 8,
+                            height: 8,
+                            borderRadius: '50%',
+                            background: pvConfig?.enabled ? 'var(--color-success)' : 'var(--color-danger)',
+                            boxShadow: pvConfig?.enabled ? '0 0 8px var(--color-success)' : 'none',
+                            display: 'inline-block',
+                            marginInlineEnd: 8,
+                          }}
+                        />
+                        <span>{pvConfig?.enabled ? (t('ui_enabled')) : (t('ui_disabled'))}</span>
+                      </button>
+                    }
+                  />
 
                   {/* Persona Preset Buttons */}
                   <div style={{ marginBlockEnd: 'var(--space-4)' }}>

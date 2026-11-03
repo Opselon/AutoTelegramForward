@@ -328,6 +328,8 @@ export const id: Catalog = {
   "ui_blocked_words": "Kata diblokir",
   "ui_bot_account": "Akun Bot",
   "ui_bot_attached_telegram_accepted": "{name} terpasang — Telegram menerimanya.",
+  "ui_bot_defaults": "Default bot",
+  "ui_bot_defaults_hint": "Apa yang bot ini berikan ke tugas yang tidak menetapkan nilainya sendiri.",
   "ui_bot_removed_its_token_is_gone_from_this_account": "Bot dihapus. Tokennya hilang dari akun ini.",
   "ui_brand_c": "Brand C",
   "ui_branding_hop_triggers_optional": "Pemicu lompatan branding (opsional)",

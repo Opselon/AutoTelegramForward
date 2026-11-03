@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { DashboardCtx } from '../App'
 import { api } from '../api'
+import { PageHeader } from '../components/ui/Primitives'
 import type {
   AutoReplyJob,
   AutoReplyPrompt,
@@ -474,28 +475,28 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       {/* header */}
       <div className="glass-panel" style={card}>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'center', justifyContent: 'space-between' }}>
-          <div>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{t('ui_ar_title')}</h2>
-            <p style={{ ...hintStyle, marginTop: 4 }}>{t('ui_ar_subtitle')}</p>
-          </div>
-          <button
-            className="btn"
-            disabled={busy || !settings}
-            onClick={() => saveSettings({ enabled: !settings?.enabled })}
-            style={{
-              padding: '8px 16px',
-              fontWeight: 700,
-              background: settings?.enabled ? 'var(--color-success-soft)' : 'var(--color-danger-soft)',
-              color: settings?.enabled ? 'var(--color-success)' : 'var(--color-danger)',
-              border: settings?.enabled
-                ? '1px solid color-mix(in oklab, var(--color-success) 40%, transparent)'
-                : '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)',
-            }}
-          >
-            {settings?.enabled ? t('ui_ar_turn_off') : t('ui_ar_turn_on')}
-          </button>
-        </div>
+        <PageHeader
+          title={t('ui_ar_title')}
+          description={t('ui_ar_subtitle')}
+          actions={
+            <button
+              className="btn"
+              disabled={busy || !settings}
+              onClick={() => saveSettings({ enabled: !settings?.enabled })}
+              style={{
+                padding: '8px 16px',
+                fontWeight: 700,
+                background: settings?.enabled ? 'var(--color-success-soft)' : 'var(--color-danger-soft)',
+                color: settings?.enabled ? 'var(--color-success)' : 'var(--color-danger)',
+                border: settings?.enabled
+                  ? '1px solid color-mix(in oklab, var(--color-success) 40%, transparent)'
+                  : '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)',
+              }}
+            >
+              {settings?.enabled ? t('ui_ar_turn_off') : t('ui_ar_turn_on')}
+            </button>
+          }
+        />
 
         <div
           style={{
