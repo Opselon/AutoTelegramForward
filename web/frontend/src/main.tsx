@@ -1,5 +1,6 @@
 import React, { StrictMode, useState, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
+import { AlertTriangle } from 'lucide-react'
 import './index.css'
 import App from './App.tsx'
 import Auth from './pages/Auth.tsx'
@@ -42,7 +43,9 @@ class ErrorBoundary extends React.Component<
     if (this.state.hasError) {
       return (
         <div className="boot-screen">
-          <div style={{ fontSize: 44, marginBottom: 12 }} aria-hidden="true">⚠️</div>
+          <div style={{ marginBottom: 12, color: 'var(--color-warning)' }} aria-hidden="true">
+            <AlertTriangle size={44} />
+          </div>
           <h2 className="boot-screen__title boot-screen__title--error">
             {t('ui_dashboard_failed_to_start')}
           </h2>

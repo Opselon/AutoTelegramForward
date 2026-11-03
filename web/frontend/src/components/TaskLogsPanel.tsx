@@ -70,7 +70,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [ruleId, levels, appliedSearch, hours, offset, pageSize, order])
+  }, [ruleId, levels, appliedSearch, hours, offset, pageSize, order, t])
 
   useEffect(() => {
     void load()

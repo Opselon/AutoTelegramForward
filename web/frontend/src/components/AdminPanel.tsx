@@ -511,7 +511,10 @@ export function AdminPanel({ lang }: Props) {
                 fontSize: '0.88rem',
               }}
             >
-              ✅ {bcastResult.message || t('ui_broadcast_queued_successfully')}
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                <CheckCircle2 size={14} aria-hidden="true" style={{ flexShrink: 0, marginTop: 2 }} />
+                <span>{bcastResult.message || t('ui_broadcast_queued_successfully')}</span>
+              </div>
               <div style={{ marginTop: 6, fontSize: '0.8rem', color: 'var(--color-success)' }}>
                 {t('ui_broadcast_id')} <code>{bcastResult.broadcast_id}</code> | {t('ui_recipients')} <b>{bcastResult.total_recipients}</b>
               </div>
@@ -567,7 +570,11 @@ export function AdminPanel({ lang }: Props) {
           <button onClick={handleSaveSettings} className="btn btn-primary" style={{ padding: '8px 20px' }}>
             <span>{saveStatus === 'saving' ? (t('ui_saving')) : (t('ui_save_gate_settings'))}</span>
           </button>
-          {saveStatus === 'saved' && <span style={{ marginLeft: 12, color: 'var(--color-success)', fontSize: '0.85rem' }}>✅ {t('ui_saved')}</span>}
+          {saveStatus === 'saved' && (
+            <span style={{ marginLeft: 12, color: 'var(--color-success)', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+              <CheckCircle2 size={13} aria-hidden="true" /> {t('ui_saved')}
+            </span>
+          )}
         </div>
       )}
 

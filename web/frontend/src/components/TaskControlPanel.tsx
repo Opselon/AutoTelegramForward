@@ -132,7 +132,7 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
     } finally {
       setLoading(false)
     }
-  }, [rule.id])
+  }, [rule.id, t])
 
   useEffect(() => {
     void load()

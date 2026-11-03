@@ -1,4 +1,4 @@
-import { ShieldAlert, AlertTriangle, Info, CheckCircle2, RefreshCw } from 'lucide-react'
+import { ShieldAlert, AlertTriangle, Info, Lightbulb, CheckCircle2, RefreshCw } from 'lucide-react'
 import type { DiagnosticsResponse, DiagnosticFinding } from '../types'
 import { makeT, type UiLang } from '../locales/engine'
 
@@ -111,7 +111,10 @@ export function DiagnosticsPanel({
                 <span>{f.title}</span>
               </div>
               <div className="finding-detail">{f.detail}</div>
-              <div className="finding-fix">💡 {f.remediation}</div>
+              <div className="finding-fix">
+                <Lightbulb size={12} aria-hidden="true" />
+                <span>{f.remediation}</span>
+              </div>
             </div>
           ))}
         </div>

@@ -6,7 +6,7 @@
  * cycle, so they live in their own module. Moved verbatim from `App.tsx`.
  */
 import { useState } from 'react'
-import { HeartPulse, LogOut } from 'lucide-react'
+import { CheckCircle2, Crown, FlaskConical, HeartPulse, Loader2, LogOut, Play, Save, Star, Trash2, User, XCircle } from 'lucide-react'
 import { api } from '../api'
 import { clearSession } from '../session'
 import { describeKeyCheck } from '../providerKey'
@@ -59,7 +59,12 @@ export function UserBar({
       <div className="userbar__id">
         <span className="userbar__dot" aria-hidden="true" />
         <span className="userbar__name">
-          {user.is_admin ? '👑 ' : '👤 '}
+          <span
+            className={`userbar__glyph${user.is_admin ? ' userbar__glyph--admin' : ''}`}
+            aria-hidden="true"
+          >
+            {user.is_admin ? <Crown size={13} /> : <User size={13} />}
+          </span>
           {user.username}
         </span>
         {user.is_admin && <span className="userbar__role">{t('ui_role_admin')}</span>}
@@ -261,8 +266,11 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
             background: 'var(--color-surface-2)', border: selected?.id === p.id ? '1px solid var(--color-accent-violet)' : '1px solid var(--color-border)',
             borderRadius: 10, padding: 14, cursor: 'pointer',
           }} onClick={() => openEditor(p)}>
-            <div style={{ fontWeight: 700, fontSize: 'var(--type-sm)', marginBottom: 4 }}>
-              {p.is_system ? '⭐' : '👤'} {p.name} <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>v{p.current_version}</span>
+            <div style={{ fontWeight: 700, fontSize: 'var(--type-sm)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span style={{ display: 'inline-flex', color: p.is_system ? 'var(--color-warning)' : 'var(--color-text-muted)' }} aria-hidden="true">
+                {p.is_system ? <Star size={12} /> : <User size={12} />}
+              </span>
+              {p.name} <span style={{ color: 'var(--color-text-muted)', fontWeight: 400 }}>v{p.current_version}</span>
             </div>
             <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
               {p.description || p.system_prompt.slice(0, 100)}
@@ -273,7 +281,7 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
                 className="btn btn-danger icon-btn" style={{ padding: 4, marginTop: 8, float: 'right' }}
                 title={t('ui_delete')}
               >
-                🗑
+                <Trash2 size={13} aria-hidden="true" />
               </button>
             )}
           </div>
@@ -339,8 +347,8 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
 
           {/* Test panel */}
           <div style={{ background: 'var(--color-surface-2)', borderRadius: 10, padding: 14, border: '1px solid var(--color-border)' }}>
-            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-primary-strong)', marginBottom: 8 }}>
-              🧪 {t('ui_prompt_test_no_message_sent')}
+            <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-primary-strong)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <FlaskConical size={13} aria-hidden="true" /> {t('ui_prompt_test_no_message_sent')}
             </div>
             <textarea className="input-field" style={{ width: '100%', minHeight: 60, marginBottom: 8, fontSize: '0.78rem' }}
               value={testText} onChange={(e) => setTestText(e.target.value)} />
@@ -350,7 +358,7 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
                 disabled={testing || !selected || !aiConfigs.length}
                 className="btn btn-secondary" style={{ padding: '6px 12px' }}
               >
-                {testing ? '⏳' : '▶'} {t('ui_run_ai_test')}
+                {testing ? <Loader2 size={13} className="spin" aria-hidden="true" /> : <Play size={13} aria-hidden="true" />} {t('ui_run_ai_test')}
               </button>
               {!aiConfigs.length && <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-danger)' }}>
                 {t('ui_create_an_ai_config_first')}
@@ -360,16 +368,18 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
               <div style={{ marginTop: 10 }}>
                 {testResult.success ? (
                   <div>
-                    <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', marginBottom: 4 }}>
-                      ✅ {testResult.model_used} | {testResult.execution_duration_ms.toFixed(0)}ms | v{testResult.prompt_version_used}
+                    <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <CheckCircle2 size={12} aria-hidden="true" style={{ color: 'var(--color-success)', flexShrink: 0 }} />
+                      {testResult.model_used} | {testResult.execution_duration_ms.toFixed(0)}ms | v{testResult.prompt_version_used}
                     </div>
                     <div style={{ background: 'var(--color-success-soft)', border: '1px solid color-mix(in oklab, var(--color-success) 40%, transparent)', borderRadius: 8, padding: 10, fontSize: 'var(--type-sm)', whiteSpace: 'pre-wrap' }}>
                       {testResult.transformed_text}
                     </div>
                   </div>
                 ) : (
-                  <div style={{ color: 'var(--color-danger)', fontSize: '0.78rem' }}>
-                    ❌ {testResult.error_code}: {testResult.error_message}
+                  <div style={{ color: 'var(--color-danger)', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <XCircle size={12} aria-hidden="true" style={{ flexShrink: 0 }} />
+                    {testResult.error_code}: {testResult.error_message}
                   </div>
                 )}
               </div>
@@ -379,7 +389,7 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
           {!selected?.is_system && form.system_prompt && (
             <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
               <button onClick={handleSave} disabled={saving || !form.name.trim()} className="btn btn-primary" style={{ padding: '8px 16px' }}>
-                💾 {saving ? (t('ui_app_saving')) : (t('ui_save_prompt'))}
+                <Save size={13} aria-hidden="true" /> {saving ? (t('ui_app_saving')) : (t('ui_save_prompt'))}
               </button>
               {selected && (
                 <button onClick={() => openEditor(null)} className="btn btn-secondary" style={{ padding: '8px 16px' }}>

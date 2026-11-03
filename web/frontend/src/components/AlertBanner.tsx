@@ -13,7 +13,7 @@
  *   same event does not return every poll cycle.
  */
 import { useEffect, useState } from 'react'
-import { X } from 'lucide-react'
+import { AlertTriangle, X } from 'lucide-react'
 import { makeT, type UiLang } from '../locales/engine'
 
 export interface PipelineAlert {
@@ -68,7 +68,9 @@ export function AlertBanner({
 
   return (
     <div className={`alert-banner alert-banner--${kind}${isFlood ? ' alert-banner--flood' : ''}`} role="alert">
-      <span className="alert-banner__icon" aria-hidden="true">⚠️</span>
+      <span className="alert-banner__icon" aria-hidden="true">
+        <AlertTriangle size={18} />
+      </span>
       <div className="alert-banner__body">
         <div className="alert-banner__headline">
           {isFlood ? (

@@ -19,11 +19,12 @@ import {
   Replace,
   Sun,
   Moon,
+  AlertTriangle,
 } from 'lucide-react'
 import { api } from './api'
 import { isAccepted, purgedCount, refusalReason } from './actionResult'
 import { describeSaveFailure } from './providerKey'
-import { isRtlLang, makeT, preferredLang, rememberLang, type UiLang } from './locales/engine'
+import { ensureLangLoaded, isLangLoaded, isRtlLang, makeT, preferredLang, rememberLang, type UiLang } from './locales/engine'
 import { LanguagePicker } from './components/LanguagePicker'
 import type { ForwardRule, Session, AIConfig, AIProviderInfo, SaveAIConfigRequest, PromptTemplate, FilterRule, DeliveryJob, DeadLetterJob, DeliveryStats, RuleLiveStat, RecentError, GatewaySystemInfo, SimulateResponse, StatsResponse, LogItem, LogStats, ServicesHealthResponse, PVResponderConfig, DiagnosticsResponse, MeInfo } from './types'
 import { getToken, applySession } from './session'
@@ -132,9 +133,26 @@ function useDashboard(me?: MeInfo) {
   // Persian and a pt/ru/zh browser had only two options.
   const [lang, setLang] = useState<UiLang>(() => preferredLang())
 
-  // Persist the choice so the next visit — and the login page — opens in it.
+  // Catalogs arrive one chunk per language, loaded on demand. Boot loads the
+  // stored language, but a switch mid-session used to change only the state:
+  // `t` fell back to English for every key not already in memory until a full
+  // reload, and <html lang/dir> kept the boot value, so the document never
+  // followed the visible switch. Persist the choice, sync the document, fetch
+  // the chunk, and repaint once it lands.
+  const [langEpoch, setLangEpoch] = useState(0)
   useEffect(() => {
     rememberLang(lang)
+    document.documentElement.lang = lang
+    document.documentElement.dir = isRtlLang(lang) ? 'rtl' : 'ltr'
+    if (!isLangLoaded(lang)) {
+      let alive = true
+      void ensureLangLoaded(lang).then(() => {
+        if (alive) setLangEpoch((n) => n + 1)
+      })
+      return () => {
+        alive = false
+      }
+    }
   }, [lang])
   // The tab is the URL: seeded from the hash so a refresh or a shared deep
   // link lands on the tab it names, and kept in sync with it below.
@@ -294,7 +312,13 @@ function useDashboard(me?: MeInfo) {
   const isRtl = isRtlLang(lang)
   // Memoized on the language so the callbacks below (and the memoized rule
   // cards that receive them) stay stable between renders of the same locale.
-  const t = useMemo(() => makeT(lang), [lang])
+  // `langEpoch` re-binds once the catalog chunk for a mid-session switch has
+  // landed — the engine resolves through the registry at call time, so a fresh
+  // identity is what carries the new language into every memoized consumer.
+  const t = useMemo(() => {
+    void langEpoch
+    return makeT(lang)
+  }, [lang, langEpoch])
 
   // Surface theme. index.html applies the stored value before the first paint;
   // this state mirrors it so the toggle icon (and its label) track reality, and
@@ -1357,7 +1381,9 @@ export function App({ me }: { me?: MeInfo } = {}) {
       items.push({ id: 'admin', label: t('ui_master_admin'), icon: <ShieldAlert size={18} />, group: 'administration' })
     }
     return items
-  }, [lang, currentUser?.is_admin, jobsPending])
+    // `t` rides the dep list beside `lang`: the epoch re-bind that carries a
+    // mid-session catalog load hands these labels their new language too.
+  }, [lang, currentUser?.is_admin, jobsPending, t])
 
   const navGroups: NavGroup[] = useMemo(
     () => [
@@ -1366,7 +1392,7 @@ export function App({ me }: { me?: MeInfo } = {}) {
       { id: 'operations', label: t('ui_nav_group_operations') },
       { id: 'administration', label: t('ui_nav_group_administration') },
     ],
-    [lang],
+    [lang, t],
   )
 
   // Mobile primary surface: the four highest-traffic destinations; everything
@@ -1388,7 +1414,9 @@ export function App({ me }: { me?: MeInfo } = {}) {
           so a dead endpoint looked like an empty account. */}
       {loadFailureLabels.length > 0 && (
         <div className="load-failure-banner" role="alert">
-          <span style={{ flexShrink: 0, lineHeight: 1.4 }} aria-hidden="true">⚠️</span>
+          <span style={{ flexShrink: 0, lineHeight: 1.4, display: 'inline-flex' }} aria-hidden="true">
+            <AlertTriangle size={16} />
+          </span>
           <span style={{ flex: 1, minWidth: 0, wordBreak: 'break-word' }}>
             {t('ui_data_load_failed')}
             {': '}

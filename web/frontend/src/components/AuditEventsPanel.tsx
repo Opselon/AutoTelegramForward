@@ -81,7 +81,7 @@ export function AuditEventsPanel({ lang }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [corrSearch, fService, fOutcome])
+  }, [corrSearch, fService, fOutcome, t])
 
   useEffect(() => {
     fetchEvents()
