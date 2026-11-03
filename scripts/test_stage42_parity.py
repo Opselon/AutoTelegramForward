@@ -150,6 +150,36 @@ def py_header_template(case: Dict[str, Any]) -> str:
     return HeaderFormatter.format_text(case["template"], rule, payload)
 
 
+def py_filter_engine(case: Dict[str, Any]) -> str:
+    """FilterEngine.evaluate — the reason code IS the decision.
+
+    F-11: the Python engine's check order is the contract (service -> media ->
+    length -> blacklist -> whitelist -> regex). The differential cases pin it
+    by asserting the reason a message is dropped under overlapping
+    conditions, which is exactly what the two engines diverged on.
+    """
+    from core.domain.entities import FilterRule, MessagePayload
+    from core.domain.value_objects import MediaType
+
+    rule = FilterRule()
+    for key, value in (case.get("filter") or {}).items():
+        if not hasattr(rule, key):
+            # The harness must not synthesize fields the entity lacks.
+            # FilterRule.block_links is exactly this case (F-12/F-11): no
+            # such field exists, the loader never sets one, and Python's
+            # getattr(..., False) gate in services.py:79 is therefore dead
+            # code. Setting it here would make the dead gate fire and the
+            # parity case would pin a behavior production never produces.
+            continue
+        setattr(rule, key, value)
+    payload = MessagePayload(
+        message_id=1, chat_id="-1", text=case["text"],
+        media_type=MediaType[case.get("media_type", "TEXT").upper()],
+    )
+    result = _ENGINE.evaluate(payload, rule)
+    return f"{result.action.value}:{result.reason}"
+
+
 ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "cleaner": py_cleaner,
     "emoji": py_emoji,
@@ -160,6 +190,7 @@ ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "advanced": py_advanced,
     "header_footer": py_header_footer,
     "header_template": py_header_template,
+    "filter_engine": py_filter_engine,
 }
 
 # ---------------------------------------------------------------------------
@@ -258,6 +289,26 @@ def cases() -> List[Dict[str, Any]]:
          "replacements": {"a\\1b": "KEPT"}},
         {"engine": "replacements", "text": "promo price today",
          "replacements": {"promo": {"to": "sale", "whole_word": True}}},
+
+        # --- F-11: FilterEngine check ORDER is the contract. Python order:
+        # --- service -> media -> length -> blacklist -> whitelist -> regex.
+        {"engine": "filter_engine", "text": "short secret deal",
+         "filter": {"min_message_length": 100, "blacklist_keywords": ["secret"],
+                    "is_enabled": True}},
+        {"engine": "filter_engine", "text": "hi",
+         "filter": {"min_message_length": 100, "is_enabled": True}},
+        # media before length: a blocked media type with an out-of-bounds body.
+        {"engine": "filter_engine", "text": "x", "media_type": "PHOTO",
+         "filter": {"blocked_media_types": ["photo"], "min_message_length": 100,
+                    "is_enabled": True}},
+        # The blocked_media_types "link" arm is the LIVE link gate at this
+        # level, on both engines.
+        {"engine": "filter_engine", "text": "see https://a.io/x",
+         "filter": {"blocked_media_types": ["link"], "is_enabled": True}},
+        # F-12/F-11: the FilterRule-level block_links flag is dead code in
+        # Python (no such field); it must never fire on either side.
+        {"engine": "filter_engine", "text": "see https://a.io/x",
+         "filter": {"block_links": True, "is_enabled": True}},
 
         # --- F-03: Unicode-correct emoji removal. ZWJ families and keycaps go
         # --- as units (no dangling joiners); non-emoji SMP scripts survive.

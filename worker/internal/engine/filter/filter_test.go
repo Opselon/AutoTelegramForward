@@ -12,6 +12,42 @@ import (
 // same input, so a task's filter decides identically in either engine. A
 // task whose filter disagrees across engines forwards a different set of
 // messages depending on which engine picked the job up.
+func TestFilterBlockLinksGateIsDeadCodeF11(t *testing.T) {
+	// F-11 (aligned Stage 4.4): the FilterRule-level block_links gate is dead
+	// code on the Python side — the entity has no such field, the loader
+	// never sets one, and getattr(filter_rule, "block_links", False) in
+	// services.py:79 always answers False. A Go gate that fires anyway would
+	// drop messages Python forwards, for a flag no owner can even set on a
+	// filter. Pinning it to never fire is the alignment.
+	//
+	// The task-level block_links gate that DOES run in Python
+	// (media_filter.link_block_reason → content_policy.has_link) is enforced
+	// by the delivery preflight via policy.HasLink — a different package,
+	// ported exactly.
+	e := New()
+	fr := &rule.FilterRule{BlockLinks: true, IsEnabled: true, WhitelistKeywords: []string{}}
+	res := e.Evaluate("see https://a.io/x now", "TEXT", false, fr)
+	if res.Action != Allow {
+		t.Errorf("FilterRule-level block_links must never fire (it is dead code in Python): got %v %s", res.Action, res.Reason)
+	}
+}
+
+func TestFilterOrderMatchesPythonF11(t *testing.T) {
+	// The Python engine's order is the contract: service → media → length →
+	// blacklist → whitelist → regex. A message that is BOTH out of bounds and
+	// blacklist-bearing takes the FIRST gate, exactly as Python does.
+	e := New()
+	shortAndBlacklisted := &rule.FilterRule{IsEnabled: true, MinMessageLength: 100, BlacklistKeywords: []string{"secret"}}
+	if res := e.Evaluate("short secret", "TEXT", false, shortAndBlacklisted); res.Reason != "too_short" {
+		t.Errorf("length before blacklist (Python order): got %s", res.Reason)
+	}
+	// media before length
+	mediaBlocked := &rule.FilterRule{IsEnabled: true, BlockedMediaTypes: []string{"photo"}, MinMessageLength: 100}
+	if res := e.Evaluate("x", "PHOTO", false, mediaBlocked); res.Reason != "media_blocked:photo" {
+		t.Errorf("media before length (Python order): got %s", res.Reason)
+	}
+}
+
 func TestFilterPortMatchesPythonSemantics(t *testing.T) {
 	e := New()
 

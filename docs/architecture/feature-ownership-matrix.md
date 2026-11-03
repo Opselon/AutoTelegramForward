@@ -10,7 +10,7 @@ or a UI button is never sufficient. Every "Actual runtime path" below was traced
 
 | Feature | Python | Go | Actual runtime path | Parity | Stage |
 |---|---|---|---|---|---|
-| FilterRule | `services.py:37` | `filter.go:84` | `pipeline.py:918` + `delivery.go:212` | order + field gap | 4.1 |
+| FilterRule | `services.py:37` | `filter.go:84` | `pipeline.py:918` + `delivery.go:212` | **FIXED F-11/F-12** (dead gate removed, order aligned) | 4.1 ✅ |
 | ContentPolicy | `content_policy.py:691` | — | `pipeline.py:974, 1197` | absent (baked) | 4.1 |
 | Whitelist | 6 distinct impls | filter only | `FLT-006` + `POL-003` | divergent | 4.1 |
 | Blacklist | 6 distinct impls | filter only | `FLT-006` + `POL-001` | divergent | 4.1 |
@@ -18,7 +18,7 @@ or a UI button is never sufficient. Every "Actual runtime path" below was traced
 | Cleaner | `entities.py:2335` | **unreferenced** | `pipeline.py:1408` | none live | 4.2 |
 | Emoji removal | `emoji_table.py` | `cleaning.emoji.go` | `pipeline.py:1413, 1461` | **FIXED F-03** (both engines, shared table) | 4.2 ✅ |
 | Replace | `text_replace.py:415` | — | `pipeline.py:1543` | absent | 4.3 |
-| Link management | `services.py:758` | strip only | `pipeline.py:1448` | absent | 4.4 |
+| Link management | `services.py:758` | `cleaning.links.go` + `policy.HasLink` | `pipeline.py:1448` | **FIXED F-14** (canonical `has_link` predicate) | 4.4 ✅ |
 | Header/Footer | `services.py:241` | `cleaning.FormatHeader` | `pipeline.py:1547` raw | **FIXED F-15** (Go renders) | 4.4 ✅ |
 | Watermark | `services.py:1441` | `pipeline.applyAdvanced` | `pipeline.py:1558` | gated F--addon ✅ | 4.4 ✅ |
 | AI transformation | `pipeline.py:1616` | — | `pipeline.py:1524` | absent | 4.4 |
