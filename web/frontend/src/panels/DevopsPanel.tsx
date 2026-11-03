@@ -34,6 +34,7 @@ import {
 } from 'lucide-react'
 import type { DashboardCtx } from '../App'
 import { LogPolicyPanel } from '../components/LogPolicyPanel'
+import { LoggingHealth } from '../components/LoggingHealth'
 
 export default function DevopsPanel({ d }: { d: DashboardCtx }) {
   const {
@@ -262,6 +263,11 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
             </button>
           </div>
         </div>
+
+        {/* Pipeline health: "no rows" and "the collector is dead" must not read
+            the same. Loads on mount, refreshes on request — the console below
+            owns the live cadence. */}
+        <LoggingHealth lang={lang} />
 
         {/* Filter & Search — the Field pattern: label above the control, so a
             narrow card can never clip a label off its edge. Controls fill

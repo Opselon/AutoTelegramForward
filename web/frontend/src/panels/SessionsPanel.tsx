@@ -2,7 +2,7 @@
  * MTProto sessions: connect, inspect, terminate.
  */
 import { Layers, Users, X } from 'lucide-react'
-import { EmptyState } from '../components/ui/Primitives'
+import { EmptyState, PageHeader, StatusIndicator } from '../components/ui/Primitives'
 import type { DashboardCtx } from '../App'
 
 export default function SessionsPanel({ d }: { d: DashboardCtx }) {
@@ -15,14 +15,10 @@ export default function SessionsPanel({ d }: { d: DashboardCtx }) {
   return (
     <>
               <div>
-                <div style={{ marginBottom: 20 }}>
-                  <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-                    {t('ui_telegram_mtproto_client_sessions')}
-                  </h2>
-                  <p style={{ fontSize: 'var(--type-sm)', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                    {t('ui_monitor_connected_userbot_sessions_auth_status_and_proxies')}
-                  </p>
-                </div>
+                <PageHeader
+                  title={t('ui_telegram_mtproto_client_sessions')}
+                  description={t('ui_monitor_connected_userbot_sessions_auth_status_and_proxies')}
+                />
 
                 <div className="sessions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
                   {(Array.isArray(sessions) ? sessions : []).length === 0 && (
@@ -39,9 +35,20 @@ export default function SessionsPanel({ d }: { d: DashboardCtx }) {
                             {sess.first_name || sess.username || sess.id}
                           </span>
                         </div>
-                        <span className={`badge ${sess.is_active ? 'badge-native' : 'badge-gray'}`}>
-                          {sess.is_active ? (t('ui_online')) : (t('ui_offline'))}
-                        </span>
+                        {/* Connection and authorization are two different truths:
+                            a session can be online but unauthorized (needs a
+                            re-login), so the indicator reads both. */}
+                        <StatusIndicator
+                          tone={sess.is_authorized ? 'success' : sess.is_active ? 'warning' : 'neutral'}
+                          pulse={sess.is_active && sess.is_authorized}
+                          label={
+                            sess.is_authorized
+                              ? t('ui_authorized')
+                              : sess.is_active
+                              ? t('ui_online')
+                              : t('ui_offline')
+                          }
+                        />
                       </div>
 
                       <div style={{ fontSize: '0.8rem', color: 'var(--color-text)', display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
