@@ -114,6 +114,29 @@ type testCase struct {
 	// harness pins the UI-copy formula too (it never decides delivery,
 	// but the two engines must still agree on it).
 	FENSlots bool `json:"fen_slots"`
+	// effective_settings cases: the settings operation the case asks
+	// for, the key(s) it asks about, the bot row(s) a store-backed case
+	// seeds the bot_tokens table with, and the owner the scoped query
+	// binds (empty = the rule knows no owner, the pre-ownership
+	// unscoped read).
+	SettingsOp     string         `json:"settings_op"`
+	SettingsKey    string         `json:"settings_key"`
+	SettingsKeys   []string       `json:"settings_keys"`
+	SettingsBots   []botTokenRow  `json:"settings_bots"`
+	SettingsOwner  int64          `json:"settings_owner"`
+
+	// BotDefaults is the bot's defaults_json blob for the in-memory ops:
+	// null = no bot attached, {} = a bot with no defaults.
+	BotDefaults any `json:"bot_defaults"`
+}
+
+// botTokenRow is one bot_tokens seed row for a store-backed effective
+// settings case: the token id, the owner whose bot it is, and the
+// defaults_json blob the Core stores.
+type botTokenRow struct {
+	TokenID  string         `json:"token_id"`
+	Owner    int64          `json:"owner"`
+	Defaults map[string]any `json:"defaults"`
 }
 
 type result struct {
@@ -535,6 +558,15 @@ case "chat_key":
 				forwardinterval.SlotsUntilNext(c.FENSequence, everyN))
 		}
 		return fmt.Sprintf("clamp=%d owns=%t", everyN, owns)
+
+	case "effective_settings":
+		// The configuration-ownership plane (Stage 5 W2): which value a
+		// task actually runs with when a bot carries defaults for it.
+		// Runs through the REAL settings registry and (for the
+		// store-backed ops) the REAL owner-scoped bot_tokens read, so a
+		// divergence is a parity failure rather than two agreed
+		// fixtures.
+		return runEffectiveSettingsCase(c)
 
 	default:
 		return ""
