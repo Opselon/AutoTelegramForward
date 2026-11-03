@@ -16,19 +16,23 @@ package main
 
 import (
 	"bytes"
+	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
-"strings"
+	"strings"
 
 	"atf/worker/internal/domain/album"
 	"atf/worker/internal/domain/cleaning"
-"atf/worker/internal/domain/reply"
-"atf/worker/internal/domain/routing"
+	"atf/worker/internal/domain/dedup"
+	"atf/worker/internal/domain/reply"
+	"atf/worker/internal/domain/routing"
 	"atf/worker/internal/domain/rule"
 	"atf/worker/internal/engine/filter"
 	"atf/worker/internal/rulestore"
+	_ "github.com/mattn/go-sqlite3" // registers the sqlite3 driver the dedup lifecycle opens
 )
 
 type testCase struct {
@@ -68,11 +72,11 @@ type testCase struct {
 	// ai_gate cases: the task's AI config id.
 	AIConfigID string `json:"ai_config_id"`
 	MediaType  string `json:"media_type"`
-// album_window cases: the per-task aggregation window and the number
+	// album_window cases: the per-task aggregation window and the number
 	// of pieces in the in-flight group.
 	Window float64 `json:"window"`
 	Items  int     `json:"items"`
-// Stage 4.5 W1 routing cases: the task's routing fields (mirroring the
+	// Stage 4.5 W1 routing cases: the task's routing fields (mirroring the
 	// rule.ForwardRule projection) and the message snapshot the decisions
 	// run against. ChatID and ChatUsername (above) are the message's
 	// source chat id and @username; ForwardOrigin the "Forwarded from
@@ -86,6 +90,18 @@ type testCase struct {
 	DetectionCriteria   map[string]any `json:"detection_criteria"`
 	IntermediateChannel string         `json:"intermediate_channel_id"`
 	ForwardOrigin       map[string]any `json:"forward_origin"`
+	// dedup cases: the caption half of the fingerprint seam (text is the
+	// shared Text field every engine already reads).
+	Caption string `json:"caption"`
+	// dedup cases: the content-fingerprint inputs. Text and Caption carry
+	// the message body/seam pair, MediaGroupID the album id ("" = no
+	// album); the case's op names the fingerprint operation to run so one
+	// engine covers the whole normalization family.
+	MediaGroupID string `json:"media_group_id"`
+	// DedupOp selects the dedup engine operation: "fingerprint" computes
+	// the content fingerprint, "claim_release" demonstrates the claim /
+	// release lifecycle against a real store.
+	DedupOp string `json:"dedup_op"`
 }
 
 type result struct {
@@ -351,11 +367,41 @@ func runCase(c testCase) string {
 			meta = c.Metadata
 		}
 		return strconv.FormatBool(rulestore.ProbeAIRewriteActive(c.AIConfigID, meta))
-	case "filter_engine":
-		// F-11: the reason code IS the decision. Runs the real filter engine
-		// in the same order the production delivery preflight does, so a
-		// check-order divergence shows up as a parity failure rather than a
-		// silent metrics/audit difference.
+	case "dedup":
+		// Stage 4.5 (W3): the content fingerprint and claim/release
+		// lifecycle, exercised against the REAL dedup package — the same
+		// code the delivery engine's W3 preflight consults.
+		//
+		// "fingerprint" computes PayloadFingerprint over the case's
+		// text/caption/media kind/album id and compares it to the Python
+		// pipeline's _content_fingerprint byte for byte: a divergence is
+		// the two engines disagreeing about which posts are the same post.
+		//
+		// "claim_release" runs the actual atomic claim, a second claim
+		// (which must lose), a release, and a re-claim (which must win)
+		// against a real SQLite store, producing the lifecycle string the
+		// Python adapter mirrors against the same Core tables.
+		switch c.DedupOp {
+		case "fingerprint":
+			// Python's MessageType defaults to TEXT ("text") when a case
+			// omits the field; the Go case field defaults to "". Matching
+			// the default keeps the two engines on one key.
+			mediaType := c.MediaType
+			if mediaType == "" {
+				mediaType = "text"
+			}
+			return dedup.PayloadFingerprint(dedup.FingerprintInput{
+				Text:         c.Text,
+				Caption:      c.Caption,
+				MediaType:    mediaType,
+				MediaGroupID: c.MediaGroupID,
+			})
+		case "claim_release":
+			return dedupClaimRelease(c)
+		default:
+			return ""
+		}
+	case "filter_engine": // F-11: the reason code IS the decision. Runs the real filter engine
 		fr := &rule.FilterRule{}
 		for key, value := range c.Filter {
 			applyFilterField(fr, key, value)
@@ -472,6 +518,87 @@ case "chat_key":
 	// point (which is ApplyText with a zero hint).
 	result := engine.ApplyText(c.Text, cfg, nil, cleaning.CaptionHint{IsCaption: c.IsCaption})
 	return result.Text
+}
+
+// dedupClaimRelease runs the content-claim lifecycle against a REAL dedup
+// store (the same Core tables the production pipeline uses), returning the
+// win/lose/win string the Python adapter mirrors. One store per case keeps
+// cases independent; the fingerprint the case acts on is derived from the
+// case's own text so two cases never collide on one (rule, hash).
+//
+// The lifecycle this pins is the one pipeline.py:781 documents: a claim is
+// earned on delivery acceptance and must be released when the message never
+// reached a target, or the next legitimate identical post is silently
+// dropped.
+func dedupClaimRelease(c testCase) string {
+	dir, err := os.MkdirTemp("", "parity-dedup")
+	if err != nil {
+		return "mkdir: " + err.Error()
+	}
+	defer os.RemoveAll(dir)
+	path := dir + "/dedup.db"
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		return "open: " + err.Error()
+	}
+	if _, err := db.Exec(parityDedupSchema); err != nil {
+		db.Close()
+		return "schema: " + err.Error()
+	}
+	db.Close()
+	store, err := dedup.NewSQLite(context.Background(), path+"?_busy_timeout=10000")
+	if err != nil {
+		return "new store: " + err.Error()
+	}
+	defer store.Close()
+
+	ctx := context.Background()
+	ruleID := strField(c.Metadata, "rule_id")
+	if ruleID == "" {
+		ruleID = "parity-rule"
+	}
+	hash := dedup.PayloadFingerprint(dedup.FingerprintInput{Text: c.Text, MediaType: "text"})
+
+	var b strings.Builder
+	first, err := store.ClaimContentHash(ctx, ruleID, hash)
+	if err != nil {
+		return "claim1: " + err.Error()
+	}
+	b.WriteString(boolWord(first))
+	second, err := store.ClaimContentHash(ctx, ruleID, hash)
+	if err != nil {
+		return "claim2: " + err.Error()
+	}
+	b.WriteString("/" + boolWord(second))
+	if err := store.ReleaseContentHash(ctx, ruleID, hash); err != nil {
+		return "release: " + err.Error()
+	}
+	again, err := store.ClaimContentHash(ctx, ruleID, hash)
+	if err != nil {
+		return "reclaim: " + err.Error()
+	}
+	b.WriteString("/" + boolWord(again))
+	return b.String()
+}
+
+// parityDedupSchema is the Core's content_dedup DDL
+// (core/infrastructure/persistence/database.py), so the lifecycle runs
+// against the real table shape rather than a look-alike.
+const parityDedupSchema = `
+CREATE TABLE IF NOT EXISTS content_dedup (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule_id TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE(rule_id, content_hash)
+);
+`
+
+func boolWord(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }
 
 func main() {
