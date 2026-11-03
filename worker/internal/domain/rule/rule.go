@@ -145,11 +145,10 @@ type ForwardRule struct {
 	// (NEVER a column on either backend; see the store's projection note.)
 
 	// AIPromptID names the prompt-template pair the task configured, a
-	// metadata key (pipeline.py:1724). The Worker has no prompt-template
-	// service, so the id is carried for attribution only: the prompt pair
-	// a rewrite actually uses is the AI config row's own, exactly as the
-	// Python pipeline does when no prompt_id is configured.
+	// metadata key (pipeline.py:1724).
 	AIPromptID string
+	// TargetPromptOverrides stores per-target prompt overrides keyed by target chat key.
+	TargetPromptOverrides map[string]TargetPrompt
 	// AICreativity is the sampling knob (metadata key, default 0.7 —
 	// entities.py:1629). Carried on the projection so a parity harness
 	// can pin the two engines' read of it; the Worker's provider payload
@@ -504,6 +503,12 @@ func (r *ForwardRule) AllTargets() []string {
 		out = append(out, tid)
 	}
 	return out
+}
+
+// TargetPrompt defines a target-scoped prompt template override.
+type TargetPrompt struct {
+	PromptID      string
+	PromptVersion int
 }
 
 // Store is the read-only interface the queue worker uses to re-check a task

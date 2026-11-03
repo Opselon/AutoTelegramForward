@@ -24,14 +24,19 @@ import (
 	"strconv"
 	"strings"
 
+	"atf/worker/internal/domain/aiconfig"
 	"atf/worker/internal/domain/album"
 	"atf/worker/internal/domain/cleaning"
 	"atf/worker/internal/domain/dedup"
 	"atf/worker/internal/domain/forwardinterval"
+	"atf/worker/internal/domain/prompt"
 	"atf/worker/internal/domain/reply"
 	"atf/worker/internal/domain/routing"
 	"atf/worker/internal/domain/rule"
 	"atf/worker/internal/engine/filter"
+	"atf/worker/internal/infra/aiprovider"
+	"atf/worker/internal/infra/aiprovider/circuit"
+	"atf/worker/internal/infra/aiprovider/validator"
 	"atf/worker/internal/rulestore"
 	_ "github.com/mattn/go-sqlite3" // registers the sqlite3 driver the dedup lifecycle opens
 )
@@ -128,6 +133,16 @@ type testCase struct {
 	// BotDefaults is the bot's defaults_json blob for the in-memory ops:
 	// null = no bot attached, {} = a bot with no defaults.
 	BotDefaults any `json:"bot_defaults"`
+
+	// channel_rewrite fields:
+	HasMedia         bool           `json:"has_media"`
+	OwnerUserID      int64          `json:"owner_user_id"`
+	AIPromptID       string         `json:"prompt_id"`
+	AIPromptVersion  int            `json:"ai_prompt_version"`
+	AIFallbackPolicy string         `json:"ai_fallback_policy"`
+	AITimeoutSeconds float64        `json:"ai_timeout_seconds"`
+	Prompts          map[string]any `json:"prompts"`
+	ProviderScript   [][]any        `json:"provider_script"`
 }
 
 // botTokenRow is one bot_tokens seed row for a store-backed effective
@@ -568,6 +583,9 @@ case "chat_key":
 		// fixtures.
 		return runEffectiveSettingsCase(c)
 
+	case "channel_rewrite":
+		return runChannelRewriteCase(c)
+
 	default:
 		return ""
 	}
@@ -840,4 +858,284 @@ func orderedCaseReplacements(c testCase) []cleaning.ReplacementEntry {
 		return nil
 	}
 	return orderedEntriesFromMap(c.orderedReplacements)
+}
+
+// ---------------------------------------------------------------------------
+// channel_rewrite parity engine
+// ---------------------------------------------------------------------------
+
+type parityOutcome struct {
+	text       string
+	err        error
+	echoSystem bool
+}
+
+type parityFakeProvider struct {
+	script []parityOutcome
+	calls  int
+}
+
+func (p *parityFakeProvider) Rewrite(ctx context.Context, cfg *aiconfig.AIConfig, text string) (string, error) {
+	p.calls++
+	idx := p.calls - 1
+	var outcome parityOutcome
+	if idx < len(p.script) {
+		outcome = p.script[idx]
+	} else if len(p.script) > 0 {
+		outcome = p.script[len(p.script)-1]
+	}
+	if outcome.err != nil {
+		return "", outcome.err
+	}
+	if outcome.echoSystem {
+		if strings.Contains(text, "Instructions:\n") {
+			parts := strings.Split(text, "Instructions:\n")
+			if len(parts) > 1 {
+				sub := strings.Split(parts[1], "\nTarget Language:")
+				return strings.TrimSpace(sub[0]), nil
+			}
+		}
+		return "", nil
+	}
+	return outcome.text, nil
+}
+
+func (p *parityFakeProvider) ChatComplete(ctx context.Context, cfg *aiconfig.AIConfig, messages []aiprovider.Message, temp float64) (string, error) {
+	return p.Rewrite(ctx, cfg, "chat")
+}
+
+func (p *parityFakeProvider) HealthCheck(ctx context.Context, cfg *aiconfig.AIConfig) (bool, error) {
+	return true, nil
+}
+
+type parityAIConfigStore struct {
+	configs map[string]*aiconfig.AIConfig
+}
+
+func (s *parityAIConfigStore) GetOwned(ctx context.Context, id string, owner int64) (*aiconfig.AIConfig, error) {
+	cfg, ok := s.configs[id]
+	if !ok || cfg.OwnerUserID != owner {
+		return nil, nil
+	}
+	return cfg, nil
+}
+
+func (s *parityAIConfigStore) GetByID(ctx context.Context, id string) (*aiconfig.AIConfig, error) {
+	return s.configs[id], nil
+}
+
+type parityPromptStore struct {
+	templates map[string]*prompt.PromptTemplate
+	versions  map[string]map[int]*prompt.PromptVersion
+}
+
+func (s *parityPromptStore) GetTemplate(ctx context.Context, id string, owner int64) (*prompt.PromptTemplate, error) {
+	t, ok := s.templates[id]
+	if !ok {
+		return nil, nil
+	}
+	if !t.IsSystem && t.OwnerUserID != owner {
+		return nil, nil
+	}
+	return t, nil
+}
+
+func (s *parityPromptStore) GetVersion(ctx context.Context, promptID string, ver int) (*prompt.PromptVersion, error) {
+	vm, ok := s.versions[promptID]
+	if !ok {
+		return nil, nil
+	}
+	v, ok := vm[ver]
+	if !ok {
+		return nil, nil
+	}
+	return v, nil
+}
+
+func metaStr(m map[string]any, k, def string) string {
+	if m == nil {
+		return def
+	}
+	if v, ok := m[k].(string); ok && strings.TrimSpace(v) != "" {
+		return strings.TrimSpace(v)
+	}
+	return def
+}
+
+func runChannelRewriteCase(c testCase) string {
+	owner := c.OwnerUserID
+	if owner == 0 {
+		owner = 42
+	}
+	cfgID := c.AIConfigID
+	if cfgID == "" {
+		cfgID = "cfg-1"
+	}
+	configs := map[string]*aiconfig.AIConfig{
+		cfgID: {
+			ID:                 cfgID,
+			Provider:           "openai",
+			Model:              "gpt-test",
+			APIKey:             "key-ai",
+			SystemPrompt:       aiconfig.DefaultSystemPrompt,
+			UserPromptTemplate: "{text}",
+			IsEnabled:          true,
+			OwnerUserID:        owner,
+		},
+	}
+	cfgStore := &parityAIConfigStore{configs: configs}
+
+	var outcomes []parityOutcome
+	for _, raw := range c.ProviderScript {
+		if len(raw) >= 2 {
+			kind, _ := raw[0].(string)
+			switch kind {
+			case "ok":
+				outcomes = append(outcomes, parityOutcome{text: fmt.Sprint(raw[1])})
+			case "status":
+				status := int(raw[1].(float64))
+				outcomes = append(outcomes, parityOutcome{err: &aiprovider.Error{Code: aiprovider.AuthError, Message: fmt.Sprintf("HTTP %d", status)}})
+			case "raise":
+				outcomes = append(outcomes, parityOutcome{err: &aiprovider.Error{Code: aiprovider.ProviderError, Message: fmt.Sprint(raw[1]), Retryable: true}})
+			case "sleep":
+				outcomes = append(outcomes, parityOutcome{err: &aiprovider.Error{Code: aiprovider.Timeout, Message: "timeout", Retryable: true}})
+			case "echo_system":
+				outcomes = append(outcomes, parityOutcome{echoSystem: true})
+			}
+		}
+	}
+	fakeProv := &parityFakeProvider{script: outcomes}
+
+	factory := aiprovider.NewFactory()
+	factory.Register("openai", func() aiprovider.Provider { return fakeProv })
+	circuits := circuit.NewRegistry()
+	transformer := aiprovider.NewTransformer(cfgStore, circuits, validator.New(), factory)
+
+	pStore := &parityPromptStore{
+		templates: make(map[string]*prompt.PromptTemplate),
+		versions:  make(map[string]map[int]*prompt.PromptVersion),
+	}
+	if c.Prompts != nil {
+		for pid, rawTpl := range c.Prompts {
+			if tm, ok := rawTpl.(map[string]any); ok {
+				tOwner := owner
+				if o, has := tm["owner_user_id"]; has {
+					tOwner = int64(o.(float64))
+				}
+				curVer := 1
+				if v, has := tm["current_version"]; has {
+					curVer = int(v.(float64))
+				}
+				isSys := false
+				if s, has := tm["is_system"]; has {
+					isSys, _ = s.(bool)
+				}
+				pStore.templates[pid] = &prompt.PromptTemplate{
+					ID:                 pid,
+					Name:               metaStr(tm, "name", pid),
+					SystemPrompt:       metaStr(tm, "system_prompt", ""),
+					UserPromptTemplate: metaStr(tm, "user_prompt_template", "{text}"),
+					TargetLanguage:     metaStr(tm, "target_language", "en"),
+					CurrentVersion:     curVer,
+					IsSystem:           isSys,
+					OwnerUserID:        tOwner,
+				}
+				if vers, has := tm["versions"].(map[string]any); has {
+					if pStore.versions[pid] == nil {
+						pStore.versions[pid] = make(map[int]*prompt.PromptVersion)
+					}
+					for verStr, vRaw := range vers {
+						verNum, _ := strconv.Atoi(verStr)
+						if vMap, ok := vRaw.(map[string]any); ok {
+							pStore.versions[pid][verNum] = &prompt.PromptVersion{
+								ID:                 fmt.Sprintf("%s-v%d", pid, verNum),
+								PromptID:           pid,
+								Version:            verNum,
+								SystemPrompt:       metaStr(vMap, "system_prompt", ""),
+								UserPromptTemplate: metaStr(vMap, "user_prompt_template", "{text}"),
+								IsActive:           true,
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	pipeline := cleaning.NewPipeline()
+	cleanCfg := cleaning.Config{
+		Header: c.Header,
+		Footer: c.Footer,
+	}
+	if len(c.orderedReplacements) > 0 {
+		cleanCfg.Replacements = orderedCaseReplacements(c)
+	} else if c.Replacements != nil {
+		cleanCfg.Replacements = entriesFromMap(c.Replacements)
+	}
+
+	meta := c.Metadata
+	if meta == nil {
+		meta = map[string]any{}
+	}
+	if rulestore.ProbeAIRewriteActive(cfgID, meta) {
+		promptID := c.AIPromptID
+		if promptID == "" {
+			promptID = metaStr(meta, "prompt_id", "")
+		}
+		promptVer := c.AIPromptVersion
+
+		cleanCfg.AIRewrite = func(ctx context.Context, text string) (string, error) {
+			sysPrompt := ""
+			userTpl := "{text}"
+			targetLang := "auto"
+			if promptID != "" {
+				preview, err := prompt.PreviewPrompt(ctx, pStore, promptID, text, promptVer, owner)
+				if err == nil && preview != nil {
+					sysPrompt = preview.SystemPrompt
+					userTpl = preview.RenderedUserPrompt
+					promptVer = preview.Version
+					if preview.TargetLanguage != "" {
+						targetLang = preview.TargetLanguage
+					}
+				}
+			}
+			maxLen := 4096
+			if c.HasMedia || c.IsCaption {
+				maxLen = 1024
+			}
+			tmo := c.AITimeoutSeconds
+			if tmo <= 0 {
+				tmo = 5.0
+			}
+			req := aiprovider.Request{
+				Text:           text,
+				SystemPrompt:   sysPrompt,
+				UserTemplate:   userTpl,
+				PromptID:       promptID,
+				PromptVersion:  promptVer,
+				TargetLanguage: targetLang,
+				MaxLength:      maxLen,
+				TimeoutSeconds: tmo,
+				IsCaption:      c.HasMedia || c.IsCaption,
+			}
+			resp := transformer.Transform(ctx, req, cfgID, "", owner)
+			if resp.Success {
+				return resp.TransformedText, nil
+			}
+			return "", &cleaning.AIError{Code: resp.ErrorCode, Message: resp.ErrorMessage}
+		}
+		cleanCfg.AIFallback = func(ctx context.Context, original, classification, message string) (string, bool) {
+			policy := strings.ToUpper(strings.TrimSpace(c.AIFallbackPolicy))
+			if policy == "SEND_ORIGINAL" {
+				return original, true
+			}
+			return "", false
+		}
+	}
+
+	res := pipeline.ApplyText(c.Text, cleanCfg, nil, cleaning.CaptionHint{IsCaption: c.HasMedia || c.IsCaption})
+	if res.AIDrop {
+		return "<DROPPED>"
+	}
+	return res.Text
 }

@@ -477,6 +477,8 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		// read off the AI config row, exactly as the Python pipeline does
 		// when no prompt_id is configured.
 		extra.ForwardRule.AIPromptID = metaStr(extra.Metadata, "prompt_id", "")
+		policyBlob, _ := extra.Metadata["content_policy"].(map[string]any)
+		extra.ForwardRule.TargetPromptOverrides = buildTargetPromptOverrides(policyBlob, extra.Metadata)
 		extra.ForwardRule.AICreativity = metaFloatDefault(extra.Metadata, "ai_creativity", 0.7)
 		extra.ForwardRule.AIMaxTokens = metaIntDefault(extra.Metadata, "ai_max_tokens", 600)
 	}
