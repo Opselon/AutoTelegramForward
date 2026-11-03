@@ -1405,3 +1405,30 @@ export interface FilterTestResult {
   entries: string[]
   mode: string
 }
+
+/**
+ * One entry in the worker's persisted per-message processing history
+ * (`/diagnostic-events`). The queue endpoint answers "how many", these entries
+ * answer "what exactly happened, in which stage, at which attempt".
+ */
+export interface DiagnosticEventEntry {
+  event_id: string
+  event_name: string
+  timestamp: number
+  severity: string
+  stage: string
+  strategy: string
+  attempt: number
+  task_id: string
+  job_id: string
+  trace_id: string
+  correlation_id: string
+  source_peer_id: string
+  source_message_id: number
+  target_peer_id: string
+  error_origin: string
+  category: string
+  reason: string
+  retryable: boolean
+  detail?: string
+}

@@ -1933,8 +1933,7 @@ p {
   }
 }
 
-/* PageHeader: one heading pattern instead of per-panel hero variants. */
-.page-header {
+/* PageHeader: one heading pattern instead of per-panel hero variants. */.page-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -5808,4 +5807,60 @@ body {
 .lang-trigger--compact {
   padding: 4px 8px;
   font-size: var(--type-xs);
+}
+
+/* Timeline: the per-message delivery drill-down. A left rail connects the
+   dots so a sequence of stages reads as one message's life, not a log list.
+   The rail sits inline-start so RTL mirrors it with the rest of the layout. */
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-inline-size: 0;
+}
+
+.timeline__item {
+  position: relative;
+  display: flex;
+  gap: var(--space-3);
+  padding-block: var(--space-2);
+  padding-inline-start: var(--space-5);
+  min-inline-size: 0;
+}
+
+.timeline__item::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 8px;
+  inline-size: 2px;
+  background: var(--color-border);
+}
+
+.timeline__item:first-child::before {
+  inset-block-start: 50%;
+}
+
+.timeline__item:last-child::before {
+  inset-block-end: 50%;
+}
+
+.timeline__dot {
+  position: absolute;
+  inset-inline-start: 4px;
+  inset-block-start: 50%;
+  transform: translateY(-50%);
+  inline-size: 10px;
+  block-size: 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-primary) 20%, transparent);
+}
+
+.timeline__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+  flex: 1;
 }

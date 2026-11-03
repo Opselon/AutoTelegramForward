@@ -3,6 +3,7 @@
  */
 import { Activity, Clock, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Button, EmptyState } from '../components/ui/Primitives'
+import { DeliveryTimeline } from '../components/DeliveryTimeline'
 import type { DashboardCtx } from '../App'
 
 export default function QueuePanel({ d }: { d: DashboardCtx }) {
@@ -11,6 +12,7 @@ export default function QueuePanel({ d }: { d: DashboardCtx }) {
     dlqJobs,
     deliveryStats,
     t,
+    lang,
     handleRetryDLQ,
     handlePurgeDLQ,
     openRuleModal,
@@ -147,6 +149,11 @@ export default function QueuePanel({ d }: { d: DashboardCtx }) {
                     )}
                   </div>
                 </div>
+
+                {/* Per-message drill-down: the worker's persisted processing
+                    history for recent deliveries — what the queue counts can
+                    only point at, the timeline explains. */}
+                <DeliveryTimeline lang={lang} />
               </div>
 
     </>

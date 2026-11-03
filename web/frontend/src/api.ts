@@ -13,6 +13,7 @@ import type {
   DeadLetterJob,
   DeliveryJob,
   DeliveryStats,
+  DiagnosticEventEntry,
   DiagnosticsResponse,
   EnvContract,
   FilterRule,
@@ -156,6 +157,32 @@ async function getQueueRaw(): Promise<any> {
   const res = await fetchJson<any>(`${API_BASE}/queue`)
   _queueCache = { data: res, ts: Date.now() }
   return res
+}
+
+/** Server rows may omit fields (older cores, partial projections); a
+ * normalized entry keeps the timeline rendering defensive without lying. */
+function normalizeDiagnosticEvent(e: any): DiagnosticEventEntry {
+  return {
+    event_id: e?.event_id ?? '',
+    event_name: e?.event_name ?? '',
+    timestamp: typeof e?.timestamp === 'number' ? e.timestamp : 0,
+    severity: e?.severity ?? 'INFO',
+    stage: e?.stage ?? '',
+    strategy: e?.strategy ?? '',
+    attempt: typeof e?.attempt === 'number' ? e.attempt : 0,
+    task_id: e?.task_id ?? '',
+    job_id: e?.job_id ?? '',
+    trace_id: e?.trace_id ?? '',
+    correlation_id: e?.correlation_id ?? '',
+    source_peer_id: e?.source_peer_id ?? '',
+    source_message_id: typeof e?.source_message_id === 'number' ? e.source_message_id : 0,
+    target_peer_id: e?.target_peer_id ?? '',
+    error_origin: e?.error_origin ?? '',
+    category: e?.category ?? '',
+    reason: e?.reason ?? '',
+    retryable: e?.retryable === true,
+    detail: typeof e?.detail === 'string' ? e.detail : undefined,
+  }
 }
 
 export const api = {
@@ -530,6 +557,104 @@ export const api = {
   purgeDLQ: () =>
     fetchJson<{ success: boolean; message: string; purged_count?: number }>(`${API_BASE}/dlq`, {
       method: 'DELETE',
+    }),
+
+  // Diagnostic events: the worker's persisted per-message processing history.
+  // The queue answers "how many", these answer "what exactly happened" — the
+  // timeline drill-down groups one message's events oldest-first with every
+  // Telegram answer preserved, which is what makes a failed delivery
+  // explainable instead of just visible.
+  getDiagnosticEvents: async (params?: {
+    since?: number
+    until?: number
+    category?: string
+    stage?: string
+    severity?: string
+    task_id?: string
+    source_peer_id?: string
+    source_message_id?: number
+    trace_id?: string
+    reason?: string
+    limit?: number
+  }): Promise<DiagnosticEventEntry[]> => {
+    const q = new URLSearchParams()
+    if (params?.since) q.set('since', String(params.since))
+    if (params?.until) q.set('until', String(params.until))
+    if (params?.category) q.set('category', params.category)
+    if (params?.stage) q.set('stage', params.stage)
+    if (params?.severity) q.set('severity', params.severity)
+    if (params?.task_id) q.set('task_id', params.task_id)
+    if (params?.source_peer_id) q.set('source_peer_id', params.source_peer_id)
+    if (params?.source_message_id) q.set('source_message_id', String(params.source_message_id))
+    if (params?.trace_id) q.set('trace_id', params.trace_id)
+    if (params?.reason) q.set('reason', params.reason)
+    if (params?.limit) q.set('limit', String(params.limit))
+    const res = await fetchJson<any>(
+      `${API_BASE}/diagnostic-events${q.toString() ? '?' + q.toString() : ''}`,
+    )
+    const events = Array.isArray(res?.events) ? res.events : []
+    return events.map(normalizeDiagnosticEvent)
+  },
+  getMessageTimeline: async (
+    sourcePeerId: string,
+    sourceMessageId: number,
+  ): Promise<DiagnosticEventEntry[]> => {
+    const q = new URLSearchParams()
+    q.set('source_peer_id', sourcePeerId)
+    q.set('source_message_id', String(sourceMessageId))
+    const res = await fetchJson<any>(`${API_BASE}/diagnostic-events/timeline?${q.toString()}`)
+    const events = Array.isArray(res?.events) ? res.events : []
+    return events.map(normalizeDiagnosticEvent)
+  },
+  getDiagnosticFacets: async (
+    facet: 'category' | 'stage' | 'severity' | 'reason' | 'strategy' | 'error_origin',
+    since?: number,
+  ): Promise<{ facet: string; counts: { value: string; count: number }[] }> => {
+    const q = new URLSearchParams()
+    q.set('facet', facet)
+    if (since) q.set('since', String(since))
+    const res = await fetchJson<any>(`${API_BASE}/diagnostic-events/facets?${q.toString()}`)
+    const counts = Array.isArray(res?.counts) ? res.counts : []
+    return {
+      facet: res?.facet ?? facet,
+      counts: counts.map((c: any) => ({ value: c?.value ?? '', count: c?.count ?? 0 })),
+    }
+  },
+
+  // Logging-pipeline health: whether log collection itself is working. An
+  // empty log console must be distinguishable from a dead pipeline.
+  getLogsHealth: () =>
+    fetchJson<{ status?: string; healthy?: boolean; detail?: string; [key: string]: unknown }>(
+      `${API_BASE}/logs/health`,
+    ),
+
+  // Bot-token defaults: the inheritance layer between task pins and registry
+  // defaults. Reading and writing it is the only way a UI can show WHERE a
+  // task's effective value came from — and clear named keys (absent `defaults`
+  // + `clear` names) without pinning anything.
+  getBotTokenDefaults: (id: string) =>
+    fetchJson<{
+      success: boolean
+      message?: string
+      error_code?: string
+      defaults?: Record<string, unknown>
+      total?: number
+      changed?: number
+    }>(`${API_BASE}/bot-tokens/${encodeURIComponent(id)}/defaults`),
+  setBotTokenDefaults: (
+    id: string,
+    body: { defaults?: Record<string, unknown>; replace_all?: boolean; clear?: string[] },
+  ) =>
+    fetchJson<{
+      success: boolean
+      message?: string
+      error_code?: string
+      defaults?: Record<string, unknown>
+      total?: number
+      changed?: number
+    }>(`${API_BASE}/bot-tokens/${encodeURIComponent(id)}/defaults`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
     }),
 
   // Simulator & Logs
