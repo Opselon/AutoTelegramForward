@@ -14,6 +14,7 @@ import (
 	"atf/worker/internal/domain/rule"
 	"atf/worker/internal/engine/counters"
 	"atf/worker/internal/queue"
+	"atf/worker/internal/telegraph"
 	"atf/worker/internal/telegraph/fakegateway"
 )
 
@@ -198,6 +199,47 @@ func TestFenACadenceSkipIsNotAnAttempt(t *testing.T) {
 // TestFenCadenceSurvivesAcrossJobs: the counter is durable, so a fresh
 // engine over the same file continues the sequence (Python's
 // test_the_cadence_survives_a_warm_restart).
+func TestFenRedispatchKeysOnClaimedFromSanity(t *testing.T) {
+	// The claim, not the job object, is the gate's only source of the
+	// first-dispatch / re-dispatch fact: a PENDING row claimed reads
+	// ClaimedFrom=PENDING (a first dispatch, the counter advances), while a
+	// RETRY_WAIT row released by backoff reads ClaimedFrom=RETRY_WAIT (a
+	// re-dispatch, the counter must not). This is the invariant
+	// TestFenARetryNeverConsumesASecondSlot depends on, pinned on its own so
+	// a regression in the claim path fails here with the store's name on it.
+	ctx := context.Background()
+	store := queue.NewTestStore(t)
+
+	first := fenJob(311, map[string]any{"text": "one"})
+	if ins, err := store.Enqueue(ctx, first); err != nil || !ins {
+		t.Fatalf("enqueue: ins=%v err=%v", ins, err)
+	}
+	pending, err := store.ClaimBatch(ctx, "w1", 5, time.Hour)
+	if err != nil {
+		t.Fatalf("claim a PENDING row: %v", err)
+	}
+	if len(pending) != 1 || pending[0].ClaimedFrom != job.StatusPending {
+		t.Fatalf("a PENDING row claimed: ClaimedFrom=%q, want PENDING", firstOf(pending))
+	}
+	if err := store.MarkRetry(ctx, first.ID, "transient", 0); err != nil {
+		t.Fatalf("mark the job RETRY_WAIT: %v", err)
+	}
+	retried, err := store.ClaimBatch(ctx, "w2", 5, time.Hour)
+	if err != nil {
+		t.Fatalf("claim a RETRY_WAIT row: %v", err)
+	}
+	if len(retried) != 1 || retried[0].ClaimedFrom != job.StatusRetryWait {
+		t.Fatalf("a RETRY_WAIT row claimed: ClaimedFrom=%q, want RETRY_WAIT", firstOf(retried))
+	}
+}
+
+func firstOf(js []*job.DeliveryJob) job.Status {
+	if len(js) == 0 {
+		return "<no rows claimed>"
+	}
+	return js[0].ClaimedFrom
+}
+
 func TestFenCadenceSurvivesAcrossJobs(t *testing.T) {
 	h, cadence := newFenHarness(t, 3)
 	ctx := context.Background()
@@ -494,6 +536,147 @@ func TestFenAnAlbumIsOneSlot(t *testing.T) {
 	if got := len(h.gateway.Recorded()); got != 1 {
 		t.Errorf("gateway calls = %d, want 1 (album B is held at slot 2)", got)
 	}
+}
+
+// TestFenARetryNeverConsumesASecondSlot is the Stage 5 regression test for
+// the gap the delivery-guarantee suite found: the Python gate runs once per
+// message AT INGEST (pipeline.py:1065), and a delivery retry never re-enters
+// it — the re-delivery is absorbed by the event-level dedupe instead
+// (test_a_redelivered_message_does_not_advance_the_counter). The Go gate
+// runs on every Process call, so without the re-dispatch exception a
+// transient failure advanced the counter a second time for the same message,
+// and under N=2 the retry itself then failed the job for "skipped by
+// cadence" — a healthy delivery silently dead-lettered by its own recovery.
+//
+// The shape: N=2, the message owns slot 1 and delivers; a transient failure
+// asks for a retry; the release re-claims the RETRY_WAIT row and the gate
+// must pass it through WITHOUT advancing the counter again.
+func TestFenARetryNeverConsumesASecondSlot(t *testing.T) {
+	ctx := context.Background()
+
+	store := queue.NewTestStore(t)
+	gw := fakegateway.New("")
+	log := &testLogger{}
+	engine := New(store, fenRules{everyN: 2}, gw, nil, log, &testMetrics{}, "w-fen-retry",
+		t.TempDir(), Options{NumWorkers: 2, BatchSize: 5, LeaseDuration: 30 * time.Second, RPCTimeout: 5 * time.Second})
+	dir := t.TempDir()
+	db, err := sql.Open("sqlite3", filepath.Join(dir, "counters.db"))
+	if err != nil {
+		t.Fatalf("open counters db: %v", err)
+	}
+	if _, err := db.Exec(ruleCountersSchema); err != nil {
+		db.Close()
+		t.Fatalf("apply counters schema: %v", err)
+	}
+	cadence, err := counters.NewSQLite(db)
+	if err != nil {
+		db.Close()
+		t.Fatalf("new counters store: %v", err)
+	}
+	t.Cleanup(func() { _ = cadence.Close() })
+	engine.SetCounters(cadence)
+
+	// Message 1 delivers and owns slot 1 (sequence 1 under N=2).
+	first := fenJob(301, map[string]any{"text": "one"})
+	if inserted, err := store.Enqueue(ctx, first); err != nil || !inserted {
+		t.Fatalf("enqueue the first job: inserted=%v err=%v", inserted, err)
+	}
+	if err := engine.Process(ctx, first); err != nil {
+		t.Fatalf("first process: %v", err)
+	}
+	if row, _ := cadence.Peek(ctx, "r1"); row == nil || row.Accepted != 1 {
+		t.Fatalf("cadence after the first message = %+v, want accepted=1", row)
+	}
+
+	// Message 2 would be sequence 2 — held by the cadence. Its job is
+	// closed as a skip, which is the queue's own RETRY_WAIT shape when the
+	// send itself fails: MarkRetry, then the backoff release, then the
+	// re-claim. The re-claimed row is what the run loop hands the engine,
+	// and this is the pass that used to advance the counter a second time
+	// for the same message — producing sequence 3, a slot the message never
+	// owned, and a *later* message that did own it dead-lettered instead.
+	second := fenJob(302, map[string]any{"text": "two"})
+	if inserted, err := store.Enqueue(ctx, second); err != nil || !inserted {
+		t.Fatalf("enqueue the second job: inserted=%v err=%v", inserted, err)
+	}
+	gw.Reset()
+	gw.SendFailsWith = &telegraph.DeliveryFailure{Code: "TELEGRAM_TEMPORARY_ERROR", Message: "transient"}
+	if err := store.MarkRetry(ctx, second.ID, "transient", 0); err != nil {
+		t.Fatalf("mark the second job RETRY_WAIT: %v", err)
+	}
+	log.lines = nil
+	reclaimed, err := store.ClaimBatch(ctx, "w-retry", 5, time.Hour)
+	if err != nil {
+		t.Fatalf("re-claim: %v", err)
+	}
+	if len(reclaimed) != 1 || reclaimed[0].ID != second.ID {
+		t.Fatalf("claim = %v, want the same job back", reclaimed)
+	}
+	if reclaimed[0].ClaimedFrom != job.StatusRetryWait {
+		t.Errorf("ClaimedFrom = %q, want RETRY_WAIT (the re-dispatch fact the gate keys on)", reclaimed[0].ClaimedFrom)
+	}
+	if err := engine.Process(ctx, reclaimed[0]); err != nil {
+		t.Fatalf("re-dispatch process: %v", err)
+	}
+	if status := directStatus(t, store, second.ID); status != "RETRY_WAIT" {
+		t.Fatalf("a transient failure left status %s, want RETRY_WAIT", status)
+	}
+	if n := attempts(t, store, second.ID); n != 2 {
+		t.Fatalf("the two transient failures spent %d attempts, want 2 (one per send)", n)
+	}
+	if row, _ := cadence.Peek(ctx, "r1"); row == nil || row.Accepted != 1 {
+		t.Fatalf("cadence after the re-dispatch = %+v, want accepted=1 (a retry advanced nothing)", row)
+	}
+
+	// The recovery: the backoff window opens and the row is re-claimed and
+	// re-processed a second time — still the same message 302, still no
+	// second slot. The send succeeds now, and the counter must still read 1.
+	gw.SendFailsWith = nil
+	if _, err := queue.StoreDB(t, store).Exec(
+		`UPDATE delivery_jobs SET next_retry_at=0 WHERE id=?`, second.ID); err != nil {
+		t.Fatalf("release the retry window: %v", err)
+	}
+	claimed, err := store.ClaimBatch(ctx, "w-retry-2", 5, time.Hour)
+	if err != nil {
+		t.Fatalf("re-claim after backoff: %v", err)
+	}
+	var retried *job.DeliveryJob
+	for _, c := range claimed {
+		if c.ID == second.ID {
+			retried = c
+		}
+	}
+	if retried == nil {
+		t.Fatal("the retry row was not re-claimable — the recovery cannot happen")
+	}
+	if err := engine.Process(ctx, retried); err != nil {
+		t.Fatalf("retry process: %v", err)
+	}
+	if status := directStatus(t, store, retried.ID); status != "SENT" {
+		t.Fatalf("the retried job ended %s, want SENT (a retry must not be skipped by the cadence)", status)
+	}
+	if row, _ := cadence.Peek(ctx, "r1"); row == nil || row.Accepted != 1 {
+		t.Errorf("cadence accepted = %d after the retry, want 1 (a re-dispatch advances nothing)", row.Accepted)
+	}
+}
+
+// fenAttemptKey is the fence identity of a fen job: the same business key the
+// engine's dispatch path builds, so the test reads the fence row the send
+// actually wrote.
+func fenAttemptKey(j *job.DeliveryJob) job.AttemptKey {
+	return job.AttemptKey{
+		RuleID:          j.RuleID,
+		SourceChatID:    j.SourceChatID,
+		SourceMessageID: j.SourceMessageID,
+		TargetChatID:    j.TargetChatID,
+		JobKind:         j.JobKind,
+	}
+}
+
+// storeInsert writes the job row the way the run loop's enqueue would.
+func storeInsert(t *testing.T, s queue.Store, j *job.DeliveryJob) {
+	t.Helper()
+	queue.InsertJob(t, s, j)
 }
 
 // TestFenOverMaxIntervalClampsToThousand: a projected value above the

@@ -292,7 +292,14 @@ func (s *sqliteStore) ClaimBatch(ctx context.Context, workerID string, batchSize
 	}
 
 	for _, c := range claimed {
+		// Preserve the row's pre-claim status (below) before the claim
+		// overwrites it: the cadence gate reads it to tell a first
+		// dispatch (PENDING) from a re-dispatch (RETRY_WAIT/CLAIMED),
+		// which is the difference between consuming a cadence slot and
+		// re-consuming one a retry already spent.
+		preclaim := c.Status
 		c.Status = job.StatusClaimed
+		c.ClaimedFrom = preclaim
 		c.WorkerID = workerID
 		c.LeaseUntil = float64(leaseUntil)
 	}

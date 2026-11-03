@@ -127,6 +127,53 @@ func (s *pgStore) SchemaCheck(ctx context.Context) error {
 // delivery_jobs is one table whose *columns* are identical on both backends,
 // so this mirrors scanJob in sqlite.go field for field; only the placeholder
 // style and the payload decoding dialect differ.
+// scanJobPGClaim reads the claim query's RETURNING set: the job columns plus
+// the trailing pre-claim status the CTE carries out for the cadence gate. It
+// mirrors scanJobPG field for field with one extra column appended.
+func scanJobPGClaim(rows *sql.Rows) (*job.DeliveryJob, error) {
+	var (
+		j                   job.DeliveryJob
+		status, payloadJSON string
+		nextRetry, lease    float64
+		workerID, errDetail string
+		interChat           string
+		interMsg            sql.NullInt64
+		stage               string
+		kind                string
+		preclaim            string
+	)
+	cols := []any{
+		&j.ID, &j.RuleID, &j.SourceChatID, &j.SourceMessageID, &j.TargetChatID,
+		&payloadJSON, &status, &j.Attempts, &j.MaxAttempts, &nextRetry, &lease,
+		&workerID, &errDetail, &j.CreatedAt, &j.UpdatedAt,
+		&interChat, &interMsg, &stage, &kind, &preclaim,
+	}
+	if err := rows.Scan(cols...); err != nil {
+		return nil, fmt.Errorf("scan delivery job: %w", err)
+	}
+	j.Status = job.Status(status)
+	j.NextRetryAt = nextRetry
+	j.LeaseUntil = lease
+	j.WorkerID = workerID
+	j.ErrorDetail = errDetail
+	j.IntermediateChatID = interChat
+	if interMsg.Valid {
+		j.IntermediateMsgID = interMsg.Int64
+	}
+	j.DeliveryStage = stage
+	j.JobKind = kind
+	if j.JobKind == "" {
+		j.JobKind = "forward"
+	}
+	j.ClaimedFrom = job.Status(preclaim)
+	var raw map[string]any
+	if payloadJSON != "" {
+		_ = json.Unmarshal([]byte(payloadJSON), &raw) // tolerate malformed
+	}
+	j.Payload = *job.NewPayload(raw)
+	return &j, nil
+}
+
 func scanJobPG(rows *sql.Rows) (*job.DeliveryJob, error) {
 	var (
 		j                   job.DeliveryJob
@@ -205,31 +252,41 @@ func (s *pgStore) ClaimBatch(ctx context.Context, workerID string, batchSize int
 	// One atomic statement: the sub-select locks exactly the rows the UPDATE
 	// will claim, so a concurrent claimer either sees a row as claimable or
 	// has it skipped — there is no read-then-write window anywhere.
+	// The CTE picks the claimable rows (and their pre-claim status) under
+	// FOR UPDATE SKIP LOCKED; the UPDATE then claims exactly those rows, and
+	// RETURNING carries the pre-claim status out as one extra column. That
+	// column exists because the forward-every-N cadence gate must be able to
+	// tell a first dispatch (PENDING) from a re-dispatch (RETRY_WAIT, or a
+	// CLAIMED row whose lease expired): Python evaluates the cadence once
+	// per message at ingest, so a delivery retry must never consume a
+	// second cadence slot.
 	query := fmt.Sprintf(`
-		UPDATE delivery_jobs
-		SET status = 'CLAIMED', worker_id = $1, lease_until = $2, updated_at = $3
-		WHERE id IN (
-			SELECT id FROM delivery_jobs AS j
-			WHERE (
-				j.status = 'PENDING'
-				OR j.status = 'RETRY_WAIT'
-				OR (j.status = 'CLAIMED' AND j.lease_until < $4)
-			)
-			AND j.next_retry_at <= $5
-			AND NOT EXISTS (
-				SELECT 1 FROM delivery_jobs AS o
-				WHERE o.target_chat_id = j.target_chat_id
-				  AND o.id <> j.id
-				  AND o.status IN ('PENDING', 'RETRY_WAIT', 'CLAIMED')
-				  AND (o.source_chat_id, o.source_message_id, o.created_at, o.id)
-				      < (j.source_chat_id, j.source_message_id, j.created_at, j.id)
-			)
-			ORDER BY j.source_chat_id ASC, j.source_message_id ASC,
-			         j.created_at ASC, j.id ASC
-			LIMIT $6
-			FOR UPDATE SKIP LOCKED
+	WITH claimable AS (
+		SELECT id, status AS preclaim_status FROM delivery_jobs AS j
+		WHERE (
+			j.status = 'PENDING'
+			OR j.status = 'RETRY_WAIT'
+			OR (j.status = 'CLAIMED' AND j.lease_until < $4)
 		)
-		RETURNING %s`, jobColumnsPG)
+		AND j.next_retry_at <= $5
+		AND NOT EXISTS (
+			SELECT 1 FROM delivery_jobs AS o
+			WHERE o.target_chat_id = j.target_chat_id
+			  AND o.id <> j.id
+			  AND o.status IN ('PENDING', 'RETRY_WAIT', 'CLAIMED')
+			  AND (o.source_chat_id, o.source_message_id, o.created_at, o.id)
+			      < (j.source_chat_id, j.source_message_id, j.created_at, j.id)
+		)
+		ORDER BY j.source_chat_id ASC, j.source_message_id ASC,
+		         j.created_at ASC, j.id ASC
+		LIMIT $6
+		FOR UPDATE SKIP LOCKED
+	)
+	UPDATE delivery_jobs
+	SET status = 'CLAIMED', worker_id = $1, lease_until = $2, updated_at = $3
+	WHERE id IN (SELECT id FROM claimable)
+	RETURNING %s, (SELECT preclaim_status FROM claimable c WHERE c.id = delivery_jobs.id)`,
+		jobColumnsPG)
 
 	rows, err := s.db.QueryContext(ctx, query,
 		workerID, leaseUntil.Unix(), now.Unix(), now.Unix(), now.Unix(), batchSize)
@@ -238,7 +295,7 @@ func (s *pgStore) ClaimBatch(ctx context.Context, workerID string, batchSize int
 	}
 	claimed := make([]*job.DeliveryJob, 0, batchSize)
 	for rows.Next() {
-		j, err := scanJobPG(rows)
+		j, err := scanJobPGClaim(rows)
 		if err != nil {
 			rows.Close()
 			return nil, err

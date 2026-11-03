@@ -77,6 +77,25 @@ func (e *Engine) forwardEveryNGate(ctx context.Context, j *job.DeliveryJob, r *r
 		return nil
 	}
 
+	// A re-dispatch never consumes a slot either. Python evaluates this
+	// gate once per message, at ingest (pipeline.py:1065); a delivery retry
+	// or a lease-expiry recovery re-runs the job without re-entering the
+	// pipeline, and the re-delivery of an event the counter already counted
+	// is absorbed upstream by the event-level dedupe (pipeline.py:867). The
+	// Go worker applies the same gate on its side of the boundary, which
+	// means it sees every re-claim too — so the gate must be able to tell a
+	// first dispatch from a re-dispatch, or a transient failure would eat a
+	// second cadence slot for the same message (and, under N=2, eventually
+	// skip a message that owned its slot).
+	//
+	// The claim hands the gate that fact through the job's ClaimedFrom: a
+	// row that was PENDING at claim time is a first dispatch, while
+	// RETRY_WAIT (or a CLAIMED row whose lease expired) is a job the engine
+	// already processed once. Only the first advances the counter.
+	if isJobRedispatch(j) {
+		return nil
+	}
+
 	sequence, err := e.counters.Advance(ctx, j.RuleID, everyN, r.OwnerUserID)
 	if err != nil {
 		// Fail open, deliberately: a broken bookkeeping row must not
@@ -135,6 +154,23 @@ func isEditJob(j *job.DeliveryJob) bool {
 		return false
 	}
 	return j.Payload.IsEdit()
+}
+
+// isJobRedispatch reports whether the claim that produced this job read the
+// delivery_jobs row in a state other than PENDING — a RETRY_WAIT row the
+// backoff released, or a CLAIMED row whose lease expired. Both mean the
+// engine already processed this job once; the cadence consumed its slot on
+// that pass and must not consume it a second time (Python's
+// test_a_redelivered_message_does_not_advance_the_counter).
+func isJobRedispatch(j *job.DeliveryJob) bool {
+	if j == nil {
+		return false
+	}
+	switch j.ClaimedFrom {
+	case job.StatusRetryWait, job.StatusClaimed:
+		return true
+	}
+	return false
 }
 
 // --- the counters store the gate consumes --------------------------------- //
