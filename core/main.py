@@ -593,6 +593,65 @@ async def _resolve_pg_pool(container: dict) -> None:
     logger.info("PostgreSQL pool resolved and bound to repositories")
 
 
+async def serve_telegram_runtime(container: dict, cfg: Config):
+    """Serve the Telegram transport gateway the Go Worker consumes.
+
+    The gateway is telegram_runtime.grpc.server.serve, wired with the SAME
+    live session pool the Core already started (the runtime's docstring
+    names this as the production wiring), the SAME media dir, and the
+    owner-scoped bot token store. It fails closed without an RPC token and
+    is absent silently when the runtime package is unavailable (an older
+    deployment keeps the rest of the Core, with the gateway reported as
+    missing rather than the process dying).
+    """
+    import os  # noqa: E402
+
+    token = (getattr(cfg, "core_rpc_token", "") or os.environ.get("ATF_CORE_RPC_TOKEN", "")).strip()
+    if not token:
+        logger.warning(
+            "ATF_CORE_RPC_TOKEN is empty — the Telegram transport gateway is NOT "
+            "serving (fail closed; the Go Worker cannot reach transport)."
+        )
+        return None
+    try:
+        from telegram_runtime.app.session_manager import SessionManager
+        from telegram_runtime.app.bot_store import standalone_bot_repo
+        from telegram_runtime.adapters.bot_api import BotApiAdapter
+        from telegram_runtime.grpc.server import serve as serve_gateway
+    except Exception as exc:  # a missing runtime must not take the Core down
+        logger.warning("telegram_runtime unavailable — transport gateway not served (%s)", exc)
+        return None
+
+    addr = os.environ.get("ATF_RUNTIME_ADDR", "0.0.0.0:50053")
+    media_dir = os.environ.get("ATF_MEDIA_DIR", "/tmp/atf-media")
+    try:
+        os.makedirs(media_dir, exist_ok=True)
+    except Exception:
+        pass
+
+    pool = container.get("pool")
+    if pool is None:
+        logger.warning("no live session pool — transport gateway not served")
+        return None
+    sessions = SessionManager(pool)
+
+    bots = None
+    try:
+        db_path = os.environ.get("ATF_DB_PATH", str(getattr(cfg, "db_path", "") or "data/atf.db"))
+        if db_path and os.path.exists(db_path):
+            bots = BotApiAdapter(standalone_bot_repo(db_path))
+    except Exception as exc:
+        logger.warning("bot token store unavailable (%s) — bot RPCs answer a typed refusal", exc)
+
+    try:
+        runtime = await serve_gateway(sessions, addr, token, media_dir, bots=bots)
+        logger.info("telegram transport gateway listening on %s (internal rpc credential required)", addr)
+        return runtime
+    except Exception as exc:
+        logger.warning("telegram transport gateway failed to start (%s)", exc)
+        return None
+
+
 async def serve_grpc(container: dict, cfg: Config):
     import grpc
     from core.proto import pb_grpc
@@ -723,6 +782,17 @@ async def serve_grpc(container: dict, cfg: Config):
     pb_grpc.add_TaskControlServiceServicer_to_server(
         TaskControlServicer(container["tasks"]), server,
     )
+    # The Telegram transport gateway (telegram_runtime) on port 50053 — the
+    # half of this process the Go Worker talks to. In production the Core
+    # serves it IN-PROCESS (see telegram_runtime/main.py's docstring: "the
+    # Core starts it inside its own process"), reusing this container's
+    # already-started session pool, media dir and owner-scoped bot token
+    # store. No second process, no second session owner: the pool stays the
+    # single authoritative home for session state.
+    runtime_server = await serve_telegram_runtime(container, cfg)
+    if runtime_server is not None:
+        container["telegram_runtime_server"] = runtime_server
+
     server.add_insecure_port(addr)
     await server.start()
     if interceptors:
@@ -850,6 +920,10 @@ async def main() -> None:
             if mgr:
                 await mgr.stop_reconciler()
             await grpc_server.stop(grace=2)
+            runtime = container.pop("telegram_runtime_server", None)
+            if runtime is not None:
+                await runtime.stop(grace=2)
+                logger.info("telegram transport gateway stopped cleanly.")
             container["db"].close()
             logger.info("Core (gRPC-only) stopped cleanly.")
         return
@@ -1130,6 +1204,10 @@ async def main() -> None:
         if coord is not None:
             await coord.close()
         await grpc_server.stop(grace=2)
+        runtime = container.pop("telegram_runtime_server", None)
+        if runtime is not None:
+            await runtime.stop(grace=2)
+            logger.info("telegram transport gateway stopped cleanly.")
         try:
             await log_client.close()
         except Exception:
