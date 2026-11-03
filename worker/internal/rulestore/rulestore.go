@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"atf/worker/internal/domain/forwardinterval"
 	"atf/worker/internal/domain/rule"
 )
 
@@ -414,6 +415,15 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		// cleaner_config + legacy flag resolution Python's build_cleaner()
 		// performs, which is why this call is not a plain key lookup.
 		extra.Transform = transformConfigFromMetadata(extra.Metadata, extra.MetadataJSON)
+
+		// Stage 4.5 (W2): forward_every_n is resolved out of the same blob
+		// the Python entity reads (entities.py::forward_every_n), through
+		// the SAME clamp and not a raw key lookup, so a hand-edited row or a
+		// float from JSON can never become a 0 or negative stride on the Go
+		// side while Python reads 1. The value is 1 (inert) for every task
+		// that never configured the feature, which keeps old rows
+		// byte-for-byte alike.
+		extra.ForwardRule.ForwardEveryN = forwardinterval.Clamp(extra.Metadata["forward_every_n"])
 	}
 
 	// auto_pause is not a column: the engine records it inside the task's
