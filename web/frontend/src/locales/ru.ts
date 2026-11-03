@@ -328,6 +328,8 @@ export const ru: Catalog = {
   "ui_blocked_words": "Запрещённые слова",
   "ui_bot_account": "Аккаунт бота",
   "ui_bot_attached_telegram_accepted": "{name} подключён — Telegram его принял.",
+  "ui_bot_defaults": "Значения бота по умолчанию",
+  "ui_bot_defaults_hint": "Что этот бот даёт задачам, которые не задали собственное значение.",
   "ui_bot_removed_its_token_is_gone_from_this_account": "Бот удалён. Его токен удалён из этого аккаунта.",
   "ui_brand_c": "Бренд C",
   "ui_branding_hop_triggers_optional": "Триггеры бренд-перехода (необязательно)",

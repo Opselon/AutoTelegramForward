@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw, Plus, X, Ban, RotateCw, Loader2 } from 'lucide-react'
 import { api } from '../api'
+import { PageHeader } from './ui/Primitives'
 import type { UserTask, TaskKind } from '../types'
 import { makeT, type UiLang } from '../locales/engine'
 
@@ -110,21 +111,23 @@ export function JobsPanel({
 
   return (
     <div className="panel-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, gap: 8, flexWrap: 'wrap' }}>
-        <h2 style={{ margin: 0, fontSize: '1.15rem' }}>{t('ui_my_jobs')}</h2>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn" onClick={() => setAutoRefresh((v) => !v)}
-            style={{ background: autoRefresh ? 'var(--color-primary-soft)' : 'transparent', color: autoRefresh ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>
-            <RefreshCw size={14} />
-            <span>{t('ui_auto_renew')}</span>
-          </button>
-          <button className="btn" onClick={() => setOpenCreate(true)}
-            style={{ background: 'var(--color-primary-soft)', color: 'var(--color-primary)', border: '1px solid color-mix(in oklab, var(--color-primary) 40%, transparent)' }}>
-            <Plus size={14} />
-            <span>{t('ui_new_job')}</span>
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title={t('ui_my_jobs')}
+        actions={
+          <>
+            <button className="btn" onClick={() => setAutoRefresh((v) => !v)}
+              style={{ background: autoRefresh ? 'var(--color-primary-soft)' : 'transparent', color: autoRefresh ? 'var(--color-primary)' : 'var(--color-text-muted)' }}>
+              <RefreshCw size={14} />
+              <span>{t('ui_auto_renew')}</span>
+            </button>
+            <button className="btn" onClick={() => setOpenCreate(true)}
+              style={{ background: 'var(--color-primary-soft)', color: 'var(--color-primary)', border: '1px solid color-mix(in oklab, var(--color-primary) 40%, transparent)' }}>
+              <Plus size={14} />
+              <span>{t('ui_new_job')}</span>
+            </button>
+          </>
+        }
+      />
 
       {error && (
         <div style={{ border: '1px solid color-mix(in oklab, var(--color-danger) 40%, transparent)', background: 'var(--color-danger-soft)', color: 'var(--color-danger)', borderRadius: 8, padding: '8px 12px', marginBottom: 12 }}>

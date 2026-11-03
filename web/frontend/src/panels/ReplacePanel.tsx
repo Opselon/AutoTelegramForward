@@ -40,7 +40,7 @@ import type {
   ReplaceRuleTestResult,
   ReplaceTaskOption,
 } from '../types'
-import { Badge, Button, Card, EmptyState, Field, SkeletonRows } from '../components/ui/Primitives'
+import { Badge, Button, Card, EmptyState, Field, PageHeader, SkeletonRows } from '../components/ui/Primitives'
 
 type StatusFilter = 'all' | 'enabled' | 'disabled'
 
@@ -335,32 +335,21 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
 
   return (
     <div>
-      <div
-        style={{
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 12,
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          marginBottom: 14,
-        }}
-      >
-        <div style={{ minWidth: 220 }}>
-          <h2 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{t('ui_rp_title')}</h2>
-          <p style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginTop: 4, maxWidth: 620 }}>
-            {t('ui_rp_subtitle')}
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <Button variant="ghost" onClick={() => void load()} disabled={loading || busy} title={t('ui_refresh')}>
-            <RefreshCw size={15} aria-hidden="true" />
-          </Button>
-          <Button variant="primary" onClick={openCreate}>
-            <Plus size={16} aria-hidden="true" />
-            <span style={{ marginInlineStart: 6 }}>{t('ui_rp_new')}</span>
-          </Button>
-        </div>
-      </div>
+      <PageHeader
+        title={t('ui_rp_title')}
+        description={t('ui_rp_subtitle')}
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => void load()} disabled={loading || busy} title={t('ui_refresh')}>
+              <RefreshCw size={15} aria-hidden="true" />
+            </Button>
+            <Button variant="primary" onClick={openCreate}>
+              <Plus size={16} aria-hidden="true" />
+              <span style={{ marginInlineStart: 6 }}>{t('ui_rp_new')}</span>
+            </Button>
+          </>
+        }
+      />
 
       {/* Counts are the server's, over the filtered set: a chip beside a task
           filter must not count a rule that task does not run. */}

@@ -328,6 +328,8 @@ export const fa: Catalog = {
   "ui_blocked_words": "واژه‌های مسدود",
   "ui_bot_account": "اکانت ربات",
   "ui_bot_attached_telegram_accepted": "{name} متصل شد — تلگرام آن را پذیرفت.",
+  "ui_bot_defaults": "پیش‌فرض‌های ربات",
+  "ui_bot_defaults_hint": "چیزی که این ربات به وظایفی که مقدار خودشان را تنظیم نکرده‌اند می‌دهد.",
   "ui_bot_removed_its_token_is_gone_from_this_account": "ربات حذف شد. توکن آن از این حساب پاک شد.",
   "ui_brand_c": "واسط برند (C)",
   "ui_branding_hop_triggers_optional": "شرط‌های طی کردن مسیر برند (اختیاری)",

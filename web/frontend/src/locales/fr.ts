@@ -328,6 +328,8 @@ export const fr: Catalog = {
   "ui_blocked_words": "Mots bloqués",
   "ui_bot_account": "Compte bot",
   "ui_bot_attached_telegram_accepted": "{name} attaché — Telegram l’a accepté.",
+  "ui_bot_defaults": "Valeurs par défaut du bot",
+  "ui_bot_defaults_hint": "Ce que ce bot fournit aux tâches qui ne définissent pas leur propre valeur.",
   "ui_bot_removed_its_token_is_gone_from_this_account": "Bot supprimé. Son jeton a été retiré de ce compte.",
   "ui_brand_c": "Marque C",
   "ui_branding_hop_triggers_optional": "Déclencheurs du saut de marque (facultatif)",

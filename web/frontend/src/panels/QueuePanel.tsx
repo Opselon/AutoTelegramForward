@@ -2,7 +2,7 @@
  * The delivery queue and the dead-letter queue.
  */
 import { Activity, Clock, Plus, RefreshCw, Trash2 } from 'lucide-react'
-import { Button, EmptyState } from '../components/ui/Primitives'
+import { Button, EmptyState, PageHeader } from '../components/ui/Primitives'
 import { DeliveryTimeline } from '../components/DeliveryTimeline'
 import type { DashboardCtx } from '../App'
 
@@ -20,22 +20,18 @@ export default function QueuePanel({ d }: { d: DashboardCtx }) {
   return (
     <>
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                  <div>
-                    <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
-                      {t('ui_delivery_jobs_dead_letter_queue_dlq')}
-                    </h2>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)', marginTop: 4 }}>
-                      {t('ui_track_in_flight_delivery_jobs_and_recover_failed_telegram_messag')}
-                    </p>
-                  </div>
-                  {dlqJobs.length > 0 && (
-                    <button onClick={handlePurgeDLQ} className="btn btn-danger">
-                      <Trash2 size={16} />
-                      <span>{t('ui_purge_all_dlq')}</span>
-                    </button>
-                  )}
-                </div>
+                <PageHeader
+                  title={t('ui_delivery_jobs_dead_letter_queue_dlq')}
+                  description={t('ui_track_in_flight_delivery_jobs_and_recover_failed_telegram_messag')}
+                  actions={
+                    dlqJobs.length > 0 ? (
+                      <button onClick={handlePurgeDLQ} className="btn btn-danger">
+                        <Trash2 size={16} />
+                        <span>{t('ui_purge_all_dlq')}</span>
+                      </button>
+                    ) : undefined
+                  }
+                />
 
                 {/* Delivery totals — the same snapshot the overview cards read, shown
                     here so the queue tab answers "how much moved?" at a glance. */}

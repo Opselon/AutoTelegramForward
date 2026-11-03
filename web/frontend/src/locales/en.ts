@@ -328,6 +328,8 @@ export const en: Catalog = {
   "ui_blocked_words": "Blocked Words",
   "ui_bot_account": "Bot Account",
   "ui_bot_attached_telegram_accepted": "Attached {name} — Telegram accepted it.",
+  "ui_bot_defaults": "Bot defaults",
+  "ui_bot_defaults_hint": "What this bot supplies to tasks that do not pin their own value.",
   "ui_bot_removed_its_token_is_gone_from_this_account": "Bot removed. Its token is gone from this account.",
   "ui_brand_c": "Brand C",
   "ui_branding_hop_triggers_optional": "Branding hop triggers (optional)",
