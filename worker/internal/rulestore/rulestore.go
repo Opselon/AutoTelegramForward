@@ -203,6 +203,17 @@ const queryTimeout = 5 * time.Second
 // resolves them out of the metadata JSON blob, so the worker must do the
 // same or it would be reading columns that do not exist on either backend.
 //
+// Stage 5 (W4) note: the AI execution pair is the mirror case. The four
+// fields ai_fallback_policy, ai_prompt_version, ai_timeout_seconds and
+// ai_secondary_config_id ARE real forward_rules columns on both backends
+// (SQLite v1.1 migration, database.py:333-336; the PostgreSQL loader
+// reads them at postgres_repositories.py:671-678), so they are read as
+// columns. The prompt_id / ai_creativity / ai_max_tokens triple is NOT a
+// column anywhere: it lives in the task's metadata blob (entities.py:1629
+// / 1644 read it there), so those are projected from the blob through
+// the same accessor the Python entity uses — the same split the
+// transport fields above already follow.
+//
 // The placeholders are written for PostgreSQL ($1); the SQLite reader rewrites
 // them through rulesQuery before the statement ever executes, so one verified
 // projection serves both engines.
@@ -223,7 +234,9 @@ const forwardProjection = `
 	       owner_user_id, fallback_enabled, intermediate_channel_id,
 	       use_intermediate, message_category, detection_criteria,
 	       split_long_caption, ai_config_id,
-	       source_chat_id, source_chat_name, target_chat_id, target_chat_ids
+	       source_chat_id, source_chat_name, target_chat_id, target_chat_ids,
+	       ai_secondary_config_id, ai_fallback_policy,
+	       ai_prompt_version, ai_timeout_seconds
 	FROM forward_rules
 	WHERE id = $1
 `
@@ -298,6 +311,20 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		sourceChatName sql.NullString
 		targetChatID   sql.NullString
 		targetChatIDs  sql.NullString
+
+		// Stage 5 (W4): the AI execution pair. All four are real
+		// forward_rules columns on both backends (database.py:333-336,
+		// and the PostgreSQL DDL the loader reads them from), so they
+		// are read as columns and not out of the metadata blob. All are
+		// nullable-or-defaulted: ai_secondary_config_id is nullable,
+		// and the other three carry NOT NULL DEFAULTs ('DROP', 0, 15.0)
+		// that an older or hand-edited row may still have as NULL, so
+		// the Null* readers degrade to the feature's own defaults
+		// rather than failing the whole projection.
+		aiSecondaryID    sql.NullString
+		aiFallbackPolicy sql.NullString
+		aiPromptVersion  sql.NullInt64
+		aiTimeoutSeconds sql.NullFloat64
 	)
 	if err := rows.Scan(
 		&id, &sessionID, &isActive, &isPaused, &pausedUntil,
@@ -306,6 +333,7 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		&useIntermediate, &messageCategory, &detectionCriteria,
 		&splitLongCaption, &aiConfigID,
 		&sourceChatID, &sourceChatName, &targetChatID, &targetChatIDs,
+		&aiSecondaryID, &aiFallbackPolicy, &aiPromptVersion, &aiTimeoutSeconds,
 	); err != nil {
 		return nil, fmt.Errorf("scan forward_rules %s: %w", ruleID, err)
 	}
@@ -350,6 +378,19 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		SourceChatName: strings.TrimSpace(sourceChatName.String),
 		TargetChatID:   strings.TrimSpace(targetChatID.String),
 		TargetChatIDs:  decodeTargetChatIDs(targetChatIDs.String),
+
+		// Stage 5 (W4): the AI execution pair, read from the columns the
+		// Python loader reads (postgres_repositories.py:671-678,
+		// sqlite_repositories.py:420-423). The fallback policy goes
+		// through the resolver's fail-closed default, so an illegible
+		// value can never become "forward the untransformed text". The
+		// timeout degrades to the Python entity's own default
+		// (entities.py:429: 15.0), never 0 — a zero budget would make
+		// every rewrite a TIMEOUT.
+		AISecondaryConfigID: strings.TrimSpace(aiSecondaryID.String),
+		AIFallbackPolicy:    rule.ResolveAIFallbackPolicy(aiFallbackPolicy.String),
+		AIPromptVersion:     int(aiPromptVersion.Int64),
+		AITimeoutSeconds:    aiTimeoutSeconds.Float64,
 	}, FilterRuleID: filterRuleID.String}
 
 	if metadataJSON.Valid && metadataJSON.String != "" {
@@ -424,6 +465,20 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		// that never configured the feature, which keeps old rows
 		// byte-for-byte alike.
 		extra.ForwardRule.ForwardEveryN = forwardinterval.Clamp(extra.Metadata["forward_every_n"])
+
+		// Stage 5 (W4): the AI prompt Tailoring triple — prompt_id,
+		// ai_creativity, ai_max_tokens — is metadata-only on both backends
+		// (entities.py:1629/1644 read ai_creativity and ai_max_tokens out
+		// of the blob; prompt_id is the prompt-template reference
+		// pipeline.py:1724 reads out of the same blob). Never a column, so
+		// never read as one: a SELECT that named them would fail on both
+		// backends. The Worker has no prompt-template service, so prompt_id
+		// is carried for attribution alone and the prompt pair itself is
+		// read off the AI config row, exactly as the Python pipeline does
+		// when no prompt_id is configured.
+		extra.ForwardRule.AIPromptID = metaStr(extra.Metadata, "prompt_id", "")
+		extra.ForwardRule.AICreativity = metaFloatDefault(extra.Metadata, "ai_creativity", 0.7)
+		extra.ForwardRule.AIMaxTokens = metaIntDefault(extra.Metadata, "ai_max_tokens", 600)
 	}
 
 	// Stage 5 (W2): the task's effective settings are resolved here, at the
@@ -527,6 +582,34 @@ func metaInt64(meta map[string]any, key string, def int64) int64 {
 		}
 	}
 	return def
+}
+
+// metaFloatDefault reads a floating-point metadata field with the
+// feature's own default (Python: float(self.metadata.get(key, default))).
+// Used for ai_creativity, whose entity default is 0.7 (entities.py:1633):
+// a missing or uninterpretable value must keep the configured behaviour,
+// never become a 0 that would pin the provider's sampling.
+func metaFloatDefault(meta map[string]any, key string, def float64) float64 {
+	if v, ok := meta[key]; ok {
+		switch n := v.(type) {
+		case float64:
+			return n
+		case int:
+			return float64(n)
+		case int64:
+			return float64(n)
+		}
+	}
+	return def
+}
+
+// metaIntDefault reads an integer metadata field with the feature's own
+// default (Python: int(self.metadata.get(key, default))). Used for
+// ai_max_tokens, whose entity default is 600 (entities.py:1648): a
+// missing value must not become a 0-token request, which every provider
+// would reject.
+func metaIntDefault(meta map[string]any, key string, def int) int {
+	return int(metaInt64(meta, key, int64(def)))
 }
 
 // metaBool reads a boolean field from a decoded metadata blob, mirroring the

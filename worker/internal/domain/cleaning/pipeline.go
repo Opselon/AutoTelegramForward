@@ -1,6 +1,7 @@
 package cleaning
 
 import (
+	"context"
 	"regexp"
 	"strconv"
 	"strings"
@@ -69,6 +70,13 @@ func (p *Pipeline) Apply(raw string, cfg Config, entities []Entity) Result {
 	return p.ApplyText(raw, cfg, entities, CaptionHint{})
 }
 
+// ApplyCtx is Apply with a context, for the one stage that needs one:
+// the Stage 5 (W4) AI rewrite is a network call, and its deadline is the
+// caller's. Every other stage is deterministic and ignores the context.
+func (p *Pipeline) ApplyCtx(ctx context.Context, raw string, cfg Config, entities []Entity, ch CaptionHint) Result {
+	return p.applyText(ctx, raw, cfg, entities, ch)
+}
+
 // Result is what _apply_transforms returns to its caller: the transformed
 // text, whether the transform pipeline decided the message has nothing left
 // to send, and a short record of which stages changed the text.
@@ -83,6 +91,18 @@ type Result struct {
 	// EntitiesDropped reports whether the entity list needed clipping because
 	// a transform shortened the body under the entities.
 	EntitiesDropped bool
+	// AIDrop is the Stage 5 (W4) AI-refusal drop: the rewrite failed and the
+	// rule's fallback policy is DROP, RETRY or QUARANTINE, so nothing is
+	// sendable. It is a distinct flag rather than a reuse of
+	// EmptyAfterClean because the two drops have different operators: the
+	// cleaner's drop is a content decision, the AI's is a delivery-routing
+	// decision the delivery layer answers for (re-queue, hold, discard).
+	AIDrop bool
+	// AIClassification carries the AI error code on a refused rewrite, so
+	// the delivery layer can log and route on the same vocabulary the
+	// Python pipeline uses ([PIPELINE:AI_REWRITE:FAILED] code=…,
+	// pipeline.py:1795) without re-parsing an error string.
+	AIClassification string
 }
 
 // ApplyText runs the full ordered transform on the raw source text. The
@@ -93,7 +113,16 @@ type Result struct {
 //
 // It never returns an error. Every Python failure mode here is "deliver what
 // you have and log", and the callers that need to drop use Result.
+//
+// The Stage 5 (W4) AI rewrite needs a context; ApplyText delegates to the
+// context-carrying implementation with a background context, which is
+// exactly the pre-W4 behaviour for every AI-less config (a nil AIRewrite
+// hook never observes it).
 func (p *Pipeline) ApplyText(raw string, cfg Config, entities []Entity, ch CaptionHint) Result {
+	return p.applyText(context.Background(), raw, cfg, entities, ch)
+}
+
+func (p *Pipeline) applyText(ctx context.Context, raw string, cfg Config, entities []Entity, ch CaptionHint) Result {
 	text := raw
 	var notes []string
 	ents := entities
@@ -188,6 +217,41 @@ func (p *Pipeline) ApplyText(raw string, cfg Config, entities []Entity, ch Capti
 		}
 	}
 
+	// 5c. Stage 5 (W4): the AI rewrite. Python runs the provider call here
+	// — after the content-policy / cleaner / link transforms so the
+	// rewrite operates on the text the task already cleaned and cannot
+	// resurrect what a stage removed, and before the final replacements
+	// and header/footer so the task's own pair still applies to the
+	// rewritten text (pipeline.py:1590-1660). A nil hook is "no AI
+	// configured": the stage is absent and the pipeline is the pre-W4
+	// one, byte for byte.
+	if cfg.AIRewrite != nil {
+		rewritten, err := cfg.AIRewrite(ctx, text)
+		if err != nil {
+			// The rewrite refused. The fallback policy decides what
+			// survives: SEND_ORIGINAL keeps the pre-rewrite text, every
+			// other policy (DROP / RETRY / QUARANTINE) leaves nothing
+			// sendable — the Python pipeline returns None for all three
+			// and lets the delivery layer distinguish them
+			// (pipeline.py:1817-1884). A nil callback is the Python
+			// default, DROP: never a silent pass-through.
+			if cfg.AIFallback != nil {
+				code := aiErrorCode(err)
+				outcome, sendable := cfg.AIFallback(ctx, text, code, err.Error())
+				if !sendable {
+					return Result{Text: "", EmptyAfterClean: true, StageNotes: append(notes, "ai:"+code), AIDrop: true, AIClassification: code}
+				}
+				text = outcome
+			} else {
+				return Result{Text: "", EmptyAfterClean: true, StageNotes: append(notes, "ai:DROP"), AIDrop: true, AIClassification: "DROP"}
+			}
+			notes = append(notes, "ai:fallback:"+aiErrorCode(err))
+		} else {
+			text = rewritten
+			notes = append(notes, "ai_rewrite")
+		}
+	}
+
 	// 6. Replacements, AFTER the policy so an expanding entry cannot
 	// resurrect what a policy strip removed (pipeline.py:1540-1543).
 	if len(cfg.Replacements) > 0 {
@@ -254,6 +318,54 @@ func (p *Pipeline) ApplyText(raw string, cfg Config, entities []Entity, ch Capti
 	}
 
 	return Result{Text: text, StageNotes: notes}
+}
+
+// AIError is the classification an installed AIRewriter returns. The
+// delivery stage's hook builds it from the aiprovider package's typed
+// error, so the fallback decision and the log line see the same code the
+// Python pipeline reports ([PIPELINE:AI_REWRITE:FAILED] code=…).
+type AIError struct {
+	Code    string
+	Message string
+}
+
+func (e *AIError) Error() string {
+	if e == nil {
+		return ""
+	}
+	if e.Message == "" {
+		return "ai: " + e.Code
+	}
+	return "ai: " + e.Code + ": " + e.Message
+}
+
+// aiErrorCode answers the classification a rewrite refusal carries, for
+// the stage note and the fallback callback. An error that carries no
+// classification is PROVIDER_ERROR — the Python except-Exception default
+// (transformer.py:299), which is also retryable there.
+func aiErrorCode(err error) string {
+	if err == nil {
+		return ""
+	}
+	var classified *AIError
+	if errorsAs(err, &classified) {
+		return classified.Code
+	}
+	return "PROVIDER_ERROR"
+}
+
+// errorsAs is the one-call errors.As shim, kept local so the package
+// does not import errors for a single use.
+func errorsAs(err error, target any) bool {
+	ai, ok := err.(*AIError)
+	if !ok {
+		return false
+	}
+	if setter, ok := target.(**AIError); ok {
+		*setter = ai
+		return true
+	}
+	return false
 }
 
 // clampText enforces the Telegram caption/message ceilings the Python

@@ -28,6 +28,7 @@
 package cleaning
 
 import (
+	"context"
 	"regexp"
 	"strings"
 )
@@ -125,7 +126,57 @@ type Config struct {
 	// dispatch stage consumes the pipeline result; the caption split itself
 	// runs there because it needs the entity list.
 	SplitLongCaption bool
+
+	// --- Stage 5 (W4): the AI rewrite ----------------------------------- //
+
+	// AIRewrite, when non-nil, runs the provider rewrite at the exact
+	// position the Python pipeline runs it (pipeline.py:1590-1660): AFTER
+	// the content-policy / cleaner / link transforms and BEFORE the final
+	// replacements + header/footer, so a rewrite operates on the text the
+	// task already cleaned and cannot resurrect what a stage removed, and
+	// so the task's own replacements and header still apply to the
+	// rewritten text.
+	//
+	// The hook is an injection point, not a stage implementation: the
+	// deterministic transform pipeline stays synchronous and network-free,
+	// and the delivery stage (the only caller that owns a context long
+	// enough for a provider call) fills it in from the aiprovider package
+	// when the rule has AI enabled. A nil hook is the pre-W4 behaviour —
+	// the stage is simply absent, which is what every test that exercises
+	// the pipeline in isolation wants.
+	//
+	// The error the hook returns is the rewrite's refusal, classified by
+	// the caller (the fallback policy lives there, not here): the stage
+	// itself calls OnAIFallback with the pre-rewrite text and the
+	// classification, and the stage applies whatever the callback decides.
+	AIRewrite AIRewriter
+	// AIFallback decides what a refused rewrite leaves behind. It is
+	// consulted only when AIRewrite itself returned an error; the default
+	// (a nil callback) is the Python default, DROP — the fail-closed
+	// posture, never a silent pass-through of untransformed text.
+	AIFallback AIFallbackPolicy
 }
+
+// AIRewriter is the provider-call injection point the delivery stage
+// installs when the rule has AI enabled. The text it receives is the
+// post-policy, pre-replacement body the Python pipeline feeds the
+// transformer; the text it returns replaces it.
+//
+// The hook receives no context of its own: the stage is synchronous, and
+// the caller that installed the hook owns the deadline (the transformer
+// wraps the provider call in its own guarded budget, so the context the
+// delivery stage holds is the outer bound).
+type AIRewriter func(ctx context.Context, text string) (string, error)
+
+// AIFallbackPolicy is what a refused rewrite does to the pipeline's
+// output. The four spellings are the Python AIFallbackPolicy values
+// (value_objects.py:170): SEND_ORIGINAL keeps the pre-rewrite text,
+// DROP / RETRY / QUARANTINE all leave nothing sendable — the Python
+// pipeline records the stage and returns None for each of the three, and
+// the delivery stage is what distinguishes RETRY (re-queue) from
+// QUARANTINE (hold) from DROP (discard) at its own layer.
+type AIFallbackPolicy func(ctx context.Context, original string, classification string, message string) (string, bool)
+
 
 // LinkButton is one rendered link button of the link_buttons add-on.
 type LinkButton struct {

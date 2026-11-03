@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"atf/worker/internal/domain/cleaning"
 	"atf/worker/internal/domain/job"
@@ -98,6 +99,14 @@ func loadTransformSwitch() bool {
 // This is a preflight stage for the same reasons the filter and
 // block_links gates are: a drop here never touches Telegram, so it must
 // never leave a fence claim behind. MarkFailed, not Defer.
+//
+// Stage 5 (W4): this is also the AI stage's only owner. The rule's
+// ai_config_id pair, the fallback policy and the timeout resolve INTO the
+// cleaning.Config the pipeline below already consumes (cfg.AIRewrite /
+// cfg.AIFallback), so the provider rewrite runs at the exact position the
+// Python pipeline runs it — inside the ordered transform, after the
+// policy stages and before the final replacements + header/footer — and
+// there is exactly one transform owner, never two.
 func (e *Engine) applyTransformPipeline(ctx context.Context, j *job.DeliveryJob, r *rule.ForwardRule, logger Logger) error {
 	raw := payloadRawText(j)
 	if raw == "" {
@@ -115,7 +124,23 @@ func (e *Engine) applyTransformPipeline(ctx context.Context, j *job.DeliveryJob,
 		// flag — the same field Python's effective_text consults.
 		IsCaption: j.Payload.HasMedia(),
 	}
-	cfg := transformConfig(j, r)
+	cfg := e.transformConfig(j, r)
+
+	// Stage 5 (W4): install the AI rewrite hook when the task actually
+	// asks for one. The gate is the rule's single AI authority
+	// (ai_rewrite_active, Stage 4.4): a config id alone is not enough,
+	// because the owner's panel switch or the paid-addon veto can be
+	// closed while the config stays attached — and Python logs exactly
+	// that ([PIPELINE:AI_REWRITE:OFF]) before delivering the text
+	// untransformed.
+	if r != nil && r.AIRewriteActive && r.AIConfigID != "" {
+		rewrite, fallback := e.aiRewriteHooks(ctx, j, r, logger)
+		if rewrite != nil {
+			cfg.AIRewrite = rewrite
+			cfg.AIFallback = fallback
+		}
+	}
+
 	result := e.transformsPipeline.ApplyText(raw, cfg, nil, ch)
 
 	// Stage 4.4 (F-16): the link policy governs the source's inline URL
@@ -152,10 +177,23 @@ func (e *Engine) applyTransformPipeline(ctx context.Context, j *job.DeliveryJob,
 			event.Level = "WARN"
 			event.Message = "message dropped: nothing left after cleaning"
 		}
+		// Stage 5 (W4): the AI-refusal drop is its own reason code, because
+		// "the rewrite failed and the policy dropped the message" is a
+		// different operator question than "the cleaner stripped the body".
+		// The Python pipeline records the same distinction
+		// (ai_drop:<error_code>, pipeline.py:1831) and the worker's reason
+		// vocabulary must match it or the two engines' audit feeds cannot
+		// be co-read.
+		if result.AIDrop {
+			event.Decision = "DROP"
+			event.ReasonCode = "AI_" + result.AIClassification
+			event.Level = "WARN"
+			event.Message = "message dropped: AI rewrite failed and the fallback policy refused to send"
+		}
 		e.decisions.RecordDecision(ctx, event)
 	}
 
-	if result.EmptyAfterClean {
+	if result.EmptyAfterClean && !result.AIDrop {
 		// The only transform-internal drop: the stages stripped the whole
 		// body of a message that had content. The Python pipeline audits
 		// exactly this decision (pipeline.py:1467-1486); the Worker makes
@@ -167,6 +205,40 @@ func (e *Engine) applyTransformPipeline(ctx context.Context, j *job.DeliveryJob,
 		_ = e.store.MarkFailed(ctx, j.ID, "Filter: empty_after_clean")
 		e.metrics.Outcome("failed")
 		return errTransformDrop
+	}
+	if result.AIDrop {
+		// Stage 5 (W4): the AI rewrite failed and the rule's fallback
+		// policy is DROP, RETRY or QUARANTINE. The three share one
+		// terminal outcome on the transform side — nothing is sendable —
+		// and the delivery layer distinguishes them: RETRY re-queues the
+		// job for another attempt, QUARANTINE holds it, DROP discards it.
+		// The job's reason string carries the policy and the error code
+		// so the queue's dead-letter surface can say which is which.
+		policy := "DROP"
+		if r != nil && r.AIFallbackPolicy != "" {
+			policy = r.AIFallbackPolicy
+		}
+		switch strings.ToUpper(strings.TrimSpace(policy)) {
+		case rule.FallbackRetry:
+			logger.Warn("AI rewrite failed — re-queuing per fallback policy",
+				"decision", "RETRY", "reason_code", "AI_"+result.AIClassification,
+				"policy", policy, "rule_id", j.RuleID)
+			_ = e.store.MarkRetry(ctx, j.ID, "AI: "+result.AIClassification, aiRetryBackoff)
+			e.metrics.Outcome("retried")
+		case rule.FallbackQuarantine:
+			logger.Warn("AI rewrite failed — quarantining per fallback policy",
+				"decision", "QUARANTINE", "reason_code", "AI_"+result.AIClassification,
+				"policy", policy, "rule_id", j.RuleID)
+			_ = e.store.MarkFailed(ctx, j.ID, "AI: quarantine:"+result.AIClassification)
+			e.metrics.Outcome("failed")
+		default:
+			logger.Warn("AI rewrite failed — dropping per fallback policy",
+				"decision", "DROP", "reason_code", "AI_"+result.AIClassification,
+				"policy", policy, "rule_id", j.RuleID)
+			_ = e.store.MarkFailed(ctx, j.ID, "AI: "+result.AIClassification)
+			e.metrics.Outcome("failed")
+		}
+		return errAIDrop
 	}
 
 	// Hand the transformed text to the dispatch stage. The payload's own
@@ -186,6 +258,22 @@ func (e *Engine) applyTransformPipeline(ctx context.Context, j *job.DeliveryJob,
 // Process without touching the fence. It is never wrapped: the caller has
 // already recorded the terminal state on the job row.
 var errTransformDrop = sentinel("transform pipeline dropped the message")
+
+// errAIDrop is the Stage 5 (W4) AI-refusal sentinel: the rewrite failed,
+// the fallback policy refused to send, and the job's terminal state is
+// already recorded (MarkFailed / MarkRetry). It unwinds out of Process
+// the same way errTransformDrop does — never a fence claim, never a
+// Telegram call.
+var errAIDrop = sentinel("AI rewrite failed and the fallback policy dropped the message")
+
+// aiRetryBackoff is the re-queue backoff a fallback policy of RETRY
+// asks for: a short, fixed window, because the failure classification
+// already decided the retry is worthwhile (RATE_LIMIT, TIMEOUT,
+// PROVIDER_ERROR) and the circuit breaker is tracking the provider's
+// health independently. Python's RETRY posture leaves the re-queue to
+// the delivery layer too (pipeline.py:1854 returns None), so the exact
+// window is this layer's to choose.
+const aiRetryBackoff = 5 * time.Second
 
 // sentinel is a string error type, so a decision drop reads like a
 // condition and not like an infrastructure failure.
@@ -220,7 +308,13 @@ func setPayloadText(j *job.DeliveryJob, text string) {
 // the live rule supplies only the configuration the payload does not carry
 // — the transform settings, which Python never baked into the payload
 // because it was the one applying them.
-func transformConfig(j *job.DeliveryJob, r *rule.ForwardRule) cleaning.Config {
+//
+// Stage 5 (W4): the method lives on the engine because the AI hook
+// resolves through the engine's transformer wiring. The AI fields are
+// installed by the caller (applyTransformPipeline) after this returns —
+// the transform config stays the deterministic pre-W4 shape it always
+// was, and the caller gates the network stage.
+func (e *Engine) transformConfig(j *job.DeliveryJob, r *rule.ForwardRule) cleaning.Config {
 	if r == nil {
 		return cleaning.Config{}
 	}
