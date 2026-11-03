@@ -182,7 +182,31 @@ def py_ai_gate(case: Dict[str, Any]) -> str:
 # status, a slow coroutine for the timeout), so the classification a
 # parity case pins is the classification production computes.
 
-import httpx as _httpx  # noqa: E402
+try:
+    import httpx as _httpx  # noqa: E402
+except ImportError:
+    # Bare runners (e.g. CI's go-worker-tests) don't have the full Python venv.
+    # Provide a minimal stand-in so the harness module can load and run.
+    class _FakeResponse:
+        def __init__(self, status_code: int, request=None):
+            self.status_code = status_code
+            self.request = request
+
+    class _FakeHTTPStatusError(Exception):
+        def __init__(self, msg, request=None, response=None):
+            super().__init__(msg)
+            self.request = request
+            self.response = response
+
+    class _FakeHTTPX:
+        HTTPStatusError = _FakeHTTPStatusError
+        Response = _FakeResponse
+
+        @staticmethod
+        def Request(method, url):
+            return object()
+
+    _httpx = _FakeHTTPX()  # type: ignore
 
 
 class _ParityAIConfigRepo:
