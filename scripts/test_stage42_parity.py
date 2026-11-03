@@ -408,6 +408,29 @@ CREATE TABLE IF NOT EXISTS content_dedup (
 );
 """
 
+def py_fen(case: Dict[str, Any]) -> str:
+    """Forward-Every-N cadence arithmetic (core/domain/forward_interval.py).
+
+    The clamp is the projection every write source funnels through, and the
+    slot arithmetic decides delivery; pinning both against the Go port keeps
+    the two engines from drifting on which messages a task forwards.
+    """
+    from core.domain.forward_interval import (
+        clamp_forward_every_n,
+        owns_slot,
+        slots_until_next,
+    )
+
+    every_n = clamp_forward_every_n(case.get("fen_value"))
+    owns = owns_slot(case.get("fen_sequence", 0), every_n)
+    # Go's formatter spells booleans in lower case; match it so the
+    # comparison is on the decision, not the spelling.
+    if case.get("fen_slots"):
+        return (f"clamp={every_n} owns={str(owns).lower()} "
+                f"slots={slots_until_next(case.get('fen_sequence', 0), every_n)}")
+    return f"clamp={every_n} owns={str(owns).lower()}"
+
+
 ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "cleaner": py_cleaner,
     "emoji": py_emoji,
@@ -429,6 +452,7 @@ ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "matches_source": py_matches_source,
     "all_targets": py_all_targets,
     "check_loop": py_check_loop,
+    "fen": py_fen,
     # Stage 4.5 W3: the dedup plane (content fingerprint + claim/release).
     "dedup": py_dedup,
 }
@@ -773,6 +797,39 @@ def cases() -> List[Dict[str, Any]]:
         {"engine": "dedup", "dedup_op": "claim_release", "text": "same announcement"},
         {"engine": "dedup", "dedup_op": "claim_release", "text": "same announcement",
          "metadata": {"rule_id": "other-rule"}},
+        {"engine": "fen", "fen_value": None, "fen_sequence": 3},
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 6},
+        {"engine": "fen", "fen_value": "", "fen_sequence": 2},
+        {"engine": "fen", "fen_value": "abc", "fen_sequence": 2},
+        {"engine": "fen", "fen_value": True, "fen_sequence": 1},
+        {"engine": "fen", "fen_value": False, "fen_sequence": 4},
+        {"engine": "fen", "fen_value": [5], "fen_sequence": 1},
+        {"engine": "fen", "fen_value": {"n": 5}, "fen_sequence": 1},
+        {"engine": "fen", "fen_value": "nan", "fen_sequence": 2},
+        {"engine": "fen", "fen_value": "inf", "fen_sequence": 2},
+        {"engine": "fen", "fen_value": "-inf", "fen_sequence": 2},
+        {"engine": "fen", "fen_value": "1e400", "fen_sequence": 2},
+        {"engine": "fen", "fen_value": 0, "fen_sequence": 1},
+        {"engine": "fen", "fen_value": -3, "fen_sequence": 1},
+        {"engine": "fen", "fen_value": 0.4, "fen_sequence": 1},
+        {"engine": "fen", "fen_value": 1001, "fen_sequence": 1},
+        {"engine": "fen", "fen_value": 50000, "fen_sequence": 1},
+        {"engine": "fen", "fen_value": "  7  ", "fen_sequence": 8},
+        {"engine": "fen", "fen_value": "1_000", "fen_sequence": 1001},
+        {"engine": "fen", "fen_value": "1__000", "fen_sequence": 1},
+        {"engine": "fen", "fen_value": "1000_", "fen_sequence": 1},
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 1},
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 5},
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 11},
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 12},
+        {"engine": "fen", "fen_value": 4, "fen_sequence": 0},
+        {"engine": "fen", "fen_value": 4, "fen_sequence": -2},
+        {"engine": "fen", "fen_value": 1, "fen_sequence": 0},
+        {"engine": "fen", "fen_value": 1, "fen_sequence": 17},
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 2, "fen_slots": True},
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 6, "fen_slots": True},
+        {"engine": "fen", "fen_value": 5, "fen_sequence": 1, "fen_slots": True},
+        {"engine": "fen", "fen_value": 3, "fen_sequence": 4, "fen_slots": True},
     ]
 
 

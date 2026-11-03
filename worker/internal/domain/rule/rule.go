@@ -127,6 +127,18 @@ type ForwardRule struct {
 	// links its owner blocked.
 	BlockLinks bool
 
+	// ForwardEveryN is the task's forward-every-N cadence (Stage 4.5 W2),
+	// the projection of ForwardRule.forward_every_n (entities.py:345):
+	// 1 means "forward every message", which is also the absence of the
+	// feature and what an unconfigured task keeps doing.
+	//
+	// Like BlockLinks this is a metadata-resolved value, never a column,
+	// and the rule store resolves it through the SAME clamp the Python
+	// property applies on read — so a hand-edited row or a float from JSON
+	// reads identically on both engines. The delivery preflight consumes
+	// it to decide whether a job's message owns a slot.
+	ForwardEveryN int
+
 	// Metadata is the task's metadata JSON blob. It carries the
 	// branding_hop sub-blob and the metadata-resolved transport/shape fields
 	// the Core's ForwardRule entity reads out of it, so the worker reads the

@@ -290,6 +290,25 @@ func (p *Payload) SourceDate() int64 { return int64(p.num("source_date", 0)) }
 // {sender_name} / {FROM_USER} header placeholders.
 func (p *Payload) SenderName() string { return p.str("sender_name", "") }
 
+// IsEdit reports whether the job carries an edit of a message the task
+// already handled, rather than a new message (Stage 4.5 W2).
+//
+// The Python pipeline derives payload.is_edit from the event's edit_date
+// (pipeline.py:212). The durable path does not carry that boolean
+// verbatim: an edit is folded into a waiting job by fold_edit
+// (sqlite_repositories.py:2623), which sets is_edit_folded and edit_date
+// while leaving the job's identity fields alone so the fence and the
+// message map still key on the ORIGINAL event. Any of the three markers
+// therefore identifies an edit of an already-counted message — the
+// forward-every-N cadence must never consume a slot for one (an edit
+// would both spend a slot and beat a real message to it: pipeline.py:1068).
+func (p *Payload) IsEdit() bool {
+	if p.boolean("is_edit", false) || p.boolean("is_edit_folded", false) {
+		return true
+	}
+	return p.num("edit_date", 0) != 0
+}
+
 // mapField reads a JSON object field.
 func (p *Payload) mapField(key string) map[string]any {
 	if v, ok := p.raw[key]; ok {

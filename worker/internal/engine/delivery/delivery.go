@@ -24,6 +24,7 @@ package delivery
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -38,6 +39,7 @@ import (
 	"atf/worker/internal/domain/reply"
 	"atf/worker/internal/domain/routing"
 	"atf/worker/internal/domain/rule"
+	"atf/worker/internal/engine/counters"
 	"atf/worker/internal/engine/delivery/replyenqueue"
 	"atf/worker/internal/engine/filter"
 	"atf/worker/internal/engine/scheduler"
@@ -107,10 +109,15 @@ type Engine struct {
 	// Log Monitor. It is optional: a nil recorder (through RecorderOr) makes
 	// every event a no-op, which is how the unit tests run.
 	decisions cleaning.DecisionRecorder
-	log       Logger
-	metrics   Metrics
-	opts      Options
-	workerID  string
+	// counters is the durable forward-every-N cadence store (Stage 4.5
+	// W2). Optional the same way Python's _counters port is: nil means
+	// the embed has no repository, and the gate forwards every message
+	// rather than failing closed on missing bookkeeping.
+	counters counters.Store
+	log      Logger
+	metrics  Metrics
+	opts     Options
+	workerID string
 
 	mu      sync.Mutex
 	rate    map[string][]time.Time // per-target send timestamps
@@ -334,6 +341,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 		}
 	}
 
+
 	// 2d. Stage 4.5 (W3) — event-level dedup: a job whose event the task
 	// already processed closes as SENT-without-send.
 	//
@@ -373,6 +381,43 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 			e.metrics.Outcome("sent")
 			return nil
 		}
+	}
+
+	// 2d. Stage 4.5 (W2): the Forward-Every-N cadence gate. The job's
+	// message owns a slot only when its position in the task's sequence of
+	// filter-passing messages is 1, N+1, 2N+1 … — and that position is
+	// durable, because a restart must continue the sequence rather than
+	// replay slot 1.
+	//
+	// Ordering rules, all mirroring the Python gate (pipeline.py:1065):
+	//
+	//   - it runs AFTER the filter and block_links gates, so a message the
+	//     task would not forward never consumes a slot (the caller gates on
+	//     the filter outcome, exactly as Python does);
+	//   - it runs BEFORE the fence claim, because a held slot is a
+	//     delivery decision and a job that will not send must never hold a
+	//     fence (the same reason every other drop here precedes it);
+	//   - it runs after the transform gate for the same reason Python
+	//     decides the slot before paying for a transform: the two engines
+	//     cannot diverge on whether the cadence was spent on a message
+	//     that a later stage then dropped.
+	//
+	// A skip is terminal for the job: closing it FAILED records the
+	// decision without an attempt and without a fence claim. Python
+	// additionally marks the skipped message processed so a redelivery
+	// cannot consume the next slot (pipeline.py:1086); that marker is the
+	// ingest side's, and a re-enqueued copy of the same event arrives here
+	// with the sequence already advanced — the counter, not this gate, is
+	// what makes the replay a no-op.
+	if err := e.forwardEveryNGate(ctx, j, r, logger); err != nil {
+		// errFenSkipped is the gate's terminal decision: the job is already
+		// closed FAILED and no Telegram call may follow, so it is not an
+		// error the caller propagates upward — exactly like the filter and
+		// block_links drops above, which return nil from Process directly.
+		if errors.Is(err, errFenSkipped) {
+			return nil
+		}
+		return err
 	}
 
 	// 3. Per-target rate limit. A throttled target is a defer (the lane is
