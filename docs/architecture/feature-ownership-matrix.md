@@ -21,7 +21,8 @@ or a UI button is never sufficient. Every "Actual runtime path" below was traced
 | Link management | `services.py:758` | `cleaning.links.go` + `policy.HasLink` | `pipeline.py:1448` | **FIXED F-14** (canonical `has_link` predicate) | 4.4 ✅ |
 | Header/Footer | `services.py:241` | `cleaning.FormatHeader` | `pipeline.py:1547` raw | **FIXED F-15** (Go renders) | 4.4 ✅ |
 | Watermark | `services.py:1441` | `pipeline.applyAdvanced` | `pipeline.py:1558` | gated F--addon ✅ | 4.4 ✅ |
-| AI transformation | `pipeline.py:1616` | — | `pipeline.py:1524` | absent | 4.4 |
+| AI transformation (gate) | `entities.py:1681` | `rulestore.aiRewriteActive` | `pipeline.py:1596` | **parity 82/82** | 4.4 ✅ |
+| AI transformation (provider) | `ai/transformer.py` | — | `pipeline.py:1616` | decision Go-owned; execution Python until switch | 4.5 |
 | Keyword reply | `services.py:1477` | — | `pipeline.py:1298` | absent | 4.5 |
 | Routing | `services.py:415` | — | `pipeline.py:633 ROUTING` | absent | 4.5 |
 | Forward Every N | `forward_interval.py` | — | `pipeline.py:1036` | absent | 4.5 |
