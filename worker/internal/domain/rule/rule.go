@@ -3,9 +3,13 @@
 // never writes these tables — the API and the pipeline own configuration.
 package rule
 
-import "time"
+import (
+	"strings"
+	"time"
 
-import "atf/worker/internal/domain/cleaning"
+	"atf/worker/internal/domain/cleaning"
+	"atf/worker/internal/domain/reply"
+)
 
 // ForwardRule is the execution-relevant projection of a forward_rules row.
 //
@@ -107,6 +111,141 @@ type ForwardRule struct {
 	// the Core's ForwardRule entity reads out of it, so the worker reads the
 	// same blob the Python entity reads.
 	Metadata map[string]any
+}
+
+// KeywordSettings projects the keyword-reply add-on's inputs out of the
+// task's metadata blob, exactly as the Python ForwardRule's own
+// accessors resolve them:
+//
+//   - keyword_confirmation / keyword_reply are metadata keys
+//     (entities.py:1787, 1799);
+//   - the paid-addon entitlement is is_addon_enabled("keyword_reply")
+//     (entities.py:1843);
+//   - the word list is ForwardRule.whitelist (entities.py:1467): the
+//     content policy's whitelist_words, with the legacy pre-policy
+//     metadata["whitelist"] list as the fallback that keeps a task
+//     configured before the policy existed on its configured behaviour.
+//
+// The projection lives on the rule because that is where Python resolves
+// it; the delivery engine's keyword-reply block (Stage 4.5, W4) consumes
+// it as a reply.Settings and never re-derives any of it.
+func (r *ForwardRule) KeywordSettings() reply.Settings {
+	if r == nil {
+		return reply.Settings{}
+	}
+	meta := r.Metadata
+	if meta == nil {
+		meta = map[string]any{}
+	}
+	return reply.Settings{
+		KeywordConfirmation: ruleMetaBool(meta, "keyword_confirmation", false),
+		KeywordReply:        ruleMetaStr(meta, "keyword_reply", ""),
+		Whitelist:           whitelistWords(meta),
+		AddonEnabled:        ruleAddonEnabled(meta, reply.AddonKey),
+	}
+}
+
+// ruleMetaBool reads a boolean metadata field with the Python entity's
+// own semantics (bool(self.metadata.get(key, def))). A value the reader
+// cannot interpret falls back to the default rather than silently
+// switching the flag off. It duplicates the rulestore helper on purpose:
+// the rule package may not import the store (the store depends on the
+// rule), so the narrow readers the projection needs stay here.
+func ruleMetaBool(meta map[string]any, key string, def bool) bool {
+	v, ok := meta[key]
+	if !ok {
+		return def
+	}
+	switch b := v.(type) {
+	case bool:
+		return b
+	case float64:
+		return b != 0
+	case int:
+		return b != 0
+	case int64:
+		return b != 0
+	case string:
+		switch strings.ToLower(strings.TrimSpace(b)) {
+		case "true":
+			return true
+		case "false":
+			return false
+		}
+	}
+	return def
+}
+
+// ruleMetaStr reads a string metadata field, mirroring the Python
+// accessor str(self.metadata.get(key) or default).
+func ruleMetaStr(meta map[string]any, key, def string) string {
+	if v, ok := meta[key]; ok {
+		if s, ok := v.(string); ok && s != "" {
+			return s
+		}
+	}
+	return def
+}
+
+// ruleAddonEnabled is ForwardRule.is_addon_enabled (entities.py:1843):
+// the addon must be marked enabled in the persisted metadata's
+// paid_addons block. A client-supplied flag alone is never sufficient,
+// and a non-dict paid_addons block means no entitlement at all.
+func ruleAddonEnabled(meta map[string]any, key string) bool {
+	addons, ok := meta["paid_addons"].(map[string]any)
+	if !ok {
+		return false
+	}
+	return ruleMetaBool(addons, key, false)
+}
+
+// whitelistWords is ForwardRule.whitelist (entities.py:1467): the
+// content policy's whitelist_words first, with the legacy pre-policy
+// metadata["whitelist"] list as the fallback. A task configured before
+// the content policy existed keeps forwarding on the words it configured
+// instead of silently forwarding everything.
+//
+// The policy comes first, exactly as the Python property orders it: a
+// non-empty policy list wins outright, and the legacy list is only read
+// when the policy carries no words.
+func whitelistWords(meta map[string]any) []string {
+	if policy, ok := meta["content_policy"].(map[string]any); ok {
+		if words := stringListField(policy, "whitelist_words"); len(words) > 0 {
+			return words
+		}
+	}
+	if legacy, ok := meta["whitelist"].([]any); ok {
+		out := make([]string, 0, len(legacy))
+		for _, word := range legacy {
+			if s, ok := word.(string); ok {
+				out = append(out, s)
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+// stringListField coerces a JSON-decoded list field into []string,
+// dropping entries that are not strings (Python's [str(x) for x in ...]
+// coerces them; no parity case ever feeds one, so dropping is the
+// conservative read).
+func stringListField(meta map[string]any, key string) []string {
+	raw, ok := meta[key]
+	if !ok {
+		return nil
+	}
+	list, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(list))
+	for _, item := range list {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // PauseStillActiveAt reports whether an explicit pause was in force at the

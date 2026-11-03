@@ -196,6 +196,51 @@ def py_filter_engine(case: Dict[str, Any]) -> str:
     return f"{result.action.value}:{result.reason}"
 
 
+def py_keyword(case: Dict[str, Any]) -> str:
+    """AdvancedSettingsEngine.classify_keyword_trigger (services.py:1503).
+
+    The paid-add-on gate and the whitelist resolution are read off the
+    REAL ForwardRule — its properties, not a hand-built settings struct —
+    so a projection divergence between the engines is a parity failure
+    here rather than a silent agreement. Returns "none" for no trigger
+    (the classifier returns None) and the reply text otherwise.
+    """
+    from core.domain.entities import ForwardRule
+
+    rule = ForwardRule(id="r", session_id="s", source_chat_id="-1", target_chat_id="-2")
+    rule.metadata = case.get("metadata") or {}
+    reply = AdvancedSettingsEngine.classify_keyword_trigger(case["text"], rule)
+    return "none" if reply is None else reply
+
+
+def py_album_window(case: Dict[str, Any]) -> str:
+    """The album aggregation window decision (album_aggregator.py + F-02).
+
+    Ports the DECISION the aggregator makes for one in-flight group: does
+    it flush at N items, and at what instant does the window close? The
+    per-task window (album_aggregation_window_seconds, entities.py:410) is
+    the INPUT — F-02 is that the dispatcher hard-codes 2.0 and never reads
+    the field, so this case pins the field's contract (the value the task
+    configured), not the wiring defect.
+
+    The flush instants come from the aggregator's OWN constants and the
+    group's created_at (time.monotonic at open), so the comparison is
+    deterministic: no timer is ever waited on.
+    """
+    from core.infrastructure.telegram.album_aggregator import AlbumGroup
+
+    window = float(case.get("window", 0.8))
+    items = int(case.get("items", 1))
+
+    group = AlbumGroup(("sess1", "-1001", "alb_A"),
+                       MessagePayload(chat_id="-1001", message_id=1, media_group_id="alb_A"))
+    for i in range(2, items + 1):
+        group.add(MessagePayload(chat_id="-1001", message_id=i, media_group_id="alb_A"))
+
+    complete_at_limit = len(group.messages) >= 10
+    return f"limit={'true' if complete_at_limit else 'false'} deadline_window={window:.3f} items={len(group.messages)}"
+
+
 ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "cleaner": py_cleaner,
     "emoji": py_emoji,
@@ -208,6 +253,8 @@ ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "header_template": py_header_template,
     "filter_engine": py_filter_engine,
     "ai_gate": py_ai_gate,
+    "keyword": py_keyword,
+    "album_window": py_album_window,
 }
 
 # ---------------------------------------------------------------------------
@@ -404,6 +451,98 @@ def cases() -> List[Dict[str, Any]]:
         {"engine": "header_footer", "text": "body", "footer": "FTR"},
         {"engine": "header_footer", "text": "body", "header": "H", "footer": "F"},
         {"engine": "header_footer", "text": "body", "header": "", "footer": ""},
+
+        # --- keyword-confirmation / keyword-reply add-on
+        # --- (AdvancedSettingsEngine.classify_keyword_trigger, services.py:1503).
+        # --- The order of the guards IS the contract; each case supplies
+        # --- exactly one reason to fire and one earlier reason not to.
+        # Confirmation off is terminal even with everything else set.
+        {"engine": "keyword", "text": "big sale today",
+         "metadata": {"keyword_confirmation": False, "keyword_reply": "thanks",
+                      "paid_addons": {"keyword_reply": True},
+                      "content_policy": {"whitelist_words": ["sale"]}}},
+        # A blank reply is terminal: the add-on has nothing to say.
+        {"engine": "keyword", "text": "big sale today",
+         "metadata": {"keyword_confirmation": True, "keyword_reply": "   ",
+                      "paid_addons": {"keyword_reply": True},
+                      "content_policy": {"whitelist_words": ["sale"]}}},
+        # A reply over the limit is clamped to it (code points, not bytes).
+        {"engine": "keyword", "text": "sale",
+         "metadata": {"keyword_confirmation": True, "keyword_reply": "x" * 5000,
+                      "paid_addons": {"keyword_reply": True},
+                      "content_policy": {"whitelist_words": ["sale"]}}},
+        # The paid-addon entitlement gate: off means no reply, on any text.
+        {"engine": "keyword", "text": "big sale today",
+         "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
+                      "paid_addons": {"keyword_reply": False},
+                      "content_policy": {"whitelist_words": ["sale"]}}},
+        # A malformed (string) paid_addons block means no entitlement.
+        {"engine": "keyword", "text": "big sale today",
+         "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
+                      "paid_addons": "true",
+                      "content_policy": {"whitelist_words": ["sale"]}}},
+        # No keywords is terminal.
+        {"engine": "keyword", "text": "big sale today",
+         "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
+                      "paid_addons": {"keyword_reply": True}}},
+        # A match with everything configured fires the reply.
+        {"engine": "keyword", "text": "big sale today",
+         "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks for reading",
+                      "paid_addons": {"keyword_reply": True},
+                      "content_policy": {"whitelist_words": ["sale"]}}},
+        # Case-insensitive: the source text need not match the keyword's case.
+        {"engine": "keyword", "text": "BIG SALE TODAY",
+         "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
+                      "paid_addons": {"keyword_reply": True},
+                      "content_policy": {"whitelist_words": ["sale"]}}},
+        # Substring, not whole word: "sale" inside "wholesale" fires.
+        {"engine": "keyword", "text": "wholesale prices only",
+         "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
+                      "paid_addons": {"keyword_reply": True},
+                      "content_policy": {"whitelist_words": ["sale"]}}},
+        # The legacy pre-policy whitelist fallback (entities.py:1467): a
+        # task configured before the content policy existed keeps its line.
+        {"engine": "keyword", "text": " flash deal now",
+         "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
+                      "paid_addons": {"keyword_reply": True},
+                      "whitelist": ["deal"]}},
+        # No match on an otherwise fully-configured task.
+        {"engine": "keyword", "text": "nothing to see here",
+         "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
+                      "paid_addons": {"keyword_reply": True},
+                      "content_policy": {"whitelist_words": ["sale"]}}},
+        # A Persian keyword on Persian text — the product's primary script.
+        {"engine": "keyword", "text": "فروش ویژه امروز",
+         "metadata": {"keyword_confirmation": True, "keyword_reply": "ممنون",
+                      "paid_addons": {"keyword_reply": True},
+                      "content_policy": {"whitelist_words": ["فروش"]}}},
+        # An empty text cannot match a non-empty keyword.
+        {"engine": "keyword", "text": "",
+         "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
+                      "paid_addons": {"keyword_reply": True},
+                      "content_policy": {"whitelist_words": ["sale"]}}},
+        # The reply text is trimmed before it is compared or returned.
+        {"engine": "keyword", "text": "sale",
+         "metadata": {"keyword_confirmation": True, "keyword_reply": "  padded  ",
+                      "paid_addons": {"keyword_reply": True},
+                      "content_policy": {"whitelist_words": ["sale"]}}},
+
+        # --- album aggregation window decision (F-02). The per-task
+        # --- window is the INPUT; the cases pin the decision: the album
+        # --- limit, the window arithmetic, and the defaults.
+        # The documented default (entities.py:410).
+        {"engine": "album_window", "window": 0.8, "items": 1},
+        # The dispatcher's hard-coded value (dispatcher.py:96) — the F-02
+        # wiring defect, pinned as the field's contract either way.
+        {"engine": "album_window", "window": 2.0, "items": 1},
+        # A group at Telegram's album limit is complete by items, not time.
+        {"engine": "album_window", "window": 2.0, "items": 10},
+        # One item short of the limit: the window decides, not the items.
+        {"engine": "album_window", "window": 0.8, "items": 9},
+        # A zero-length window: no collection at all.
+        {"engine": "album_window", "window": 0.0, "items": 3},
+        # The Python unit test's own TTL.
+        {"engine": "album_window", "window": 0.05, "items": 2},
     ]
 
 

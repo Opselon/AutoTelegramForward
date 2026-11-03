@@ -17,11 +17,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"strconv"
 	"fmt"
 	"os"
+	"strconv"
 
+	"atf/worker/internal/domain/album"
 	"atf/worker/internal/domain/cleaning"
+	"atf/worker/internal/domain/reply"
 	"atf/worker/internal/domain/rule"
 	"atf/worker/internal/engine/filter"
 	"atf/worker/internal/rulestore"
@@ -42,28 +44,32 @@ type testCase struct {
 	// the plain Replacements field cannot express the order-dependent
 	// composition RPL-PRIORITY-01 pins; the ordered decoder fills this
 	// field instead.
-	orderedReplacements []orderedPair `json:"-"`
-	Metadata     map[string]any    `json:"metadata"`
-	Header       string            `json:"header"`
-	Footer       string            `json:"footer"`
+	orderedReplacements []orderedPair  `json:"-"`
+	Metadata            map[string]any `json:"metadata"`
+	Header              string         `json:"header"`
+	Footer              string         `json:"footer"`
 	// header_template cases: the template and the message snapshot it
 	// renders against (the Stage 4.4 F-15 fix).
-	Template     string            `json:"template"`
-	ChatID       string            `json:"chat_id"`
-	ChatUsername string            `json:"chat_username"`
-	ChatTitle    string            `json:"chat_title"`
-	MessageID    int64             `json:"message_id"`
-	Date         int64             `json:"date"`
-	RuleName     string            `json:"rule_name"`
-	SenderName   string            `json:"sender_name"`
+	Template     string `json:"template"`
+	ChatID       string `json:"chat_id"`
+	ChatUsername string `json:"chat_username"`
+	ChatTitle    string `json:"chat_title"`
+	MessageID    int64  `json:"message_id"`
+	Date         int64  `json:"date"`
+	RuleName     string `json:"rule_name"`
+	SenderName   string `json:"sender_name"`
 	// is_caption marks a cleaner case's text as a media caption, for the
 	// F-09 apply_to_caption switch the pipeline honors.
-	IsCaption    bool              `json:"is_caption"`
+	IsCaption bool `json:"is_caption"`
 	// filter_engine cases: the filter's fields and the message's media type.
-	Filter       map[string]any    `json:"filter"`
+	Filter map[string]any `json:"filter"`
 	// ai_gate cases: the task's AI config id.
-	AIConfigID   string            `json:"ai_config_id"`
-	MediaType    string            `json:"media_type"`
+	AIConfigID string `json:"ai_config_id"`
+	MediaType  string `json:"media_type"`
+	// album_window cases: the per-task aggregation window and the number
+	// of pieces in the in-flight group.
+	Window float64 `json:"window"`
+	Items  int     `json:"items"`
 }
 
 type result struct {
@@ -378,6 +384,30 @@ func runCase(c testCase) string {
 			EffectiveText:      c.Text,
 		}
 		cfg.HeaderTask = cleaning.HeaderTask{Name: c.RuleName}
+	case "keyword":
+		// The keyword-reply classifier, called through the REAL rule
+		// projection (rule.ForwardRule.KeywordSettings on the case's
+		// metadata blob) and not a hand-built reply.Settings — the same
+		// projection the delivery engine's W4 block consults, so a
+		// divergence between the metadata reader and the classifier is a
+		// parity failure here rather than a silent agreement.
+		r := &rule.ForwardRule{ID: "r", IsActive: true, Metadata: c.Metadata}
+		if out := reply.Classify(c.Text, r.KeywordSettings()); out == "" {
+			return "none"
+		} else {
+			return out
+		}
+	case "album_window":
+		// The album aggregation decision. The per-task window is the
+		// INPUT (F-02: dispatcher.py hard-codes 2.0 and never reads the
+		// field), so the case pins the decision the field's contract
+		// implies: the album limit, the window arithmetic, the defaults.
+		s := album.NewSettings(c.Window, album.DefaultMaxActiveAlbums)
+		group := album.Group{Items: c.Items, CreatedAt: 0}
+		d := s.Evaluate(group, 0)
+		completeByLimit := d.Reason == "album_limit" || c.Items >= album.MaxGroupItems
+		return fmt.Sprintf("limit=%v deadline_window=%.3f items=%d",
+			completeByLimit, s.Window, c.Items)
 	default:
 		return ""
 	}

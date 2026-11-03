@@ -398,6 +398,52 @@ func (s *pgStore) PendingCount(ctx context.Context) (int, error) {
 	return count, err
 }
 
+// Enqueue writes one delivery job PENDING, idempotently. The statement is
+// the Core's own Postgres enqueue (postgres_repositories.py: enqueue):
+// INSERT ... ON CONFLICT (rule_id, source_chat_id, source_message_id,
+// target_chat_id, job_kind) DO NOTHING, so the delivery-time reply is
+// exactly one row no matter how many times the decision fires.
+//
+// A duplicate returns (false, nil): the job already exists, which is the
+// idempotent outcome the Python enqueue reports as a False of its own.
+func (s *pgStore) Enqueue(ctx context.Context, j *job.DeliveryJob) (bool, error) {
+	if j == nil {
+		return false, fmt.Errorf("enqueue: nil job")
+	}
+	payload := "{}"
+	if raw := j.Payload.Raw(); len(raw) > 0 {
+		out, err := json.Marshal(raw)
+		if err != nil {
+			return false, fmt.Errorf("enqueue %s: encode payload: %w", j.ID, err)
+		}
+		payload = string(out)
+	}
+	kind := j.JobKind
+	if kind == "" {
+		kind = "forward"
+	}
+	stage := j.DeliveryStage
+	if stage == "" {
+		stage = "DIRECT"
+	}
+	now := time.Now().Unix()
+	res, err := s.db.ExecContext(ctx, `INSERT INTO delivery_jobs
+		(id, rule_id, source_chat_id, source_message_id, target_chat_id, payload_json,
+		 status, attempts, max_attempts, next_retry_at, lease_until, worker_id,
+		 error_detail, created_at, updated_at, intermediate_chat_id,
+		 intermediate_message_id, delivery_stage, job_kind)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+		ON CONFLICT (rule_id, source_chat_id, source_message_id, target_chat_id, job_kind) DO NOTHING`,
+		j.ID, j.RuleID, j.SourceChatID, j.SourceMessageID, j.TargetChatID, payload,
+		string(job.StatusPending), 0, j.MaxAttempts, j.NextRetryAt, j.LeaseUntil,
+		"", "", now, now, j.IntermediateChatID, j.IntermediateMsgID, stage, kind)
+	if err != nil {
+		return false, fmt.Errorf("enqueue %s: %w", j.ID, err)
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
 // writeDeadLetterPG preserves an exhausted job for replay, inside the caller's
 // transaction. The row id is `dlq_<job_id>` — the Python implementation's own
 // convention, so a dead letter written by either engine lands on the same row.
