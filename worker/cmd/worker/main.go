@@ -33,12 +33,16 @@ import (
 	"time"
 
 	"atf/worker/internal/config"
+	"atf/worker/internal/domain/aiconfig"
 	"atf/worker/internal/domain/dedup"
 	"atf/worker/internal/domain/job"
+	"atf/worker/internal/engine/autoreply"
 	"atf/worker/internal/engine/counters"
 	"atf/worker/internal/engine/delivery"
 	"atf/worker/internal/engine/scheduler"
 	"atf/worker/internal/health"
+	"atf/worker/internal/infra/aiprovider"
+	autoreplystore "atf/worker/internal/infra/autoreply/store"
 	"atf/worker/internal/observability"
 	"atf/worker/internal/queue"
 	"atf/worker/internal/rulestore"
@@ -252,6 +256,23 @@ func run() (runErr error) {
 			log.Warn("scheduler engine stopped", "error", err)
 		}
 	}()
+
+	// Stage 5 (W5): the PVA / auto-reply durable consumer. Same lifecycle
+	// as the scheduler: claim loop + bounded pool + maintenance sweep, run
+	// until SIGTERM drains in-flight replies. It is only started when the
+	// deployment actually moved the PVA boundary (ATF_WORKER_AUTOREPLY),
+	// because a Python Core that still owns auto-reply would otherwise see
+	// two consumers on one queue — the same single-owner contract the
+	// delivery queue has.
+	if autoreplyEnabled() {
+		pvaWG := &sync.WaitGroup{}
+		if err := startAutoreplyConsumer(ctx, log, gateway, cfg, pvaWG); err != nil {
+			log.Warn("auto-reply consumer failed to start — Python Core keeps the queue", "error", err)
+		}
+		defer pvaWG.Wait()
+	} else {
+		log.Info("auto-reply consumer not started — the Python Core owns the PVA queue (ATF_WORKER_AUTOREPLY)")
+	}
 
 	err = runLoop(ctx, log, engine, store, tracker, cfg)
 	schedWG.Wait()
@@ -645,3 +666,83 @@ func (schedCounters) Outcome(kind string)                       {}
 func (schedCounters) ObserveDueLatency(seconds float64)         {}
 func (schedCounters) ObserveQueueDepth(n int)                   {}
 func (schedCounters) ObserveRetry(actionID string, attempt int) {}
+
+// autoreplyEnabled reports whether this worker process owns the PVA /
+// auto-reply queue. The Python Core runs its own AutoReplyWorker when this is
+// unset, so exactly one consumer owns the queue at a time — the same
+// single-owner contract ATF_WORKER_ENABLED applies to delivery jobs.
+func autoreplyEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("ATF_WORKER_AUTOREPLY"))) {
+	case "1", "true", "yes", "on":
+		return true
+	}
+	return false
+}
+
+// startAutoreplyConsumer wires the Go PVA consumer to the same lifecycle as
+// the delivery engine: bounded pool, per-chat ordering, lease recovery, and a
+// drain on SIGTERM. The WaitGroup is handed to the caller so main can wait
+// for in-flight replies before exiting (a pending reply is a promise).
+func startAutoreplyConsumer(ctx context.Context, log *slog.Logger, gateway telegraph.Gateway, cfg *config.Config, wg *sync.WaitGroup) error {
+	// The auto-reply tables are SQLite-only (the Python Core is authoritative
+	// for that schema: core/infrastructure/persistence/database.py:677), so
+	// the consumer always reads the shared atf.db, never PostgreSQL.
+	pvaStore, err := autoreplystore.NewSQLiteStore(ctx, cfg.DSN())
+	if err != nil {
+		return fmt.Errorf("open autoreply store: %w", err)
+	}
+
+	// The AI configs the PVA prompts resolve against are the SAME owner-scoped
+	// table the channel-rewrite path uses, with the same at-rest encryption.
+	aiStore, err := openAIConfigStore(ctx, cfg)
+	if err != nil {
+		pvaStore.Close()
+		return fmt.Errorf("open ai config store for autoreply: %w", err)
+	}
+
+	factory := aiprovider.NewFactory()
+
+	w := autoreply.NewWorker(pvaStore, aiStore, factory, gateway, workerID(), autoreply.Options{
+		Concurrency:  cfg.NumWorkers,
+		PollInterval: 1500 * time.Millisecond,
+		LeaseSeconds: 45,
+	})
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer pvaStore.Close()
+		log.Info("auto-reply consumer started",
+			"module", "worker.autoreply",
+			"concurrency", cfg.NumWorkers,
+			"db", "sqlite:shared-atf.db")
+		if err := w.Run(ctx, 0); err != nil && !errors.Is(err, context.Canceled) {
+			log.Warn("auto-reply consumer stopped", "error", err)
+		}
+		log.Info("auto-reply consumer stopped — in-flight replies drained")
+	}()
+	return nil
+}
+
+// openAIConfigStore opens the owner-scoped AI configuration store the autoreply
+// consumer resolves prompts against. It is the SAME table (ai_configs) the
+// channel-rewrite path uses, with the SAME at-rest AES-GCM encryption, so a
+// user's PVA and their channel rewriting share one credential per provider.
+//
+// The master key is the deployment's ATF_MASTER_KEY — the same secret the
+// Python Core's CryptoService derives from (core/infrastructure/security/
+// crypto.py). A worker without the key refuses to decrypt anything rather
+// than silently running with a wrong key.
+func openAIConfigStore(ctx context.Context, cfg *config.Config) (aiconfig.Store, error) {
+	masterKey := os.Getenv("ATF_MASTER_KEY")
+	if masterKey == "" {
+		return nil, fmt.Errorf("ATF_MASTER_KEY is unset: the AI config store cannot decrypt provider credentials")
+	}
+	crypto, err := aiconfig.NewCrypto(masterKey)
+	if err != nil {
+		return nil, fmt.Errorf("init ai config crypto: %w", err)
+	}
+	// ai_configs is SQLite-only in the Python Core (the repository reads it
+	// from the shared atf.db), so the Go side mirrors that placement.
+	return aiconfig.NewSQLiteStore(ctx, cfg.DSN(), crypto)
+}

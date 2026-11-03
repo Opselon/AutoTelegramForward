@@ -1082,12 +1082,27 @@ async def main() -> None:
         # made to their contact, so it ships rather than being dropped on
         # restart. The worker's own maintenance loop also recovers any lease
         # a previous process left dangling.
-        await container["autoreply_worker"].start()
-        from core.infrastructure.telegram.autoreply_bridge import register_pool_senders
+        #
+        # Strangler-fig switch, mirroring ATF_WORKER_ENABLED for the delivery
+        # queue: when the Go Worker owns the PVA queue (ATF_WORKER_AUTOREPLY),
+        # this loop deliberately does NOT start. The dispatcher's decide +
+        # enqueue stays here (ingestion is still Python's) — only the
+        # consumption moves, so exactly one consumer owns the queue at a time
+        # and a rollback is a config flip, not a redeploy.
+        if os.environ.get("ATF_WORKER_AUTOREPLY", "").strip().lower() in ("1", "true", "yes", "on"):
+            logger.info(
+                "[AUTOREPLY] ATF_WORKER_AUTOREPLY is set — the Go Worker owns the "
+                "auto-reply queue; the Python consumer is standing down (decide + "
+                "enqueue still active)."
+            )
+            container.setdefault("autoreply_consumer_owner", "go-worker")
+        else:
+            await container["autoreply_worker"].start()
+            from core.infrastructure.telegram.autoreply_bridge import register_pool_senders
 
-        wired = register_pool_senders(container["pool"], container["autoreply_worker"])
-        log_client.info("core", "autoreply", "auto-reply queue worker started",
-                        {"sessions_wired": wired})
+            wired = register_pool_senders(container["pool"], container["autoreply_worker"])
+            log_client.info("core", "autoreply", "auto-reply queue worker started",
+                            {"sessions_wired": wired})
     except Exception as exc:
         logger.warning("Auto-reply worker failed to start: %s", exc)
 
