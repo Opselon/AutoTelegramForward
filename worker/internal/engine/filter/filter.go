@@ -214,14 +214,21 @@ func (e *Engine) Evaluate(text string, mediaType string, isService bool, f *rule
 		}
 	}
 
-	// block_links gate (Python key: block_links on the FilterRule).
-	if f.BlockLinks {
-		lowered := strings.ToLower(text)
-		if urlRegex.MatchString(text) || strings.Contains(lowered, "http://") ||
-			strings.Contains(lowered, "https://") || strings.Contains(lowered, "t.me/") {
-			return drop("link_blocked")
-		}
-	}
+	// F-11 (aligned Stage 4.4): Python's FilterEngine has a block_links gate
+	// here, ordered between the length bounds and the blacklist. It is dead
+	// code on the Python side — FilterRule has no block_links field, the
+	// loader never sets one, and getattr(filter_rule, "block_links", False)
+	// in services.py:79 therefore always answers False — so the gate never
+	// fires and contributes nothing but a reason-code divergence when a
+	// message is both link-bearing and out of bounds (Python reports
+	// link_blocked, this engine used to report too_short). The task-level
+	// block_links gate that DOES run (media_filter.link_block_reason →
+	// has_link, pipeline.py:985) is enforced by the delivery preflight via
+	// policy.HasLink, which ports that gate exactly.
+	//
+	// The live link gate at this level is the blocked_media_types "link"
+	// arm above, which both engines implement in the same place.
+	_ = f.BlockLinks
 
 	return allow("filter_passed")
 }

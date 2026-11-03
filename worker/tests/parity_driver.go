@@ -21,6 +21,8 @@ import (
 	"os"
 
 	"atf/worker/internal/domain/cleaning"
+	"atf/worker/internal/domain/rule"
+	"atf/worker/internal/engine/filter"
 	"atf/worker/internal/rulestore"
 )
 
@@ -56,6 +58,9 @@ type testCase struct {
 	// is_caption marks a cleaner case's text as a media caption, for the
 	// F-09 apply_to_caption switch the pipeline honors.
 	IsCaption    bool              `json:"is_caption"`
+	// filter_engine cases: the filter's fields and the message's media type.
+	Filter       map[string]any    `json:"filter"`
+	MediaType    string            `json:"media_type"`
 }
 
 type result struct {
@@ -97,6 +102,49 @@ func rulestoreProbeTransform(meta map[string]any) *cleaning.Config {
 	}
 	cfg := rulestore.ProbeTransform(meta, string(raw))
 	return &cfg
+}
+
+// applyFilterField sets one FilterRule field from a parity case's raw value.
+// Only the keys the cases carry are handled; anything else is a test-author
+// error the unknown-key check in the engine would catch in production.
+func applyFilterField(f *rule.FilterRule, key string, value any) {
+	switch key {
+	case "min_message_length":
+		if n, ok := value.(float64); ok {
+			f.MinMessageLength = int(n)
+		}
+	case "max_message_length":
+		if n, ok := value.(float64); ok {
+			f.MaxMessageLength = int(n)
+		}
+	case "blacklist_keywords":
+		f.BlacklistKeywords = stringListValue(value)
+	case "whitelist_keywords":
+		f.WhitelistKeywords = stringListValue(value)
+	case "blocked_media_types":
+		f.BlockedMediaTypes = stringListValue(value)
+	case "allowed_media_types":
+		f.AllowedMediaTypes = stringListValue(value)
+	case "is_enabled":
+		if b, ok := value.(bool); ok {
+			f.IsEnabled = b
+		}
+	}
+}
+
+// stringListValue coerces a JSON-decoded list into []string.
+func stringListValue(value any) []string {
+	raw, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(raw))
+	for _, item := range raw {
+		if s, ok := item.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 func strField(m map[string]any, key string) string {
@@ -247,6 +295,20 @@ func runCase(c testCase) string {
 			return engine.ApplyText(c.Text, cfg, nil, cleaning.CaptionHint{IsCaption: true}).Text
 		}
 		return cleaner.Clean(c.Text)
+	case "filter_engine":
+		// F-11: the reason code IS the decision. Runs the real filter engine
+		// in the same order the production delivery preflight does, so a
+		// check-order divergence shows up as a parity failure rather than a
+		// silent metrics/audit difference.
+		fr := &rule.FilterRule{}
+		for key, value := range c.Filter {
+			applyFilterField(fr, key, value)
+		}
+		// FilterRule.block_links is dead code in Python (no such field), so
+		// the Go gate must never fire either — the F-11 alignment.
+		fr.BlockLinks = false
+		act := filter.New().Evaluate(c.Text, c.MediaType, false, fr)
+		return fmt.Sprintf("%v:%s", act.Action, act.Reason)
 	case "emoji":
 		cfg.RemoveEmojis = true
 	case "link_policy":

@@ -138,13 +138,29 @@ opted-in default, the inactive-cleaner guard, and the compatibility entry point.
 64 features) with the website-compatible fields wrapped and confirmed green by the
 `website` CI job.
 
-## F-11 — `block_links` evaluation ORDER differs — **VERIFIED**
-Python `services.py:79` checks block_links 5th; Go `filter.go:213` checks it last.
-Same DROP, different reason code. Customer impact: none on delivery; affects
-drop-reason metrics/audit only. Classification: **architectural cleanup**.
-Action: align in Stage 4.1c.
+## F-11 — `block_links` evaluation ORDER differs — **FIXED (Stage 4.4)**
 
-## F-12 — Go `FilterRule.BlockLinks` never populated — **VERIFIED**
+Python `services.py:79` checks block_links 5th; Go `filter.go:213` checked it last.
+Same DROP, different reason code.
+
+**Resolution.** The premise turned out to be inverted. `FilterRule` has **no
+`block_links` field** in Python (the entity defines none, and
+`sqlite_repositories.py` never sets one), so the `getattr(filter_rule,
+"block_links", False)` gate at `services.py:79` **always answers False — the
+gate is dead code**. Its only observable effect was the reason-code divergence
+this finding tracked: a message both link-bearing and out of bounds got
+`link_blocked` from Python and `too_short` from Go.
+The Go engine's gate was therefore removed (kept as a documented no-op so the
+field stays compatible with any older payload), and both engines now agree on
+the Python order by construction.
+The task-level `block_links` gate that DOES run — `media_filter.link_block_reason`
+→ `content_policy.has_link` (`pipeline.py:985`) — is unaffected and is enforced
+by the delivery preflight via `policy.HasLink` (the F-14 canonical predicate).
+Cross-language parity pinned by 5 new `filter_engine` cases in
+`scripts/test_stage42_parity.py` (74/74), including the order and the dead-flag
+case, plus `filter_test.go` regression tests.
+
+## F-12 — Go `FilterRule.BlockLinks` never populated — **RESOLVED (Stage 4.4)**
 Go struct field `worker/internal/domain/rule/rule.go:101`; evaluated at
 `filter.go:213`; but `rulestore.go:420-462` scans only the 9 legacy columns plus
 optional `regex_block`/`regex_require`/`is_enabled` and never sets `BlockLinks`.
@@ -154,6 +170,14 @@ for PostgreSQL. Customer impact: **latent** — mitigated today because the Pyth
 ingest gate (`pipeline.py:957`) drops the message before a job exists; the
 divergence goes live when Worker activation defaults on. Classification:
 **missing functionality**. Action: **Stage 4.1a (the first Stage 4.1 task)**.
+
+**Resolution.** The projection gap was real but moot: the Python `FilterRule`
+has no `block_links` field at all, so the FilterEngine gate the Go field fed
+never fires on either side (see F-11). The ForwardRule-level gate — the one
+production actually runs — IS projected (`rulestore.go` reads
+`metadata["block_links"]`), and the delivery preflight enforces it through
+`policy.HasLink`, a byte-exact port of `content_policy.has_link`. The LNK-GATE
+fixtures pin both halves of that gate on the Python side.
 
 **Store topology verified by the coordinator for the Stage 4.1 plan:**
 - `filter_rules` has no `block_links` column in **any** SQLite migration. The table
