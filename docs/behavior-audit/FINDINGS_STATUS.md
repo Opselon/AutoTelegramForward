@@ -60,7 +60,7 @@ are preserved in each fixture's notes), and 9 new differential cases in
 `scripts/test_stage42_parity.py` cover ZWJ families, keycaps, flags, skin
 tones, arrows and non-emoji SMP scripts (69/69 agree).
 
-## F-04 — `remove_links`/`link_replacement` precedence differs per path — **VERIFIED**
+## F-04 — `remove_links`/`link_replacement` precedence differs per path — **RESOLVED for the Worker (Stage 4.2 port, re-verified 4.4)**
 Reproduced by execution: durable path (`pipeline.py:1438` `if`/`elif`) with
 `remove_links=True` and `link_replacement="[LINK]"` on `"visit https://a.io now"`
 yields `'visit now'` — the replacement is ignored. Legacy
@@ -68,8 +68,17 @@ yields `'visit now'` — the replacement is ignored. Legacy
 and yields `'visit [LINK] now'`.
 Customer impact: edits (which run the legacy path) format links differently from
 the original forward.
-Classification: **conflicting specifications between two paths**.
-Action: Stage 4.4 must pick one documented precedence and port it.
+Classification: **conflicting specifications between two Python paths**.
+
+**Resolution for the Worker.** The divergence is Python-internal (durable vs
+legacy path), not Go/Python. The Go transform pipeline implements the DURABLE
+path precedence exactly — `resolvePolicy`/`if`/`else-if`
+(`pipeline.go:120-137`) gives `remove_links` the win and drops the replacement,
+producing `visit now` from the same input, verified by probe against the Python
+`LinkManagementEngine`. That is the correct side to match: the durable path is
+the authoritative one, and the legacy `transform_text` is the Python-only
+preview/edit path the Worker does not inherit. The remaining task — unifying the
+two PYTHON paths — stays with the Python core until the strangler switch moves.
 
 ## F-05 — `forward_every_n` runs AFTER all filters — **VERIFIED**
 `pipeline.py:1036-1084` sits after `FilterEngine.evaluate` (918), media/link gates
