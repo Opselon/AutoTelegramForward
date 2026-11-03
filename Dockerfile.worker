@@ -35,6 +35,7 @@ COPY worker/ ./worker/
 # image below carries the one shared library that produces (musl libc) and
 # nothing else — no compiler, no headers, no Go toolchain.
 ARG ATF_COMMIT_SHA=
+ARG ATF_VERSION=
 RUN --mount=type=cache,id=atf-worker-gomod,target=/root/go/pkg/mod \
     --mount=type=cache,id=atf-worker-goenv,target=/root/.cache/go-build \
     apk add --no-cache gcc musl-dev && \
@@ -44,7 +45,8 @@ RUN --mount=type=cache,id=atf-worker-gomod,target=/root/go/pkg/mod \
       -trimpath \
       -ldflags "-s -w \
         -X main.CommitSHA=${ATF_COMMIT_SHA} \
-        -X main.BuildInfo=worker" \
+        -X main.BuildInfo=worker \
+        -X main.VersionString=${ATF_VERSION}" \
       -o /out/atf-worker ./cmd/worker
 
 # --------------------------------------------------------------------------- #

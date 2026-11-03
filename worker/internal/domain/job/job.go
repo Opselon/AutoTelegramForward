@@ -64,6 +64,21 @@ type DeliveryJob struct {
 	DeliveryStage      string
 	JobKind            string
 	Payload            Payload
+
+	// ClaimedFrom is the status the delivery_jobs row carried when the
+	// claim that produced this job read it. It is NOT persisted: only the
+	// claim sets it, and only the in-memory job a worker is processing
+	// ever sees it.
+	//
+	// Its one reader is the forward-every-N cadence gate. A row that was
+	// PENDING at claim time is a first dispatch; a row that was RETRY_WAIT
+	// or CLAIMED (an expired lease) is a RE-DISPATCH of a job the engine
+	// already processed once. Python's cadence is evaluated once per
+	// message at ingest — a delivery retry never re-enters it — so the Go
+	// gate must not consume a second cadence slot for a re-dispatch.
+	// Nothing else reads this field on purpose: it is a claim-time fact,
+	// not a property of the job.
+	ClaimedFrom Status
 }
 
 // AttemptKey is the deterministic business identity of one logical delivery —
