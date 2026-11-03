@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -204,12 +205,24 @@ const queryTimeout = 5 * time.Second
 // The placeholders are written for PostgreSQL ($1); the SQLite reader rewrites
 // them through rulesQuery before the statement ever executes, so one verified
 // projection serves both engines.
+//
+// Stage 4.5 W1: source_chat_id / source_chat_name / target_chat_id /
+// target_chat_ids are the routing columns. source_chat_id, source_chat_name
+// and target_chat_id are NOT NULL on both backends (the SQLite v1 DDL and
+// the PostgreSQL DDL_SCHEMA declare all three); target_chat_ids is a
+// nullable JSONB list on PostgreSQL and a NOT NULL DEFAULT '[]' TEXT list
+// on SQLite, so it is read through a NullString and an empty/invalid blob
+// means "no extra targets" — the same answer the Python _safe_list
+// fallback gives. The extra *sources* are NOT a column: they live in
+// detection_criteria["source_chat_ids"], which the projection already
+// decodes.
 const forwardProjection = `
 	SELECT id, session_id, is_active, is_paused, paused_until,
 	       forward_mode, content_mode, filter_rule_id, metadata,
 	       owner_user_id, fallback_enabled, intermediate_channel_id,
 	       use_intermediate, message_category, detection_criteria,
-	       split_long_caption, ai_config_id
+	       split_long_caption, ai_config_id,
+	       source_chat_id, source_chat_name, target_chat_id, target_chat_ids
 	FROM forward_rules
 	WHERE id = $1
 `
@@ -272,6 +285,18 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		detectionCriteria  sql.NullString
 		splitLongCaption   sql.NullBool
 		aiConfigID         sql.NullString
+
+		// Stage 4.5 W1: the routing columns. source_chat_id and
+		// target_chat_id are NOT NULL on both backends but are still read
+		// through NullString: a row written before the columns existed
+		// (SQLite ALTER TABLE adds them with a default, PostgreSQL has
+		// them since the v1 DDL) would otherwise break the whole
+		// projection instead of degrading to the "no routing configured"
+		// default.
+		sourceChatID   sql.NullString
+		sourceChatName sql.NullString
+		targetChatID   sql.NullString
+		targetChatIDs  sql.NullString
 	)
 	if err := rows.Scan(
 		&id, &sessionID, &isActive, &isPaused, &pausedUntil,
@@ -279,6 +304,7 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		&ownerUserID, &fallbackEnabled, &intermediateChatID,
 		&useIntermediate, &messageCategory, &detectionCriteria,
 		&splitLongCaption, &aiConfigID,
+		&sourceChatID, &sourceChatName, &targetChatID, &targetChatIDs,
 	); err != nil {
 		return nil, fmt.Errorf("scan forward_rules %s: %w", ruleID, err)
 	}
@@ -311,6 +337,18 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		// Stage 4.4: AI transform. ai_config_id is a real column; a NULL or
 		// empty value means "no AI transform configured".
 		AIConfigID: strings.TrimSpace(aiConfigID.String),
+		// Stage 4.5 W1: routing columns. The Python ForwardRule builds
+		// these same values out of the same columns
+		// (sqlite_repositories.py:617, postgres_repositories.py:682):
+		// source_chat_id/target_chat_id from their NOT NULL columns and
+		// target_chat_ids from the JSON list column. source_chat_name is
+		// a real column on both backends — NOT a metadata key, unlike
+		// name/description — so it is read from the column the Python
+		// loader reads it from, never out of the blob.
+		SourceChatID:   strings.TrimSpace(sourceChatID.String),
+		SourceChatName: strings.TrimSpace(sourceChatName.String),
+		TargetChatID:   strings.TrimSpace(targetChatID.String),
+		TargetChatIDs:  decodeTargetChatIDs(targetChatIDs.String),
 	}, FilterRuleID: filterRuleID.String}
 
 	if metadataJSON.Valid && metadataJSON.String != "" {
@@ -398,6 +436,38 @@ func metaStr(meta map[string]any, key, def string) string {
 		}
 	}
 	return def
+}
+
+// decodeTargetChatIDs reads the target_chat_ids column blob into the
+// target list, mirroring the Python loader's _safe_list(col, []):
+// a missing, empty or invalid blob means "no extra targets", never an
+// error — a row whose list cannot be parsed still delivers to its primary
+// target, exactly as it does on the Python side. Non-string entries are
+// stringified (the column is written by Python as json.dumps of a list of
+// str, but an API client can store numbers).
+func decodeTargetChatIDs(blob string) []string {
+	trimmed := strings.TrimSpace(blob)
+	if trimmed == "" {
+		return nil
+	}
+	var list []any
+	if err := json.Unmarshal([]byte(trimmed), &list); err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(list))
+	for _, item := range list {
+		switch v := item.(type) {
+		case string:
+			if s := strings.TrimSpace(v); s != "" {
+				out = append(out, s)
+			}
+		case float64:
+			// json.dumps writes Telegram ids as ints; a JSON-decoded
+			// -100123.0 must read back as "-100123", matching _chat_key.
+			out = append(out, strconv.FormatInt(int64(v), 10))
+		}
+	}
+	return out
 }
 
 // metaInt64 reads a numeric metadata field. JSON numbers decode as float64,

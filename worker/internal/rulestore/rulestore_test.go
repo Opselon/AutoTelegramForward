@@ -74,7 +74,16 @@ func applyRuleSchema(t *testing.T, db *sql.DB) {
 			message_category TEXT NOT NULL DEFAULT 'ALL',
 			detection_criteria TEXT NOT NULL DEFAULT '{}',
 			split_long_caption INTEGER NOT NULL DEFAULT 1,
-			ai_config_id TEXT NOT NULL DEFAULT ''
+			ai_config_id TEXT NOT NULL DEFAULT '',
+			-- Stage 4.5 W1: the routing columns. All four exist on a live
+			-- database (source_chat_id/source_chat_name/target_chat_id
+			-- since the v1 DDL, target_chat_ids since the v2 migration),
+			-- so a fixture that omitted them would test a schema no
+			-- deployment has.
+			source_chat_id TEXT NOT NULL DEFAULT '',
+			source_chat_name TEXT NOT NULL DEFAULT '',
+			target_chat_id TEXT NOT NULL DEFAULT '',
+			target_chat_ids TEXT NOT NULL DEFAULT '[]'
 		)`,
 		`CREATE TABLE IF NOT EXISTS filter_rules (
 			id TEXT PRIMARY KEY,
@@ -365,12 +374,20 @@ func TestLegacyRowWithoutV30Columns(t *testing.T) {
 		// ADD COLUMN is how the real bootstrap heals a live table, so this
 		// fixture reproduces exactly that: the old shape, then the columns
 		// added the way the migration adds them (idempotent, with defaults).
+		// source_chat_id / source_chat_name / target_chat_id /
+		// target_chat_ids are included in the same way: all four predate
+		// Stage 3 (v1 and v2), and the Stage 4.5 routing projection reads
+		// them — a fixture without them would model a database the
+		// bootstrap never produces.
 		`CREATE TABLE forward_rules (
 			id TEXT PRIMARY KEY, session_id TEXT NOT NULL DEFAULT '',
 			is_active INTEGER NOT NULL DEFAULT 1, is_paused INTEGER NOT NULL DEFAULT 0,
 			paused_until INTEGER NOT NULL DEFAULT 0, forward_mode TEXT NOT NULL DEFAULT 'COPY_MESSAGE',
-			content_mode TEXT NOT NULL DEFAULT 'AUTO', filter_rule_id TEXT, metadata TEXT NOT NULL DEFAULT '{}'
+			content_mode TEXT NOT NULL DEFAULT 'AUTO', filter_rule_id TEXT, metadata TEXT NOT NULL DEFAULT '{}',
+			source_chat_id TEXT NOT NULL DEFAULT '', source_chat_name TEXT NOT NULL DEFAULT '',
+			target_chat_id TEXT NOT NULL DEFAULT ''
 		)`,
+		`ALTER TABLE forward_rules ADD COLUMN target_chat_ids TEXT NOT NULL DEFAULT '[]'`,
 		`ALTER TABLE forward_rules ADD COLUMN owner_user_id INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE forward_rules ADD COLUMN fallback_enabled INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE forward_rules ADD COLUMN intermediate_channel_id TEXT NOT NULL DEFAULT ''`,
