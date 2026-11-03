@@ -152,7 +152,6 @@ def py_header_template(case: Dict[str, Any]) -> str:
 
 def py_ai_gate(case: Dict[str, Any]) -> str:
     """ForwardRule.ai_rewrite_active — the AI transform gate (entities.py:1681).
-
     A config id alone means "rewrite with this config"; the paid-addon switch
     is the explicit veto on top. Pinned because a Go side that answered this
     differently would silently rewrite (or silently not rewrite) every message
@@ -168,7 +167,6 @@ def py_ai_gate(case: Dict[str, Any]) -> str:
 
 def py_filter_engine(case: Dict[str, Any]) -> str:
     """FilterEngine.evaluate — the reason code IS the decision.
-
     F-11: the Python engine's check order is the contract (service -> media ->
     length -> blacklist -> whitelist -> regex). The differential cases pin it
     by asserting the reason a message is dropped under overlapping
@@ -194,6 +192,75 @@ def py_filter_engine(case: Dict[str, Any]) -> str:
     )
     result = _ENGINE.evaluate(payload, rule)
     return f"{result.action.value}:{result.reason}"
+
+
+# --- Stage 4.5 W1: the routing adapters ------------------------------------- #
+#
+# The Go Worker re-runs the Python Core's routing and anti-loop decisions
+# at delivery time. These adapters call the REAL Python methods —
+# _chat_key, ForwardRule.matches_source / all_targets and
+# SmartRoutingEngine.check_loop — so a Go divergence is a parity failure,
+# not a fixture of expected values.
+
+
+def py_chat_key(case: Dict[str, Any]) -> str:
+    """_chat_key — the chat-id normalisation every routing equality uses."""
+    from core.domain.entities import _chat_key
+
+    return _chat_key(case["chat_id"])
+
+
+def _routing_rule(case: Dict[str, Any]) -> ForwardRule:
+    """Build the ForwardRule the adapters below call the REAL methods on.
+
+    The shape mirrors the Go projection: a primary source, the extra
+    sources in detection_criteria["source_chat_ids"] (where the Python
+    entity's property reads them from), and the target list.
+    """
+    criteria = dict(case.get("detection_criteria") or {})
+    rule = _rule_with(
+        source_chat_id=case.get("source_chat_id", ""),
+        source_chat_name=case.get("source_chat_name", ""),
+        target_chat_id=case.get("target_chat_id", ""),
+        target_chat_ids=list(case.get("target_chat_ids") or []),
+        intermediate_channel_id=case.get("intermediate_channel_id", ""),
+    )
+    rule.detection_criteria = criteria
+    return rule
+
+
+def py_matches_source(case: Dict[str, Any]) -> str:
+    """ForwardRule.matches_source — the multi-source membership decision."""
+    rule = _routing_rule(case)
+    return "true" if rule.matches_source(case["chat_id"]) else "false"
+
+
+def py_all_targets(case: Dict[str, Any]) -> str:
+    """ForwardRule.all_targets — every target, primary first, deduped."""
+    rule = _routing_rule(case)
+    return ",".join(rule.all_targets)
+
+
+def py_check_loop(case: Dict[str, Any]) -> str:
+    """SmartRoutingEngine.check_loop — the anti-loop guarantee, per target."""
+    from core.domain.entities import MessagePayload
+    from core.domain.services import SmartRoutingEngine
+    from core.domain.value_objects import MediaType
+
+    origin = case.get("forward_origin") or None
+    payload = MessagePayload(
+        message_id=1,
+        chat_id=case.get("chat_id", ""),
+        chat_username=case.get("chat_username", ""),
+        text="",
+        media_type=MediaType.TEXT,
+        forward_origin=dict(origin) if origin else None,
+    )
+    rule = _routing_rule(case)
+    is_loop, reason = SmartRoutingEngine().check_loop(payload, rule, case["target_chat_id"])
+    # Go's strconv.FormatBool spells the booleans lowercase; the decision is
+    # the agreement being tested, not Python's spelling of it.
+    return f"{'true' if is_loop else 'false'}:{reason}"
 
 
 def py_keyword(case: Dict[str, Any]) -> str:
@@ -253,11 +320,21 @@ ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "header_template": py_header_template,
     "filter_engine": py_filter_engine,
     "ai_gate": py_ai_gate,
+    # Stage 4.5 W4: the keyword-reply trigger and the album window.
     "keyword": py_keyword,
     "album_window": py_album_window,
+    # Stage 4.5 W1: the routing decisions the Go Worker re-runs at
+    # delivery time (source matching, target fan-out, loop prevention).
+    "chat_key": py_chat_key,
+    "matches_source": py_matches_source,
+    "all_targets": py_all_targets,
+    "check_loop": py_check_loop,
 }
 
+
 # ---------------------------------------------------------------------------
+# The case list — every entry executed by BOTH engines.
+# ---------------------------------------------------------------------------# ---------------------------------------------------------------------------
 # The case list — every entry executed by BOTH engines.
 # ---------------------------------------------------------------------------
 
@@ -452,96 +529,120 @@ def cases() -> List[Dict[str, Any]]:
         {"engine": "header_footer", "text": "body", "header": "H", "footer": "F"},
         {"engine": "header_footer", "text": "body", "header": "", "footer": ""},
 
-        # --- keyword-confirmation / keyword-reply add-on
-        # --- (AdvancedSettingsEngine.classify_keyword_trigger, services.py:1503).
-        # --- The order of the guards IS the contract; each case supplies
-        # --- exactly one reason to fire and one earlier reason not to.
-        # Confirmation off is terminal even with everything else set.
+        # --- Stage 4.5 W1: routing & loop prevention (the Go Worker
+        # --- re-runs these at delivery time; every adapter calls the REAL
+        # --- Python method, so a divergence is a parity failure).
+        # _chat_key: every spelling of one chat normalises to one key.
+        {"engine": "chat_key", "chat_id": "-100123"},
+        {"engine": "chat_key", "chat_id": "-100123.0"},
+        {"engine": "chat_key", "chat_id": " -100123 "},
+        {"engine": "chat_key", "chat_id": "-100123.7"},
+        {"engine": "chat_key", "chat_id": "@username"},
+        {"engine": "chat_key", "chat_id": ""},
+        {"engine": "chat_key", "chat_id": "   "},
+        {"engine": "chat_key", "chat_id": "not-a-number"},
+        # matches_source: primary, criteria-listed extras, username spellings.
+        {"engine": "matches_source", "chat_id": "-1001", "source_chat_id": "-1001"},
+        {"engine": "matches_source", "chat_id": "-1002",
+         "source_chat_id": "-1001",
+         "detection_criteria": {"source_chat_ids": ["-1002", "-1003"]}},
+        {"engine": "matches_source", "chat_id": "-1003",
+         "source_chat_id": "-1001",
+         "detection_criteria": {"source_chat_ids": ["-1002", "-1003"]}},
+        # A float-spelled id is the same chat after _chat_key.
+        {"engine": "matches_source", "chat_id": "-1002.0",
+         "source_chat_id": "-1001",
+         "detection_criteria": {"source_chat_ids": ["-1002"]}},
+        # Usernames: with and without the @, and case never matters.
+        {"engine": "matches_source", "chat_id": "@channel",
+         "source_chat_id": "@channel"},
+        {"engine": "matches_source", "chat_id": "channel",
+         "source_chat_id": "@channel"},
+        {"engine": "matches_source", "chat_id": "@CHANNEL",
+         "source_chat_id": "@channel"},
+        {"engine": "matches_source", "chat_id": "@NAMEDSOURCE",
+         "source_chat_id": "-1001", "source_chat_name": "@namedsource"},
+        {"engine": "matches_source", "chat_id": "namedsource",
+         "source_chat_id": "-1001", "source_chat_name": "@namedsource"},
+        # A task with no criteria list falls back to its primary source.
+        {"engine": "matches_source", "chat_id": "-1001",
+         "source_chat_id": "-1001", "detection_criteria": {}},
+        # Unknown chats, empty ids and inactive tasks never match.
+        {"engine": "matches_source", "chat_id": "-9999", "source_chat_id": "-1001"},
+        {"engine": "matches_source", "chat_id": "", "source_chat_id": "-1001"},
+        # all_targets: primary first, deduped, order preserved.
+        {"engine": "all_targets", "target_chat_id": "-2001",
+         "target_chat_ids": ["-2001", "-2002"]},
+        {"engine": "all_targets", "target_chat_id": "",
+         "target_chat_ids": ["-2001", "-2002"]},
+        {"engine": "all_targets", "target_chat_id": "-2001",
+         "target_chat_ids": []},
+        # check_loop: each arm of services.py:508, including the username
+        # spelling the numeric comparison alone would miss.
+        {"engine": "check_loop", "chat_id": "-1001", "target_chat_id": "-1001"},
+        {"engine": "check_loop", "chat_id": "-1001", "target_chat_id": "-2001"},
+        {"engine": "check_loop", "chat_id": "-1001", "chat_username": "@sourcechannel",
+         "target_chat_id": "@sourcechannel"},
+        {"engine": "check_loop", "chat_id": "-1001", "chat_username": "@SourceChannel",
+         "target_chat_id": "@SOURCECHANNEL"},
+        {"engine": "check_loop", "chat_id": "-1001", "chat_username": "sourcechannel",
+         "target_chat_id": "sourcechannel"},
+        {"engine": "check_loop", "chat_id": "-1001",
+         "forward_origin": {"from_chat_id": "-1099"}, "target_chat_id": "-1099"},
+        {"engine": "check_loop", "chat_id": "-1009",
+         "forward_origin": {"from_chat_id": "-1099"}, "target_chat_id": "-1099"},
+        # The intermediate arm: C as target is a loop only when the message
+        # came from C — the source/forward arms report it first otherwise.
+        {"engine": "check_loop", "chat_id": "-1300",
+         "intermediate_channel_id": "-1300", "target_chat_id": "-1300"},
+        {"engine": "check_loop", "chat_id": "-1001",
+         "forward_origin": {"from_chat_id": "-1300"},
+         "intermediate_channel_id": "-1300", "target_chat_id": "-1300"},
+        {"engine": "check_loop", "chat_id": "-1001",
+         "forward_origin": {"from_chat_id": "-1099"},
+         "intermediate_channel_id": "-1300", "target_chat_id": "-1300"},
+        {"engine": "check_loop", "chat_id": "-1001",
+         "intermediate_channel_id": "-1300", "target_chat_id": "-1300"},
+        # A forward origin whose from_chat_id is absent must not crash.
+        {"engine": "check_loop", "chat_id": "-1001",
+         "forward_origin": {}, "target_chat_id": "-2001"},
         {"engine": "keyword", "text": "big sale today",
          "metadata": {"keyword_confirmation": False, "keyword_reply": "thanks",
                       "paid_addons": {"keyword_reply": True},
                       "content_policy": {"whitelist_words": ["sale"]}}},
-        # A blank reply is terminal: the add-on has nothing to say.
-        {"engine": "keyword", "text": "big sale today",
-         "metadata": {"keyword_confirmation": True, "keyword_reply": "   ",
-                      "paid_addons": {"keyword_reply": True},
-                      "content_policy": {"whitelist_words": ["sale"]}}},
-        # A reply over the limit is clamped to it (code points, not bytes).
         {"engine": "keyword", "text": "sale",
          "metadata": {"keyword_confirmation": True, "keyword_reply": "x" * 5000,
                       "paid_addons": {"keyword_reply": True},
                       "content_policy": {"whitelist_words": ["sale"]}}},
-        # The paid-addon entitlement gate: off means no reply, on any text.
-        {"engine": "keyword", "text": "big sale today",
-         "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
-                      "paid_addons": {"keyword_reply": False},
-                      "content_policy": {"whitelist_words": ["sale"]}}},
-        # A malformed (string) paid_addons block means no entitlement.
-        {"engine": "keyword", "text": "big sale today",
-         "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
-                      "paid_addons": "true",
-                      "content_policy": {"whitelist_words": ["sale"]}}},
-        # No keywords is terminal.
-        {"engine": "keyword", "text": "big sale today",
-         "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
-                      "paid_addons": {"keyword_reply": True}}},
-        # A match with everything configured fires the reply.
-        {"engine": "keyword", "text": "big sale today",
-         "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks for reading",
-                      "paid_addons": {"keyword_reply": True},
-                      "content_policy": {"whitelist_words": ["sale"]}}},
-        # Case-insensitive: the source text need not match the keyword's case.
         {"engine": "keyword", "text": "BIG SALE TODAY",
          "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
                       "paid_addons": {"keyword_reply": True},
                       "content_policy": {"whitelist_words": ["sale"]}}},
-        # Substring, not whole word: "sale" inside "wholesale" fires.
         {"engine": "keyword", "text": "wholesale prices only",
          "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
                       "paid_addons": {"keyword_reply": True},
                       "content_policy": {"whitelist_words": ["sale"]}}},
-        # The legacy pre-policy whitelist fallback (entities.py:1467): a
-        # task configured before the content policy existed keeps its line.
         {"engine": "keyword", "text": " flash deal now",
          "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
                       "paid_addons": {"keyword_reply": True},
                       "whitelist": ["deal"]}},
-        # No match on an otherwise fully-configured task.
         {"engine": "keyword", "text": "nothing to see here",
          "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
                       "paid_addons": {"keyword_reply": True},
                       "content_policy": {"whitelist_words": ["sale"]}}},
-        # A Persian keyword on Persian text — the product's primary script.
         {"engine": "keyword", "text": "فروش ویژه امروز",
          "metadata": {"keyword_confirmation": True, "keyword_reply": "ممنون",
                       "paid_addons": {"keyword_reply": True},
                       "content_policy": {"whitelist_words": ["فروش"]}}},
-        # An empty text cannot match a non-empty keyword.
         {"engine": "keyword", "text": "",
          "metadata": {"keyword_confirmation": True, "keyword_reply": "thanks",
                       "paid_addons": {"keyword_reply": True},
                       "content_policy": {"whitelist_words": ["sale"]}}},
-        # The reply text is trimmed before it is compared or returned.
-        {"engine": "keyword", "text": "sale",
-         "metadata": {"keyword_confirmation": True, "keyword_reply": "  padded  ",
-                      "paid_addons": {"keyword_reply": True},
-                      "content_policy": {"whitelist_words": ["sale"]}}},
-
-        # --- album aggregation window decision (F-02). The per-task
-        # --- window is the INPUT; the cases pin the decision: the album
-        # --- limit, the window arithmetic, and the defaults.
-        # The documented default (entities.py:410).
         {"engine": "album_window", "window": 0.8, "items": 1},
-        # The dispatcher's hard-coded value (dispatcher.py:96) — the F-02
-        # wiring defect, pinned as the field's contract either way.
         {"engine": "album_window", "window": 2.0, "items": 1},
-        # A group at Telegram's album limit is complete by items, not time.
         {"engine": "album_window", "window": 2.0, "items": 10},
-        # One item short of the limit: the window decides, not the items.
         {"engine": "album_window", "window": 0.8, "items": 9},
-        # A zero-length window: no collection at all.
         {"engine": "album_window", "window": 0.0, "items": 3},
-        # The Python unit test's own TTL.
         {"engine": "album_window", "window": 0.05, "items": 2},
     ]
 

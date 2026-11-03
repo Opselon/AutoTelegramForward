@@ -20,10 +20,12 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+"strings"
 
 	"atf/worker/internal/domain/album"
 	"atf/worker/internal/domain/cleaning"
-	"atf/worker/internal/domain/reply"
+"atf/worker/internal/domain/reply"
+"atf/worker/internal/domain/routing"
 	"atf/worker/internal/domain/rule"
 	"atf/worker/internal/engine/filter"
 	"atf/worker/internal/rulestore"
@@ -66,10 +68,24 @@ type testCase struct {
 	// ai_gate cases: the task's AI config id.
 	AIConfigID string `json:"ai_config_id"`
 	MediaType  string `json:"media_type"`
-	// album_window cases: the per-task aggregation window and the number
+// album_window cases: the per-task aggregation window and the number
 	// of pieces in the in-flight group.
 	Window float64 `json:"window"`
 	Items  int     `json:"items"`
+// Stage 4.5 W1 routing cases: the task's routing fields (mirroring the
+	// rule.ForwardRule projection) and the message snapshot the decisions
+	// run against. ChatID and ChatUsername (above) are the message's
+	// source chat id and @username; ForwardOrigin the "Forwarded from
+	// <chat>" header snapshot. TargetChatID is the single target a
+	// check_loop case decides against and the task's own primary for
+	// all_targets cases.
+	SourceChatID        string         `json:"source_chat_id"`
+	SourceChatName      string         `json:"source_chat_name"`
+	TargetChatID        string         `json:"target_chat_id"`
+	TargetChatIDs       []string       `json:"target_chat_ids"`
+	DetectionCriteria   map[string]any `json:"detection_criteria"`
+	IntermediateChannel string         `json:"intermediate_channel_id"`
+	ForwardOrigin       map[string]any `json:"forward_origin"`
 }
 
 type result struct {
@@ -286,6 +302,27 @@ func optionsMap(value any) map[string]any {
 	return out
 }
 
+// routingCaseRule builds the rule.ForwardRule projection a routing case
+// describes, the same shape the rule store projects from forward_rules:
+// primary source and name, extra sources in detection_criteria, primary
+// target and list, and the branding channel the intermediate arm reads.
+//
+// The extra sources are routed through the real projection accessor
+// (rule.ForwardRule.SourceChatIDs) rather than decoded here, so a parity
+// case exercises the same path the delivery engine consults.
+func routingCaseRule(c testCase) *rule.ForwardRule {
+	return &rule.ForwardRule{
+		ID:                    "r",
+		IsActive:              true,
+		SourceChatID:          c.SourceChatID,
+		SourceChatName:        c.SourceChatName,
+		TargetChatID:          c.TargetChatID,
+		TargetChatIDs:         c.TargetChatIDs,
+		DetectionCriteria:     c.DetectionCriteria,
+		IntermediateChannelID: c.IntermediateChannel,
+	}
+}
+
 func runCase(c testCase) string {
 	engine := cleaning.NewPipeline()
 	cfg := cleaning.Config{}
@@ -384,7 +421,7 @@ func runCase(c testCase) string {
 			EffectiveText:      c.Text,
 		}
 		cfg.HeaderTask = cleaning.HeaderTask{Name: c.RuleName}
-	case "keyword":
+case "keyword":
 		// The keyword-reply classifier, called through the REAL rule
 		// projection (rule.ForwardRule.KeywordSettings on the case's
 		// metadata blob) and not a hand-built reply.Settings — the same
@@ -408,6 +445,25 @@ func runCase(c testCase) string {
 		completeByLimit := d.Reason == "album_limit" || c.Items >= album.MaxGroupItems
 		return fmt.Sprintf("limit=%v deadline_window=%.3f items=%d",
 			completeByLimit, s.Window, c.Items)
+case "chat_key":
+		// _chat_key: the normalisation every routing equality is built on.
+		return routing.ChatKey(c.ChatID)
+	case "matches_source":
+		// ForwardRule.matches_source: the multi-source membership decision,
+		// run against the same projection the delivery preflight builds.
+		return strconv.FormatBool(routing.MatchesSource(routingCaseRule(c), c.ChatID))
+	case "all_targets":
+		// ForwardRule.all_targets: every target, primary first, deduped.
+		return strings.Join(routing.AllTargets(routingCaseRule(c)), ",")
+	case "check_loop":
+		// SmartRoutingEngine.check_loop, per target — the decision the
+		// delivery preflight consults before any send.
+		isLoop, reason := routing.CheckLoop(routing.Input{
+			ChatID:        c.ChatID,
+			ChatUsername:  c.ChatUsername,
+			ForwardOrigin: c.ForwardOrigin,
+		}, routingCaseRule(c), c.TargetChatID)
+		return strconv.FormatBool(isLoop) + ":" + reason
 	default:
 		return ""
 	}
