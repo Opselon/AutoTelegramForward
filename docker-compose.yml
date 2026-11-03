@@ -132,6 +132,20 @@ services:
       # exits on the failed login restart-loops and SIGKILLs checks running
       # through `docker compose exec` (the v2.2.0 clean-install died at 137).
       ATF_DISABLE_BOT: ${ATF_DISABLE_BOT:-}
+      # Strangler-fig switches, shared with the worker service. The Python
+      # Core READS these to stand its own business loops down, so they must
+      # be visible HERE, not only on the worker:
+      #   ATF_WORKER_ENABLED     — the Go Worker owns delivery-job execution;
+      #                            durable_queue.py:221 keeps the enqueue path.
+      #   ATF_WORKER_TRANSFORMS  — the Worker owns the transform stage; the
+      #                            pipeline enqueues the RAW snapshot instead.
+      #   ATF_WORKER_AUTOREPLY   — the Worker owns the PVA/auto-reply queue;
+      #                            core/main.py's AutoReplyWorker stands down.
+      # Exactly one engine may own each boundary at a time; unsetting any of
+      # them is an instant rollback.
+      ATF_WORKER_ENABLED: ${ATF_WORKER_ENABLED:-0}
+      ATF_WORKER_TRANSFORMS: ${ATF_WORKER_TRANSFORMS:-0}
+      ATF_WORKER_AUTOREPLY: ${ATF_WORKER_AUTOREPLY:-0}
       ATF_API_ID: ${ATF_API_ID}
       ATF_API_HASH: ${ATF_API_HASH}
       ATF_BOT_TOKEN: ${ATF_BOT_TOKEN}
@@ -264,6 +278,9 @@ services:
     environment:
       # The switch. Unset = the Python loop owns delivery execution.
       ATF_WORKER_ENABLED: ${ATF_WORKER_ENABLED:-0}
+      # PVA/auto-reply queue ownership. Set = the Go Worker consumes the
+      # autoreply queue (and Python's AutoReplyWorker stands down).
+      ATF_WORKER_AUTOREPLY: ${ATF_WORKER_AUTOREPLY:-0}
       # Stage 4.2 switch: unset = the Python pipeline owns the text-transform
       # stage and the job payload carries the transformed result. Set = the
       # payload carries the RAW text and this worker re-runs the identical
