@@ -49,6 +49,18 @@ type Store interface {
 	// at enqueue time; the worker reports the same number in metrics.
 	PendingCount(ctx context.Context) (int, error)
 
+	// Enqueue writes one delivery job PENDING, idempotently. It mirrors
+	// the Python enqueue (sqlite_repositories.py enqueue /
+	// postgres_repositories.py enqueue): INSERT OR IGNORE / ON CONFLICT DO
+	// NOTHING on the (rule_id, source_chat_id, source_message_id,
+	// target_chat_id, job_kind) UNIQUE key, so a replay or a duplicate
+	// delivery-time enqueue is a no-op rather than a second delivery.
+	//
+	// Enqueued returns true when a row was inserted, false when the row
+	// already existed (the duplicate case), and an error only when the
+	// store could not answer.
+	Enqueue(ctx context.Context, j *job.DeliveryJob) (bool, error)
+
 	// FenceClaim is delivery_attempts.claim_or_check. Only FenceDispatch
 	// allows a send; see job.FenceOutcome for the contract.
 	FenceClaim(ctx context.Context, key job.AttemptKey, workerID string, leaseUntil float64) (job.FenceOutcome, *job.DeliveryAttempt, error)
@@ -140,14 +152,14 @@ func (s *sqliteStore) Close() error { return s.db.Close() }
 // scanJob builds a job.DeliveryJob from a delivery_jobs row.
 func scanJob(rows *sql.Rows) (*job.DeliveryJob, error) {
 	var (
-		j                        job.DeliveryJob
-		status, payloadJSON      string
-		nextRetry, lease         float64
-		workerID, errDetail      sql.NullString
-		interChat                sql.NullString
-		interMsg                 sql.NullInt64
-		stage                    sql.NullString
-		kind                     sql.NullString
+		j                   job.DeliveryJob
+		status, payloadJSON string
+		nextRetry, lease    float64
+		workerID, errDetail sql.NullString
+		interChat           sql.NullString
+		interMsg            sql.NullInt64
+		stage               sql.NullString
+		kind                sql.NullString
 	)
 	cols := []any{
 		&j.ID, &j.RuleID, &j.SourceChatID, &j.SourceMessageID, &j.TargetChatID,
@@ -430,6 +442,51 @@ func (s *sqliteStore) PendingCount(ctx context.Context) (int, error) {
 		`SELECT COUNT(*) FROM delivery_jobs WHERE status IN ('PENDING','CLAIMED','RETRY_WAIT')`).
 		Scan(&count)
 	return count, err
+}
+
+// Enqueue writes one delivery job PENDING, idempotently. The statement is
+// the Core's own enqueue (sqlite_repositories.py: enqueue): INSERT OR
+// IGNORE against the (rule, source, message, target, job_kind) UNIQUE
+// key, so the reply a delivery-time trigger enqueues is exactly one row
+// no matter how many times the decision fires for the same event.
+//
+// A duplicate returns (false, nil): the job already exists, which is the
+// idempotent outcome the Python enqueue reports as a False of its own.
+func (s *sqliteStore) Enqueue(ctx context.Context, j *job.DeliveryJob) (bool, error) {
+	if j == nil {
+		return false, fmt.Errorf("enqueue: nil job")
+	}
+	payload := "{}"
+	if raw := j.Payload.Raw(); len(raw) > 0 {
+		out, err := json.Marshal(raw)
+		if err != nil {
+			return false, fmt.Errorf("enqueue %s: encode payload: %w", j.ID, err)
+		}
+		payload = string(out)
+	}
+	kind := j.JobKind
+	if kind == "" {
+		kind = "forward"
+	}
+	stage := j.DeliveryStage
+	if stage == "" {
+		stage = "DIRECT"
+	}
+	now := time.Now().Unix()
+	res, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO delivery_jobs
+		(id, rule_id, source_chat_id, source_message_id, target_chat_id, payload_json,
+		 status, attempts, max_attempts, next_retry_at, lease_until, worker_id,
+		 error_detail, created_at, updated_at, intermediate_chat_id,
+		 intermediate_message_id, delivery_stage, job_kind)
+		VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		j.ID, j.RuleID, j.SourceChatID, j.SourceMessageID, j.TargetChatID, payload,
+		string(job.StatusPending), 0, j.MaxAttempts, j.NextRetryAt, j.LeaseUntil,
+		"", "", now, now, j.IntermediateChatID, j.IntermediateMsgID, stage, kind)
+	if err != nil {
+		return false, fmt.Errorf("enqueue %s: %w", j.ID, err)
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
 }
 
 // writeDeadLetter preserves an exhausted job for replay. The row id is

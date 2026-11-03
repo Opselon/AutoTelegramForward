@@ -34,7 +34,9 @@ import (
 	"atf/worker/internal/domain/cleaning"
 	"atf/worker/internal/domain/job"
 	"atf/worker/internal/domain/policy"
+	"atf/worker/internal/domain/reply"
 	"atf/worker/internal/domain/rule"
+	"atf/worker/internal/engine/delivery/replyenqueue"
 	"atf/worker/internal/engine/filter"
 	"atf/worker/internal/engine/scheduler"
 	"atf/worker/internal/engine/transform"
@@ -365,6 +367,36 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	// of the claimed execution — never before enqueue.
 	if err := e.ensureBrandingStage1(ctx, j, r, logger); err != nil {
 		return err
+	}
+
+	// 4b. Stage 4.5 (W4): the keyword-confirmation / keyword-reply add-on.
+	// This is the delivery-time port of the pipeline's Phase-2 enqueue
+	// (pipeline.py:1381-1411): when the task's reply trigger fires on the
+	// text being forwarded, the configured reply is enqueued to the SAME
+	// target as its own durable job (job_kind="keyword_reply"), AFTER the
+	// primary enqueue made the forward itself durable.
+	//
+	// The three invariants the Python pipeline guarantees and this block
+	// preserves:
+	//
+	//  1. A trigger NEVER drops or delays the forward. The enqueue runs
+	//     in-process and its failure is logged, never fatal — the reply
+	//     is a secondary, best-effort side effect (pipeline.py:1404-1411).
+	//     It runs after the fence claim, so a reply is only scheduled for
+	//     a job that is actually about to send.
+	//  2. The reply is a DISTINCT deliverable: its own job id and
+	//     job_kind give it its own UNIQUE-key row and its own fence key,
+	//     so it is neither deduplicated against the forward nor able to
+	//     claim the forward's send.
+	//  3. The reply goes to the same target minus the branding channel
+	//     (pipeline.py:1387-1391): a reply is plain text and carries no
+	//     header to brand, so the branding hop is not cloned into it.
+	//
+	// The trigger runs on forward jobs only: a keyword_reply job itself
+	// carries JobKind="keyword_reply", so no reply ever chains out of a
+	// reply.
+	if j.JobKind == "" || j.JobKind == "forward" {
+		e.enqueueKeywordReply(ctx, j, r, logger)
 	}
 
 	// 5. Dispatch (Stage 2 for branded deliveries; direct for unbranded).
@@ -1126,6 +1158,65 @@ func (e *Engine) updateJobForStage2(j *job.DeliveryJob, plan *hopPlan, cChat str
 		"content_mode":  plan.ContentMode,
 		"reason":        plan.Reason,
 	}
+}
+
+// --- Stage 4.5: keyword-reply enqueue (W4) --------------------------------- //
+
+// enqueueKeywordReply is the delivery-time port of the pipeline's Phase-2
+// keyword-reply enqueue (pipeline.py:1381-1411).
+//
+// The PRIMARY forward is never touched by anything here: a trigger only
+// SCHEDULES a reply. Every failure path returns quietly after logging,
+// mirroring the Python pipeline's except-clause (pipeline.py:1404-1411)
+// that keeps a reply failure from turning an already-enqueued forward
+// into a pipeline failure.
+func (e *Engine) enqueueKeywordReply(ctx context.Context, j *job.DeliveryJob, r *rule.ForwardRule, logger Logger) {
+	if r == nil {
+		return
+	}
+	settings := r.KeywordSettings()
+	text := reply.Classify(operandFor(j), settings)
+	if text == "" {
+		return // no trigger: the add-on is off, misconfigured, or unmatched
+	}
+	if err := replyenqueue.EnsureJobIDNotEmpty(j.ID); err != nil {
+		logger.Warn("keyword reply not enqueued — primary job cannot name one",
+			"reason_code", "KEYWORD_REPLY_NO_JOB_ID", "error", err)
+		return
+	}
+	replyJob := replyenqueue.Reply(j, text)
+	inserted, err := e.store.Enqueue(ctx, replyJob)
+	if err != nil {
+		// Best-effort side effect: a queue hiccup must never fail the
+		// forward it matched on.
+		logger.Warn("keyword reply could not be enqueued — forward unaffected",
+			"reason_code", "KEYWORD_REPLY_ENQUEUE_FAILED", "error", err)
+		return
+	}
+	if !inserted {
+		// The UNIQUE (rule, source, message, target, job_kind) key
+		// already carried a row: a replay, not a duplicate send. Python's
+		// enqueue reports the same False and logs it.
+		logger.Info("keyword reply already queued — skipping re-enqueue",
+			"reply_job_id", replyJob.ID)
+		return
+	}
+	logger.Info("keyword trigger matched — reply enqueued to the same target",
+		"reply_job_id", replyJob.ID,
+		"decision", "ENQUEUE", "reason_code", "KEYWORD_REPLY_MATCHED")
+}
+
+// operandFor is the text the keyword classifier reads. Python feeds
+// `payload.effective_text or ctx.transformed_text or ""` (pipeline.py:1384);
+// the job payload carries the same effective_text snapshot, with the
+// payload's `text` (the already-transformed body the forward delivers) as
+// the pre-Stage-4.2 fallback a job written before effective_text existed
+// still carries.
+func operandFor(j *job.DeliveryJob) string {
+	if text := j.Payload.EffectiveText(); text != "" {
+		return text
+	}
+	return j.Payload.Text()
 }
 
 // --- Stage 3: auto-delete scheduling --------------------------------------- //
