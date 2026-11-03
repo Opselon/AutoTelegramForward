@@ -133,6 +133,9 @@ func run() (runErr error) {
 		"db", dbLabel(cfg),
 		"telegram_runtime", cfg.TelegramRuntimeAddr,
 		"contract", ContractVersion,
+		"version", version(),
+		"commit_sha", CommitSHA,
+		"build_info", BuildInfo,
 	)
 
 	store, err := openStore(context.Background(), cfg)
@@ -518,6 +521,19 @@ func dbLabel(cfg *config.Config) string {
 		return "postgres"
 	}
 	return "sqlite:" + cfg.DBPath
+}
+
+// versionString reports the product version the worker belongs to: the repo's
+// VERSION file, baked in at build time the same way CommitSHA is. Empty means
+// "built without the flag"; the startup log says so rather than inventing a
+// number, matching the health surface's policy on CommitSHA.
+var VersionString string
+
+func version() string {
+	if VersionString != "" {
+		return VersionString
+	}
+	return "unset"
 }
 
 // --- adapters: keep the engine free of logging/metrics plumbing ------------ //
