@@ -141,6 +141,11 @@ type FilterRule struct {
 	DropService       bool
 	MinMessageLength  int
 	MaxMessageLength  int
+	// OwnerUserID is the filter's tenant. The rule store enforces that a task
+	// may only be filtered by a filter it owns (owner 0 is a pre-ownership
+	// row, kept as the task's own — pipeline.py:930-943). Carried on the
+	// projection so a parity harness can assert the boundary.
+	OwnerUserID int64
 	// BlockLinks on a FilterRule mirrors the task's own flag projected at
 	// load time (see ForwardRule.BlockLinks) — it is NOT a filter_rules
 	// column: no migration ever added one, and Python's FilterRule entity

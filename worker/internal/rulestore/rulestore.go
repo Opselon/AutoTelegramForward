@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -174,7 +175,7 @@ func (s *Store) GetByID(ruleID string) (*rule.ForwardRule, *rule.FilterRule, err
 	if strings.TrimSpace(ext.FilterRuleID) == "" {
 		return r, nil, nil // no filter attached
 	}
-	f, err := s.getFilter(ctx, ext.FilterRuleID)
+	f, err := s.getFilter(ctx, ext.FilterRuleID, ext.ForwardRule.OwnerUserID)
 	if err != nil {
 		// A filter-store failure is an outage, not "no filter". Report it —
 		// the caller defers instead of deciding from missing data.
@@ -462,10 +463,18 @@ func metaBool(meta map[string]any, key string, def bool) bool {
 //     disable every old filter the first time the worker ran.
 //
 // A dangling reference (the rule points at a filter that no longer exists)
-// returns (nil, nil): the task attached a filter, the filter is gone, and the
-// delivery proceeds *unfiltered* — the Python pipeline's own behaviour when
+// returns (nil, nil): the task attached a filter, the filter is gone, and
+// the delivery proceeds *unfiltered* — the Python pipeline's own behaviour when
 // a filter load fails (it logs and evaluates no filter), never a drop.
-func (s *Store) getFilter(ctx context.Context, filterID string) (*rule.FilterRule, error) {
+//
+// Tenant isolation (pipeline.py:930-943): the filter id comes from the task's
+// own row, but the row it points at is read BY ID ALONE — so a task must never
+// be filtered by (or inherit the configuration of) a filter owned by another
+// tenant. A filter whose owner_user_id is neither 0 (a pre-ownership row,
+// still the task's own configuration) nor the task's owner is IGNORED, exactly
+// as the Python pipeline ignores it: the delivery proceeds unfiltered, and the
+// violation is visible in the log rather than silently applied.
+func (s *Store) getFilter(ctx context.Context, filterID string, ruleOwnerUserID int64) (*rule.FilterRule, error) {
 	// filter_rules always lives in SQLite; rewrite the PG-style placeholder
 	// the shared projection uses, if the projection ever cites one.
 	filterQuery := filterProjectionSQLite
@@ -493,14 +502,26 @@ func (s *Store) getFilter(ctx context.Context, filterID string) (*rule.FilterRul
 		dropService       bool
 		minLen            int
 		maxLen            int
+		filterOwner       sql.NullInt64
 	)
 	if err := rows.Scan(&id, &whitelistJSON, &blacklistJSON,
-		&regexPatternsJSON, &allowedJSON, &blockedJSON, &dropService, &minLen, &maxLen); err != nil {
+		&regexPatternsJSON, &allowedJSON, &blockedJSON, &dropService, &minLen, &maxLen, &filterOwner); err != nil {
 		return nil, fmt.Errorf("scan filter_rules %s: %w", filterID, err)
+	}
+
+	// Tenant isolation: the task may only be filtered by its own filter. An
+	// owner_user_id of 0 is a pre-ownership row and stays the task's own
+	// configuration, exactly as the Python pipeline allows.
+	if filterOwner.Valid && filterOwner.Int64 != 0 && filterOwner.Int64 != ruleOwnerUserID {
+		slog.Warn("filter ignored: owned by another tenant",
+			"filter_id", id, "rule_owner", ruleOwnerUserID, "filter_owner", filterOwner.Int64,
+			"reason", "FILTER_NOT_OWNED")
+		return nil, nil
 	}
 
 	f := &rule.FilterRule{
 		ID:                id,
+		OwnerUserID:       filterOwner.Int64,
 		IsEnabled:         true, // pre-v30 default; overridden when the column exists AND is false
 		DropService:       dropService,
 		MinMessageLength:  minLen,
