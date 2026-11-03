@@ -167,6 +167,207 @@ def py_ai_gate(case: Dict[str, Any]) -> str:
     return "true" if rule.ai_rewrite_active else "false"
 
 
+# ---------------------------------------------------------------------------
+# Stage 5 (W4): the AI provider execution path — the ai_exec engine.
+# ---------------------------------------------------------------------------
+#
+# Both sides run the SAME deterministic in-process fake provider through
+# their REAL production orchestrator (core.infrastructure.ai.transformer
+# .AITransformer on the Python side, worker/internal/infra/aiprovider
+# .Transformer on the Go side), and compare the observable outcome:
+# success/failure, the error code, the retryability flag, the failover
+# flag and the provider/model the rewrite landed on. No network, no
+# sleeping: the fake raises the provider failures as the production
+# OpenAI-compatible adapter raises them (httpx.HTTPStatusError for a
+# status, a slow coroutine for the timeout), so the classification a
+# parity case pins is the classification production computes.
+
+try:
+    import httpx as _httpx  # noqa: E402
+except ImportError:
+    # Bare runners (e.g. CI's go-worker-tests) don't have the full Python venv.
+    # Provide a minimal stand-in so the harness module can load and run.
+    class _FakeResponse:
+        def __init__(self, status_code: int, request=None):
+            self.status_code = status_code
+            self.request = request
+
+    class _FakeHTTPStatusError(Exception):
+        def __init__(self, msg, request=None, response=None):
+            super().__init__(msg)
+            self.request = request
+            self.response = response
+
+    class _FakeHTTPX:
+        HTTPStatusError = _FakeHTTPStatusError
+        Response = _FakeResponse
+
+        @staticmethod
+        def Request(method, url):
+            return object()
+
+    _httpx = _FakeHTTPX()  # type: ignore
+
+
+class _ParityAIConfigRepo:
+    """The owner-scoped ai_configs read the AIExec cases configure."""
+
+    def __init__(self, configs: Dict[str, Any]) -> None:
+        self._configs = configs
+
+    async def get_owned(self, config_id: str, owner_user_id: int):
+        cfg = self._configs.get(config_id)
+        if cfg is None or cfg.owner_user_id != owner_user_id:
+            return None
+        return cfg
+
+    async def get_by_id(self, config_id: str):
+        return self._configs.get(config_id)
+
+
+class _ScriptedAIProvider:
+    """One fake provider serving a script of outcomes per call.
+
+    An outcome is (kind, payload):
+      ("ok", text)            — a successful rewrite returning the text
+      ("status", 401)         — the HTTPStatusError that status produces
+      ("sleep", seconds)      — a slow rewrite, for the TIMEOUT cases
+      ("raise", message)      — a generic provider failure
+    A script shorter than the call list repeats its last entry, so a
+    steady failure is spelled once and a circuit case lists four.
+    """
+
+    def __init__(self, outcomes: list) -> None:
+        self.outcomes = outcomes
+        self.calls = 0
+        self.served: List[str] = []
+
+    async def rewrite(self, config, text: str) -> str:
+        self.calls += 1
+        self.served.append(text)
+        if not self.outcomes:
+            return "rewritten"
+        index = min(self.calls - 1, len(self.outcomes) - 1)
+        kind, payload = self.outcomes[index]
+        if kind == "ok":
+            return payload
+        if kind == "status":
+            request = _httpx.Request("POST", "http://parity.invalid/v1/chat/completions")
+            response = _httpx.Response(int(payload), request=request)
+            raise _httpx.HTTPStatusError("parity status", request=request, response=response)
+        if kind == "sleep":
+            await asyncio.sleep(float(payload))
+        raise Exception(str(payload))
+
+
+class _ScriptedAIFactory:
+    def __init__(self, provider: _ScriptedAIProvider) -> None:
+        self._provider = provider
+
+    def get(self, config):
+        return self._provider
+
+
+def _ai_exec_configs(case: Dict[str, Any]) -> Dict[str, Any]:
+    """The ai_configs rows the case wires: one primary, an optional
+    secondary (the failover pair), and the case's foreign-owned row the
+    ownership-boundary cases must be refused by."""
+    from core.domain.entities import AIConfig
+    from core.domain.value_objects import AIProviderType
+
+    def one(cid: str, owner: int = 42, **kw) -> AIConfig:
+        params = dict(
+            id=cid, provider=AIProviderType.OPENAI, model="m-" + cid,
+            api_key="sk-" + cid, is_enabled=True, owner_user_id=owner,
+            system_prompt="", user_prompt_template="{text}",
+        )
+        params.update(kw)
+        return AIConfig(**params)
+
+    configs: Dict[str, Any] = {"cfg-1": one("cfg-1")}
+    if case.get("secondary_config_id"):
+        configs[case["secondary_config_id"]] = one(case["secondary_config_id"])
+    if case.get("foreign_config_id"):
+        # owner 7: a row another tenant owns, which a rule owned by 42
+        # must not be able to spend.
+        configs[case["foreign_config_id"]] = one(case["foreign_config_id"], owner=7)
+    return configs
+
+
+def _ai_exec_outcomes(case: Dict[str, Any]) -> list:
+    """The case's provider script, from the JSON the case carries."""
+    raw = case.get("provider_script") or []
+    out: list = []
+    for entry in raw:
+        kind, payload = entry[0], entry[1]
+        out.append((kind, payload))
+    return out
+
+
+def py_ai_exec(case: Dict[str, Any]) -> str:
+    """The AI provider execution path, both engines through their real
+    orchestrators.
+
+    The case names the shape of the provider's answers (a script), the
+    config pair the rule wires, and the rule's owner; the adapter runs
+    the production AITransformer against the scripted provider and
+    reports the observable contract: success, the error code, the
+    retryability, whether the answer came from the secondary, and which
+    config the rewrite landed on. What is never reported: the API key,
+    the transformed text (an output, not a contract field), or the
+    timing.
+    """
+    from core.infrastructure.ai.circuit_breaker import CircuitBreakerRegistry
+    from core.infrastructure.ai.transformer import AIRequest, AITransformer
+    from core.infrastructure.ai.validator import AIOutputValidator
+
+    primary = case.get("primary_config_id") or "cfg-1"
+    secondary = case.get("secondary_config_id") or ""
+    owner = int(case.get("owner_user_id", 42))
+    # The ownership-boundary cases: a rule that names a config another
+    # tenant owns, resolved owner-scoped on both engines.
+    if case.get("foreign_config_id") and case.get("use_foreign"):
+        primary = case["foreign_config_id"]
+
+    provider = _ScriptedAIProvider(_ai_exec_outcomes(case))
+    transformer = AITransformer(
+        _ParityAIConfigRepo(_ai_exec_configs(case)),
+        CircuitBreakerRegistry(),
+        AIOutputValidator(),
+        _ScriptedAIFactory(provider),
+    )
+    request = AIRequest(
+        text=case.get("text", "the original body"),
+        target_language="auto",
+        timeout_seconds=float(case.get("timeout_seconds", 5.0)),
+        is_caption=bool(case.get("is_caption")),
+    )
+    response = asyncio.run(
+        transformer.transform(
+            request,
+            primary_config_id=primary,
+            secondary_config_id=secondary or None,
+            owner_user_id=owner,
+        )
+    )
+    # The timing is an observation, not a contract: both engines report
+    # a duration in ms, and comparing floats would tie the parity to the
+    # machine. The failover flag and the provider/model identity are the
+    # contract, because those are what the delivery layer logs.
+    provider_used = response.provider_used or ""
+    if hasattr(provider_used, "value"):
+        provider_used = provider_used.value
+    return (
+        f"success={str(response.success).lower()} "
+        f"code={response.error_code or 'OK'} "
+        f"retryable={str(response.is_retryable).lower()} "
+        f"failover={str(response.is_failover).lower()} "
+        f"circuit={response.circuit_state or 'CLOSED'} "
+        f"provider={provider_used or 'none'} "
+        f"model={response.model_used or 'none'}"
+    )
+
+
 def py_filter_engine(case: Dict[str, Any]) -> str:
     """FilterEngine.evaluate — the reason code IS the decision.
     F-11: the Python engine's check order is the contract (service -> media ->
@@ -497,6 +698,10 @@ _PARITY_SETTINGS_SCHEMA = [
         is_active INTEGER NOT NULL DEFAULT 1,
         filter_rule_id TEXT,
         ai_config_id TEXT NOT NULL DEFAULT '',
+        ai_secondary_config_id TEXT,
+        ai_fallback_policy TEXT NOT NULL DEFAULT 'DROP',
+        ai_prompt_version INTEGER NOT NULL DEFAULT 0,
+        ai_timeout_seconds REAL NOT NULL DEFAULT 15.0,
         remove_links INTEGER NOT NULL DEFAULT 0,
         custom_caption_template TEXT,
         delay_seconds REAL NOT NULL DEFAULT 0.0,
@@ -801,6 +1006,8 @@ ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     # (pinned vs inherited vs spec-default, missing bot, foreign-tenant
     # bot, inheritable=False, validation-failure-skip).
     "effective_settings": py_effective_settings,
+    # Stage 5 (W4): the AI provider execution path (transform + fallback).
+    "ai_exec": py_ai_exec,
 }
 
 

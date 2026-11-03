@@ -115,6 +115,51 @@ type ForwardRule struct {
 	// the explicit veto on top.
 	AIRewriteActive bool
 
+	// --- Stage 5 (W4): the AI execution pair ---------------------------- //
+
+	// AISecondaryConfigID is the failover config (a real forward_rules
+	// column on both backends, database.py:336): when the primary config's
+	// circuit is OPEN, the rewrite falls over to this one. Owned by the
+	// same rule owner — a failover to a config the owner does not own
+	// would be a privilege escalation, not a recovery.
+	AISecondaryConfigID string
+	// AIFallbackPolicy is what the delivery does when the rewrite fails
+	// (a real column, default DROP — pipeline.py:1817): deliver the
+	// original text, drop the message, re-queue it, or quarantine it.
+	// QUARANTINE and RETRY are both terminal drops on the Go execution
+	// side: the Python pipeline records the stage and returns None either
+	// way, and the re-queue decision is the queue's, not the transform's.
+	AIFallbackPolicy string
+	// AIPromptVersion pins the prompt template version the rewrite used
+	// (a real column, default 0 = latest active version). The Worker has
+	// no prompt-template service, so the version is carried for
+	// attribution only: the prompt pair itself is read off the config
+	// row, the same way the Python pipeline does when no prompt_id is
+	// configured (pipeline.py:1730).
+	AIPromptVersion int
+	// AITimeoutSeconds is the per-rewrite network budget (a real column,
+	// default 15.0 — entities.py:429).
+	AITimeoutSeconds float64
+
+	// --- Stage 5 (W4): the metadata-only prompt tailoring triple ------ //
+	// (NEVER a column on either backend; see the store's projection note.)
+
+	// AIPromptID names the prompt-template pair the task configured, a
+	// metadata key (pipeline.py:1724). The Worker has no prompt-template
+	// service, so the id is carried for attribution only: the prompt pair
+	// a rewrite actually uses is the AI config row's own, exactly as the
+	// Python pipeline does when no prompt_id is configured.
+	AIPromptID string
+	// AICreativity is the sampling knob (metadata key, default 0.7 —
+	// entities.py:1629). Carried on the projection so a parity harness
+	// can pin the two engines' read of it; the Worker's provider payload
+	// uses the config row's temperature, the field Python's own provider
+	// adapter sends.
+	AICreativity float64
+	// AIMaxTokens is the response budget (metadata key, default 600 —
+	// entities.py:1644), the same attribution-only posture.
+	AIMaxTokens int
+
 	// BlockLinks mirrors the task-level metadata flag the Python pipeline
 	// gates at pipeline.py:957 via media_filter.link_block_reason, which
 	// reads ForwardRule.block_links — itself the metadata key
@@ -264,6 +309,7 @@ func whitelistWords(meta map[string]any) []string {
 // coerces them; no parity case ever feeds one, so dropping is the
 // conservative read).
 func stringListField(meta map[string]any, key string) []string {
+
 	raw, ok := meta[key]
 	if !ok {
 		return nil
@@ -279,6 +325,37 @@ func stringListField(meta map[string]any, key string) []string {
 		}
 	}
 	return out
+}
+
+// AIFallbackPolicy values the delivery stage's fallback contract speaks
+// (value_objects.AIFallbackPolicy, pipeline.py:1817). The strings are the
+// Python enum's values: a Go spelling that differed would read the
+// column's value as "unknown policy" and fail-closed to DROP — which is
+// the same default the Python loader applies to an illegible value.
+const (
+	FallbackSendOriginal = "SEND_ORIGINAL"
+	FallbackDrop         = "DROP"
+	FallbackRetry        = "RETRY"
+	FallbackQuarantine   = "QUARANTINE"
+)
+
+// ResolveAIFallbackPolicy maps the persisted string onto the delivery
+// stage's vocabulary (entities.py:500-506): an unknown or empty value is
+// DROP, the Python __post_init__ default — the fail-closed posture, so
+// a rule saved with a policy the Worker cannot spell never silently
+// forwards text its owner expected rewritten.
+func ResolveAIFallbackPolicy(raw string) string {
+	switch strings.ToUpper(strings.TrimSpace(raw)) {
+	case FallbackSendOriginal:
+		return FallbackSendOriginal
+	case FallbackDrop:
+		return FallbackDrop
+	case FallbackRetry:
+		return FallbackRetry
+	case FallbackQuarantine:
+		return FallbackQuarantine
+	}
+	return FallbackDrop
 }
 
 // PauseStillActiveAt reports whether an explicit pause was in force at the

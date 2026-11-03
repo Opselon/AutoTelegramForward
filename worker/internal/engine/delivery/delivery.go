@@ -32,6 +32,7 @@ import (
 	"sync"
 	"time"
 
+	"atf/worker/internal/domain/aiconfig"
 	"atf/worker/internal/domain/cleaning"
 	"atf/worker/internal/domain/dedup"
 	"atf/worker/internal/domain/job"
@@ -44,6 +45,7 @@ import (
 	"atf/worker/internal/engine/filter"
 	"atf/worker/internal/engine/scheduler"
 	"atf/worker/internal/engine/transform"
+	"atf/worker/internal/infra/aiprovider"
 	"atf/worker/internal/queue"
 	"atf/worker/internal/telegraph"
 )
@@ -114,6 +116,20 @@ type Engine struct {
 	// the embed has no repository, and the gate forwards every message
 	// rather than failing closed on missing bookkeeping.
 	counters counters.Store
+	// aiTransformer is the Stage 5 (W4) AI rewrite orchestrator. Optional
+	// the same way the transform stage is: nil means the worker has no
+	// provider path wired (no master key, or a deployment that has not
+	// enabled the stage), and a task that asks for a rewrite delivers the
+	// original text — the Python AI_UNAVAILABLE posture, never a drop.
+	aiTransformer *aiprovider.Transformer
+	// aiConfigs is the owner-scoped AI configuration store the
+	// transformer resolves through. Nil alongside a nil transformer; the
+	// pair is installed together by SetAITransformer.
+	aiConfigs aiconfig.Store
+	// aiMetrics counts the AI rewrite and fallback outcomes in the
+	// Python pipeline's own vocabulary (ai_transforms_*,
+	// ai_fallback_*). Nil is "no recorder".
+	aiMetrics AIMetrics
 	log      Logger
 	metrics  Metrics
 	opts     Options
@@ -335,8 +351,14 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	//
 	// An empty-after-clean result is the pipeline's one drop: the stages
 	// removed everything and the message has nothing left to send.
+	// Stage 5 (W4) adds the AI-refusal drop to the same preflight: a
+	// rewrite that failed under a DROP / RETRY / QUARANTINE policy has
+	// already closed the job, and the sentinel unwinds without a fence.
 	if e.ownsTransforms(j) {
 		if err := e.applyTransformPipeline(ctx, j, r, logger); err != nil {
+			if errors.Is(err, errAIDrop) {
+				return nil
+			}
 			return err
 		}
 	}

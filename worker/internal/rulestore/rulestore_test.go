@@ -83,7 +83,15 @@ func applyRuleSchema(t *testing.T, db *sql.DB) {
 			source_chat_id TEXT NOT NULL DEFAULT '',
 			source_chat_name TEXT NOT NULL DEFAULT '',
 			target_chat_id TEXT NOT NULL DEFAULT '',
-			target_chat_ids TEXT NOT NULL DEFAULT '[]'
+			target_chat_ids TEXT NOT NULL DEFAULT '[]',
+			-- Stage 5 (W4): the AI execution pair, added by the Core's
+			-- v1.1 migration (database.py:333-336) and present on every
+			-- live database the Worker reads. ai_secondary_config_id is
+			-- nullable; the other three carry NOT NULL DEFAULTs.
+			ai_secondary_config_id TEXT,
+			ai_fallback_policy TEXT NOT NULL DEFAULT 'DROP',
+			ai_prompt_version INTEGER NOT NULL DEFAULT 0,
+			ai_timeout_seconds REAL NOT NULL DEFAULT 15.0
 		)`,
 		`CREATE TABLE IF NOT EXISTS filter_rules (
 			id TEXT PRIMARY KEY,
@@ -399,6 +407,16 @@ func TestLegacyRowWithoutV30Columns(t *testing.T) {
 		// declared here so the harness exercises the same forward-compat
 		// path the production reads take.
 		`ALTER TABLE forward_rules ADD COLUMN ai_config_id TEXT NOT NULL DEFAULT ''`,
+		// Stage 5 (W4): the AI execution pair arrives the same way — the
+		// Core's v1.1 migration adds each column with a DEFAULT
+		// (database.py:333-336), so the store's Null* readers degrade to
+		// the feature's own defaults instead of failing the projection.
+		// A legacy fixture without them would model a database the
+		// bootstrap heals on the next Core start.
+		`ALTER TABLE forward_rules ADD COLUMN ai_secondary_config_id TEXT`,
+		`ALTER TABLE forward_rules ADD COLUMN ai_fallback_policy TEXT NOT NULL DEFAULT 'DROP'`,
+		`ALTER TABLE forward_rules ADD COLUMN ai_prompt_version INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE forward_rules ADD COLUMN ai_timeout_seconds REAL NOT NULL DEFAULT 15.0`,
 		`CREATE TABLE filter_rules (
 			id TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '',
 			whitelist_keywords TEXT NOT NULL DEFAULT '[]',
