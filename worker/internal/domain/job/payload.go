@@ -212,6 +212,22 @@ func (p *Payload) Branding() map[string]any {
 // InlineButtons is the raw inline-button spec for the BOT transport.
 func (p *Payload) InlineButtons() []any { return p.stringListAny("inline_buttons") }
 
+// SourceButtons is the SOURCE message's inline keyboard, snapshotted at
+// ingest so the link policy can govern its URL buttons too (F-16). Each row
+// is a list of {"text":..,"url":..} dicts; empty means the source carried no
+// keyboard and nothing can leak.
+func (p *Payload) SourceButtons() []any { return p.stringListAny("source_buttons") }
+
+// DropSourceButtons is the transform stage's F-16 decision: the link policy
+// removed every URL button the source carried, so the copy must not re-send
+// the keyboard. Pyrogram re-sends the source markup by default; this flag is
+// what tells the runtime to suppress it.
+func (p *Payload) DropSourceButtons() bool { return p.boolean("drop_source_buttons", false) }
+
+// MarkDropSourceButtons records the F-16 decision. Set once, at transform
+// time; the delivery side only reads it.
+func (p *Payload) MarkDropSourceButtons() { p.raw["drop_source_buttons"] = true }
+
 // BotTokenID is the stored bot token a BOT job names (never the token).
 func (p *Payload) BotTokenID() string {
 	// The pipeline snapshots the task's metadata-resolved value at enqueue;

@@ -118,6 +118,15 @@ func (e *Engine) applyTransformPipeline(ctx context.Context, j *job.DeliveryJob,
 	cfg := transformConfig(j, r)
 	result := e.transformsPipeline.ApplyText(raw, cfg, nil, ch)
 
+	// Stage 4.4 (F-16): the link policy governs the source's inline URL
+	// buttons as well as its body. The payload carries the keyboard
+	// snapshot; the policy that just governed the body decides whether the
+	// buttons survive, and the decision rides on the payload so the
+	// delivery side never re-derives it.
+	if decision := buttonDecisionFor(j, cfg); decision.RemoveAll {
+		j.Payload.MarkDropSourceButtons()
+	}
+
 	// Record the decision — even the null result, because "which stages
 	// ran" is the answer to "was any message silently skipped?".
 	if e.decisions != nil {

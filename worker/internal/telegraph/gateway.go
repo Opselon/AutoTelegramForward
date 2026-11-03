@@ -128,9 +128,12 @@ type Gateway interface {
 	// header preserved). The returned ids align with the request ids.
 	ForwardMessages(ctx context.Context, sessionID string, targetChatID, fromChatID int64, messageIDs []int64, threadID int64) ([]int64, *DeliveryFailure)
 	// CopyMessage performs a clean copy of one message.
-	CopyMessage(ctx context.Context, sessionID string, targetChatID, fromChatID, messageID int64, caption string, threadID int64) (int64, *DeliveryFailure)
+	// CopyMessage copies one source message. dropSourceButtons removes the
+	// source's inline keyboard from the copy (finding F-16): the link policy
+	// governs URL buttons as well as URL text.
+	CopyMessage(ctx context.Context, sessionID string, targetChatID, fromChatID, messageID int64, caption string, threadID int64, dropSourceButtons bool) (int64, *DeliveryFailure)
 	// CopyMessages copies several messages one-for-one.
-	CopyMessages(ctx context.Context, sessionID string, targetChatID, fromChatID int64, messageIDs []int64, caption string, threadID int64) ([]int64, *DeliveryFailure)
+	CopyMessages(ctx context.Context, sessionID string, targetChatID, fromChatID int64, messageIDs []int64, caption string, threadID int64, dropSourceButtons bool) ([]int64, *DeliveryFailure)
 	// CopyMediaGroup copies an album as a group.
 	CopyMediaGroup(ctx context.Context, sessionID string, targetChatID, fromChatID int64, messageID int64, caption string, threadID int64) ([]int64, *DeliveryFailure)
 	// SendMessage sends plain transformed text.

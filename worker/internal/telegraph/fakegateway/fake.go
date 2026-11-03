@@ -177,7 +177,7 @@ func (f *Fake) ForwardMessages(ctx context.Context, sessionID string, targetChat
 }
 
 // CopyMessage copies one message.
-func (f *Fake) CopyMessage(ctx context.Context, sessionID string, targetChatID, fromChatID, messageID int64, caption string, threadID int64) (int64, *telegraph.DeliveryFailure) {
+func (f *Fake) CopyMessage(ctx context.Context, sessionID string, targetChatID, fromChatID, messageID int64, caption string, threadID int64, dropSourceButtons bool) (int64, *telegraph.DeliveryFailure) {
 	f.record(Call{Op: "CopyMessage", SessionID: sessionID, TargetID: targetChatID, ChatID: fromChatID, MessageID: messageID, Caption: caption, ThreadID: threadID})
 	f.copyCalls++
 	if f.CopyFailOnNth > 0 && f.copyCalls == f.CopyFailOnNth {
@@ -200,7 +200,7 @@ func (f *Fake) CopyMessage(ctx context.Context, sessionID string, targetChatID, 
 }
 
 // CopyMessages copies several messages one-for-one.
-func (f *Fake) CopyMessages(ctx context.Context, sessionID string, targetChatID, fromChatID int64, messageIDs []int64, caption string, threadID int64) ([]int64, *telegraph.DeliveryFailure) {
+func (f *Fake) CopyMessages(ctx context.Context, sessionID string, targetChatID, fromChatID int64, messageIDs []int64, caption string, threadID int64, dropSourceButtons bool) ([]int64, *telegraph.DeliveryFailure) {
 	f.record(Call{Op: "CopyMessages", SessionID: sessionID, TargetID: targetChatID, ChatID: fromChatID, MessageIDs: append([]int64{}, messageIDs...), Caption: caption, ThreadID: threadID})
 	if f.CopyFailsWith != nil {
 		return nil, f.CopyFailsWith

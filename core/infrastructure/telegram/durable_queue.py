@@ -394,6 +394,15 @@ class DurableQueueManager:
             # re-copy or re-forward the source message's media.
             "is_reply": job_kind != "forward",
             "correlation_id": correlation_id or getattr(payload, "correlation_id", "") or "",
+            # --- Stage 4.4 (F-16): the source message's inline keyboard ------
+            # Pyrogram's copy_message re-sends the source markup by default,
+            # so a link policy that strips URL text would leave the URL
+            # buttons leaking under the message. The snapshot is small (text
+            # and URL per button, never the callback data) and is read only
+            # by the Go transform stage, which decides — from the same link
+            # policy that governed the body — whether the buttons may reach
+            # the target.
+            "source_buttons": _snapshot_source_buttons(payload),
             # --- Stage 4.2: the transform execution boundary ------------------
             # Exactly one engine applies the text-transform stage. The
             # payload tells the Worker which side that was, so neither
@@ -498,6 +507,9 @@ class DurableQueueManager:
             self._notify_event.set()
 
         return enqueued
+
+
+
 
     def _transform_boundary_payload(self, text: str) -> tuple:
         """Stage 4.2: decide which transform-side payload keys the job carries.
@@ -2510,4 +2522,38 @@ class DurableQueueManager:
             "rss_mb": rss_mb,
             "targets": per_target,
         }
+
+
+def _snapshot_source_buttons(payload: Any) -> Optional[List[Any]]:
+    """Stage 4.4 (F-16): snapshot the source message's inline keyboard.
+
+    The Go transform stage needs the keyboard to apply the task's link policy
+    to the message's URL BUTTONS as well as its URL text. Only what the
+    policy evaluates is taken — the button label and its URL — never the
+    callback data, so no interaction secrets ride along in the job payload.
+
+    ``None`` (rather than ``[]``) when the source carried no inline keyboard,
+    so an empty keyboard stays distinguishable from a message that simply had
+    one.
+    """
+    markup = getattr(payload, "reply_markup", None)
+    if markup is None:
+        return None
+    rows = getattr(markup, "inline_keyboard", None)
+    if not rows:
+        return None
+    snapshot: List[Any] = []
+    for row in rows:
+        out_row: List[Dict[str, str]] = []
+        for button in row:
+            url = getattr(button, "url", None)
+            label = getattr(button, "text", "") or ""
+            # Only URL buttons are governed by the link policy; a callback
+            # button the source chat configured is not a link and must not
+            # be misread as one in the snapshot.
+            if url:
+                out_row.append({"text": str(label), "url": str(url)})
+        if out_row:
+            snapshot.append(out_row)
+    return snapshot or None
 

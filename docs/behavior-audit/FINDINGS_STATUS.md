@@ -285,10 +285,35 @@ Cross-language parity for the renderer is proven by
 private-channel link and the unknown-placeholder passthrough), executed against
 the real Python `HeaderFormatter` and the Go port.
 
-## F-16 — `filter_inline_keyboard` has zero production callers — **VERIFIED**
+## F-16 — `filter_inline_keyboard` has zero production callers — **FIXED (Stage 4.4)**
+
 `services.py:1065`; coordinator grep across `core`, `web`, `api`, `mobile`,
 `worker` found only the definition. Customer impact: a link policy strips link
 text but leaves inline URL buttons. Classification: **missing functionality**.
+
+**Stage 4.4 resolution.** The Go Worker — the business-logic owner — now makes
+and enforces the decision:
+
+- `cleaning.FilterInlineKeyboard` (`worker/internal/domain/cleaning/buttons.go`)
+  ports `filter_inline_keyboard` exactly: every policy value, the Telegram-
+  domain exception, the parent-domain matching, callback buttons untouched,
+  and Python's "no row survives ⇔ markup removed" rule.
+- The enqueue path snapshots the source keyboard (`source_buttons`, text and
+  URL per button only — never callback data), and the Go transform stage
+  evaluates the policy against it during the same pass that governs the body.
+  The decision rides on the payload as `drop_source_buttons` (one evaluation,
+  restart-safe).
+- The delivery side reads that flag and hands it to the Telegram runtime over
+  the gRPC contract (`CopyMessage`/`CopyMessages` gained an additive
+  `drop_source_buttons` field). The pyrogram adapter passes an explicit
+  `reply_markup=None`, which is the only thing that suppresses the keyboard —
+  `message.copy` re-sends the source markup by default.
+
+Bot-API copies never carried the source keyboard (copyMessage has no
+reply_markup parameter), so the fix targets the USER transport alone.
+Cross-engine parity is pinned by `buttons_test.go` (every policy value, the
+drop-everything case, the callback-button guarantee); the pre-4.4 behavior is
+preserved for a task that never configured a link policy.
 Action: Stage 4.4.
 
 ## F-17 — Bound disagreements between layers — **VERIFIED**

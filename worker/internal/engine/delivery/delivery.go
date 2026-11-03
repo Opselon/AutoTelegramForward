@@ -529,7 +529,7 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.Forwa
 				e.metrics.ObserveRPC("bot_copy_message", 0)
 				if ferr != nil && unsupportedFailure(ferr) {
 					e.jobLogger(j).Warn("bot copy unsupported — falling back to account transport", "reason", ferr.Message)
-					return e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, "", p.TopicID())
+					return e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, "", p.TopicID(), j.Payload.DropSourceButtons())
 				}
 				return id, ferr
 			}
@@ -542,7 +542,7 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.Forwa
 			e.metrics.ObserveRPC("bot_copy_message", 0)
 			if ferr != nil && unsupportedFailure(ferr) {
 				e.jobLogger(j).Warn("bot copy unsupported — falling back to account transport", "reason", ferr.Message)
-				return e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, caption, p.TopicID())
+				return e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, caption, p.TopicID(), j.Payload.DropSourceButtons())
 			}
 			return id, ferr
 		}
@@ -563,7 +563,7 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.Forwa
 		return id, ferr
 	case "MEDIA_ONLY":
 		if p.HasMedia() {
-			id, ferr := e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, "", p.TopicID())
+			id, ferr := e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, "", p.TopicID(), j.Payload.DropSourceButtons())
 			e.metrics.ObserveRPC("copy_message", 0)
 			if ferr != nil && ferr.IsForwardingRestricted() && p.FallbackEnabled() {
 				return e.reuploadMedia(callCtx, j, src, srcMsg, "")
@@ -575,7 +575,7 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.Forwa
 
 	// AUTO / TEXT_AND_MEDIA on USER transport:
 	if p.HasMedia() {
-		id, ferr := e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, caption, p.TopicID())
+		id, ferr := e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, caption, p.TopicID(), j.Payload.DropSourceButtons())
 		e.metrics.ObserveRPC("copy_message", 0)
 		if ferr != nil && ferr.IsForwardingRestricted() && p.FallbackEnabled() {
 			return e.reuploadMedia(callCtx, j, src, srcMsg, caption)
@@ -613,7 +613,7 @@ func (e *Engine) brandingStage(ctx context.Context, sessionID string, target, cC
 		if j.Payload.ContentMode() == "MEDIA_ONLY" {
 			caption = ""
 		}
-		id, ferr := e.gateway.CopyMessage(ctx, sessionID, target, cChat, cID, caption, j.Payload.TopicID())
+		id, ferr := e.gateway.CopyMessage(ctx, sessionID, target, cChat, cID, caption, j.Payload.TopicID(), j.Payload.DropSourceButtons())
 		e.metrics.ObserveRPC("copy_message", 0)
 		if ferr != nil {
 			if ferr.IsForwardingRestricted() && j.Payload.FallbackEnabled() {
@@ -650,7 +650,7 @@ func (e *Engine) dispatchAlbum(ctx context.Context, j *job.DeliveryJob, albumIDs
 
 	switch strings.ToLower(p.AlbumMode()) {
 	case "first":
-		id, ferr := e.gateway.CopyMessage(ctx, sessionID, target, src, albumIDs[0], caption, p.TopicID())
+		id, ferr := e.gateway.CopyMessage(ctx, sessionID, target, src, albumIDs[0], caption, p.TopicID(), j.Payload.DropSourceButtons())
 		e.metrics.ObserveRPC("copy_message", 0)
 		if ferr != nil && ferr.IsForwardingRestricted() && p.FallbackEnabled() {
 			return e.reuploadMedia(ctx, j, src, albumIDs[0], caption)
@@ -676,7 +676,7 @@ func (e *Engine) dispatchAlbum(ctx context.Context, j *job.DeliveryJob, albumIDs
 		var last int64
 		newSent := map[string]int64{}
 		for _, itemID := range remaining {
-			id, ferr := e.gateway.CopyMessage(ctx, sessionID, target, src, itemID, caption, p.TopicID())
+			id, ferr := e.gateway.CopyMessage(ctx, sessionID, target, src, itemID, caption, p.TopicID(), j.Payload.DropSourceButtons())
 			e.metrics.ObserveRPC("copy_message", 0)
 			if ferr != nil {
 				// Record what got through before surfacing the failure, so

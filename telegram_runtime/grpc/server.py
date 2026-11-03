@@ -260,6 +260,7 @@ class TelegramGatewayServicer(pb_grpc.TelegramGatewayServicer):
         sent, f = await adapter.copy_message(
             request.target_chat_id, request.from_chat_id, request.message_id,
             request.caption or None, request.message_thread_id,
+            drop_source_buttons=bool(request.drop_source_buttons),
         )
         if f is not None:
             return pb.SendOutcome(error=self._err(f))
@@ -272,6 +273,7 @@ class TelegramGatewayServicer(pb_grpc.TelegramGatewayServicer):
         ids, f = await adapter.copy_messages(
             request.target_chat_id, request.from_chat_id, list(request.message_ids),
             request.caption or None, request.message_thread_id,
+            drop_source_buttons=bool(request.drop_source_buttons),
         )
         if f is not None:
             return pb.CopyMessagesResponse(error=self._err(f))
