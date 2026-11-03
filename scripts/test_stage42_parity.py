@@ -76,6 +76,9 @@ def py_cleaner(case: Dict[str, Any]) -> str:
 
 
 def py_emoji(case: Dict[str, Any]) -> str:
+    # F-03 (fixed): both engines now strip emoji SEQUENCES via the shared
+    # Extended_Pictographic table (core/domain/emoji_table.py), not the
+    # SMP-wide regex that destroyed cuneiform and shredded ZWJ families.
     return _ENGINE.remove_emojis(case["text"])
 
 
@@ -255,6 +258,17 @@ def cases() -> List[Dict[str, Any]]:
          "replacements": {"a\\1b": "KEPT"}},
         {"engine": "replacements", "text": "promo price today",
          "replacements": {"promo": {"to": "sale", "whole_word": True}}},
+
+        # --- F-03: Unicode-correct emoji removal. ZWJ families and keycaps go
+        # --- as units (no dangling joiners); non-emoji SMP scripts survive.
+        {"engine": "emoji", "text": "\U0001f468\u200d\U0001f469\u200d\U0001f467 family"},
+        {"engine": "emoji", "text": "5\ufe0f\u20e3 five"},
+        {"engine": "emoji", "text": "\U00012000 cuneiform"},
+        {"engine": "emoji", "text": "\U0001f495 heart"},
+        {"engine": "emoji", "text": "\u2190 arrow"},
+        {"engine": "emoji", "text": "\U0001f3fb toned"},
+        {"engine": "emoji", "text": "\U0001f1ee\U0001f1f7 flag"},
+        {"engine": "emoji", "text": "x5\ufe0f\u20e3y"},
 
         # --- advanced content transforms (watermark / link buttons / affiliate)
         {"engine": "advanced", "text": "body",

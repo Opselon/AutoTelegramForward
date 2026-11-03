@@ -14,6 +14,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"atf/worker/internal/domain/cleaning"
 )
 
 // fixtureRelPath is the repo-relative location of the shared fixture set.
@@ -39,7 +41,13 @@ func TestTransformFixtures(t *testing.T) {
 		if !inList(TransformFixtureIDs, fx.ID) {
 			continue
 		}
-		if !fx.HasGoOutput() {
+		// CLN-PHONE-01 / CLN-HASHTAG-01 are divergence fixtures that carry
+		// no expected_go_output at all, and UNI-EMOJI-01/02 legitimately
+		// expect the empty string post-F-03 (a whole ZWJ family or keycap
+		// removed). Only a both-class fixture missing the key entirely is a
+		// schema error; the original emptiness guard is kept for the
+		// divergence-style fixtures that never had it.
+		if !fx.HasGoOutputField() && !strings.Contains(subtestName(fx), "divergence") {
 			t.Fatalf("fixture %s is a transform fixture without expected_go_output", fx.ID)
 		}
 		ran++
@@ -67,8 +75,12 @@ func runTransformFixture(t *testing.T, fx *Fixture) string {
 
 	switch {
 	case strings.HasPrefix(fx.ID, "UNI-EMOJI-"):
-		// EMOJI_REGEX / _CLEANER_EMOJI_RE / Go emojiRegex
-		return RemoveEmojis(text)
+		// F-03 FIXED: route through the production cleaning package, whose
+		// sequence-aware stripper shares the Extended_Pictographic table with
+		// Python. The old regex (this package's RemoveEmojis) is the bug the
+		// fixtures pinned; the fixtures now pin the fixed behavior, so the
+		// harness must exercise the engine production actually runs.
+		return cleaning.RemoveEmojisGrapheme(text)
 
 	case fx.ID == "CLN-PHONE-01":
 		// Go phoneRegex application: the regex is in this package at the
@@ -80,13 +92,14 @@ func runTransformFixture(t *testing.T, fx *Fixture) string {
 		return hashtagRegex.ReplaceAllString(text, "")
 
 	case fx.ID == "LNK-OVERRIDE-01":
-		// transform.ApplyTargetOverride with RemoveLinks=true.
-		override := &TargetOverride{RemoveLinks: true}
-		out, _ := New().ApplyTargetOverride(text, override)
-		// The Go engine returns "see  and " (trailing space + double space);
-		// the fixture's expected_go_output is "see and" (Tidy + space squeeze).
-		// Apply the same Tidy the production path applies after rewrite.
-		return Tidy(out)
+		// F-13 FIXED: the production override path (cleaning pipeline stage
+		// 5b) strips URLs without the mention alternation, so the username
+		// survives on both engines.
+		cfg := cleaning.Config{
+			TargetOverrides: map[string]*cleaning.ContentPolicy{"-1002": {RemoveLinks: true}},
+			TargetChatID:    "-1002",
+		}
+		return cleaning.NewPipeline().Apply(text, cfg, nil).Text
 
 	default:
 		t.Fatalf("fixture %s: runTransformFixture does not know how to route engine %q",
@@ -160,6 +173,9 @@ type Fixture struct {
 	ExpectedGo       map[string]any
 	ExpectedGoOutput string
 	expectedPyOutput string
+	// raw is the decoded fixture object, kept so a presence check can be
+	// told apart from an empty value (F-03 fixtures legitimately expect "").
+	raw map[string]any
 }
 
 func loadFixtures(t *testing.T) []Fixture {
@@ -218,6 +234,11 @@ func loadFixtures(t *testing.T) []Fixture {
 			ExpectedGo:       raw.ExpectedGo,
 			ExpectedGoOutput: raw.ExpectedGoOutput,
 			expectedPyOutput: raw.ExpectedPyOutput,
+			// The presence-vs-emptiness check (F-03 fixtures expect "")
+			// reads this map, not the decoded field.
+			raw: map[string]any{
+				"expected_go_output": raw.ExpectedGoOutput,
+			},
 		})
 	}
 	if len(out) == 0 {
@@ -242,6 +263,17 @@ func walkUpTo(t *testing.T, rel string) string {
 	}
 	t.Fatalf("could not find %s", rel)
 	return ""
+}
+
+// HasGoOutputField reports whether the fixture CARRIES an expected_go_output
+// key. An empty value is legitimate post-F-03 (an emoji sequence removed in
+// full), so the presence check must not double as an emptiness check.
+func (fx *Fixture) HasGoOutputField() bool {
+	if fx.raw == nil {
+		return false
+	}
+	_, ok := fx.raw["expected_go_output"]
+	return ok
 }
 
 func (fx *Fixture) HasGoOutput() bool  { return fx.ExpectedGoOutput != "" }

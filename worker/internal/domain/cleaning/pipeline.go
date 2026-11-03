@@ -146,7 +146,10 @@ func (p *Pipeline) ApplyText(raw string, cfg Config, entities []Entity, ch Capti
 	// keeps both exactly as they are (UNI-EMOJI-04's double space is the
 	// pinned evidence).
 	if cfg.RemoveEmojis {
-		next := cleanEmojiRegex.ReplaceAllString(text, "")
+		// F-03: the sequence-aware stripper, not the SMP-wide regex —
+		// cuneiform and math alphanumerics are not emoji and a ZWJ family
+		// leaves no dangling joiners behind.
+		next := RemoveEmojisGrapheme(text)
 		next = strings.TrimSpace(next)
 		if next != text {
 			text = next

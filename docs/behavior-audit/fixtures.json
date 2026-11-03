@@ -298,57 +298,57 @@
    "id": "UNI-EMOJI-01",
    "engine": "EMOJI_REGEX / _CLEANER_EMOJI_RE / Go emojiRegex",
    "group": "emoji",
-   "description": "ZWJ family emoji leaves dangling joiners",
+   "description": "F-03 FIXED: ZWJ family emoji leaves dangling joiners",
    "input": {
     "text": "👨‍👩‍👧"
    },
-   "expected_python_output": "‍‍",
-   "expected_go_output": "‍‍",
-   "notes": "F-03, verified by coordinator execution 2026-11-02: ZWJ (U+200D) is BMP and not matched, so family sequences are shredded. (Expectation uses actual U+200D runes, not JSON-escaped string).",
+   "expected_python_output": "",
+   "expected_go_output": "",
+   "notes": "F-03, verified by coordinator execution 2026-11-02: ZWJ (U+200D) is BMP and not matched, so family sequences are shredded. (Expectation uses actual U+200D runes, not JSON-escaped string).\n\nStage 4.4 (F-03 FIXED): both engines now strip emoji SEQUENCES via the shared Unicode 15.0.0 Extended_Pictographic table (core/domain/emoji_table.py / worker/internal/domain/cleaning/emoji_ranges.go, generated from github.com/rivo/uniseg by scripts/gen_emoji_table.py). The old SMP-wide regex destroyed non-emoji scripts and shredded ZWJ/keycap sequences; the pre-fix values were py='\\u200d\\u200d' go='\\u200d\\u200d'.",
    "executable": "both",
-   "go_engine": "transform.RemoveEmojis"
+   "go_engine": "cleaning.RemoveEmojisGrapheme"
   },
   {
    "id": "UNI-EMOJI-02",
    "engine": "EMOJI_REGEX",
    "group": "emoji",
-   "description": "Keycap sequence leaves dangling U+20E3",
+   "description": "F-03 FIXED: Keycap sequence leaves dangling U+20E3",
    "input": {
     "text": "5️⃣"
    },
-   "expected_python_output": "5⃣",
-   "expected_go_output": "5⃣",
-   "notes": "F-03: 5 is BMP (kept), U+FE0F variation selector removed, U+20E3 combining keycap is BMP (kept).",
+   "expected_python_output": "",
+   "expected_go_output": "",
+   "notes": "F-03: 5 is BMP (kept), U+FE0F variation selector removed, U+20E3 combining keycap is BMP (kept).\n\nStage 4.4 (F-03 FIXED): both engines now strip emoji SEQUENCES via the shared Unicode 15.0.0 Extended_Pictographic table (core/domain/emoji_table.py / worker/internal/domain/cleaning/emoji_ranges.go, generated from github.com/rivo/uniseg by scripts/gen_emoji_table.py). The old SMP-wide regex destroyed non-emoji scripts and shredded ZWJ/keycap sequences; the pre-fix values were py='5⃣' go='5⃣'.",
    "executable": "both",
-   "go_engine": "transform.RemoveEmojis"
+   "go_engine": "cleaning.RemoveEmojisGrapheme"
   },
   {
    "id": "UNI-EMOJI-03",
    "engine": "EMOJI_REGEX",
    "group": "emoji",
-   "description": "Non-emoji supplementary-plane script is destroyed (collateral damage)",
+   "description": "F-03 FIXED: Non-emoji supplementary-plane script is destroyed (collateral damage)",
    "input": {
     "text": "𒀀 cuneiform"
    },
-   "expected_python_output": " cuneiform",
-   "expected_go_output": " cuneiform",
-   "notes": "F-03: [\\U00010000-\\U0010ffff] matches ALL non-BMP characters, not just emoji.",
+   "expected_python_output": "𒀀 cuneiform",
+   "expected_go_output": "𒀀 cuneiform",
+   "notes": "F-03: [\\U00010000-\\U0010ffff] matches ALL non-BMP characters, not just emoji.\n\nStage 4.4 (F-03 FIXED): both engines now strip emoji SEQUENCES via the shared Unicode 15.0.0 Extended_Pictographic table (core/domain/emoji_table.py / worker/internal/domain/cleaning/emoji_ranges.go, generated from github.com/rivo/uniseg by scripts/gen_emoji_table.py). The old SMP-wide regex destroyed non-emoji scripts and shredded ZWJ/keycap sequences; the pre-fix values were py=' cuneiform' go=' cuneiform'.",
    "executable": "both",
-   "go_engine": "transform.RemoveEmojis"
+   "go_engine": "cleaning.RemoveEmojisGrapheme"
   },
   {
    "id": "UNI-EMOJI-04",
    "engine": "EMOJI_REGEX",
    "group": "emoji",
-   "description": "Persian and Arabic text adjacent to emoji survives; double space left",
+   "description": "F-03 FIXED: Persian and Arabic text adjacent to emoji survives; double space left",
    "input": {
     "text": "سلام 🌟 دنیا"
    },
    "expected_python_output": "سلام  دنیا",
    "expected_go_output": "سلام  دنیا",
-   "notes": "Coordinator-verified. The regex does not touch Arabic/Persian; note the double space the removal leaves.",
+   "notes": "Coordinator-verified. The regex does not touch Arabic/Persian; note the double space the removal leaves.\n\nStage 4.4 (F-03 FIXED): both engines now strip emoji SEQUENCES via the shared Unicode 15.0.0 Extended_Pictographic table (core/domain/emoji_table.py / worker/internal/domain/cleaning/emoji_ranges.go, generated from github.com/rivo/uniseg by scripts/gen_emoji_table.py). The old SMP-wide regex destroyed non-emoji scripts and shredded ZWJ/keycap sequences; the pre-fix values were py='سلام  دنیا' go='سلام  دنیا'.",
    "executable": "both",
-   "go_engine": "transform.RemoveEmojis"
+   "go_engine": "cleaning.RemoveEmojisGrapheme"
   },
   {
    "id": "UNI-EMOJI-05",
@@ -539,7 +539,7 @@
    "id": "LNK-OVERRIDE-01",
    "engine": "target-scoped policy override",
    "group": "links",
-   "description": "Target override remove_links deletes usernames in Go but not in Python (F-13)",
+   "description": "Target override remove_links keeps usernames on both engines (F-13 FIXED in Go)",
    "input": {
     "text": "see @bob and https://a.io",
     "target_override": {
@@ -547,8 +547,8 @@
     }
    },
    "expected_python_output": "see @bob and",
-   "expected_go_output": "see  and",
-   "notes": "Python remove_urls keeps @mentions; Go urlRegex includes the mention alternation. (Go ApplyTargetOverride without Tidy leaves un-collapsed whitespace).",
+   "expected_go_output": "see @bob and",
+   "notes": "Python remove_urls keeps @mentions. The Go port originally stripped them (the dead worker transform package urlRegex carried the mention arm); Stage 4.2 rebuilt the override path in worker/internal/domain/cleaning, whose RemoveURLsPlain deliberately excludes the mention alternation, so both engines now return \"see @bob and\". The old expected_go_output \"see  and\" is the pre-4.2 divergence, kept here as the historical record.",
    "executable": "both",
    "go_engine": "transform.ApplyTargetOverride"
   },

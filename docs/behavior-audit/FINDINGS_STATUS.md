@@ -27,7 +27,7 @@ Customer impact: low (album flush timing cannot be tuned per task).
 Classification: **missing functionality**, wiring only.
 Action: Stage 4.5 wiring task.
 
-## F-03 — Emoji regex destroys non-emoji SMP and shreds ZWJ/keycap — **VERIFIED**
+## F-03 — Emoji regex destroys non-emoji SMP and shreds ZWJ/keycap — **FIXED (Stage 4.4, both engines)**
 Re-verified by execution in this phase on `EMOJI_REGEX`
 (`core/domain/services.py:31`) and `_CLEANER_EMOJI_RE` (`entities.py:103`,
 byte-identical pattern):
@@ -35,10 +35,30 @@ byte-identical pattern):
 `❤️` → `` , `←` and combining marks untouched.
 Customer impact: messages containing historical scripts, math alphanumerics or
 complex emoji render corrupted in the target.
-Classification: **real customer impact**, cross-language (Go `transform.go:33` is
-byte-identical — see `feature-ownership-matrix.md`).
-Action: needs a Unicode-property-based shared pattern. **NEEDS_FUTURE_IMPLEMENTATION**
-(design decision required; RE2 cannot express Python's property classes).
+Classification: **real customer impact**, cross-language.
+
+**Stage 4.4 resolution.** The shared predicate is now Unicode 15.0.0's
+Extended_Pictographic property, extracted from `github.com/rivo/uniseg@v0.4.7`'s
+generated table into ONE data file pair:
+`worker/internal/domain/cleaning/emoji_ranges.go` (Go) and
+`core/domain/emoji_table.py` (Python), both emitted by
+`scripts/gen_emoji_table.py`. A Unicode update is one regeneration; the two
+engines cannot drift.
+
+The removal is sequence-aware: a whole ZWJ family, flag, skin-toned
+pictograph, keycap (`<base><FE0F?><20E3>`, base included) or
+variation-selector sequence goes as a unit — no dangling joiner, no orphaned
+`U+20E3`, no bare digit. Non-emoji supplementary-plane scripts (cuneiform,
+math alphanumerics) are not Extended_Pictographic and pass through untouched.
+Arrows, Persian/Arabic and combining marks are unaffected.
+
+`FilterEngine.remove_emojis` and `CleanerRule.clean` route through the shared
+stripper on the Python side; the Go pipeline's emoji flag and the cleaner's
+`remove_emojis` route through `cleaning.RemoveEmojisGrapheme`. The
+UNI-EMOJI-01/02/03/04 fixtures now pin the FIXED outputs (their pre-fix values
+are preserved in each fixture's notes), and 9 new differential cases in
+`scripts/test_stage42_parity.py` cover ZWJ families, keycaps, flags, skin
+tones, arrows and non-emoji SMP scripts (69/69 agree).
 
 ## F-04 — `remove_links`/`link_replacement` precedence differs per path — **VERIFIED**
 Reproduced by execution: durable path (`pipeline.py:1438` `if`/`elif`) with
@@ -179,10 +199,20 @@ lands in the same release the gate starts firing. Verified prerequisite: the
 canonical `_RE_LINK` predicate is RE2-portable (plain literal-prefix
 alternation, no Unicode property classes — unlike the F-03 emoji case).
 
-## F-13 — Target-override strip deletes usernames in Go — **VERIFIED**
-Go `transform.go:21` `urlRegex` includes `@[A-Za-z0-9_]{3,32}`;
+## F-13 — Target-override strip deletes usernames in Go — **FIXED (Stage 4.2, re-verified 4.4)**
+Go `transform.go:21` `urlRegex` included `@[A-Za-z0-9_]{3,32}`;
 Python `remove_urls` (`services.py:159-169`) keeps mentions. Classification:
-**conflicting specifications**. Action: Stage 4.4.
+**conflicting specifications**.
+
+**Resolution.** The dead `worker/internal/engine/transform` package that carried
+that regex was superseded by Stage 4.2's `worker/internal/domain/cleaning`, and
+the override path's `RemoveURLsPlain` deliberately excludes the mention
+alternation (links.go: the mention arm is documented as intentionally absent —
+"A mention is not a link", services.py:911). Re-verified by execution against
+both engines on the `LNK-OVERRIDE-01` input: Python and Go now both return
+`see @bob and` from `see @bob and https://a.io` with `remove_links: true`. The
+fixture's `expected_go_output` has been corrected from the pre-4.2 divergence
+(`see  and`) and the historical value is preserved in its notes.
 
 ## F-14 — Three different "contains a link" predicates — **VERIFIED**
 Re-verified by execution in this phase:

@@ -16,11 +16,11 @@ or a UI button is never sufficient. Every "Actual runtime path" below was traced
 | Blacklist | 6 distinct impls | filter only | `FLT-006` + `POL-001` | divergent | 4.1 |
 | Regex filter | `content_policy.compile_user_regex` | `filter.go:243` | `FLT-007` | RE2 vs `re` | 4.1 |
 | Cleaner | `entities.py:2335` | **unreferenced** | `pipeline.py:1408` | none live | 4.2 |
-| Emoji removal | `services.py:31` | `transform.go:33` | `pipeline.py:1413, 1461` | **INCOMPATIBLE** | 4.2 |
+| Emoji removal | `emoji_table.py` | `cleaning.emoji.go` | `pipeline.py:1413, 1461` | **FIXED F-03** (both engines, shared table) | 4.2 ✅ |
 | Replace | `text_replace.py:415` | — | `pipeline.py:1543` | absent | 4.3 |
 | Link management | `services.py:758` | strip only | `pipeline.py:1448` | absent | 4.4 |
-| Header/Footer | `services.py:241` | `transform.FormatText` preview | `pipeline.py:1547` raw | placeholders dead | 4.4 |
-| Watermark | `services.py:1441` | — | `pipeline.py:1558` | absent | 4.4 |
+| Header/Footer | `services.py:241` | `cleaning.FormatHeader` | `pipeline.py:1547` raw | **FIXED F-15** (Go renders) | 4.4 ✅ |
+| Watermark | `services.py:1441` | `pipeline.applyAdvanced` | `pipeline.py:1558` | gated F--addon ✅ | 4.4 ✅ |
 | AI transformation | `pipeline.py:1616` | — | `pipeline.py:1524` | absent | 4.4 |
 | Keyword reply | `services.py:1477` | — | `pipeline.py:1298` | absent | 4.5 |
 | Routing | `services.py:415` | — | `pipeline.py:633 ROUTING` | absent | 4.5 |

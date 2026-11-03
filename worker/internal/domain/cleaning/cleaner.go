@@ -264,7 +264,9 @@ func (c *CleanerRule) Clean(text string) string {
 		out = cleanHashtagRegex.ReplaceAllString(out, "")
 	}
 	if c.RemoveEmojis {
-		out = cleanEmojiRegex.ReplaceAllString(out, "")
+		// F-03: the sequence-aware stripper (see emoji.go). The old
+		// SMP-wide regex destroyed non-emoji supplementary-plane scripts.
+		out = RemoveEmojisGrapheme(out)
 	}
 	if c.RemovePhoneNumbers {
 		out = stripPhoneNumbers(out)

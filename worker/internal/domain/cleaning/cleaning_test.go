@@ -433,6 +433,62 @@ func TestPipelineApplyWithoutCaptionHintPreservesBehavior(t *testing.T) {
 	}
 }
 
+func TestRemoveEmojisGraphemeF03(t *testing.T) {
+	// F-03: both engines now strip emoji SEQUENCES via the shared
+	// Extended_Pictographic table. Each expectation below was produced by
+	// running the Python twin (core/domain/emoji_table.strip_emoji) on the
+	// same input, so the two engines are pinned to agree.
+	cases := []struct{ in, want string }{
+		// A ZWJ family is ONE sequence: removed whole, no dangling joiners.
+		{"\U0001f468\u200d\U0001f469\u200d\U0001f467 family", " family"},
+		// A keycap takes its base with it: <base><FE0F?><20E3> goes whole.
+		{"5\ufe0f\u20e3 five", " five"},
+		{"x5\ufe0f\u20e3y", "xy"},
+		{"3\ufe0f\u20e34\ufe0f\u20e3", ""},
+		// Flags (regional indicator pairs) and skin tones go whole.
+		{"\U0001f1ee\U0001f1f7 flag", " flag"},
+		{"\U0001f44d\U0001f3fb toned", " toned"},
+		// Non-emoji supplementary-plane scripts are NOT pictographic: they
+		// survive the pass unchanged (the F-03 corruption, fixed).
+		{"\U00012000 cuneiform", "\U00012000 cuneiform"},
+		{"\U0001d578\U0001d566\U0001d565\U0001d547\U0001d560 math", "\U0001d578\U0001d566\U0001d565\U0001d547\U0001d560 math"},
+		// BMP symbols that are not in the table are untouched.
+		{"\u2190 arrow", "\u2190 arrow"},
+		{"plain text", "plain text"},
+		{"a1b2", "a1b2"},
+		{"call 555", "call 555"},
+		// A variation-selector heart sequence goes whole.
+		{"\U0001f495 heart", " heart"},
+		{"\u2764\ufe0f\u200d\U0001f525 fireheart", " fireheart"},
+	}
+	for _, c := range cases {
+		if got := RemoveEmojisGrapheme(c.in); got != c.want {
+			t.Errorf("RemoveEmojisGrapheme(%q): got %q, want %q", c.in, got, c.want)
+		}
+	}
+}
+
+func TestRemoveEmojisGraphemeIsIdempotent(t *testing.T) {
+	// A removal pass must be stable: running it twice cannot change the
+	// result, or a retry/restart would corrupt text a second time.
+	in := "\U0001f468\u200d\U0001f469 and 5\ufe0f\u20e3 and \U00012000"
+	once := RemoveEmojisGrapheme(in)
+	if twice := RemoveEmojisGrapheme(once); twice != once {
+		t.Errorf("not idempotent: %q -> %q -> %q", in, once, twice)
+	}
+}
+
+func TestRemoveEmojisGraphemeKeycapDoesNotEatNeighbors(t *testing.T) {
+	// The keycap rewind consumes exactly the base, the optional FE0F and
+	// the 20E3 — never a letter that merely follows the sequence.
+	if got := RemoveEmojisGrapheme("5\ufe0f\u20e3end"); got != "end" {
+		t.Errorf("keycap before text: got %q", got)
+	}
+	if got := RemoveEmojisGrapheme("end 5\ufe0f\u20e3"); got != "end " {
+		t.Errorf("keycap after text: got %q", got)
+	}
+}
+
 func TestHeaderFormatterRendersEveryPlaceholder(t *testing.T) {
 	// Every variable Python's HeaderFormatter exposes, rendered against
 	// one message snapshot, compared to the Python output captured from

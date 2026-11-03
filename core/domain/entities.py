@@ -2394,7 +2394,11 @@ class CleanerRule:
         if self.remove_hashtags:
             out = _CLEANER_HASHTAG_RE.sub("", out)
         if self.remove_emojis:
-            out = _CLEANER_EMOJI_RE.sub("", out)
+            # F-03: sequence-aware removal via the shared emoji table
+            # (core/domain/emoji_table.py); see services.FilterEngine.remove_emojis.
+            from .emoji_table import strip_emoji
+
+            out = strip_emoji(out)
         if self.remove_phone_numbers:
             out = _strip_phone_numbers(out)
         # Collapse the whitespace holes the removals punched out so the

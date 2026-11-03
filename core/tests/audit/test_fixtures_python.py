@@ -198,8 +198,17 @@ def run_cleaner(rec: Dict[str, Any]) -> str:
 
 
 def run_emoji_regex(rec: Dict[str, Any]) -> str:
-    """UNI-EMOJI-*: EMOJI_REGEX (services.py), the engine remove_emojis uses."""
-    return EMOJI_REGEX.sub("", rec["input"]["text"])
+    """UNI-EMOJI-*: the emoji-removal engine production uses.
+
+    F-03 (fixed): that engine is now the sequence-aware stripper in
+    core/domain/emoji_table.py, which both FilterEngine.remove_emojis and
+    CleanerRule.clean route through. The old EMOJI_REGEX is retained above
+    only for the historical divergence notes; running it here would assert
+    the bug the fix removed.
+    """
+    from core.domain.emoji_table import strip_emoji
+
+    return strip_emoji(rec["input"]["text"])
 
 
 def run_apply_replacements(rec: Dict[str, Any]) -> str:

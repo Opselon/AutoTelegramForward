@@ -7,11 +7,10 @@ go 1.27
 
 toolchain go1.27.2
 
-require autoforward v0.0.0
-
 replace autoforward => ../api
 
 require (
+	autoforward v0.0.0
 	github.com/jackc/pgx/v5 v5.12.0
 	github.com/mattn/go-sqlite3 v1.14.32
 	golang.org/x/text v0.43.0
