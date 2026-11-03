@@ -1732,6 +1732,242 @@ p {
 
 /* -------------------------------------------------------- primitives ---- */
 
+/* StatusIndicator: the runtime-visibility contract in one shape. The dot is
+   the state, the label is the truth, `unknown` never borrows a healthy tone. */
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.status-indicator__dot {
+  flex-shrink: 0;
+  inline-size: 9px;
+  block-size: 9px;
+  border-radius: var(--radius-full);
+  background: var(--color-neutral-soft);
+  border: 1px solid var(--color-border-strong);
+}
+
+.status-indicator--success .status-indicator__dot {
+  background: var(--color-success);
+  border-color: color-mix(in oklab, var(--color-success) 55%, transparent);
+}
+
+.status-indicator--warning .status-indicator__dot {
+  background: var(--color-warning);
+  border-color: color-mix(in oklab, var(--color-warning) 55%, transparent);
+}
+
+.status-indicator--danger .status-indicator__dot {
+  background: var(--color-danger);
+  border-color: color-mix(in oklab, var(--color-danger) 55%, transparent);
+}
+
+.status-indicator--info .status-indicator__dot {
+  background: var(--color-info);
+  border-color: color-mix(in oklab, var(--color-info) 55%, transparent);
+}
+
+.status-indicator--unknown .status-indicator__dot {
+  background: transparent;
+  border-color: var(--color-border-strong);
+}
+
+.status-indicator__label {
+  font-size: var(--type-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-indicator__dot--pulse {
+  animation: status-pulse 2.4s var(--ease-out) infinite;
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklab, currentColor 0%, transparent);
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-indicator__dot--pulse {
+    animation: none;
+  }
+}
+
+/* SegmentedControl: one exclusive choice, zero decoration. */
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  max-inline-size: 100%;
+  overflow-x: auto;
+}
+
+.segmented__option {
+  min-block-size: 36px;
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: var(--type-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color var(--motion-fast) var(--ease-out), color var(--motion-fast) var(--ease-out);
+}
+
+.segmented__option:hover {
+  color: var(--color-text);
+}
+
+.segmented__option.is-selected {
+  background: var(--color-primary-soft);
+  border-color: color-mix(in oklab, var(--color-primary) 40%, transparent);
+  color: var(--color-text);
+}
+
+/* SearchInput: icon inside the field, clear only when there is content. */
+.search-input {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+}
+
+.search-input__icon {
+  position: absolute;
+  inset-inline-start: var(--space-3);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.search-input__field {
+  inline-size: 100%;
+  padding-inline-start: calc(var(--space-3) * 2 + 14px);
+  padding-inline-end: calc(var(--space-5) + 14px);
+}
+
+.search-input__clear {
+  position: absolute;
+  inset-inline-end: var(--space-1);
+  inline-size: 32px;
+  block-size: 32px;
+  min-inline-size: 32px;
+  min-block-size: 32px;
+}
+
+/* ProgressIndicator: determinate fill or an honest indeterminate sweep. */
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-inline-size: 0;
+}
+
+.progress__label {
+  font-size: var(--type-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.progress__track {
+  position: relative;
+  display: block;
+  block-size: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-surface-inset);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.progress__fill {
+  display: block;
+  block-size: 100%;
+  border-radius: var(--radius-full);
+  background: var(--gradient-brand);
+  transition: inline-size var(--motion-base) var(--ease-out);
+}
+
+.progress__track--indeterminate::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inline-size: 40%;
+  background: var(--gradient-brand);
+  border-radius: var(--radius-full);
+  animation: progress-sweep 1.4s var(--ease-out) infinite;
+}
+
+@keyframes progress-sweep {
+  from {
+    inset-inline-start: -40%;
+  }
+  to {
+    inset-inline-start: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress__track--indeterminate::after {
+    animation: none;
+    inset-inline: 0;
+    inline-size: 100%;
+    opacity: 0.4;
+  }
+}
+
+/* PageHeader: one heading pattern instead of per-panel hero variants. */
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-block-end: var(--space-2);
+}
+
+.page-header__text {
+  min-inline-size: 0;
+  flex: 1;
+}
+
+.page-header__title {
+  margin: 0;
+  font-size: var(--type-lg);
+  font-weight: 800;
+  color: var(--color-text);
+}
+
+.page-header__description {
+  margin: var(--space-1) 0 0;
+  font-size: var(--type-sm);
+  color: var(--color-text-muted);
+}
+
+.page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
 .card {
   display: flex;
   flex-direction: column;

@@ -13,7 +13,7 @@
  *   card in the list. Deletion is confirmed by a real `ConfirmDialog`, not
  *   `window.confirm`.
  */
-import { memo, useCallback, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import {
   Bot,
   Clock,
@@ -31,10 +31,19 @@ import {
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel'
 import { ConfirmDialog } from '../components/ConfirmDialog'
 import { FlowDiagram } from '../components/FlowDiagram'
-import { EmptyState, Button } from '../components/ui/Primitives'
+import {
+  EmptyState,
+  Button,
+  PageHeader,
+  SearchInput,
+  SegmentedControl,
+  StatusIndicator,
+} from '../components/ui/Primitives'
 import { normalizeEndpoint } from '../endpoint'
 import type { DashboardCtx } from '../App'
 import type { ForwardRule, RuleLiveStat } from '../types'
+
+type StatusFilter = 'all' | 'active' | 'paused'
 
 interface RuleCardProps {
   rule: ForwardRule
@@ -90,6 +99,13 @@ const RuleCard = memo(function RuleCard({
       <div className="rule-card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12, gap: 8, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div className="rule-badges" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            {/* Operational state at a glance: running pulses, paused warns,
+                disabled reads as off — the same three-word contract everywhere. */}
+            <StatusIndicator
+              tone={rule.is_paused ? 'warning' : rule.is_active ? 'success' : 'neutral'}
+              pulse={rule.is_active && !rule.is_paused}
+              label={rule.is_paused ? t('ui_paused') : rule.is_active ? t('ui_running') : t('ui_disabled')}
+            />
             {isVipHop && (
               <span className="badge badge-vip" style={{ fontSize: 'var(--type-xs)', padding: '3px 8px' }}>
                 <Sparkles size={11} />
@@ -392,6 +408,30 @@ export default function RulesPanel({ d }: { d: DashboardCtx }) {
     }
   }
 
+  // Workspace tools: a client-side search over the loaded page and an
+  // operational-status filter. Server-side paging stays the API's job; these
+  // only narrow what is already on screen.
+  const [search, setSearch] = useState('')
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
+  const allRules = useMemo(() => (Array.isArray(rules) ? rules : []), [rules])
+  const visibleRules = useMemo(() => {
+    const needle = search.trim().toLowerCase()
+    return allRules.filter((rule) => {
+      if (statusFilter === 'active' && (!rule.is_active || rule.is_paused)) return false
+      if (statusFilter === 'paused' && !rule.is_paused) return false
+      if (!needle) return true
+      const source = normalizeEndpoint(rule.source_chat_id ?? '')
+      const target = normalizeEndpoint(rule.target_chat_id ?? '')
+      return (
+        rule.id.toLowerCase().includes(needle) ||
+        (rule.source_chat_id ?? '').toLowerCase().includes(needle) ||
+        (rule.target_chat_id ?? '').toLowerCase().includes(needle) ||
+        source.toLowerCase().includes(needle) ||
+        target.toLowerCase().includes(needle)
+      )
+    })
+  }, [allRules, search, statusFilter])
+
   // Stable per-card callbacks so the memoized cards only re-render when their
   // own inputs (rule, live stat, language) change.
   const onOverview = useCallback(
@@ -422,28 +462,54 @@ export default function RulesPanel({ d }: { d: DashboardCtx }) {
                   onRefresh={refreshDiagnostics}
                   lang={lang}
                 />
-                <div className="hero-container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                  <div>
-                    <h2 style={{ fontSize: '1.2rem', fontWeight: 800, margin: 0 }}>
-                      {t('ui_smart_forwarding_routing_rules')}
-                    </h2>
-                    <p className="text-balance" style={{ fontSize: '0.82rem', color: 'var(--color-text-muted)', marginTop: 4, margin: 0 }}>
-                      {t('ui_configure_triple_routes_branding_hops_bypass_policies_and_channe')}
-                    </p>
+                <PageHeader
+                  title={t('ui_smart_forwarding_routing_rules')}
+                  description={t('ui_configure_triple_routes_branding_hops_bypass_policies_and_channe')}
+                  actions={
+                    /* A new task starts from the editor's clean default — this
+                        button no longer seeds fake demo data. */
+                    <button
+                      onClick={() => openRuleModal(null)}
+                      className="hero-add-btn btn btn-primary"
+                    >
+                      <Plus size={16} />
+                      <span>{t('ui_new_rule')}</span>
+                    </button>
+                  }
+                />
+
+                {/* Workspace tools: search + operational status. Kept above the
+                    grid so the filter state is obvious before the list scrolls. */}
+                <div
+                  className="toolbar"
+                  style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', alignItems: 'center' }}
+                >
+                  <div style={{ flex: '1 1 220px', minInlineSize: 0 }}>
+                    <SearchInput
+                      value={search}
+                      onChange={setSearch}
+                      placeholder={t('ui_search')}
+                      ariaLabel={t('ui_search_tasks')}
+                      clearLabel={t('ui_clear_search')}
+                    />
                   </div>
-                  {/* A new task starts from the editor's clean default — this
-                      button no longer seeds fake demo data. */}
-                  <button
-                    onClick={() => openRuleModal(null)}
-                    className="hero-add-btn btn btn-primary"
-                  >
-                    <Plus size={16} />
-                    <span>{t('ui_new_rule')}</span>
-                  </button>
+                  <SegmentedControl<StatusFilter>
+                    options={[
+                      { value: 'all', label: t('ui_all') },
+                      { value: 'active', label: t('ui_running') },
+                      { value: 'paused', label: t('ui_paused') },
+                    ]}
+                    value={statusFilter}
+                    onChange={setStatusFilter}
+                    ariaLabel={t('ui_filter_status')}
+                  />
+                  <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>
+                    {t('ui_showing_tasks', { shown: visibleRules.length, total: allRules.length })}
+                  </span>
                 </div>
 
                 <div className="rules-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 16 }}>
-                  {(Array.isArray(rules) ? rules : []).length === 0 && (
+                  {allRules.length === 0 && (
                     <div style={{ gridColumn: '1 / -1' }}>
                       <EmptyState
                         title={t('ui_empty_title')}
@@ -457,7 +523,15 @@ export default function RulesPanel({ d }: { d: DashboardCtx }) {
                       />
                     </div>
                   )}
-                  {(Array.isArray(rules) ? rules : []).map((rule) => (
+                  {allRules.length > 0 && visibleRules.length === 0 && (
+                    <div style={{ gridColumn: '1 / -1' }}>
+                      <EmptyState
+                        title={t('ui_no_tasks_match')}
+                        description={t('ui_try_again')}
+                      />
+                    </div>
+                  )}
+                  {visibleRules.map((rule) => (
                     <RuleCard
                       key={rule.id}
                       rule={rule}
