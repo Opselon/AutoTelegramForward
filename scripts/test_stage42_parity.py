@@ -431,6 +431,348 @@ def py_fen(case: Dict[str, Any]) -> str:
     return f"clamp={every_n} owns={str(owns).lower()}"
 
 
+# --- Stage 5 W2: the effective-settings / configuration-ownership plane ----- #
+#
+# The Go Worker resolves a task's effective settings at rule-load time (the
+# counterpart of pipeline.py:787, where materialize() runs FIRST — before
+# the paused check and every gate). These adapters answer the same cases
+# through the REAL Python production modules — core.domain.rule_settings and
+# core.domain.bot_defaults — so a resolution divergence is a parity failure
+# rather than two agreed fixtures.
+#
+# The output grammar is byte-for-byte the Go driver's:
+#
+#   resolved <key>=<json> …            bot_defaults.effective
+#   pinned <key>=true|false …          rule_settings.pinned_keys
+#   copy=unchanged                     effective_settings.materialize: nothing
+#                                      to inherit
+#   copy=done mark=<list> values=…     materialize: what resolution filled in
+#   copy=… resolved=… stored=…         the owner-scoped read through the real
+#                                      SqliteBotTokenRepository + what the
+#                                      STORED row still holds
+
+def _effective_rule(case: Dict[str, Any]) -> "ForwardRule":
+    """The ForwardRule a resolution case describes.
+
+    The shape mirrors the Go projection: the task's settings live in its
+    metadata blob, bot_token_id included, exactly as the repository
+    stores them; and the owner is the row's own owner_user_id, the one
+    the Python materializer reads off the rule.
+    """
+    rule = _rule_with()
+    rule.metadata = dict(case.get("metadata") or {})
+    if rule.metadata.get("bot_token_id"):
+        rule.bot_token_id = str(rule.metadata["bot_token_id"])
+    rule.owner_user_id = int(case.get("settings_owner") or 0)
+    return rule
+
+
+# _PARITY_SETTINGS_SCHEMA is the Core's own DDL for the three tables a
+# store-backed effective-settings case needs: forward_rules, bot_tokens and the
+# sessions row a forward rule references. Applied to a fresh in-memory SQLite
+# database so the store-backed parity cases run against the real table shapes.
+_PARITY_SETTINGS_SCHEMA = [
+    """CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        phone_number TEXT NOT NULL DEFAULT '',
+        session_string_encrypted TEXT NOT NULL DEFAULT '',
+        user_id INTEGER NOT NULL DEFAULT 0,
+        username TEXT NOT NULL DEFAULT '',
+        first_name TEXT NOT NULL DEFAULT '',
+        is_active INTEGER NOT NULL DEFAULT 1,
+        is_authorized INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0
+    )""",
+    """CREATE TABLE IF NOT EXISTS forward_rules (
+        id TEXT PRIMARY KEY,
+        session_id TEXT NOT NULL DEFAULT '',
+        source_chat_id TEXT NOT NULL DEFAULT '',
+        source_chat_name TEXT NOT NULL DEFAULT '',
+        target_chat_id TEXT NOT NULL DEFAULT '',
+        target_chat_name TEXT NOT NULL DEFAULT '',
+        target_chat_ids TEXT NOT NULL DEFAULT '[]',
+        routing_type TEXT NOT NULL DEFAULT 'CHANNEL_TO_CHANNEL',
+        forward_mode TEXT NOT NULL DEFAULT 'COPY_MESSAGE',
+        is_active INTEGER NOT NULL DEFAULT 1,
+        filter_rule_id TEXT,
+        ai_config_id TEXT NOT NULL DEFAULT '',
+        remove_links INTEGER NOT NULL DEFAULT 0,
+        custom_caption_template TEXT,
+        delay_seconds REAL NOT NULL DEFAULT 0.0,
+        skip_history INTEGER NOT NULL DEFAULT 1,
+        since_ts INTEGER NOT NULL DEFAULT 0,
+        ignore_edits INTEGER NOT NULL DEFAULT 0,
+        trigger_events TEXT NOT NULL DEFAULT '["NEW_MESSAGE"]',
+        content_mode TEXT NOT NULL DEFAULT 'AUTO',
+        metadata TEXT NOT NULL DEFAULT '{}',
+        version INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0,
+        ai_prompt_version INTEGER NOT NULL DEFAULT 0,
+        ai_fallback_policy TEXT NOT NULL DEFAULT 'DROP',
+        ai_timeout_seconds REAL NOT NULL DEFAULT 15.0,
+        ai_secondary_config_id TEXT,
+        owner_user_id INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (session_id) REFERENCES sessions(id)
+    )""",
+    """CREATE TABLE IF NOT EXISTS bot_tokens (
+        id TEXT PRIMARY KEY,
+        label TEXT NOT NULL DEFAULT '',
+        token_encrypted TEXT NOT NULL DEFAULT '',
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL DEFAULT 0,
+        owner_user_id INTEGER NOT NULL DEFAULT 0,
+        defaults_json TEXT NOT NULL DEFAULT '{}'
+    )""",
+]
+
+
+def py_effective_settings(case: Dict[str, Any]) -> str:
+    """The effective-settings family: resolution, pins, materialise, store.
+
+    One adapter, four operations — each routed at the REAL production
+    module, so the parity comparison exercises the code the two engines
+    actually run rather than a reformatted fixture.
+    """
+    op = case.get("settings_op") or "resolution"
+    rule = _effective_rule(case)
+
+    if op == "pinned":
+        from core.domain.rule_settings import pinned_keys
+
+        pinned = pinned_keys(rule)
+        keys = _effective_case_keys(case)
+        return "pinned " + " ".join(f"{key}={'true' if key in pinned else 'false'}"
+                                    for key in keys)
+
+    if op == "materialize":
+        return _py_effective_settings_materialize(case, rule)
+
+    if op == "store":
+        return _py_effective_settings_store(case)
+
+    # The default: resolution — every effective value, bot defaults applied.
+    from core.domain.bot_defaults import effective
+
+    values = effective(rule, _effective_bot_defaults(case))
+    return "resolved " + _render_key_values(values, _effective_case_keys(case))
+
+
+def _effective_bot_defaults(case: Dict[str, Any]) -> Dict[str, Any]:
+    """The case's bot_defaults blob, as attached_defaults would read it."""
+    raw = case.get("bot_defaults")
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
+def _effective_tokens(case: Dict[str, Any], rule=None):
+    """A BotToken repository over the case's declared bot rows.
+
+    The in-memory ops hand the adapter a repository that answers from the
+    case's single bot_defaults blob, scoped to the rule's own owner — the
+    same owner-scoped lookup attached_defaults performs (owner from the
+    rule when the argument carries none). Only the store-backed cases
+    declare real bot rows.
+    """
+    from core.application.repositories import BotToken
+
+    rows = case.get("settings_bots") or []
+    if rule is not None:
+        owner = getattr(rule, "owner_user_id", 0) or 0
+    else:
+        owner = case.get("settings_owner") or 0
+
+    class _CaseTokens:
+        """The owner-scoped repository surface effective_settings uses."""
+
+        def __init__(self) -> None:
+            self._rows = {
+                row["token_id"]: BotToken(
+                    id=row["token_id"], label=row["token_id"], token="",
+                    owner_user_id=int(row.get("owner") or 0),
+                    created_at=0, updated_at=0,
+                    defaults=dict(row.get("defaults") or {}),
+                )
+                for row in rows
+            }
+
+        async def get_owned(self, token_id: str, owner_user_id: int):
+            row = self._rows.get(token_id)
+            if row is None or int(row.owner_user_id or 0) != int(owner_user_id or 0):
+                return None
+            return row
+
+        async def get_by_id(self, token_id: str):
+            return self._rows.get(token_id)
+
+    class _InlineTokens:
+        """The single-blob repository the in-memory cases resolve against."""
+
+        def __init__(self, defaults: Dict[str, Any], owner: int, rule=None) -> None:
+            token_id = "tok"
+            if rule is not None:
+                token_id = str(getattr(rule, "bot_token_id", "") or "tok")
+            self._blob = BotToken(
+                id=token_id,
+                label="tok", token="", owner_user_id=owner,
+                created_at=0, updated_at=0, defaults=dict(defaults or {}),
+            )
+
+        async def get_owned(self, token_id: str, owner_user_id: int):
+            if not self._blob.defaults:
+                return None
+            if int(self._blob.owner_user_id or 0) != int(owner_user_id or 0):
+                return None
+            return self._blob
+
+        async def get_by_id(self, token_id: str):
+            return self._blob if self._blob.defaults else None
+
+    if rows:
+        return _CaseTokens()
+    return _InlineTokens(_effective_bot_defaults(case), owner, rule)
+
+
+def _effective_case_keys(case: Dict[str, Any]) -> List[str]:
+    """The keys a case asks about: its list, its single key, or every one."""
+    keys = case.get("settings_keys") or []
+    if keys:
+        return list(keys)
+    if case.get("settings_key"):
+        return [case["settings_key"]]
+    from core.domain.rule_settings import SETTING_SPECS
+
+    return sorted(SETTING_SPECS)
+
+
+def _render_key_values(values: Dict[str, Any], keys: List[str]) -> str:
+    """The Go driver's own rendering: key=<json> pairs, in key order."""
+    import json as _json
+
+    # Go's encoding/json emits ", " and ": " WITHOUT the spaces; match it so
+    # the comparison is on the values, not the separators.
+    return " ".join(
+        f"{key}={_json.dumps(values.get(key), separators=(',', ':'))}"
+        for key in keys
+    )
+
+
+def _py_effective_settings_materialize(case: Dict[str, Any], rule) -> str:
+    """The in-memory materialise arm: the real coroutine, awaited.
+
+    Python's materialize is async; the adapter runs it to completion the
+    same way the pipeline does (the store arm below does the same inside
+    its own event loop).
+    """
+    import asyncio
+
+    from core.application.effective_settings import INHERITED_MARK, materialize
+
+    tokens = _effective_tokens(case, rule)
+
+    async def run() -> str:
+        resolved = await materialize(rule, tokens)
+        if resolved is rule or getattr(resolved, INHERITED_MARK, None) is None:
+            return "copy=unchanged"
+        mark = list(sorted(getattr(resolved, INHERITED_MARK) or []))
+        values = {key: getattr(resolved, key) for key in _effective_case_keys(case)}
+        return ("copy=done mark=" + ",".join(mark) + " values=" +
+                _render_key_values(values, _effective_case_keys(case)))
+
+    return asyncio.run(run())
+
+
+def _py_effective_settings_store(case: Dict[str, Any]) -> str:
+    """The store-backed arm: the real repository, the real stored row.
+
+    Seeds a real SqliteBotTokenRepository with the case's bot rows, loads
+    the rule through SqliteForwardRuleRepository, materialises it against
+    the owner-scoped repository, and reads the row back — so the
+    copy-not-mutate rule is measured against the database, exactly as the
+    Go side's probe measures it.
+    """
+    import asyncio
+
+    from core.application.effective_settings import INHERITED_MARK, materialize
+    from core.application.repositories import BotToken
+    from core.infrastructure.persistence.database import SqliteDatabase
+    from core.infrastructure.persistence.sqlite_repositories import (
+        SqliteBotTokenRepository,
+        SqliteForwardRuleRepository,
+    )
+    from core.infrastructure.security.crypto import CryptoService
+
+    rows = case.get("settings_bots") or []
+    owner = int(case.get("settings_owner") or 0)
+    metadata = dict(case.get("metadata") or {})
+    keys = _effective_case_keys(case)
+
+    def build() -> str:
+        async def run() -> str:
+            db = SqliteDatabase(":memory:")
+            try:
+                for stmt in _PARITY_SETTINGS_SCHEMA:
+                    db.execute(stmt)
+                # The forward rule's session row: the repository's INSERT
+                # is foreign-keyed to it, so a fresh fixture needs one.
+                db.execute(
+                    "INSERT INTO sessions (id, phone_number, session_string_encrypted,"
+                    " user_id, username, first_name, is_active, is_authorized,"
+                    " created_at, updated_at)"
+                    " VALUES ('s1', '+1000', '', 0, '', '', 1, 1, 0, 0)",
+                    (),
+                )
+                crypto = CryptoService("parity-master-key")
+                tokens = SqliteBotTokenRepository(db, crypto)
+                rules = SqliteForwardRuleRepository(db)
+                for row in rows:
+                    await tokens.add(BotToken(
+                        id=row["token_id"], label=row["token_id"],
+                        token="", owner_user_id=int(row.get("owner") or 0),
+                        created_at=0, updated_at=0,
+                        defaults=dict(row.get("defaults") or {}),
+                    ))
+                from core.domain.entities import ForwardRule as _FR
+                from core.domain.value_objects import ForwardMode, RoutingType
+
+                rule = _FR(
+                    id="r-parity", name="parity", session_id="s1",
+                    source_chat_id="-1001", target_chat_id="-1002",
+                    routing_type=RoutingType.CHANNEL_TO_CHANNEL,
+                    forward_mode=ForwardMode.COPY_MESSAGE,
+                    owner_user_id=owner,
+                )
+                rule.metadata = dict(metadata)
+                if metadata.get("bot_token_id"):
+                    rule.bot_token_id = str(metadata["bot_token_id"])
+                await rules.add(rule)
+
+                resolved = await materialize(await rules.get_by_id("r-parity"), tokens)
+                copied = getattr(resolved, INHERITED_MARK, None) is not None
+
+                # The stored row, read back fresh after resolution.
+                import json as _json
+
+                stored_row = db.query_one(
+                    "SELECT metadata FROM forward_rules WHERE id = 'r-parity'")
+                stored_meta = _json.loads(stored_row["metadata"]) if stored_row else {}
+                resolved_values = {key: getattr(resolved, key) for key in keys}
+                stored_values = {
+                    key: stored_meta.get(key)
+                    for key in keys if key in stored_meta
+                }
+                return (f"copy={'done' if copied else 'unchanged'} "
+                        f"resolved={_render_key_values(resolved_values, keys)} "
+                        f"stored={_render_key_values(stored_values, keys)}")
+            finally:
+                db.close()
+
+        return asyncio.run(run())
+
+    return build()
+
+
 ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "cleaner": py_cleaner,
     "emoji": py_emoji,
@@ -455,6 +797,10 @@ ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "fen": py_fen,
     # Stage 4.5 W3: the dedup plane (content fingerprint + claim/release).
     "dedup": py_dedup,
+    # Stage 5 W2: the effective-settings / configuration-ownership plane
+    # (pinned vs inherited vs spec-default, missing bot, foreign-tenant
+    # bot, inheritable=False, validation-failure-skip).
+    "effective_settings": py_effective_settings,
 }
 
 
@@ -830,6 +1176,151 @@ def cases() -> List[Dict[str, Any]]:
         {"engine": "fen", "fen_value": 5, "fen_sequence": 6, "fen_slots": True},
         {"engine": "fen", "fen_value": 5, "fen_sequence": 1, "fen_slots": True},
         {"engine": "fen", "fen_value": 3, "fen_sequence": 4, "fen_slots": True},
+
+        # --- Stage 5 W2: the effective-settings / configuration-ownership
+        # --- plane. Every case runs through the REAL registry and the REAL
+        # --- bot-defaults resolver on both engines; the store-backed ones
+        # --- seed a real bot_tokens table and read through the real
+        # --- owner-scoped repository (composite rule store on the Go side).
+        # Pinned vs inherited vs spec-default, one case per registry kind.
+        {"engine": "effective_settings", "settings_op": "resolution",
+         "settings_key": "remove_emojis", "metadata": {},
+         "bot_defaults": {"remove_emojis": True}},
+        # The task's own (pinned) value wins even when the bot carries one.
+        {"engine": "effective_settings", "settings_op": "resolution",
+         "settings_key": "remove_emojis",
+         "metadata": {"remove_emojis": True},
+         "bot_defaults": {"remove_emojis": False}},
+        # int kind: an inheritable int landing and its range guard.
+        {"engine": "effective_settings", "settings_op": "resolution",
+         "settings_key": "auto_delete_seconds", "metadata": {},
+         "bot_defaults": {"auto_delete_seconds": 42}},
+        {"engine": "effective_settings", "settings_op": "resolution",
+         "settings_key": "auto_delete_seconds", "metadata": {},
+         "bot_defaults": {"auto_delete_seconds": 999999999}},
+        # float kind.
+        {"engine": "effective_settings", "settings_op": "resolution",
+         "settings_key": "ai_creativity", "metadata": {},
+         "bot_defaults": {"ai_creativity": 1.5}},
+        # str kind, incl. the choices gate.
+        {"engine": "effective_settings", "settings_op": "resolution",
+         "settings_key": "header", "metadata": {},
+         "bot_defaults": {"header": "BOT-HDR"}},
+        {"engine": "effective_settings", "settings_op": "resolution",
+         "settings_key": "album_mode", "metadata": {},
+         "bot_defaults": {"album_mode": "gallery"}},
+        # list and dict kinds.
+        {"engine": "effective_settings", "settings_op": "resolution",
+         "settings_key": "blacklist", "metadata": {},
+         "bot_defaults": {"blacklist": ["spam", "  promo  ", ""]}},
+        {"engine": "effective_settings", "settings_op": "resolution",
+         "settings_key": "replacements", "metadata": {},
+         "bot_defaults": {"replacements": {"sale": "discount"}}},
+        # inheritable=False: a bot default naming a route or a chat must
+        # never reach the task (both engines refuse it).
+        {"engine": "effective_settings", "settings_op": "resolution",
+         "settings_keys": ["delivery_transport", "bot_token_id",
+                           "source_policies", "link_buttons"],
+         "metadata": {},
+         "bot_defaults": {"delivery_transport": "BOT",
+                          "bot_token_id": "tok-other",
+                          "source_policies": {"-1001": {}},
+                          "link_buttons": ["x"]}},
+        # Missing bot (no bot_token_id) → registry defaults.
+        {"engine": "effective_settings", "settings_op": "resolution",
+         "settings_key": "remove_emojis", "metadata": {},
+         "bot_defaults": None},
+        # A bot with empty defaults → registry defaults.
+        {"engine": "effective_settings", "settings_op": "resolution",
+         "settings_key": "remove_emojis",
+         "metadata": {"bot_token_id": "tok-1"},
+         "bot_defaults": {}},
+        # An unknown key in the bot's blob is skipped, never applied.
+        {"engine": "effective_settings", "settings_op": "resolution",
+         "settings_key": "remove_emojis", "metadata": {},
+         "bot_defaults": {"remove_emojis": True, "not_a_setting": 1}},
+        # pinned_keys: the decision every inheritance question turns on.
+        {"engine": "effective_settings", "settings_op": "pinned",
+         "settings_keys": ["remove_emojis", "header", "blacklist"],
+         "metadata": {"remove_emojis": True, "blacklist": ["a"]}},
+        # A value equal to the registry default is NOT a choice unless the
+        # pin index records it — the gap the index exists to close.
+        {"engine": "effective_settings", "settings_op": "pinned",
+         "settings_keys": ["remove_emojis"],
+         "metadata": {"remove_emojis": False}},
+        {"engine": "effective_settings", "settings_op": "pinned",
+         "settings_keys": ["remove_emojis"],
+         "metadata": {"remove_emojis": False,
+                      "_pinned_settings": ["remove_emojis"]}},
+        # An empty mapping means "off", not a choice (the _chosen_not_default
+        # arm both registries implement).
+        {"engine": "effective_settings", "settings_op": "pinned",
+         "settings_keys": ["power_schedule", "auto_post_scheduler"],
+         "metadata": {"power_schedule": {}}},
+        # materialize: nothing to inherit → the rule itself, no copy.
+        {"engine": "effective_settings", "settings_op": "materialize",
+         "settings_key": "remove_emojis",
+         "metadata": {"bot_token_id": "tok-1"},
+         "bot_defaults": {}},
+        # materialize: no bot attached → no defaults, even though a blob
+        # was handed in (attached_defaults' empty-token-id clause).
+        {"engine": "effective_settings", "settings_op": "materialize",
+         "settings_key": "remove_emojis",
+         "metadata": {},
+         "bot_defaults": {"remove_emojis": True}},
+        # materialize: the copy carries the sorted mark and the values.
+        {"engine": "effective_settings", "settings_op": "materialize",
+         "settings_keys": ["remove_emojis", "header"],
+         "metadata": {"header": "MINE", "bot_token_id": "tok-1"},
+         "bot_defaults": {"remove_emojis": True}},
+        # materialize: a validation failure is skipped, the valid keys land.
+        {"engine": "effective_settings", "settings_op": "materialize",
+         "settings_keys": ["remove_emojis", "auto_delete_seconds", "album_mode"],
+         "metadata": {"bot_token_id": "tok-1"},
+         "bot_defaults": {"remove_emojis": True, "auto_delete_seconds": 999999999,
+                          "album_mode": "gallery"}},
+        # --- store-backed: the owner-scoped read, measured end to end -----
+        # The task's own bot: inherited, and the stored row untouched.
+        {"engine": "effective_settings", "settings_op": "store",
+         "settings_keys": ["remove_emojis"],
+         "settings_owner": 5094837833,
+         "settings_bots": [{"token_id": "tok-alice", "owner": 5094837833,
+                            "defaults": {"remove_emojis": True}}],
+         "metadata": {"bot_token_id": "tok-alice"}},
+        # A foreign-tenant bot: NO defaults (registry defaults), because the
+        # owner-scoped read simply does not find the row.
+        {"engine": "effective_settings", "settings_op": "store",
+         "settings_keys": ["remove_emojis"],
+         "settings_owner": 5094837833,
+         "settings_bots": [{"token_id": "tok-bob", "owner": 6278059256,
+                            "defaults": {"remove_emojis": True}}],
+         "metadata": {"bot_token_id": "tok-bob"}},
+        # Two users, two bots, opposite defaults: each task resolves only
+        # its owner's bot's.
+        {"engine": "effective_settings", "settings_op": "store",
+         "settings_keys": ["remove_emojis"],
+         "settings_owner": 5094837833,
+         "settings_b": [],
+         "settings_bots": [
+             {"token_id": "tok-alice", "owner": 5094837833,
+              "defaults": {"remove_emojis": True}},
+             {"token_id": "tok-bob", "owner": 6278059256,
+              "defaults": {"remove_emojis": False}}],
+         "metadata": {"bot_token_id": "tok-alice"}},
+        # A task with no owner (a pre-ownership row) takes the unscoped
+        # read and still inherits.
+        {"engine": "effective_settings", "settings_op": "store",
+         "settings_keys": ["remove_emojis"],
+         "settings_owner": 0,
+         "settings_bots": [{"token_id": "tok-legacy", "owner": 0,
+                            "defaults": {"remove_emojis": True}}],
+         "metadata": {"bot_token_id": "tok-legacy"}},
+        # A deleted token: no defaults, never an error.
+        {"engine": "effective_settings", "settings_op": "store",
+         "settings_keys": ["remove_emojis"],
+         "settings_owner": 5094837833,
+         "settings_bots": [],
+         "metadata": {"bot_token_id": "tok-gone"}},
     ]
 
 
@@ -839,27 +1330,43 @@ def cases() -> List[Dict[str, Any]]:
 
 # The driver source is a committed file (worker/tests/parity_driver.go), kept
 # in the repo so the Go toolchain vets it on every build instead of the
-# harness generating unvetted code at run time. The harness copies it into
-# a main package under worker/tests, runs it once over the case list, and
-# removes the copy.
+# harness generating unvetted code at run time. The harness copies every
+# committed driver file into a main package under worker/tests, runs it once
+# over the case list, and removes the copies.
 DRIVER_SOURCE_FILE = ROOT / "worker" / "tests" / "parity_driver.go"
+
+# Every committed file under worker/tests that declares the parity build
+# tag. The tag keeps package main out of the normal build (it lives inside a
+# library tree); the harness strips it from each copy it compiles.
+DRIVER_SOURCES = sorted(
+    (ROOT / "worker" / "tests").glob("*.go")
+)
+
+# _strip_build_tag removes the go:build / +build prefix lines (and any blank
+# lines between them and the package clause) so the copied file compiles as
+# part of the harness's untagged main package.
+def _strip_build_tag(source: str) -> str:
+    lines = source.splitlines()
+    while lines and (lines[0].startswith("//go:build") or
+                     lines[0].startswith("// +build") or lines[0].strip() == ""):
+        lines = lines[1:]
+    return "\n".join(lines) + "\n"
 
 
 def run_go(cases_json: List[Dict[str, Any]]) -> Optional[List[Dict[str, Any]]]:
     """Run the Go driver once over the whole case list."""
     driver_dir = ROOT / "worker" / "tests"
     driver_dir.mkdir(parents=True, exist_ok=True)
-    driver = driver_dir / "parity_driver_main.go"
-    source = DRIVER_SOURCE_FILE.read_text(encoding="utf-8")
-    # Strip the build tag from the copy: the tag keeps the committed file
-    # out of the normal build (it declares package main inside a library
-    # tree), and the copy must compile when the harness runs it.
-    lines = source.splitlines()
-    while lines and (lines[0].startswith("//go:build") or
-                     lines[0].startswith("// +build") or lines[0].strip() == ""):
-        lines = lines[1:]
-    driver.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    written: List[Path] = []
     try:
+        # Copy every committed driver file, tags stripped, so a driver
+        # split across files (the effective-settings arm is one) compiles
+        # as one main package.
+        for source_path in DRIVER_SOURCES:
+            text = source_path.read_text(encoding="utf-8")
+            target = driver_dir / (source_path.stem + "_main.go")
+            target.write_text(_strip_build_tag(text), encoding="utf-8")
+            written.append(target)
         proc = subprocess.run(
             ["go", "run", "./tests"],
             cwd=str(ROOT / "worker"),
@@ -872,7 +1379,8 @@ def run_go(cases_json: List[Dict[str, Any]]) -> Optional[List[Dict[str, Any]]]:
             return None
         return json.loads(proc.stdout.decode("utf-8"))
     finally:
-        driver.unlink(missing_ok=True)
+        for copy in written:
+            copy.unlink(missing_ok=True)
 
 
 def main() -> int:

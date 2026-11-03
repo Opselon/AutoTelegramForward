@@ -426,8 +426,41 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		extra.ForwardRule.ForwardEveryN = forwardinterval.Clamp(extra.Metadata["forward_every_n"])
 	}
 
+	// Stage 5 (W2): the task's effective settings are resolved here, at the
+	// rule-load path — the Go counterpart of the Python pipeline's
+	// `rule = await materialize(rule, self._bot_tokens)` (pipeline.py:787),
+	// which runs FIRST, before the paused check and every gate. Every
+	// consumer of GetByID (delivery preflight, transform stage, every
+	// gate) therefore sees the bot-defaults-merged task; there is no
+	// second resolution step anywhere downstream.
+	//
+	// It sits AFTER the blob-resolved fields above for one reason:
+	// resolution needs the bot_token_id/owner pair the projection
+	// resolves out of the metadata blob, so it cannot run before the blob
+	// block does. It runs before anything else sees the projection, which
+	// is the ordering that actually matters — GetByID returns the merged
+	// task, and no later stage re-resolves.
+	//
+	// materializeRule returns the SAME projection when there is nothing
+	// to inherit (no attached bot, empty defaults_json, every candidate
+	// key pinned, or the only candidate keys non-inheritable), so the
+	// common path allocates nothing and no caller can tell resolution
+	// ran. When it does inherit, the stored rule is untouched: the merged
+	// values live on a copy (the copy-not-mutate rule — a caller that
+	// saved the resolved values would turn the bot's defaults into the
+	// task's own pins).
+	if extra.Metadata != nil {
+		if merged := s.materializeRule(ctx, extra.ForwardRule, extra.Metadata, extra.MetadataJSON); merged != extra.ForwardRule {
+			extra.ForwardRule = merged
+		}
+	}
+
 	// auto_pause is not a column: the engine records it inside the task's
-	// metadata JSON, so the projection reads it out of the same blob.
+	// metadata JSON, so the projection reads it out of the same blob. It is
+	// NOT a registry setting (it is engine bookkeeping, never inheritable,
+	// never written by a bot default), so the original blob is the right
+	// place to read it from: resolution never touches the key, and the
+	// merged copy carries it forward verbatim.
 	if reason, ok := extra.Metadata["auto_pause"].(map[string]any); ok {
 		if r, ok := reason["reason"].(string); ok && r != "" {
 			extra.AutoPauseReason = r
