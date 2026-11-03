@@ -59,7 +59,8 @@ func openSQLite(ctx context.Context, dsn string) (*sql.DB, error) {
 const filterProjectionSQLite = `
 	SELECT id, whitelist_keywords, blacklist_keywords,
 	       regex_patterns, allowed_media_types, blocked_media_types,
-	       drop_service_messages, min_message_length, max_message_length
+	       drop_service_messages, min_message_length, max_message_length,
+	       owner_user_id
 	FROM filter_rules
 	WHERE id = ?
 `
