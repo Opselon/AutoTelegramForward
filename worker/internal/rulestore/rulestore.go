@@ -208,7 +208,7 @@ const forwardProjection = `
 	       forward_mode, content_mode, filter_rule_id, metadata,
 	       owner_user_id, fallback_enabled, intermediate_channel_id,
 	       use_intermediate, message_category, detection_criteria,
-	       split_long_caption
+	       split_long_caption, ai_config_id
 	FROM forward_rules
 	WHERE id = $1
 `
@@ -270,13 +270,14 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		messageCategory    sql.NullString
 		detectionCriteria  sql.NullString
 		splitLongCaption   sql.NullBool
+		aiConfigID         sql.NullString
 	)
 	if err := rows.Scan(
 		&id, &sessionID, &isActive, &isPaused, &pausedUntil,
 		&forwardMode, &contentMode, &filterRuleID, &metadataJSON,
 		&ownerUserID, &fallbackEnabled, &intermediateChatID,
 		&useIntermediate, &messageCategory, &detectionCriteria,
-		&splitLongCaption,
+		&splitLongCaption, &aiConfigID,
 	); err != nil {
 		return nil, fmt.Errorf("scan forward_rules %s: %w", ruleID, err)
 	}
@@ -306,6 +307,9 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		UseIntermediate:       useIntermediate.Bool,
 		MessageCategory:       strings.ToUpper(strings.TrimSpace(messageCategory.String)),
 		SplitLongCaption:      splitLongCaption.Bool,
+		// Stage 4.4: AI transform. ai_config_id is a real column; a NULL or
+		// empty value means "no AI transform configured".
+		AIConfigID: strings.TrimSpace(aiConfigID.String),
 	}, FilterRuleID: filterRuleID.String}
 
 	if metadataJSON.Valid && metadataJSON.String != "" {
@@ -353,6 +357,10 @@ func (s *Store) getRule(ctx context.Context, ruleID string) (*extendedForwardRul
 		// Projecting it here is what lets the delivery preflight enforce the
 		// same gate the Python pipeline already enforced at ingest.
 		extra.BlockLinks = metaBool(extra.Metadata, "block_links", false)
+
+		// Stage 4.4: ai_rewrite_active (entities.py:1681) — the single
+		// authority for "does this task rewrite text with an LLM?".
+		extra.ForwardRule.AIRewriteActive = aiRewriteActive(extra.AIConfigID, extra.Metadata)
 
 		// Stage 4.4: the task's display name lives in the metadata blob
 		// (sqlite_repositories.py loads it as name=str(meta.get("name"))).
@@ -586,4 +594,26 @@ func optionalBool(ctx context.Context, db *sql.DB, filterID, column string) (boo
 // formatting helper rather than an injection surface.
 func quoteIdent(name string) string {
 	return `"` + strings.ReplaceAll(name, `"`, `""`) + `"`
+}
+
+// aiRewriteActive is ForwardRule.ai_rewrite_active (entities.py:1681): the
+// single authority for "does this task rewrite text with an LLM?".
+//
+// The semantics are deliberately asymmetric: a config id alone keeps meaning
+// "rewrite with this config", because API clients, backups and the AI menu
+// have always relied on that; the task panel's paid-addon switch is the one
+// thing that can veto it. An absent or non-dict paid_addons block is "no veto
+// recorded", not "vetoed".
+func aiRewriteActive(aiConfigID string, meta map[string]any) bool {
+	if strings.TrimSpace(aiConfigID) == "" {
+		return false
+	}
+	addons, ok := meta["paid_addons"].(map[string]any)
+	if !ok {
+		return true
+	}
+	if _, present := addons["ai_rewrite"]; !present {
+		return true
+	}
+	return metaBool(addons, "ai_rewrite", false)
 }

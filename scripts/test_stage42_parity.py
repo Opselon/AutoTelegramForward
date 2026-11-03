@@ -150,6 +150,22 @@ def py_header_template(case: Dict[str, Any]) -> str:
     return HeaderFormatter.format_text(case["template"], rule, payload)
 
 
+def py_ai_gate(case: Dict[str, Any]) -> str:
+    """ForwardRule.ai_rewrite_active — the AI transform gate (entities.py:1681).
+
+    A config id alone means "rewrite with this config"; the paid-addon switch
+    is the explicit veto on top. Pinned because a Go side that answered this
+    differently would silently rewrite (or silently not rewrite) every message
+    of every task with an AI config attached.
+    """
+    from core.domain.entities import ForwardRule
+
+    rule = ForwardRule(id="r", session_id="s", source_chat_id="-1", target_chat_id="-2")
+    rule.ai_config_id = case.get("ai_config_id", "")
+    rule.metadata = case.get("metadata") or {}
+    return "true" if rule.ai_rewrite_active else "false"
+
+
 def py_filter_engine(case: Dict[str, Any]) -> str:
     """FilterEngine.evaluate — the reason code IS the decision.
 
@@ -191,6 +207,7 @@ ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "header_footer": py_header_footer,
     "header_template": py_header_template,
     "filter_engine": py_filter_engine,
+    "ai_gate": py_ai_gate,
 }
 
 # ---------------------------------------------------------------------------
@@ -289,6 +306,24 @@ def cases() -> List[Dict[str, Any]]:
          "replacements": {"a\\1b": "KEPT"}},
         {"engine": "replacements", "text": "promo price today",
          "replacements": {"promo": {"to": "sale", "whole_word": True}}},
+
+        # --- AI transform gate (entities.py:1681): a config id alone means
+        # --- "rewrite"; the paid-addon switch is the veto.
+        {"engine": "ai_gate", "ai_config_id": "", "metadata": {}},
+        {"engine": "ai_gate", "ai_config_id": "cfg-1", "metadata": {}},
+        {"engine": "ai_gate", "ai_config_id": "cfg-1", "metadata": None},
+        {"engine": "ai_gate", "ai_config_id": "cfg-1",
+         "metadata": {"paid_addons": {}}},
+        {"engine": "ai_gate", "ai_config_id": "cfg-1",
+         "metadata": {"paid_addons": {"ai_rewrite": True}}},
+        {"engine": "ai_gate", "ai_config_id": "cfg-1",
+         "metadata": {"paid_addons": {"ai_rewrite": False}}},
+        # The veto must be a dict member; a malformed (string) block is "no
+        # veto recorded", and smart_ai_rewrite is not the veto.
+        {"engine": "ai_gate", "ai_config_id": "cfg-1",
+         "metadata": {"paid_addons": "true"}},
+        {"engine": "ai_gate", "ai_config_id": "cfg-1",
+         "metadata": {"smart_ai_rewrite": False}},
 
         # --- F-11: FilterEngine check ORDER is the contract. Python order:
         # --- service -> media -> length -> blacklist -> whitelist -> regex.

@@ -17,6 +17,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"strconv"
 	"fmt"
 	"os"
 
@@ -60,6 +61,8 @@ type testCase struct {
 	IsCaption    bool              `json:"is_caption"`
 	// filter_engine cases: the filter's fields and the message's media type.
 	Filter       map[string]any    `json:"filter"`
+	// ai_gate cases: the task's AI config id.
+	AIConfigID   string            `json:"ai_config_id"`
 	MediaType    string            `json:"media_type"`
 }
 
@@ -295,6 +298,16 @@ func runCase(c testCase) string {
 			return engine.ApplyText(c.Text, cfg, nil, cleaning.CaptionHint{IsCaption: true}).Text
 		}
 		return cleaner.Clean(c.Text)
+	case "ai_gate":
+		// The AI transform gate: the rulestore projection is the authority.
+		// Routed through ProbeAIRewriteActive (the real
+		// aiRewriteActive the rule store computes) and not a hand-built
+		// answer, so a gate regression is a parity failure here.
+		meta := map[string]any{}
+		if c.Metadata != nil {
+			meta = c.Metadata
+		}
+		return strconv.FormatBool(rulestore.ProbeAIRewriteActive(c.AIConfigID, meta))
 	case "filter_engine":
 		// F-11: the reason code IS the decision. Runs the real filter engine
 		// in the same order the production delivery preflight does, so a
