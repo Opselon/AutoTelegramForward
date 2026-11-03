@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"atf/worker/internal/config"
+	"atf/worker/internal/domain/dedup"
 	"atf/worker/internal/domain/job"
 	"atf/worker/internal/engine/delivery"
 	"atf/worker/internal/engine/scheduler"
@@ -139,6 +140,16 @@ func run() (runErr error) {
 	}
 	defer store.Close()
 
+	// Stage 4.5 (W3): the event-level replay marker + content fingerprint
+	// store. Wired here so the delivery engine's W3 preflight gate can
+	// close a replayed event as SENT-without-send; a worker without it
+	// keeps the pre-stage behaviour (the gate is simply absent).
+	dedupStore, err := openDedupStore(context.Background(), cfg)
+	if err != nil {
+		return err
+	}
+	defer dedupStore.Close()
+
 	// The Telegram Gateway: the gRPC client in production, the deterministic
 	// fake when the worker is explicitly told to run without a runtime
 	// (integration tests, shadow-mode control planes). The fake never
@@ -178,6 +189,7 @@ func run() (runErr error) {
 		MaxPerMinutePerTarget: cfg.MaxPerMinutePerTarget,
 		RPCTimeout:            60 * time.Second,
 	})
+	engine.SetDedupStore(dedupStore)
 
 	// Stage 4.2: the transform-stage strangler switch. The Worker only
 	// re-runs the text-transform pipeline when the deployment moved that
@@ -385,6 +397,31 @@ func runLoop(ctx context.Context, log *slog.Logger, engine *delivery.Engine, sto
 	}
 	wg.Wait()
 	return nil
+}
+
+// openDedupStore opens the event/content idempotency store against the
+// backend that owns the processed_messages and content_dedup tables: the
+// primary database (PostgreSQL when configured, otherwise the SQLite atf.db
+// the Python Core writes).
+//
+// A failure here is fatal, matching openStore and openRuleStore: a worker
+// that silently ran without its replay-protection gate would look healthy
+// while re-delivering every replayed event.
+//
+// Note on the SQLite path: the processed_messages table is created by the
+// Python Core (database.py), not by this worker, so a store that opens
+// against a database the Core has not initialized reports "not processed"
+// for everything — the same posture the Python pipeline takes when the
+// repository is not configured.
+func openDedupStore(ctx context.Context, cfg *config.Config) (dedup.Store, error) {
+	if cfg.DatabaseURL != "" {
+		s, err := dedup.NewPostgres(ctx, cfg.DatabaseURL)
+		if err != nil {
+			return nil, fmt.Errorf("open dedup store: %w", redactDSN(err))
+		}
+		return s, nil
+	}
+	return dedup.NewSQLite(ctx, cfg.DSN())
 }
 
 // openStore opens the durable queue. PostgreSQL takes precedence when

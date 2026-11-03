@@ -26,16 +26,19 @@ Exit code 0 = every case agrees. Anything else prints the divergences.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from core.application.pipeline import _content_fingerprint  # noqa: E402
 from core.domain.entities import CleanerRule, ForwardRule, MessagePayload  # noqa: E402
 from core.domain.services import (  # noqa: E402
     AdvancedSettingsEngine,
@@ -241,6 +244,94 @@ def py_album_window(case: Dict[str, Any]) -> str:
     return f"limit={'true' if complete_at_limit else 'false'} deadline_window={window:.3f} items={len(group.messages)}"
 
 
+def py_dedup(case: Dict[str, Any]) -> str:
+    """Stage 4.5 (W3) — the duplicate-filters engine.
+
+    Two families, one adapter, both against the REAL Python production code:
+
+    * ``dedup_op: "fingerprint"`` — ``DurableMessagePipeline._content_
+      fingerprint`` (pipeline.py:274). The fingerprint is the bytecode the
+      Duplicate Filters feature decides duplicates by, and the Go side must
+      produce it byte for byte. Pins the normalization (casefold + the
+      whitespace collapse + the ``text||caption`` seam), the media-kind key,
+      and the album id's place in it — and pins that this fingerprint is a
+      PLAIN casefold, not the content engine's Persian/Arabic fold (that fold
+      belongs to the branding dedup key; a Go side that reused it here would
+      disagree with Python about which posts are the same post).
+
+    * ``dedup_op: "claim_release"`` — the claim lifecycle against a REAL
+      SqliteMessageMapRepository over the Core's ``content_dedup`` table:
+      the first claim wins, a concurrent claim loses, a release gives the
+      fingerprint back, and the next claim wins again. This is the invariant
+      pipeline.py:781 documents: a claim is EARNED on delivery acceptance
+      and must be RELEASED when the message never reached a target, because
+      a claim kept forever silently drops the next legitimate identical
+      post.
+    """
+    op = case.get("dedup_op") or "fingerprint"
+    if op == "fingerprint":
+        payload = MessagePayload(
+            message_id=1, chat_id="-1",
+            text=case.get("text", ""), caption=case.get("caption", ""),
+            media_type=MediaType[case.get("media_type", "TEXT").upper()],
+        )
+        payload.media_group_id = case.get("media_group_id") or None
+        return _content_fingerprint(payload)
+
+    if op == "claim_release":
+        from core.infrastructure.persistence.database import SqliteDatabase
+        from core.infrastructure.persistence.sqlite_repositories import (
+            SqliteMessageMapRepository,
+        )
+
+        tmp = Path(tempfile.mkdtemp(prefix="parity-dedup-"))
+        try:
+            # The constructor opens the connection, applies the pragmas and
+            # migrates; the DDL below only adds the content_dedup table a
+            # fresh temp file does not yet carry through the main schema
+            # path (it lives in the Core's v2 schema block).
+            db = SqliteDatabase(str(tmp / "atf.db"))
+            try:
+                db.execute(_CONTENT_DEDUP_DDL)
+                repo = SqliteMessageMapRepository(db)
+                rule_id = (case.get("metadata") or {}).get("rule_id") or "parity-rule"
+                payload = MessagePayload(
+                    message_id=1, chat_id="-1", text=case.get("text", ""),
+                    media_type=MediaType.TEXT,
+                )
+                content_hash = _content_fingerprint(payload)
+
+                async def run() -> str:
+                    first = await repo.claim_content_hash(rule_id, content_hash)
+                    second = await repo.claim_content_hash(rule_id, content_hash)
+                    await repo.release_content_hash(rule_id, content_hash)
+                    again = await repo.claim_content_hash(rule_id, content_hash)
+                    # Lowercase: the Go side emits true/false, and a case
+                    # difference would register as a divergence that means
+                    # nothing.
+                    return f"{str(first).lower()}/{str(second).lower()}/{str(again).lower()}"
+
+                return asyncio.run(run())
+            finally:
+                db.close()
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    return ""
+
+
+# The Core's content_dedup DDL (core/infrastructure/persistence/database.py),
+# so the claim/release lifecycle runs against the real table shape.
+_CONTENT_DEDUP_DDL = """
+CREATE TABLE IF NOT EXISTS content_dedup (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rule_id TEXT NOT NULL,
+    content_hash TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE(rule_id, content_hash)
+);
+"""
+
 ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "cleaner": py_cleaner,
     "emoji": py_emoji,
@@ -255,7 +346,9 @@ ADAPTERS: Dict[str, Callable[[Dict[str, Any]], str]] = {
     "ai_gate": py_ai_gate,
     "keyword": py_keyword,
     "album_window": py_album_window,
-}
+
+
+    "dedup": py_dedup,}
 
 # ---------------------------------------------------------------------------
 # The case list — every entry executed by BOTH engines.
@@ -543,7 +636,54 @@ def cases() -> List[Dict[str, Any]]:
         {"engine": "album_window", "window": 0.0, "items": 3},
         # The Python unit test's own TTL.
         {"engine": "album_window", "window": 0.05, "items": 2},
-    ]
+
+
+        # --- Stage 4.5 (W3): the content fingerprint, normalized how the
+        # --- Python _content_fingerprint normalizes it — a PLAIN casefold
+        # --- plus the whitespace collapse, NOT the branding fold.
+        # Same text, different casing: one fingerprint.
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "Hello World"},
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "hello world"},
+        # An internal whitespace run collapses: one fingerprint.
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "Hello   World"},
+        # A re-wrap (newline instead of a space) is the same content.
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "Hello \n World"},
+        # The text||caption seam: a caption is not an empty body.
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "ab", "caption": "cd"},
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "ab"},
+        # A caption-only media message.
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "", "caption": "caption only",
+         "media_type": "PHOTO"},
+        # The media kind is part of the key.
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "x", "media_type": "PHOTO"},
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "x", "media_type": "VIDEO"},
+        # The album id scopes the fingerprint.
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "x", "media_type": "PHOTO",
+         "media_group_id": "g1"},
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "x", "media_type": "PHOTO",
+         "media_group_id": "g2"},
+        # Persian text: this fingerprint is the PLAIN casefold, so two
+        # spellings the branding fold would unify stay APART here. Pinning
+        # the difference pins which of the two functions each engine runs.
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "كتاب"},
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "کتاب"},
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "أحمد"},
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "invis\u200bible"},
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": "invisible"},
+        # An empty message still has a fingerprint (the seam alone).
+        {"engine": "dedup", "dedup_op": "fingerprint", "text": ""},
+
+        # --- Stage 4.5 (W3): the claim/release lifecycle against a REAL
+        # --- content_dedup table on both sides. The first claim wins, a
+        # --- second claim on the same (rule, hash) loses, a release gives
+        # --- the fingerprint back, and the next claim wins again — the
+        # --- pipeline.py:781 invariant that a claim kept forever would
+        # --- silently drop the next legitimate identical post.
+        {"engine": "dedup", "dedup_op": "claim_release", "text": "same announcement"},
+        # The claim is scoped to the rule: two cases, two rules, each wins
+        # its own claim.
+        {"engine": "dedup", "dedup_op": "claim_release", "text": "same announcement",
+         "metadata": {"rule_id": "other-rule"}},    ]
 
 
 # ---------------------------------------------------------------------------
