@@ -3,6 +3,9 @@
 // never writes these tables — the API and the pipeline own configuration.
 package rule
 
+import "strconv"
+import "strings"
+
 import "time"
 
 import "atf/worker/internal/domain/cleaning"
@@ -60,6 +63,26 @@ type ForwardRule struct {
 	AlbumMode string
 	// TopicID is the forum thread (0 = General / none).
 	TopicID int64
+
+	// --- Stage 4.5 W1: routing + loop prevention ------------------------- //
+
+	// SourceChatID is the primary source chat the task routes from. Extra
+	// sources live in SourceChatIDs (mirrored out of the task's
+	// detection_criteria["source_chat_ids"]); the pair mirrors the Python
+	// ForwardRule's source_chat_id column / source_chat_ids property,
+	// where the column exists but the list lives in the JSON criteria.
+	SourceChatID string
+	// SourceChatName is the source chat's @username or title: a task can
+	// be configured by @username instead of a numeric id, and
+	// matches_source compares it too (entities.py:1994).
+	SourceChatName string
+	// TargetChatID is the primary target (the legacy single-target
+	// spelling, also the task's destination_chat_id).
+	TargetChatID string
+	// TargetChatIDs are the multi-target fan-out targets. The primary is
+	// first by construction, so all_targets (primary first, deduped) reads
+	// the pair the same way the Python ForwardRule property does.
+	TargetChatIDs []string
 
 	// Name is the task's display name, resolved out of the metadata blob
 	// the same way the Python ForwardRule's name field is
@@ -156,6 +179,105 @@ type FilterRule struct {
 	// fires whether or not a filter is attached — matching the Python
 	// pipeline's link_block_reason gate at pipeline.py:957.
 	BlockLinks bool
+}
+
+// SourceChatIDs is every source chat the task routes from.
+//
+// Port of the Python ForwardRule.source_chat_ids property
+// (entities.py:1873): the extra sources live in
+// detection_criteria["source_chat_ids"], and the property falls back to
+// the mirrored primary when the list is empty — so a task built the legacy
+// way (source_chat_id only) still answers with a one-element list and
+// matches_source need not special-case it.
+func (r *ForwardRule) SourceChatIDs() []string {
+	if r == nil {
+		return nil
+	}
+	raw := criteriaList(r.DetectionCriteria, "source_chat_ids")
+	if len(raw) == 0 && r.SourceChatID != "" {
+		return []string{r.SourceChatID}
+	}
+	return raw
+}
+
+// criteriaList reads a string list out of the task's detection_criteria
+// JSON blob, tolerating every spelling the blob can carry: the list is
+// written by Python as a JSON array of strings, but a task saved by an
+// older path can hold a single string or a list of numbers, and the
+// Python property's str(...) coercion on each entry accepts both.
+func criteriaList(criteria map[string]any, key string) []string {
+	if criteria == nil {
+		return nil
+	}
+	raw, ok := criteria[key]
+	if !ok {
+		return nil
+	}
+	switch v := raw.(type) {
+	case []any:
+		out := make([]string, 0, len(v))
+		for _, item := range v {
+			if s := coercionString(item); s != "" {
+				out = append(out, s)
+			}
+		}
+		return out
+	case string:
+		if s := strings.TrimSpace(v); s != "" {
+			return []string{s}
+		}
+	}
+	return nil
+}
+
+// coercionString stringifies one detection_criteria entry the way the
+// Python property's str(...) does: numbers and bools become their decimal
+// spelling, and a non-string non-number is skipped (str() would render
+// it, but such an entry is not a chat id either engine can match).
+func coercionString(value any) string {
+	switch v := value.(type) {
+	case string:
+		return strings.TrimSpace(v)
+	case float64:
+		// The Python str(int(x)) path: a JSON-decoded -100123.0 is
+		// "-100123", matching _chat_key's normalisation of the same value.
+		return strconv.FormatInt(int64(v), 10)
+	case int:
+		return strconv.Itoa(v)
+	case int64:
+		return strconv.FormatInt(v, 10)
+	case bool:
+		if v {
+			return "true"
+		}
+		return "false"
+	}
+	return ""
+}
+
+// AllTargets is every target chat id for the task, primary first, deduped.
+//
+// Port of the Python ForwardRule.all_targets property (entities.py:554).
+// The primary (target_chat_id) comes first and the list repeats it, so
+// without dedup a task whose primary is also the first list entry would
+// deliver to the same target twice.
+func (r *ForwardRule) AllTargets() []string {
+	if r == nil {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0, 1+len(r.TargetChatIDs))
+	for _, tid := range append([]string{r.TargetChatID}, r.TargetChatIDs...) {
+		if tid == "" {
+			continue
+		}
+		if _, dup := seen[tid]; dup {
+			continue
+		}
+		seen[tid] = struct{}{}
+		out = append(out, tid)
+	}
+	return out
 }
 
 // Store is the read-only interface the queue worker uses to re-check a task

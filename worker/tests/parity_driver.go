@@ -17,11 +17,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"strconv"
 	"fmt"
 	"os"
+	"strconv"
+	"strings"
 
 	"atf/worker/internal/domain/cleaning"
+	"atf/worker/internal/domain/routing"
 	"atf/worker/internal/domain/rule"
 	"atf/worker/internal/engine/filter"
 	"atf/worker/internal/rulestore"
@@ -42,28 +44,43 @@ type testCase struct {
 	// the plain Replacements field cannot express the order-dependent
 	// composition RPL-PRIORITY-01 pins; the ordered decoder fills this
 	// field instead.
-	orderedReplacements []orderedPair `json:"-"`
-	Metadata     map[string]any    `json:"metadata"`
-	Header       string            `json:"header"`
-	Footer       string            `json:"footer"`
+	orderedReplacements []orderedPair  `json:"-"`
+	Metadata            map[string]any `json:"metadata"`
+	Header              string         `json:"header"`
+	Footer              string         `json:"footer"`
 	// header_template cases: the template and the message snapshot it
 	// renders against (the Stage 4.4 F-15 fix).
-	Template     string            `json:"template"`
-	ChatID       string            `json:"chat_id"`
-	ChatUsername string            `json:"chat_username"`
-	ChatTitle    string            `json:"chat_title"`
-	MessageID    int64             `json:"message_id"`
-	Date         int64             `json:"date"`
-	RuleName     string            `json:"rule_name"`
-	SenderName   string            `json:"sender_name"`
+	Template     string `json:"template"`
+	ChatID       string `json:"chat_id"`
+	ChatUsername string `json:"chat_username"`
+	ChatTitle    string `json:"chat_title"`
+	MessageID    int64  `json:"message_id"`
+	Date         int64  `json:"date"`
+	RuleName     string `json:"rule_name"`
+	SenderName   string `json:"sender_name"`
 	// is_caption marks a cleaner case's text as a media caption, for the
 	// F-09 apply_to_caption switch the pipeline honors.
-	IsCaption    bool              `json:"is_caption"`
+	IsCaption bool `json:"is_caption"`
 	// filter_engine cases: the filter's fields and the message's media type.
-	Filter       map[string]any    `json:"filter"`
+	Filter map[string]any `json:"filter"`
 	// ai_gate cases: the task's AI config id.
-	AIConfigID   string            `json:"ai_config_id"`
-	MediaType    string            `json:"media_type"`
+	AIConfigID string `json:"ai_config_id"`
+	MediaType  string `json:"media_type"`
+
+	// Stage 4.5 W1 routing cases: the task's routing fields (mirroring the
+	// rule.ForwardRule projection) and the message snapshot the decisions
+	// run against. ChatID and ChatUsername (above) are the message's
+	// source chat id and @username; ForwardOrigin the "Forwarded from
+	// <chat>" header snapshot. TargetChatID is the single target a
+	// check_loop case decides against and the task's own primary for
+	// all_targets cases.
+	SourceChatID        string         `json:"source_chat_id"`
+	SourceChatName      string         `json:"source_chat_name"`
+	TargetChatID        string         `json:"target_chat_id"`
+	TargetChatIDs       []string       `json:"target_chat_ids"`
+	DetectionCriteria   map[string]any `json:"detection_criteria"`
+	IntermediateChannel string         `json:"intermediate_channel_id"`
+	ForwardOrigin       map[string]any `json:"forward_origin"`
 }
 
 type result struct {
@@ -280,6 +297,27 @@ func optionsMap(value any) map[string]any {
 	return out
 }
 
+// routingCaseRule builds the rule.ForwardRule projection a routing case
+// describes, the same shape the rule store projects from forward_rules:
+// primary source and name, extra sources in detection_criteria, primary
+// target and list, and the branding channel the intermediate arm reads.
+//
+// The extra sources are routed through the real projection accessor
+// (rule.ForwardRule.SourceChatIDs) rather than decoded here, so a parity
+// case exercises the same path the delivery engine consults.
+func routingCaseRule(c testCase) *rule.ForwardRule {
+	return &rule.ForwardRule{
+		ID:                    "r",
+		IsActive:              true,
+		SourceChatID:          c.SourceChatID,
+		SourceChatName:        c.SourceChatName,
+		TargetChatID:          c.TargetChatID,
+		TargetChatIDs:         c.TargetChatIDs,
+		DetectionCriteria:     c.DetectionCriteria,
+		IntermediateChannelID: c.IntermediateChannel,
+	}
+}
+
 func runCase(c testCase) string {
 	engine := cleaning.NewPipeline()
 	cfg := cleaning.Config{}
@@ -378,6 +416,25 @@ func runCase(c testCase) string {
 			EffectiveText:      c.Text,
 		}
 		cfg.HeaderTask = cleaning.HeaderTask{Name: c.RuleName}
+	case "chat_key":
+		// _chat_key: the normalisation every routing equality is built on.
+		return routing.ChatKey(c.ChatID)
+	case "matches_source":
+		// ForwardRule.matches_source: the multi-source membership decision,
+		// run against the same projection the delivery preflight builds.
+		return strconv.FormatBool(routing.MatchesSource(routingCaseRule(c), c.ChatID))
+	case "all_targets":
+		// ForwardRule.all_targets: every target, primary first, deduped.
+		return strings.Join(routing.AllTargets(routingCaseRule(c)), ",")
+	case "check_loop":
+		// SmartRoutingEngine.check_loop, per target — the decision the
+		// delivery preflight consults before any send.
+		isLoop, reason := routing.CheckLoop(routing.Input{
+			ChatID:        c.ChatID,
+			ChatUsername:  c.ChatUsername,
+			ForwardOrigin: c.ForwardOrigin,
+		}, routingCaseRule(c), c.TargetChatID)
+		return strconv.FormatBool(isLoop) + ":" + reason
 	default:
 		return ""
 	}

@@ -34,6 +34,7 @@ import (
 	"atf/worker/internal/domain/cleaning"
 	"atf/worker/internal/domain/job"
 	"atf/worker/internal/domain/policy"
+	"atf/worker/internal/domain/routing"
 	"atf/worker/internal/domain/rule"
 	"atf/worker/internal/engine/filter"
 	"atf/worker/internal/engine/scheduler"
@@ -259,6 +260,36 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 		logger.Warn("job dropped by task-level block_links at delivery time", "decision", "DROP", "reason_code", "LINK_BLOCKED")
 		_ = e.store.MarkFailed(ctx, j.ID, "Filter: link_blocked")
 		e.metrics.Outcome("failed")
+		return nil
+	}
+
+	// 2b-LOOP. Stage 4.5 W1: the anti-loop check, per target.
+	//
+	// The Python pipeline runs this same decision in its delivery fan-out
+	// (pipeline.py:1226, LOOP_SKIP): a target that would route the message
+	// back onto itself is SKIPPED, never a failure — the message still
+	// goes to every other target. Porting it into the preflight keeps the
+	// worker from being the path that closes a loop the Python engine
+	// refuses to close: a task re-pointed while its job sat in the queue
+	// can turn a once-fine target into the source chat itself.
+	//
+	// The decision reads the same three inputs the Python check_loop reads
+	// off the MessagePayload (source chat id, source @username, forward
+	// origin), all snapshotted into the durable payload at enqueue time.
+	// A SKIP closes the job MarkSent-without-send, not MarkFailed: the
+	// Python pipeline logs and continues, the message is deliberately not
+	// delivered, and a failure would spend an attempt and run the retry
+	// policy against a decision that will never change.
+	if loop, reason := routing.CheckLoop(routing.Input{
+		ChatID:        j.Payload.SourceChatID(),
+		ChatUsername:  j.Payload.SourceChatUsername(),
+		ForwardOrigin: j.Payload.ForwardOrigin(),
+	}, r, j.TargetChatID); loop {
+		logger.Warn("target would loop — skipping this target",
+			"decision", "LOOP_SKIP", "reason_code", reason,
+			"target_chat_id", j.TargetChatID)
+		_ = e.store.MarkSent(ctx, j.ID, 0)
+		e.metrics.Outcome("sent")
 		return nil
 	}
 
