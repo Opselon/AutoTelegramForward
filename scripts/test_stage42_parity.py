@@ -207,6 +207,7 @@ except ImportError:
             return object()
 
     _httpx = _FakeHTTPX()  # type: ignore
+    sys.modules["httpx"] = _httpx
 
 
 class _ParityAIConfigRepo:
