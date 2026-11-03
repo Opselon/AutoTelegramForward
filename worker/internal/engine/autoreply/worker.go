@@ -3,7 +3,6 @@ package autoreply
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -15,6 +14,22 @@ import (
 	"atf/worker/internal/infra/autoreply/store"
 	"atf/worker/internal/telegraph"
 )
+
+// Logger is the structured sink the consumer reports to. It is the same
+// slog-shaped contract the delivery engine uses, so one collector (stdout
+// JSON + the central Rust Logger) handles every business decision. The
+// default is a no-op: an unwired consumer is silent, not broken.
+type Logger interface {
+	Info(msg string, args ...any)
+	Warn(msg string, args ...any)
+	Error(msg string, args ...any)
+}
+
+type noopLogger struct{}
+
+func (noopLogger) Info(string, ...any)  {}
+func (noopLogger) Warn(string, ...any)  {}
+func (noopLogger) Error(string, ...any) {}
 
 // Default lease duration and backoff parameters mirroring Python worker.py
 const (
@@ -59,6 +74,7 @@ type Worker struct {
 	aiStore         aiconfig.Store
 	providerFactory *aiprovider.Factory
 	sender          Sender
+	log             Logger
 	workerID        string
 	concurrency     int
 	pollInterval    time.Duration
@@ -66,6 +82,11 @@ type Worker struct {
 	mu              sync.Mutex
 	activeLanes     map[string]bool // per-chat lane guard
 }
+
+// SetLogger wires the structured sink. Optional: without it the consumer
+// logs nothing, which keeps the engine usable from tests that only want
+// the state machine.
+func (w *Worker) SetLogger(l Logger) { w.log = l }
 
 // Options configures the AutoReply worker.
 type Options struct {
@@ -105,6 +126,7 @@ func NewWorker(
 		pollInterval:    poll,
 		leaseSeconds:    lease,
 		activeLanes:     make(map[string]bool),
+		log:             noopLogger{},
 	}
 }
 
@@ -248,6 +270,24 @@ func (w *Worker) ProcessJob(ctx context.Context, job *autoreply.AutoReplyJob) (b
 		_ = w.store.TouchPromptUsage(ctx, prompt.ID, job.OwnerUserID)
 	}
 
+	// The PVA decision + response outcome: one structured line per reply,
+	// carrying the ids an operator needs and never the conversation text,
+	// the prompt body, or any credential (the mandate's observability
+	// contract). latency_ms mirrors the Python GenerationResult.
+	w.log.Info("pva reply delivered",
+		"job_id", job.ID,
+		"chat_id", job.ChatID,
+		"owner_user_id", job.OwnerUserID,
+		"prompt_id", promptID,
+		"ai_config_id", aiCfgID,
+		"provider", cfg.Provider,
+		"model", cfg.Model,
+		"target_message_id", sentID,
+		"reply_chars", len(replyText),
+		"latency_ms", time.Since(start).Milliseconds(),
+		"correlation_id", job.CorrelationID,
+	)
+
 	return ok, nil
 }
 
@@ -299,13 +339,13 @@ func (w *Worker) maintenanceSweep(ctx context.Context) {
 	now := time.Now().Unix()
 	if _, err := w.store.RecoverExpiredLeases(ctx, now); err != nil {
 		// Never let a maintenance fault take the consumer down.
-		fmt.Fprintf(os.Stderr, "autoreply: lease recovery failed: %v\n", err)
+		w.log.Error("autoreply lease recovery failed", "error", err)
 	}
 	if _, err := w.store.CleanupMessages(ctx, int64(retentionSeconds)); err != nil {
-		fmt.Fprintf(os.Stderr, "autoreply: message retention failed: %v\n", err)
+		w.log.Error("autoreply message retention failed", "error", err)
 	}
 	if _, err := w.store.CleanupExpiredMemory(ctx, now); err != nil {
-		fmt.Fprintf(os.Stderr, "autoreply: memory expiry failed: %v\n", err)
+		w.log.Error("autoreply memory expiry failed", "error", err)
 	}
 }
 
@@ -436,7 +476,9 @@ func (w *Worker) Run(ctx context.Context, ownerUserID int64) error {
 			}()
 
 			if _, err := w.ProcessJob(jobCtx, j); err != nil {
-				fmt.Fprintf(os.Stderr, "autoreply: job %s failed: %v\n", j.ID, err)
+				w.log.Error("autoreply job failed",
+					"job_id", j.ID, "chat_id", j.ChatID,
+					"owner_user_id", j.OwnerUserID, "error", err)
 			}
 		}(job)
 	}
@@ -449,7 +491,7 @@ func (w *Worker) requeueUnclaimed(ctx context.Context, j *autoreply.AutoReplyJob
 	// Release the lease without spending an attempt: a lane conflict means
 	// "try again in order", not "this attempt failed".
 	if _, err := w.store.MarkRetry(ctx, j.ID, j.LeaseToken, "lane busy; requeued in order", "lane_conflict", 0, j.Attempt); err != nil {
-		fmt.Fprintf(os.Stderr, "autoreply: lane requeue failed for %s: %v\n", j.ID, err)
+		w.log.Warn("autoreply lane requeue failed", "job_id", j.ID, "error", err)
 	}
 }
 

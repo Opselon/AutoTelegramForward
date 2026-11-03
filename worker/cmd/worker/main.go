@@ -702,11 +702,15 @@ func startAutoreplyConsumer(ctx context.Context, log *slog.Logger, gateway teleg
 
 	factory := aiprovider.NewFactory()
 
+	pvaLog := &slogLogger{log: log, module: "worker.autoreply"}
 	w := autoreply.NewWorker(pvaStore, aiStore, factory, gateway, workerID(), autoreply.Options{
 		Concurrency:  cfg.NumWorkers,
 		PollInterval: 1500 * time.Millisecond,
 		LeaseSeconds: 45,
 	})
+	// Structured PVA decisions ride the same sink every other business
+	// decision uses: stdout JSON + the central Rust Logger fan-out.
+	w.SetLogger(pvaLog)
 
 	wg.Add(1)
 	go func() {
