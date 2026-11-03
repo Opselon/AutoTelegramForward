@@ -239,12 +239,32 @@ func run() (runErr error) {
 
 // runLoop is the claim loop: N bounded goroutines, one shared claimer.
 //
+// Activation is gated on cfg.WorkerEnabled — the same strangler-fig switch the
+// Python queue loop consults (durable_queue.py:221). When the flag is unset the
+// Python Core owns delivery execution and this worker must NOT claim a single
+// job: an ungated claimer would run both engines on one queue at once, which is
+// the double-execution hazard the switch exists to prevent. The health surface
+// stays up (a disabled worker is "alive, not executing"), and the process exits
+// cleanly on SIGTERM — a flip of the flag is a restart away, no migration.
+//
 // A single claimer rather than N competing claimers: SQLite serializes the
 // claim transaction anyway, so competing claimers would only add contention.
 // The claimer hands batches to a bounded channel consumed by the workers,
 // which gives natural backpressure — a slow Telegram never piles up an
 // unbounded in-memory queue of claimed jobs.
 func runLoop(ctx context.Context, log *slog.Logger, engine *delivery.Engine, store queue.Store, tracker *health.Tracker, cfg *config.Config) error {
+	if !config.ClaimsEnabled(cfg) {
+		// The disabled worker reports ready (its health surface is up) but
+		// deliberately never claims. Logged once at startup and on shutdown so
+		// the "why is nothing being delivered" question is answerable from the
+		// log alone.
+		log.Info("worker is not enabled — the Python Core owns delivery execution (ATF_WORKER_ENABLED)",
+			"enabled", false)
+		tracker.SetState(health.StateReady)
+		<-ctx.Done()
+		log.Info("worker stopping (disabled)", "enabled", false)
+		return nil
+	}
 	batches := make(chan []*job.DeliveryJob, cfg.NumWorkers)
 	var wg sync.WaitGroup
 	tracker.SetState(health.StateStarting)
