@@ -328,12 +328,12 @@ func TestErrorFilterLimitBounds(t *testing.T) {
 // pinned: no message content, no secrets, no multi-line detail in any field.
 func TestSanitizeStripsSecretsAndContent(t *testing.T) {
 	cases := []struct{ in, want string }{
-		{"line one\nline two", "line one"},                      // multi-line → first line
+		{"line one\nline two", "line one"}, // multi-line → first line
 		// A 300-char single token is both a log bomb and a secret shape;
 		// the length bound fires (160), then the scrub pass collapses it.
 		{strings.Repeat("a", 300), "[redacted]"},
-		{"token=abc123-secret", "token"},                          // key=value pair → key only
-		{"FLOOD_WAIT", "FLOOD_WAIT"},                              // the legitimate vocabulary
+		{"token=abc123-secret", "token"}, // key=value pair → key only
+		{"FLOOD_WAIT", "FLOOD_WAIT"},     // the legitimate vocabulary
 		{"  spaced  ", "spaced"},
 	}
 	for _, tc := range cases {

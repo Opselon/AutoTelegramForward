@@ -33,9 +33,17 @@ type engineHarness struct {
 
 func newEngineHarness(t *testing.T) *engineHarness {
 	t.Helper()
+	return newEngineHarnessWithRules(t, staticTestRules{})
+}
+
+// newEngineHarnessWithRules builds the harness against a caller-chosen rule
+// store, so a test can produce a RULE_NOT_FOUND drop (or any other rule
+// resolution outcome) without touching the shared fixture.
+func newEngineHarnessWithRules(t *testing.T, rules rule.Store) *engineHarness {
+	t.Helper()
 	store := queue.NewTestStore(t)
 	collector := testCollectorOps()
-	engine := delivery.New(store, staticTestRules{}, fakegateway.New(""), nil,
+	engine := delivery.New(store, rules, fakegateway.New(""), nil,
 		&captureLogger{}, collector, "w-test", t.TempDir(),
 		delivery.Options{
 			NumWorkers: 2, BatchSize: 5, LeaseDuration: 30 * time.Second,
@@ -49,6 +57,18 @@ func newEngineHarness(t *testing.T) *engineHarness {
 type staticTestRules struct{}
 
 func (staticTestRules) GetByID(ruleID string) (*rule.ForwardRule, *rule.FilterRule, error) {
+	return &rule.ForwardRule{ID: ruleID, IsActive: true}, nil, nil
+}
+
+// missingRuleRules: the rule store answers nil for one specific rule id,
+// which is how a RULE_NOT_FOUND drop is produced on demand. The engine
+// must mark such a job FAILED and record a task_resolution stage failure.
+type missingRuleRules struct{ missing string }
+
+func (m missingRuleRules) GetByID(ruleID string) (*rule.ForwardRule, *rule.FilterRule, error) {
+	if ruleID == m.missing {
+		return nil, nil, nil
+	}
 	return &rule.ForwardRule{ID: ruleID, IsActive: true}, nil, nil
 }
 
@@ -148,14 +168,14 @@ func TestOpsEngineEndToEndLatencyIsRecorded(t *testing.T) {
 	if err := h.engine.Process(context.Background(), j); err != nil {
 		t.Fatalf("engine.Process: %v", err)
 	}
-	if n := h.collector.E2E().countInWindow(); n < 1 {
+	if n := h.collector.E2ECount(); n < 1 {
 		t.Fatalf("end-to-end latency observations = %d, want ≥1 after a delivery", n)
 	}
-	if p := h.collector.E2E().percentile(50); p <= 0 {
+	if p := h.collector.E2EPercentile(50); p <= 0 {
 		t.Fatalf("p50 after a delivery = %v, want > 0", p)
 	}
 	// The queue-wait ring is fed by the engine's ObserveWait.
-	if n := h.collector.QueueWait().countInWindow(); n < 1 {
+	if n := h.collector.QueueWaitCount(); n < 1 {
 		t.Fatalf("queue-wait observations = %d, want ≥1", n)
 	}
 }
@@ -194,7 +214,7 @@ func TestOpsStagesInstrumentedAcrossEngine(t *testing.T) {
 // BOTH a failed counter AND a stage failure — so the panel never paints
 // the stage green while the queue is failing jobs.
 func TestOpsReportsFailedJobThroughEngine(t *testing.T) {
-	h := newEngineHarness(t)
+	h := newEngineHarnessWithRules(t, missingRuleRules{missing: "rule-gone"})
 	// A rule that does not exist: the engine drops the job FAILED through
 	// the task_resolution preflight (RULE_NOT_FOUND).
 	j := &job.DeliveryJob{

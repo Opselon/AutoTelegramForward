@@ -86,8 +86,8 @@ type stageStats struct {
 	// lastErr is the sanitized one-liner of the most recent failure. A
 	// pointer-to-immutable so the HTTP read path can swap-read it
 	// lock-free; nil means "never failed" (JSON null, not an empty object).
-	lastErr  atomic.Pointer[stageError]
-	lastRun  atomic.Int64
+	lastErr atomic.Pointer[stageError]
+	lastRun atomic.Int64
 
 	// mu guards the stage's latency window only.
 	mu        sync.Mutex
@@ -106,8 +106,8 @@ type stageError struct {
 // newStageStats builds a stage record with its bounded windows allocated.
 func newStageStats(name string) *stageStats {
 	s := &stageStats{
-		name:   name,
-		lat:    make([]float64, stageLatencyWindow),
+		name: name,
+		lat:  make([]float64, stageLatencyWindow),
 	}
 	s.recentFails = *newWindowCounter(stageHealthWindow)
 	return s
