@@ -31,6 +31,14 @@ services:
       - atf-net
       - ai-net
 
+  # The Go Worker owns the AI rewrite stage (ATF_WORKER_TRANSFORMS), so its
+  # provider calls resolve 9router directly — without this attachment every
+  # rewrite fails at DNS and only the fallback policy saves the message.
+  worker:
+    networks:
+      - atf-net
+      - ai-net
+
 networks:
   ai-net:
     external: true
