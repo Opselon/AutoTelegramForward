@@ -153,6 +153,11 @@ type Harness struct {
 
 // NewHarness builds an isolated environment for one scenario.
 func NewHarness(t *testing.T, ownerUserID int64) *Harness {
+	// The production worker runs with ATF_WORKER_TRANSFORMS=1: Go owns the
+	// transform stage and Python defers to it (core/main.py reads the same
+	// switch). The harness must mirror that or every D/E scenario would test
+	// the Python-side pre-transform against a Go that never runs.
+	delivery.SetWorkerOwnsTransforms(true)
 	t.Helper()
 	dir := t.TempDir()
 	dbPath := filepath.Join(dir, "e2e.db")
@@ -355,6 +360,47 @@ type TaskSpec struct {
 	Metadata     map[string]any
 	Header       string
 	Footer       string
+
+	// Policy is the task's content_policy metadata block: whitelist,
+	// blacklist, replacements, regex and cleaner toggles. nil = no policy.
+	Policy *PolicySpec
+}
+
+// PolicySpec is the metadata.content_policy shape the Python pipeline and
+// the Go transforms pipeline both read.
+type PolicySpec struct {
+	Enabled        *bool
+	BlacklistWords []string
+	WhitelistWords []string
+	WhitelistMode  string // any | all | phrase
+	BlockLinks     bool
+	RemoveLinks    bool
+	StripWords     []string
+	// Replacements: {from: to}. Order matters for overlapping rules, so
+	// OrderedReplacements (when non-empty) wins over the map.
+	Replacements        map[string]string
+	OrderedReplacements [][2]string
+	RegexBlock          []string
+	RegexRequire        []string
+	MinLength           int
+	MaxLength           int
+	AllowedMedia        []string
+	BlockedMedia        []string
+	CaseSensitive       bool
+	WordBoundary        bool
+	Cleaner             *CleanerSpec
+}
+
+// CleanerSpec is the metadata.cleaner shape: which normalizations run.
+type CleanerSpec struct {
+	Enabled    bool
+	Emoji      bool
+	Urls       bool
+	Mentions   bool
+	Hashtags   bool
+	Phones     bool
+	Whitespace bool
+	Newlines   bool
 }
 
 // Install writes the task as real forward_rules (+ filter_rules when a
@@ -371,6 +417,45 @@ func (h *Harness) Install(spec TaskSpec) {
 	}
 	if spec.Replacements != nil {
 		meta["replacements"] = spec.Replacements
+	}
+	if spec.Policy != nil && (len(spec.Policy.Replacements) > 0 || len(spec.Policy.OrderedReplacements) > 0) {
+		// The transforms pipeline reads the top-level metadata key; the
+		// content_policy copy is the policy-restricted view. Preserve entry
+		// order: the store's ordered decoder keeps same-priority entries in
+		// the order the task wrote them, and overlapping rules ("ab" before
+		// "a") are order-sensitive.
+		if len(spec.Policy.OrderedReplacements) > 0 {
+			var sb strings.Builder
+			sb.WriteByte('{')
+			for i, kv := range spec.Policy.OrderedReplacements {
+				if i > 0 {
+					sb.WriteByte(',')
+				}
+				k, _ := json.Marshal(kv[0])
+				v, _ := json.Marshal(kv[1])
+				sb.Write(k)
+				sb.WriteByte(':')
+				sb.Write(v)
+			}
+			sb.WriteByte('}')
+			meta["replacements"] = json.RawMessage(sb.String())
+		} else {
+			reps := map[string]any{}
+			for k, v := range spec.Policy.Replacements {
+				reps[k] = v
+			}
+			meta["replacements"] = reps
+		}
+	}
+	if spec.Policy != nil {
+		meta["content_policy"] = spec.Policy.asMap()
+		if spec.Policy.Cleaner != nil {
+			// The production split: the enable flag is a top-level task
+			// metadata key (cleaner_enabled); the option flags live under
+			// cleaner_config. Both are read by the transform projection.
+			meta["cleaner_enabled"] = spec.Policy.Cleaner.Enabled
+			meta["cleaner_config"] = spec.Policy.Cleaner.asMap()
+		}
 	}
 	metaJSON, _ := json.Marshal(meta)
 	repsJSON, _ := json.Marshal(spec.Replacements)
@@ -487,3 +572,31 @@ func boolToInt(b bool) int {
 
 // now returns the scenario start instant (Finish computes duration).
 func now() time.Time { return time.Now() }
+
+// EnqueueMedia inserts a media-shaped job: media_type + has_media + caption.
+func (h *Harness) EnqueueMedia(taskID, sourceChat string, sourceMsg int64, targetChat, mediaType, caption string) *job.DeliveryJob {
+	extra := map[string]any{
+		"media_type": mediaType,
+		"has_media":  mediaType != "" && mediaType != "text",
+	}
+	if caption != "" {
+		extra["text"] = caption
+	}
+	return h.Enqueue(taskID, sourceChat, sourceMsg, targetChat, caption, extra)
+}
+
+// SetMediaGroup marks the job as a member of a media group (album).
+func (h *Harness) SetMediaGroup(j *job.DeliveryJob, groupID string) {
+	j.Payload.Raw()["media_group_id"] = groupID
+}
+
+// SetHasMedia toggles the payload's media flag independently of media_type.
+func (h *Harness) SetHasMedia(j *job.DeliveryJob, has bool) {
+	j.Payload.Raw()["has_media"] = has
+}
+
+// SetErrorOnce makes the fake gateway fail the next send to targetChat once,
+// then succeed — the transient-failure path.
+func (h *Harness) SetErrorOnce(targetChat string) {
+	h.Gateway.SetErrorOnce(targetChat)
+}
