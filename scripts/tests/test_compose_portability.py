@@ -89,8 +89,11 @@ def test_overlay_attaches_the_ai_gateway_to_the_services_that_resolve_it():
     assert ai.get("name") == "9router_default"
 
     services = overlay.get("services") or {}
-    assert set(services) == {"core", "api"}, (
-        "only core (rewrite calls) and api (preflight probe) need 9router; "
+    # core (rewrite calls), api (preflight probe) and worker (the Go Worker
+    # owns the AI rewrite stage under ATF_WORKER_TRANSFORMS, so its provider
+    # calls resolve 9router directly).
+    assert set(services) == {"core", "api", "worker"}, (
+        "only core, api and worker resolve 9router; "
         f"overlay touches {sorted(services)}"
     )
     for svc_name, svc in services.items():
