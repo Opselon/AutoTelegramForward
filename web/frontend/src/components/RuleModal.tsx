@@ -34,6 +34,7 @@ import {
   Type,
   Video,
   X,
+  Lightbulb,
 } from 'lucide-react'
 import { api } from '../api'
 import { normalizeEndpoint } from '../endpoint'
@@ -707,8 +708,9 @@ export function RuleModal({
               />
             </div>
           </div>
-          <p className="field__hint" style={{ marginTop: 8 }}>
-            {t('ui_fail_open_sends_the_original_text_if_ai_fails_and_logs_the_fallb')}
+          <p className="field__hint" style={{ marginTop: 8, display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+            <Lightbulb size={13} aria-hidden="true" style={{ flexShrink: 0, marginBlockStart: 1 }} />
+            <span>{t('ui_fail_open_sends_the_original_text_if_ai_fails_and_logs_the_fallb')}</span>
           </p>
         </section>
 

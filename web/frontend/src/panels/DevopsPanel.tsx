@@ -32,6 +32,8 @@ import {
   Terminal,
   Upload,
   X,
+  AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react'
 import type { DashboardCtx } from '../App'
 import { LogPolicyPanel } from '../components/LogPolicyPanel'
@@ -129,6 +131,13 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
           <span
             className={`badge ${servicesHealth?.status === 'healthy' ? 'badge--success' : servicesHealth ? 'badge--danger' : 'badge--neutral'}`}
           >
+            {servicesHealth ? (
+              servicesHealth.status === 'healthy' ? (
+                <CheckCircle2 size={12} aria-hidden="true" />
+              ) : (
+                <AlertTriangle size={12} aria-hidden="true" />
+              )
+            ) : null}
             {servicesHealth
               ? servicesHealth.status === 'healthy'
                 ? t('ui_all_services_healthy')
@@ -348,10 +357,10 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                 className="ops-select"
               >
                 <option value="all">{t('ui_all_levels')}</option>
-                <option value="ERROR">❌ {t('ui_level_error')}</option>
-                <option value="WARN">⚠️ {t('ui_level_warn')}</option>
-                <option value="INFO">ℹ️ {t('ui_level_info')}</option>
-                <option value="DEBUG">🔍 {t('ui_level_debug')}</option>
+                <option value="ERROR">{t('ui_level_error')}</option>
+                <option value="WARN">{t('ui_level_warn')}</option>
+                <option value="INFO">{t('ui_level_info')}</option>
+                <option value="DEBUG">{t('ui_level_debug')}</option>
               </select>
               <ChevronDown size={14} aria-hidden="true" />
             </span>
@@ -811,8 +820,9 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
               </div>
             )}
             {!backupEncrypted && backupCounts && (
-              <div style={{ marginBlockStart: 'var(--space-2)', fontSize: 'var(--type-xs)', color: 'var(--color-warning)' }}>
-                ⚠️ {t('ui_this_file_is_unencrypted_and_holds_live_credentials')}
+              <div style={{ marginBlockStart: 'var(--space-2)', fontSize: 'var(--type-xs)', color: 'var(--color-warning)', display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                <AlertTriangle size={13} aria-hidden="true" style={{ flexShrink: 0, marginBlockStart: 1 }} />
+                <span>{t('ui_this_file_is_unencrypted_and_holds_live_credentials')}</span>
               </div>
             )}
           </div>
@@ -914,7 +924,9 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
 
         {(!Array.isArray(recentErrors) || recentErrors.length === 0) ? (
           <div style={{ textAlign: 'center', padding: 'var(--space-4)', color: 'var(--color-text-muted)', fontSize: 'var(--type-sm)' }}>
-            <div style={{ fontSize: 22, marginBlockEnd: 6 }}>✅</div>
+            <div style={{ marginBlockEnd: 6, display: 'flex', justifyContent: 'center', color: 'var(--color-success)' }} aria-hidden="true">
+              <CheckCircle2 size={22} />
+            </div>
             <div>{t('ui_no_pipeline_errors_recorded_all_healthy')}</div>
           </div>
         ) : (
