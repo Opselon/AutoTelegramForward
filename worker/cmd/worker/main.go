@@ -36,12 +36,15 @@ import (
 	"atf/worker/internal/domain/aiconfig"
 	"atf/worker/internal/domain/dedup"
 	"atf/worker/internal/domain/job"
+	"atf/worker/internal/domain/prompt"
 	"atf/worker/internal/engine/autoreply"
 	"atf/worker/internal/engine/counters"
 	"atf/worker/internal/engine/delivery"
 	"atf/worker/internal/engine/scheduler"
 	"atf/worker/internal/health"
 	"atf/worker/internal/infra/aiprovider"
+	"atf/worker/internal/infra/aiprovider/circuit"
+	"atf/worker/internal/infra/aiprovider/validator"
 	autoreplystore "atf/worker/internal/infra/autoreply/store"
 	"atf/worker/internal/observability"
 	"atf/worker/internal/queue"
@@ -212,6 +215,34 @@ func run() (runErr error) {
 	})
 	engine.SetDedupStore(dedupStore)
 	engine.SetCounters(cadenceStore)
+
+	// Stage 5 (W4): the AI rewrite stage. The transformer resolves prompts
+	// through the SAME owner-scoped ai_configs store the channel-rewrite and
+	// PVA paths use (same ATF_MASTER_KEY-backed AES-GCM), the circuit
+	// breaker provides primary->secondary failover, and the validator
+	// enforces the length/injection-escape contract on provider output.
+	// Without this wiring the stage exists but never runs — the AI toggle
+	// on a task silently means nothing (a real defect this closes).
+	aiCfgCtx, aiCfgCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer aiCfgCancel()
+	aiConfigs, err := openAIConfigStore(aiCfgCtx, cfg)
+	if err != nil {
+		log.Warn("AI config store unavailable — the AI stage is disabled (provider credentials unreadable)",
+			"error", err)
+	} else {
+		factory := aiprovider.NewFactory()
+		transformer := aiprovider.NewTransformer(
+			aiConfigs, circuit.NewRegistry(), validator.New(), factory)
+		engine.SetAITransformer(transformer, aiConfigs, &aiMetricsCounters{})
+		if ps, perr := prompt.NewSQLiteStore(aiCfgCtx, cfg.DSN()); perr == nil {
+			engine.SetPromptStore(ps)
+		} else {
+			log.Warn("prompt template store unavailable — per-target prompt_id resolution falls back to the rule default", "error", perr)
+		}
+		log.Info("AI rewrite stage wired",
+			"prompt_store", "sqlite:shared-atf.db",
+			"provider_configs", "owner-scoped")
+	}
 
 	// Stage 4.2: the transform-stage strangler switch. The Worker only
 	// re-runs the text-transform pipeline when the deployment moved that
@@ -659,6 +690,13 @@ func openCountersStore(ctx context.Context, cfg *config.Config) (counters.Store,
 	}
 	return s, nil
 }
+
+// aiMetricsCounters satisfies delivery.AIMetrics: AI stage outcomes are
+// observable without coupling the engine to a metrics backend.
+type aiMetricsCounters struct{}
+
+func (aiMetricsCounters) AITransform(outcome string) {}
+func (aiMetricsCounters) AIFallback(policy string)   {}
 
 type schedCounters struct{}
 
