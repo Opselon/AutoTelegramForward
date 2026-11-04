@@ -122,7 +122,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
       {/* -------------------------------------------- Go Worker Control Center -- */}
       {currentUser?.is_admin ? (
         <section className="glass-panel ops-section" style={{ '--ops-i': 0 } as React.CSSProperties}>
-          <WorkerControlCenter />
+          <WorkerControlCenter lang={lang} />
         </section>
       ) : null}
 

@@ -19,6 +19,9 @@
  * and a 10s poll matches the existing DevOps panel cadence; the fetcher
  * re-arms on every filter change so a stale response never paints over a
  * newer one.
+ *
+ * Every visible label resolves through the catalog (makeT(lang)); the panel
+ * inherits the shell's language and falls back to English, never Persian.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
@@ -40,6 +43,7 @@ import {
 } from 'lucide-react'
 import { Button, EmptyState } from './ui/Primitives'
 import { api } from '../api'
+import { makeT, type UiLang } from '../locales/engine'
 import {
   isWorkerUnreachable,
   PIPELINE_STAGES,
@@ -137,9 +141,15 @@ function Chip({
  * One latency trio drawn as a compact inline bar chart: three segments
  * scaled to p99 so no percentile ever reads as zero-width noise.
  */
-function LatencyBars({ l }: { l: { p50: number; p95: number; p99: number } }) {
+function LatencyBars({
+  l,
+  unavailable,
+}: {
+  l: { p50: number; p95: number; p99: number }
+  unavailable: string
+}) {
   if (!l || [l.p50, l.p95, l.p99].some((v) => v == null || !isFinite(v))) {
-    return <span className="ops-chip">latency unavailable</span>
+    return <span className="ops-chip">{unavailable}</span>
   }
   const max = Math.max(l.p99, 0.001)
   const seg = (v: number, color: string) => (
@@ -172,13 +182,19 @@ function LatencyBars({ l }: { l: { p50: number; p95: number; p99: number } }) {
  * switched a stage off) and `waiting` (dependency unreachable) are drawn
  * distinctly from `healthy`/`failed` so an operator reads WHY at a glance.
  */
-function PipelineChain({ stages }: { stages: PipelineStageRow[] }) {
+function PipelineChain({
+  stages,
+  t,
+}: {
+  stages: PipelineStageRow[]
+  t: (key: string, params?: Record<string, string | number>) => string
+}) {
   if (!stages || stages.length === 0) {
-    return <EmptyState icon={<Workflow size={22} />} title="Pipeline telemetry unavailable" />
+    return <EmptyState icon={<Workflow size={22} />} title={t('ui_pipeline_telemetry_unavailable')} />
   }
   const known = new Map(stages.map((s) => [String(s.stage), s]))
   return (
-    <div className="ops-chain" role="list" aria-label="Go Worker pipeline stages">
+    <div className="ops-chain" role="list" aria-label={t('ui_go_worker_pipeline_stages')}>
       {PIPELINE_STAGES.map((name, i) => {
         const s = known.get(name)
         const health = s?.health ?? 'waiting'
@@ -194,7 +210,7 @@ function PipelineChain({ stages }: { stages: PipelineStageRow[] }) {
                   {s.failures > 0 ? <span style={{ color: 'var(--color-danger)' }}> · {s.failures}✗</span> : null}
                 </>
               ) : (
-                'no telemetry'
+                t('ui_no_telemetry')
               )}
             </span>
             {i < PIPELINE_STAGES.length - 1 ? <span className="ops-chain__arrow" aria-hidden="true">→</span> : null}
@@ -205,7 +221,8 @@ function PipelineChain({ stages }: { stages: PipelineStageRow[] }) {
   )
 }
 
-export default function WorkerControlCenter(): React.JSX.Element {
+export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.JSX.Element {
+  const t = makeT(lang)
   const [info, setInfo] = useState<WorkerInfo | null>(null)
   const [queue, setQueue] = useState<WorkerQueue | null>(null)
   const [tasks, setTasks] = useState<WorkerTaskRow[] | null>(null)
@@ -236,7 +253,7 @@ export default function WorkerControlCenter(): React.JSX.Element {
         return
       }
       setOffline(false)
-      // /ops returns the worker snapshot envelope; the info block may be
+      // /ops Returns the worker snapshot envelope; the info block may be
       // nested or flat depending on the worker's /ops shape.
       setInfo((st as any).worker ?? (st as any))
       if (!isWorkerUnreachable(q)) setQueue(q as WorkerQueue)
@@ -275,10 +292,10 @@ export default function WorkerControlCenter(): React.JSX.Element {
       <div className="ops-section">
         <div className="ops-head">
           <Server size={18} />
-          <span className="ops-head__title">Go Worker</span>
-          <span className="ops-head__meta">connecting…</span>
+          <span className="ops-head__title">{t('ui_go_worker')}</span>
+          <span className="ops-head__meta">{t('ui_connecting_ellipsis')}</span>
         </div>
-        <EmptyState icon={<RefreshCw size={20} className="spin" />} title="Reaching the worker's ops surface…" />
+        <EmptyState icon={<RefreshCw size={20} className="spin" />} title={t('ui_reaching_the_worker_ops_surface')} />
       </div>
     )
   }
@@ -288,25 +305,25 @@ export default function WorkerControlCenter(): React.JSX.Element {
       <div className="ops-section">
         <div className="ops-head">
           <Server size={18} />
-          <span className="ops-head__title">Go Worker</span>
+          <span className="ops-head__title">{t('ui_go_worker')}</span>
           <span className="ops-head__meta">
             <span
               className="ops-levelchip"
               style={{ background: 'var(--color-danger)', color: 'var(--color-button-fg)' }}
             >
-              OFFLINE
+              {t('ui_offline')}
             </span>
           </span>
         </div>
         <EmptyState
           icon={<AlertTriangle size={22} />}
-          title="Worker unreachable — no live snapshot"
+          title={t('ui_unreachable_no_live_snapshot')}
           description={
             pollError
-              ? `The admin API could not reach the worker's /ops surface (${pollError}). The dashboard below shows nothing rather than zeroes that would look like an idle, healthy worker.`
-              : 'The admin API reported worker_reachable=false. Nothing here is simulated: when the worker returns, so does the data.'
+              ? t('ui_unreachable_admin_api_detail', { error: pollError })
+              : t('ui_unreachable_not_simulated')
           }
-          action={<Button onClick={() => { setLoading(true); void refresh() }}>Retry</Button>}
+          action={<Button onClick={() => { setLoading(true); void refresh() }}>{t('ui_retry')}</Button>}
         />
       </div>
     )
@@ -320,7 +337,7 @@ export default function WorkerControlCenter(): React.JSX.Element {
       <div className="ops-section">
         <div className="ops-head">
           <Server size={18} />
-          <span className="ops-head__title">Go Worker</span>
+          <span className="ops-head__title">{t('ui_go_worker')}</span>
           <span className="ops-head__meta">
             <span
               className="ops-levelchip"
@@ -333,18 +350,18 @@ export default function WorkerControlCenter(): React.JSX.Element {
         </div>
 
         <div className="ops-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-          <Metric icon={<Gauge size={14} />} label="Version" value={info?.version ?? '—'} hint={shortSha(info?.commit_sha)} title={info?.commit_sha} />
-          <Metric icon={<Timer size={14} />} label="Uptime" value={fmtUptime(info?.uptime_seconds)} hint="since worker start" />
-          <Metric icon={<Activity size={14} />} label="Utilization" value={`${(util * 100).toFixed(0)}%`} hint={`${info?.active ?? 0} / ${info?.num_workers ?? 0} workers`} title="active / configured pool size" />
-          <Metric icon={<Cpu size={14} />} label="Goroutines" value={String(info?.goroutines ?? '—')} hint="process-level" />
-          <Metric icon={<Boxes size={14} />} label="Memory" value={fmtBytes(info?.memory_bytes)} hint="runtime Sys" />
-          <Metric icon={<Send size={14} />} label="Mode" value={info?.processing_mode ?? '—'} hint={info?.queue_backend ?? ''} />
+          <Metric icon={<Gauge size={14} />} label={t('ui_version')} value={info?.version ?? '—'} hint={shortSha(info?.commit_sha)} title={info?.commit_sha} />
+          <Metric icon={<Timer size={14} />} label={t('ui_uptime')} value={fmtUptime(info?.uptime_seconds)} hint={t('ui_since_worker_start')} />
+          <Metric icon={<Activity size={14} />} label={t('ui_utilization')} value={`${(util * 100).toFixed(0)}%`} hint={t('ui_workers_active', { active: info?.active ?? 0, configured: info?.num_workers ?? 0 })} title={t('ui_active_configured_pool_size')} />
+          <Metric icon={<Cpu size={14} />} label={t('ui_goroutines')} value={String(info?.goroutines ?? '—')} hint={t('ui_process_level')} />
+          <Metric icon={<Boxes size={14} />} label={t('ui_memory')} value={fmtBytes(info?.memory_bytes)} hint={t('ui_runtime_sys')} />
+          <Metric icon={<Send size={14} />} label={t('ui_mode')} value={info?.processing_mode ?? '—'} hint={info?.queue_backend ?? ''} />
         </div>
 
         <div className="ops-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', marginTop: 10 }}>
-          <Chip ok={info?.db_connected ?? null} label="DB" title="delivery store reachable" />
-          <Chip ok={info?.telegram_connected ?? null} label="Telegram" title="gateway probe ok" />
-          <Chip ok={info?.ai_connected ?? null} label="9router / AI" title="last provider probe ok" />
+          <Chip ok={info?.db_connected ?? null} label="DB" title={t('ui_delivery_store_reachable')} />
+          <Chip ok={info?.telegram_connected ?? null} label={t('ui_telegram_label')} title={t('ui_gateway_probe_ok')} />
+          <Chip ok={info?.ai_connected ?? null} label={t('ui_9router_ai')} title={t('ui_last_provider_probe_ok')} />
           <Chip ok={info?.switches?.worker_enabled ? true : false} label="ATF_WORKER_ENABLED" />
           <Chip ok={info?.switches?.transforms ? true : false} label="ATF_WORKER_TRANSFORMS" />
           <Chip ok={info?.switches?.autoreply ? true : false} label="ATF_WORKER_AUTOREPLY" />
@@ -354,7 +371,7 @@ export default function WorkerControlCenter(): React.JSX.Element {
       <div className="ops-section">
         <div className="ops-head">
           <Layers size={18} />
-          <span className="ops-head__title">Queue</span>
+          <span className="ops-head__title">{t('ui_queue')}</span>
           <span className="ops-head__meta">
             <span className="ops-levelchip" style={{ background: LOAD_TONE[loadStatus], color: 'var(--color-button-fg)' }}>
               {loadStatus.toUpperCase()}
@@ -364,104 +381,104 @@ export default function WorkerControlCenter(): React.JSX.Element {
         {queue ? (
           <>
             <div className="ops-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
-              <Metric icon={<Send size={14} />} label="Delivered" value={String(queue.delivered)} />
-              <Metric icon={<Activity size={14} />} label="Processing" value={String(queue.processing)} />
-              <Metric icon={<Timer size={14} />} label="Pending" value={String(queue.pending)} hint={queue.oldest_pending_age_seconds > 0 ? `oldest ${fmtUptime(queue.oldest_pending_age_seconds)} old` : 'empty'} />
-              <Metric icon={<AlertTriangle size={14} />} label="Retry pending" value={String(queue.retry_pending)} />
-              <Metric icon={<XCircle size={14} />} label="Failed" value={String(queue.failed)} />
-              <Metric icon={<XCircle size={14} />} label="Dead letter" value={String(queue.dead_letter)} />
-              <Metric icon={<Gauge size={14} />} label="Jobs/s" value={(queue.jobs_per_second ?? 0).toFixed(1)} />
-              <Metric icon={<Database size={14} />} label="Backpressure" value={String(queue.capacity)} hint="queue capacity ceiling" />
+              <Metric icon={<Send size={14} />} label={t('ui_delivered')} value={String(queue.delivered)} />
+              <Metric icon={<Activity size={14} />} label={t('ui_processing')} value={String(queue.processing)} />
+              <Metric icon={<Timer size={14} />} label={t('ui_pending')} value={String(queue.pending)} hint={queue.oldest_pending_age_seconds > 0 ? t('ui_oldest_old', { age: fmtUptime(queue.oldest_pending_age_seconds) }) : t('ui_empty')} />
+              <Metric icon={<AlertTriangle size={14} />} label={t('ui_retry_pending')} value={String(queue.retry_pending)} />
+              <Metric icon={<XCircle size={14} />} label={t('ui_failed')} value={String(queue.failed)} />
+              <Metric icon={<XCircle size={14} />} label={t('ui_dead_letter')} value={String(queue.dead_letter)} />
+              <Metric icon={<Gauge size={14} />} label={t('ui_jobs_per_second')} value={(queue.jobs_per_second ?? 0).toFixed(1)} />
+              <Metric icon={<Database size={14} />} label={t('ui_backpressure')} value={String(queue.capacity)} hint={t('ui_queue_capacity_ceiling')} />
             </div>
             <div style={{ marginTop: 10 }}>
               <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>end-to-end latency</span>
-                <LatencyBars l={queue.latency} />
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{t('ui_end_to_end_latency')}</span>
+                <LatencyBars l={queue.latency} unavailable={t('ui_latency_unavailable')} />
               </div>
               <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap', marginTop: 6 }}>
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>queue wait</span>
-                <LatencyBars l={queue.queue_wait} />
+                <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{t('ui_queue_wait')}</span>
+                <LatencyBars l={queue.queue_wait} unavailable={t('ui_latency_unavailable')} />
               </div>
             </div>
           </>
         ) : (
-          <EmptyState icon={<Layers size={22} />} title="Queue snapshot unavailable" />
+          <EmptyState icon={<Layers size={22} />} title={t('ui_queue_snapshot_unavailable')} />
         )}
       </div>
 
       <div className="ops-section">
         <div className="ops-head">
           <Workflow size={18} />
-          <span className="ops-head__title">Pipeline</span>
-          <span className="ops-head__meta">11 stages · live execution state</span>
+          <span className="ops-head__title">{t('ui_pipeline')}</span>
+          <span className="ops-head__meta">{t('ui_pipeline_stages_live', { count: PIPELINE_STAGES.length })}</span>
         </div>
-        <PipelineChain stages={(info as any)?.pipeline ?? []} />
+        <PipelineChain stages={(info as any)?.pipeline ?? []} t={t} />
         <p style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', margin: '8px 0 0' }}>
-          The AI stage is only healthy after a real successful rewrite — enabling AI on a task never paints it green.
+          {t('ui_the_ai_stage_is_only_healthy_after_a_real_successful_rewrite')}
         </p>
       </div>
 
       <div className="ops-section">
         <div className="ops-head">
           <Activity size={18} />
-          <span className="ops-head__title">Tasks</span>
-          <span className="ops-head__meta">{tasks?.length ?? 0} configured</span>
+          <span className="ops-head__title">{t('ui_tasks')}</span>
+          <span className="ops-head__meta">{t('ui_tasks_configured', { count: tasks?.length ?? 0 })}</span>
         </div>
         {tasks && tasks.length > 0 ? (
           <div className="ops-console" style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
               <thead>
                 <tr style={{ textAlign: 'left', color: 'var(--color-text-muted)' }}>
-                  <th style={{ padding: '4px 8px' }}>Task</th>
-                  <th style={{ padding: '4px 8px' }}>State</th>
-                  <th style={{ padding: '4px 8px' }}>Delivered / Failed</th>
-                  <th style={{ padding: '4px 8px' }}>Pending</th>
-                  <th style={{ padding: '4px 8px' }}>Throughput</th>
-                  <th style={{ padding: '4px 8px' }}>Features</th>
-                  <th style={{ padding: '4px 8px' }}>Last error</th>
+                  <th style={{ padding: '4px 8px' }}>{t('ui_task')}</th>
+                  <th style={{ padding: '4px 8px' }}>{t('ui_state')}</th>
+                  <th style={{ padding: '4px 8px' }}>{t('ui_delivered_failed')}</th>
+                  <th style={{ padding: '4px 8px' }}>{t('ui_pending')}</th>
+                  <th style={{ padding: '4px 8px' }}>{t('ui_throughput')}</th>
+                  <th style={{ padding: '4px 8px' }}>{t('ui_features')}</th>
+                  <th style={{ padding: '4px 8px' }}>{t('ui_last_error')}</th>
                 </tr>
               </thead>
               <tbody>
-                {tasks.map((t) => {
-                  const open = expandedTask === t.rule_id
+                {tasks.map((row) => {
+                  const open = expandedTask === row.rule_id
                   return (
                     <>
                       <tr
-                        key={t.rule_id}
+                        key={row.rule_id}
                         style={{ cursor: 'pointer', borderTop: '1px solid var(--color-border)' }}
-                        onClick={() => setExpandedTask(open ? null : t.rule_id)}
-                        title="Click for the feature breakdown"
+                        onClick={() => setExpandedTask(open ? null : row.rule_id)}
+                        title={t('ui_click_for_the_feature_breakdown')}
                       >
                         <td style={{ padding: '4px 8px' }}>
                           {open ? <ChevronDown size={12} /> : <ChevronRight />}
-                          <code style={{ marginLeft: 4 }}>{t.rule_id.slice(0, 12)}</code>
+                          <code style={{ marginLeft: 4 }}>{row.rule_id.slice(0, 12)}</code>
                         </td>
                         <td style={{ padding: '4px 8px' }}>
-                          <span style={{ color: t.enabled ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
-                            {t.enabled ? 'enabled' : 'disabled'}
+                          <span style={{ color: row.enabled ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
+                            {row.enabled ? t('ui_enabled') : t('ui_disabled')}
                           </span>
                         </td>
                         <td style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>
-                          {t.delivered} / <span style={{ color: t.failed ? 'var(--color-danger)' : 'inherit' }}>{t.failed}</span>
+                          {row.delivered} / <span style={{ color: row.failed ? 'var(--color-danger)' : 'inherit' }}>{row.failed}</span>
                         </td>
-                        <td style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>{t.pending}</td>
-                        <td style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>{t.throughput_per_min.toFixed(1)}/min · {fmtMs(t.latency_ms_avg)}</td>
+                        <td style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>{row.pending}</td>
+                        <td style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>{row.throughput_per_min.toFixed(1)}{t('ui_per_min')} {fmtMs(row.latency_ms_avg)}</td>
                         <td style={{ padding: '4px 8px' }}>
-                          {[t.features.filter && 'F', t.features.replacement && 'R', t.features.ai && 'AI', t.features.cleaner && 'C', t.features.fen > 1 && `N${t.features.fen}`]
+                          {[row.features.filter && 'F', row.features.replacement && 'R', row.features.ai && 'AI', row.features.cleaner && 'C', row.features.fen > 1 && `N${row.features.fen}`]
                             .filter(Boolean)
                             .join(' ') || '—'}
                         </td>
-                        <td style={{ padding: '4px 8px', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={t.last_error ?? undefined}>
-                          {t.last_error ?? <span style={{ color: 'var(--color-success)' }}>ok</span>}
+                        <td style={{ padding: '4px 8px', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.last_error ?? undefined}>
+                          {row.last_error ?? <span style={{ color: 'var(--color-success)' }}>{t('ui_ok')}</span>}
                         </td>
                       </tr>
                       {open ? (
-                        <tr key={`${t.rule_id}-detail`}>
-                          <td colSpan={7} style={{ padding: '8px 8px 12px 28px', color: 'var(--color-text-muted)' }}>
-                            <div>source <code>{t.source}</code> → target <code>{t.target}</code></div>
-                            <div>retries {t.retries} · worker {t.worker_id || '—'} · last success {t.last_success_at ?? '—'}</div>
+                        <tr key={`${row.rule_id}-detail`} style={{ color: 'var(--color-text-muted)' }}>
+                          <td colSpan={7} style={{ padding: '8px 8px 12px 28px' }}>
+                            <div>{t('ui_source')} <code>{row.source}</code> {t('ui_arrow_to')} <code>{row.target}</code></div>
+                            <div>{t('ui_retries_label')} {row.retries} {t('ui_worker_label')} {row.worker_id || '—'} {t('ui_last_success_label')} {row.last_success_at ?? '—'}</div>
                             <div>
-                              filter {String(t.features.filter)} · replacement {String(t.features.replacement)} · ai {String(t.features.ai)} · cleaner {String(t.features.cleaner)} · header {String(t.features.header)} · footer {String(t.features.footer)} · media {String(t.features.media)} · fallback {String(t.features.fallback)}
+                              {t('ui_filter_label')} {String(row.features.filter)} · {t('ui_replacement_label')} {String(row.features.replacement)} · {t('ui_ai_label')} {String(row.features.ai)} · {t('ui_cleaner_label')} {String(row.features.cleaner)} · {t('ui_header_label')} {String(row.features.header)} · {t('ui_footer_label')} {String(row.features.footer)} · {t('ui_media_label')} {String(row.features.media)} · {t('ui_fallback_label')} {String(row.features.fallback)}
                             </div>
                           </td>
                         </tr>
@@ -473,26 +490,26 @@ export default function WorkerControlCenter(): React.JSX.Element {
             </table>
           </div>
         ) : (
-          <EmptyState icon={<Activity size={22} />} title="No task rows" description="The worker derives these from durable delivery_jobs; none match yet." />
+          <EmptyState icon={<Activity size={22} />} title={t('ui_no_task_rows')} description={t('ui_no_task_rows_description')} />
         )}
       </div>
 
       <div className="ops-section">
         <div className="ops-head">
           <AlertTriangle size={18} />
-          <span className="ops-head__title">Errors &amp; warnings</span>
+          <span className="ops-head__title">{t('ui_errors_warnings')}</span>
           <span className="ops-head__meta">
-            {errorTotal} total · {visibleErrors.length} shown · deduplicated
+            {t('ui_total_shown_deduplicated', { total: errorTotal, shown: visibleErrors.length })}
           </span>
         </div>
         <div className="ops-filter" style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
-          <select value={severity} onChange={(e) => setSeverity(e.target.value as Severity)} aria-label="Filter by severity">
-            <option value="all">All severities</option>
+          <select value={severity} onChange={(e) => setSeverity(e.target.value as Severity)} aria-label={t('ui_filter_by_severity')}>
+            <option value="all">{t('ui_all_severities')}</option>
             <option value="ERROR">ERROR</option>
             <option value="WARN">WARN</option>
           </select>
-          <select value={component} onChange={(e) => setComponent(e.target.value)} aria-label="Filter by component">
-            <option value="all">All components</option>
+          <select value={component} onChange={(e) => setComponent(e.target.value)} aria-label={t('ui_filter_by_component')}>
+            <option value="all">{t('ui_all_components')}</option>
             {knownComponents.map((c) => (
               <option key={c} value={c}>{c}</option>
             ))}
@@ -511,17 +528,17 @@ export default function WorkerControlCenter(): React.JSX.Element {
                 <span style={{ minWidth: 120, fontFamily: 'var(--font-mono)' }}>{e.component}</span>
                 <span style={{ minWidth: 90, fontFamily: 'var(--font-mono)' }}>{e.code || '—'}</span>
                 <span style={{ color: e.retryable ? 'var(--color-warning)' : 'var(--color-text-muted)', minWidth: 70 }}>
-                  {e.retryable ? `retry ${e.retry_count}` : 'permanent'}
+                  {e.retryable ? t('ui_retry_label', { count: e.retry_count }) : t('ui_permanent')}
                 </span>
                 <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.message}>{e.message}</span>
                 {e.count && e.count > 1 ? (
-                  <span className="ops-levelchip" title={`repeated ${e.count} times since ${e.first_seen}`}>×{e.count}</span>
+                  <span className="ops-levelchip" title={t('ui_repeated_times_since', { count: e.count, since: e.first_seen ?? '' })}>×{e.count}</span>
                 ) : null}
               </div>
             ))}
           </div>
         ) : (
-          <EmptyState icon={<CheckCircle2 size={22} />} title="No errors match this filter" />
+          <EmptyState icon={<CheckCircle2 size={22} />} title={t('ui_no_errors_match_this_filter')} />
         )}
       </div>
     </>
