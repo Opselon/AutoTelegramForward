@@ -413,7 +413,7 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
           <span className="ops-head__meta">{t('ui_pipeline_stages_live', { count: PIPELINE_STAGES.length })}</span>
         </div>
         <PipelineChain stages={(info as any)?.pipeline ?? []} t={t} />
-        <p style={{ fontSize: '0.72rem', color: 'var(--color-text-muted)', margin: '8px 0 0' }}>
+        <p style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', margin: '8px 0 0' }}>
           {t('ui_the_ai_stage_is_only_healthy_after_a_real_successful_rewrite')}
         </p>
       </div>
@@ -560,11 +560,11 @@ function Metric({
 }) {
   return (
     <div className="ops-chip ops-chip--info" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }} title={title}>
-      <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--color-text-muted)', fontSize: '0.7rem' }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
         {icon} {label}
       </span>
       <strong style={{ fontSize: '0.92rem' }}>{value}</strong>
-      {hint ? <span style={{ fontSize: '0.68rem', color: 'var(--color-text-muted)' }}>{hint}</span> : null}
+      {hint ? <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{hint}</span> : null}
     </div>
   )
 }
