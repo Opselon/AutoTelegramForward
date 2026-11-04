@@ -52,6 +52,11 @@ type Store interface {
 	// at enqueue time; the worker reports the same number in metrics.
 	PendingCount(ctx context.Context) (int, error)
 
+	// QueueStats is the read-only aggregation the /ops surface serves on
+	// /ops/queue. Both stores implement it; declaring it here lets the ops
+	// tests take a Store without a second, narrower interface.
+	QueueStats(ctx context.Context) (*ops.QueueStats, error)
+
 	// Enqueue writes one delivery job PENDING, idempotently. It mirrors
 	// the Python enqueue (sqlite_repositories.py enqueue /
 	// postgres_repositories.py enqueue): INSERT OR IGNORE / ON CONFLICT DO
