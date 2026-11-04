@@ -72,6 +72,13 @@ import type {
   TestPromptResponse,
 } from './types'
 import { clearSession, getToken } from './session'
+import type {
+  WorkerErrorQuery,
+  WorkerErrorsResponse,
+  WorkerQueueResponse,
+  WorkerStatusResponse,
+  WorkerTasksResponse,
+} from './workerOps'
 
 const API_BASE = '/api'
 
@@ -849,6 +856,25 @@ export const api = {
 
   // ------------------------------------------------- Admin Control Plane
   adminGetOverview: () => fetchJson<any>(`${API_BASE}/admin/overview`),
+
+  // Go Worker operational surface — the worker is the single telemetry
+  // owner; the API proxies its /ops snapshot. Unreachable => 503 with
+  // worker_reachable=false, which the UI must render as "worker offline"
+  // and NEVER as an idle, healthy zeroed dashboard.
+  workerStatus: () => fetchJson<WorkerStatusResponse>(`${API_BASE}/worker/status`),
+  workerQueue: () => fetchJson<WorkerQueueResponse>(`${API_BASE}/worker/queue`),
+  workerTasks: () => fetchJson<WorkerTasksResponse>(`${API_BASE}/worker/tasks`),
+  workerErrors: (params?: WorkerErrorQuery) => {
+    const q = new URLSearchParams()
+    if (params?.severity) q.set('severity', params.severity)
+    if (params?.component) q.set('component', params.component)
+    if (params?.rule_id) q.set('rule_id', params.rule_id)
+    if (params?.since) q.set('since', String(params.since))
+    if (params?.limit) q.set('limit', String(params.limit))
+    const s = q.toString()
+    return fetchJson<WorkerErrorsResponse>(`${API_BASE}/worker/errors${s ? '?' + s : ''}`)
+  },
+
   adminListUsers: (limit = 50, offset = 0) =>
     fetchJson<{ users: any[]; total: number }>(`${API_BASE}/admin/users?limit=${limit}&offset=${offset}`),
   adminSetUserStatus: (id: number | string, status: string) =>
