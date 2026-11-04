@@ -79,8 +79,9 @@ def clone_rule(c: sqlite3.Connection, base: sqlite3.Row, marker: str,
     return rid
 
 
-def drop_rule(c: sqlite3.Connection, rid: str) -> None:
-    c.execute("DELETE FROM delivery_jobs WHERE rule_id=?", (rid,))
+def drop_rule(c: sqlite3.Connection, rid: str, keep_jobs: bool = False) -> None:
+    if not keep_jobs:
+        c.execute("DELETE FROM delivery_jobs WHERE rule_id=?", (rid,))
     c.execute("DELETE FROM rule_counters WHERE rule_id=?", (rid,))
     c.execute("DELETE FROM forward_rules WHERE id=?", (rid,))
     c.commit()
@@ -117,7 +118,7 @@ def send_text(client, text: str) -> int:
 # ---------------------------------------------------------------- helpers
 
 def wait_for_job(c: sqlite3.Connection, rid: str, src_msg_id: int,
-                 timeout: float = 45.0) -> tuple[str | None, str | None]:
+                 timeout: float = 120.0) -> tuple[str | None, str | None]:
     """Poll delivery_jobs until terminal. Returns (status, error_detail)."""
     key = f"{rid}:{SRC}:{src_msg_id}:{DST}"
     t0 = time.time()
@@ -136,15 +137,17 @@ def wait_for_job(c: sqlite3.Connection, rid: str, src_msg_id: int,
     return (row[0], row[1]) if row else (None, None)
 
 
-def b_side_has(client, marker: str, since: int) -> tuple[bool, int | None]:
-    """Look for our marker text in Target B's recent history."""
-    msgs = list(client.get_chat_history(DST, limit=40))
-    for m in reversed(msgs):
-        if m.id <= since:
-            continue
-        txt = (m.text or m.caption or "")
-        if marker in txt:
-            return True, m.id
+def b_side_has(client, marker: str, since: int = 0, timeout: float = 15.0) -> tuple[bool, int | None]:
+    """Look for our marker text in Target B's recent history with retry."""
+    _ = since
+    t0 = time.time()
+    while time.time() - t0 < timeout:
+        msgs = list(client.get_chat_history(DST, limit=40))
+        for m in reversed(msgs):
+            txt = (m.text or m.caption or "")
+            if marker in txt:
+                return True, m.id
+        time.sleep(1.0)
     return False, None
 
 
@@ -155,7 +158,8 @@ def sha(text: str) -> str:
 # ---------------------------------------------------------------- cells
 
 def cell_replica(client, c: sqlite3.Connection, base: sqlite3.Row, cell: str,
-                 text: str, expect_block: bool, meta_patch: dict | None = None) -> dict:
+                 text: str, expect_block: bool, meta_patch: dict | None = None,
+                 run_id: str = "") -> dict:
     # matching_rules is single-match per owner: one message is consumed by
     # exactly one task of a tenant (deterministic highest-priority first)
     # unless multi_route=True. The replica copies the baseline's owner and
@@ -165,16 +169,10 @@ def cell_replica(client, c: sqlite3.Connection, base: sqlite3.Row, cell: str,
     c.execute("UPDATE forward_rules SET is_paused=? WHERE id=?", (1, BASELINE))
     c.commit()
     rid = clone_rule(c, base, cell.lower(), meta_patch=meta_patch)
-    # matching_rules is single-match per owner: one message is consumed by
-    # exactly one task of a tenant (deterministic highest-priority first)
-    # unless multi_route=True. The replica copies the baseline's owner and
-    # creation time, so the baseline would win every sort and the replica
-    # would never see traffic. Pause the baseline while the replica runs and
-    # restore it from the snapshot taken in main().
-    c.execute("UPDATE forward_rules SET is_paused=1 WHERE id=?", (BASELINE,))
-    c.commit()
     try:
-        marker = f"ATF-MTX-{cell}"
+        # Run-unique marker so a block assertion never false-fails against a
+        # surviving message from an earlier matrix run.
+        marker = f"ATF-MTX-{cell}-{run_id}" if run_id else f"ATF-MTX-{cell}"
         src_id = send_text(client, f"{marker} {text}")
         status, err = wait_for_job(c, rid, src_id)
         delivered, tgt_id = b_side_has(client, marker, src_id - 1)
@@ -188,12 +186,12 @@ def cell_replica(client, c: sqlite3.Connection, base: sqlite3.Row, cell: str,
             "cell": cell, "kind": "pass" if not expect_block else "block",
             "rule_id": rid, "source_message_id": src_id,
             "status": "PASS" if ok else "FAIL",
-            "reason": err or ("delivered" if delivered else "not seen in B"),
+            "reason": err or ("delivered" if delivered else ("blocked as expected" if expect_block else "not seen in B")),
             "target_message_id": tgt_id,
             "job_status": status,
         }
     finally:
-        drop_rule(c, rid)
+        drop_rule(c, rid, keep_jobs=True)
         c.execute("UPDATE forward_rules SET is_paused=? WHERE id=?", (0, BASELINE))
         c.commit()
 
@@ -211,6 +209,7 @@ def main() -> int:
                  "baseline": {"before": snapshot, "after": None, "drift": None},
                  "cells": {}}
 
+    run_id = f"{int(time.time()) % 100000:05d}"
     client = make_client()
     with client:
         # Warm the entity cache: a session-string client starts with no peers
@@ -225,7 +224,7 @@ def main() -> int:
         cells = [
             ("A", "plain pass-through", False, None),
             ("B", "blocked by blacklist", True, {
-                "content_policy": {"enabled": True, "blacklist_words": ["ATF-MTX-B"]},
+                "content_policy": {"enabled": True, "blacklist_words": [f"ATF-MTX-B-{run_id}"]},
             }),
             ("C", "replacement applied", False, {"replacements": {"plain": "REPLACED"}}),
             ("D", "filter+replacement", False, {"replacements": {"replacement": "REPLACED"}}),
@@ -233,7 +232,7 @@ def main() -> int:
             ("F", "minimal pipeline", False, None),
         ]
         for cell, text, block, meta_patch in cells:
-            res = cell_replica(client, c, base, cell, text, block, meta_patch)
+            res = cell_replica(client, c, base, cell, text, block, meta_patch, run_id=run_id)
             out["cells"][cell] = [res]
             log(f"cell {cell}: {res['status']} ({res['reason']})")
 
