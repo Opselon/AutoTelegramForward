@@ -1,6 +1,7 @@
 package ops
 
 import (
+	"math"
 	"os"
 	"runtime"
 	"strconv"
@@ -78,6 +79,14 @@ func (c *Collector) cpuStats() (user, system time.Duration) {
 	u, err1 := strconv.ParseUint(fields[11], 10, 64)
 	st, err2 := strconv.ParseUint(fields[12], 10, 64)
 	if err1 != nil || err2 != nil {
+		return 0, 0
+	}
+	// time.Duration is an int64 nanosecond count; the parsed utime/stime are
+	// uint64 clock ticks. Cap the conversion rather than truncating: a value
+	// above MaxInt64 ticks (~292 years at 100 Hz) is not representable and
+	// must never wrap into a negative duration.
+	const maxTicks = math.MaxInt64 / (int64(time.Second) / 100)
+	if u > uint64(maxTicks) || st > uint64(maxTicks) {
 		return 0, 0
 	}
 	const hz = 100 // USER_HZ on every supported Linux architecture
