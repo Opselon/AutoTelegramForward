@@ -2,6 +2,7 @@ package ops
 
 import (
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -289,8 +290,22 @@ func round3(f float64) float64 {
 
 // sanitize is the single choke point every error/stage message passes
 // before it reaches a ring or a JSON field. One line, bounded length, no
-// credential-shaped pair: the classification vocabulary survives, raw text
-// and secrets never do.
+// credential-shaped content: the classification vocabulary survives, raw
+// text and secrets never do.
+//
+// Three passes:
+//
+//  1. shape: one line, bounded length.
+//  2. pairs: a "=value" is dropped, keeping only the bare key when the key
+//     looks like a code (short, no spaces). The messages arriving here are
+//     engine classifications ("FLOOD_WAIT", "mark_retry failed") whose
+//     payload is ids — the moment a value rides along it is either a
+//     secret-shaped pair (token=…, session=…) or raw Telegram detail that
+//     must not reach a dashboard.
+//  3. scrub: any remaining secret-SHAPED token (a word followed by a long
+//     alnum run, or an obvious key/context value) is removed. This is the
+//     belt behind the braces: an error string not shaped like a pair
+//     ("session string=abc123", "<AUTH_KEY>") still loses the secret.
 func sanitize(msg string) string {
 	msg = strings.TrimSpace(msg)
 	if msg == "" {
@@ -302,17 +317,26 @@ func sanitize(msg string) string {
 	if len(msg) > 160 {
 		msg = msg[:160] // a 10KB error is a log bomb
 	}
-	// "token=..." / "reason_code=..." style pairs: keep the key, drop the
-	// value. The error vocabulary is code-shaped, so a leaked value here is
-	// the one shape this surface must not emit.
+	// Pair pass.
 	if eq := strings.Index(msg, "="); eq > 0 {
 		key := msg[:eq]
-		if !strings.ContainsAny(key, " \t") && len(key) < 32 {
+		if !strings.ContainsAny(key, " 	") && len(key) < 32 {
 			msg = key
 		}
 	}
-	return msg
+	// Scrub pass: remove anything that survived the pair pass but still
+	// looks like a secret (a long alnum run — session strings, API keys,
+	// hex tokens are all ≥16 mixed-case alnum with no spaces).
+	msg = secretRun.ReplaceAllString(msg, "[redacted]")
+	return strings.TrimSpace(msg)
 }
+
+// secretRun matches a long alphanumeric/hex-ish run: the shape session
+// strings, API keys and file tokens all share. Codes the engine actually
+// emits (FLOOD_WAIT, PEER_ID_INVALID, RULE_NOT_FOUND) are ≤11 chars, so a
+// 12-char floor keeps every legitimate vocabulary word intact while
+// catching the secrets — which are, in practice, never that short.
+var secretRun = regexp.MustCompile(`[A-Za-z0-9_\-]{12,}`)
 
 // String is a compact debug form (tests, log lines).
 func (s *stageStats) String() string {

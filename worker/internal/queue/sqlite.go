@@ -15,6 +15,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -193,7 +194,7 @@ func isMissingTable(err error) bool {
 }
 
 // scanJob builds a job.DeliveryJob from a delivery_jobs row.
-func scanJob(rows *sql.Rows) (*job.DeliveryJob, error) {
+func scanJobScanner(rows rowScanner) (*job.DeliveryJob, error) {
 	var (
 		j                   job.DeliveryJob
 		status, payloadJSON string
@@ -820,7 +821,7 @@ func (s *sqliteStore) QueueStats(ctx context.Context) (*ops.QueueStats, error) {
 			SUM(status = 'RETRY_WAIT' AND next_retry_at > ?)    AS delayed,
 			SUM(status = 'RETRY_WAIT' AND next_retry_at <= ?)   AS retry_pending,
 			SUM(status = 'UNKNOWN')                             AS unknown,
-			COALESCE(MIN(CASE WHEN status IN ('PENDING','RETRY_WAIT')
+			COALESCE(MAX(CASE WHEN status IN ('PENDING','RETRY_WAIT')
 			                  THEN CAST(strftime('%s','now') AS REAL) - created_at
 			                  END), 0)                           AS oldest_pending_age
 		FROM delivery_jobs`
@@ -884,4 +885,55 @@ func (s *sqliteStore) TaskRows(ctx context.Context, limit int) ([]*ops.TaskRow, 
 		out = append(out, &r)
 	}
 	return out, rows.Err()
+}
+
+// claimHead reads one lane's head job: the first row the target-scoped claim
+// index yields for that target — by construction the row with the smallest
+// (source, message, created, id) tuple among that lane's claimable rows.
+// INDEXED BY pins the index because the planner prefers the poll index and
+// then silently re-sorts, which costs the backlog again.
+func claimHead(ctx context.Context, tx *sql.Tx, headQ string, now int64, target string) (*job.DeliveryJob, error) {
+	row := tx.QueryRowContext(ctx, headQ, target, now, now)
+	j, err := scanJobRow(row)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return j, nil
+}
+
+// sortHeads orders claimed lane heads by the claim's tuple contract. The
+// single-phase ORDER BY produced this order in SQL; the roster form reads
+// heads one lane at a time, so the merge sorts them here.
+func sortHeads(heads []*job.DeliveryJob) {
+	sort.SliceStable(heads, func(i, k int) bool {
+		a, b := heads[i], heads[k]
+		if a.SourceChatID != b.SourceChatID {
+			return a.SourceChatID < b.SourceChatID
+		}
+		if a.SourceMessageID != b.SourceMessageID {
+			return a.SourceMessageID < b.SourceMessageID
+		}
+		if a.CreatedAt != b.CreatedAt {
+			return a.CreatedAt < b.CreatedAt
+		}
+		return a.ID < b.ID
+	})
+}
+
+// scanJobRow reads one job from the single-result form claimHead uses.
+// scanJob keeps the multi-row form. Both share the scan body through
+// scanJobScanner: *sql.Rows and *sql.Row expose the same Scan signature.
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanJob(rows *sql.Rows) (*job.DeliveryJob, error) {
+	return scanJobScanner(rows)
+}
+
+func scanJobRow(row *sql.Row) (*job.DeliveryJob, error) {
+	return scanJobScanner(row)
 }
