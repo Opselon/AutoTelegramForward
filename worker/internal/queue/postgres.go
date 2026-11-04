@@ -795,7 +795,7 @@ func (s *pgStore) QueueStats(ctx context.Context) (*ops.QueueStats, error) {
 			COUNT(*) FILTER (WHERE status = 'RETRY_WAIT' AND next_retry_at > $2)   AS delayed,
 			COUNT(*) FILTER (WHERE status = 'RETRY_WAIT' AND next_retry_at <= $3)  AS retry_pending,
 			COUNT(*) FILTER (WHERE status = 'UNKNOWN')                        AS unknown,
-			COALESCE(MIN(CASE WHEN status IN ('PENDING','RETRY_WAIT')
+			COALESCE(MAX(CASE WHEN status IN ('PENDING','RETRY_WAIT')
 			                  THEN EXTRACT(EPOCH FROM NOW()) - created_at
 			                  END), 0)                                        AS oldest_pending_age
 		FROM delivery_jobs`
