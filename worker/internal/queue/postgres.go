@@ -261,28 +261,49 @@ func (s *pgStore) ClaimBatch(ctx context.Context, workerID string, batchSize int
 	// CLAIMED row whose lease expired): Python evaluates the cadence once
 	// per message at ingest, so a delivery retry must never consume a
 	// second cadence slot.
+	// Lane-head claim. The legacy form's NOT EXISTS compared every active row
+	// against every earlier same-target row, so one claim cost O(backlog):
+	// against a 64k-row backlog that is tens of milliseconds per claim,
+	// capping the worker at a handful of claims per second regardless of
+	// worker count.
+	//
+	// DISTINCT ON (target_chat_id) expresses the same rule — one head row per
+	// target lane, the earliest under the claim tuple order — as a per-group
+	// first-row scan served from the target-scoped index in O(lanes). The
+	// lock must sit OUTSIDE the DISTINCT (Postgres forbids FOR UPDATE with
+	// DISTINCT), so heads CTE selects unlocked and the wrapper locks the
+	// chosen ids under SKIP LOCKED; the UPDATE then claims exactly those.
+	//
+	// Lane semantics: a lane whose earliest non-delivered row is a CLAIMED
+	// row with a live lease is BUSY — no row of that lane is claimable, so
+	// the busy check must run BEFORE the claim. GOOD rows only (ORDER BY
+	// picks the earliest blockable row, and the busy check then filters).
 	query := fmt.Sprintf(`
-	WITH claimable AS (
-		SELECT id, status AS preclaim_status FROM delivery_jobs AS j
-		WHERE (
-			j.status = 'PENDING'
-			OR j.status = 'RETRY_WAIT'
-			OR (j.status = 'CLAIMED' AND j.lease_until < $4)
-		)
-		AND j.next_retry_at <= $5
-		AND NOT EXISTS (
-			SELECT 1 FROM delivery_jobs AS o
-			WHERE o.target_chat_id = j.target_chat_id
-			  AND o.id <> j.id
-			  AND o.status IN ('PENDING', 'RETRY_WAIT', 'CLAIMED')
-			  AND (o.source_chat_id, o.source_message_id, o.created_at, o.id)
-			      < (j.source_chat_id, j.source_message_id, j.created_at, j.id)
-		)
-		ORDER BY j.source_chat_id ASC, j.source_message_id ASC,
+	WITH heads AS (
+		-- The earliest non-delivered row of each target lane. This row, and
+		-- only this row, decides whether the lane is claimable: a live-lease
+		-- CLAIMED head means the lane is busy.
+		SELECT DISTINCT ON (j.target_chat_id)
+		       j.id, j.status, j.next_retry_at, j.lease_until
+		FROM delivery_jobs AS j
+		WHERE j.status IN ('PENDING', 'RETRY_WAIT', 'CLAIMED')
+		ORDER BY j.target_chat_id ASC,
+		         j.source_chat_id ASC, j.source_message_id ASC,
 		         j.created_at ASC, j.id ASC
+), claimable AS (
+		-- Of those heads, the genuinely claimable ones: a PENDING/RETRY_WAIT
+		-- head whose retry gate has elapsed, or a CLAIMED head whose lease
+		-- expired (reclaim). Busy lanes fall out here — no sibling can be
+		-- claimed while the head itself is not claimable.
+		SELECT h.id, h.status AS preclaim_status
+		FROM heads AS h
+		WHERE (h.status <> 'CLAIMED' AND h.next_retry_at <= $5)
+		   OR (h.status = 'CLAIMED' AND h.lease_until < $4
+		       AND h.next_retry_at <= $5)
+		ORDER BY h.next_retry_at ASC, h.id ASC
 		LIMIT $6
 		FOR UPDATE SKIP LOCKED
-	)
+)
 	UPDATE delivery_jobs
 	SET status = 'CLAIMED', worker_id = $1, lease_until = $2, updated_at = $3
 	WHERE id IN (SELECT id FROM claimable)
