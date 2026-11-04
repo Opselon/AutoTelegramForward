@@ -1,0 +1,346 @@
+{
+  "generated_at": "2026-11-04T14:23:16Z",
+  "worker_sha": "82f1982",
+  "baseline": {
+    "rule_id": "ea565d5c-ccce-4f1c-b5f5-79eca2911642",
+    "before": {
+      "id": "ea565d5c-ccce-4f1c-b5f5-79eca2911642",
+      "priority": 10,
+      "is_active": 1,
+      "is_paused": 0,
+      "version": 33,
+      "metadata": "{\"paid_addons\": {\"every_n\": false, \"ai_rewrite\": false, \"webhook\": true}, \"smart_ai_rewrite\": true, \"prompt_id\": \"sys_summarizer\", \"content_policy\": {\"enabled\": null, \"blacklist_off\": false, \"whitelist_off\": false, \"blacklist_words\": [], \"whitelist_words\": [], \"whitelist_mode\": \"any\", \"block_links\": false, \"remove_links\": false, \"strip_words\": [], \"replacements\": {}, \"regex_block\": [], \"regex_require\": [], \"min_length\": 0, \"max_length\": 0, \"allowed_media\": [], \"blocked_media\": [], \"case_sensitive\": false, \"word_boundary\": true, \"normalize\": true}}"
+    },
+    "after": null,
+    "drift": null
+  },
+  "cells": {
+    "A": [
+      {
+        "cell": "A",
+        "kind": "pass",
+        "rule_id": "mtx-a-1793802107",
+        "source_message_id": 299,
+        "sent_text_sha256": "9a8e9150af0b274c727af11483cc0a4aa831fd30253e8c3a278f14bfbae75486",
+        "expected_text_sha256": "9a8e9150af0b274c727af11483cc0a4aa831fd30253e8c3a278f14bfbae75486",
+        "duration_ms": 1173,
+        "status": "PASS",
+        "reason": "delivered",
+        "target_message_id": 249,
+        "target_text_sha256": "9a8e9150af0b274c727af11483cc0a4aa831fd30253e8c3a278f14bfbae75486",
+        "correlation_id": "corr_1cfe1f7bfa2c",
+        "job_status": "SENT",
+        "filter_decision": null,
+        "ai_status": "n/a (AI off)",
+        "payload_has_raw_text": true,
+        "baseline_pickups_this_run": 0,
+        "worker_delivered_line": true
+      },
+      {
+        "cell": "A",
+        "kind": "block",
+        "rule_id": "mtx-a-1793802107",
+        "source_message_id": 300,
+        "sent_text_sha256": "2a8a24f3f6c65ed471f16ca1404ffae27fc570a2ecbb59552948b35d126bc3f3",
+        "expected_text_sha256": "2a8a24f3f6c65ed471f16ca1404ffae27fc570a2ecbb59552948b35d126bc3f3",
+        "duration_ms": 12107,
+        "status": "PASS",
+        "reason": "blocked before enqueue (no delivery job created)",
+        "target_message_id": null,
+        "target_text_sha256": null,
+        "correlation_id": null,
+        "job_status": "NONE",
+        "filter_decision": "REJECT-pre-enqueue",
+        "ai_status": "n/a (AI off)",
+        "baseline_pickups_this_run": 0
+      }
+    ],
+    "B": [
+      {
+        "cell": "B",
+        "kind": "pass",
+        "rule_id": "mtx-b-1793802122",
+        "source_message_id": 301,
+        "sent_text_sha256": "5903f410159ea3f96e6ae984173262a00f77a4f6a3005da4c4e1cb27f07a217b",
+        "expected_text_sha256": "5903f410159ea3f96e6ae984173262a00f77a4f6a3005da4c4e1cb27f07a217b",
+        "duration_ms": 1156,
+        "status": "PASS",
+        "reason": "delivered",
+        "target_message_id": 250,
+        "target_text_sha256": "5903f410159ea3f96e6ae984173262a00f77a4f6a3005da4c4e1cb27f07a217b",
+        "correlation_id": "corr_49486c937a1e",
+        "job_status": "SENT",
+        "filter_decision": null,
+        "ai_status": "n/a (AI off)",
+        "payload_has_raw_text": true,
+        "baseline_pickups_this_run": 0,
+        "worker_delivered_line": true
+      },
+      {
+        "cell": "B",
+        "kind": "block",
+        "rule_id": "mtx-b-1793802122",
+        "source_message_id": 302,
+        "sent_text_sha256": "1f8c908b99716db8a973481396abd92f47303c329ce53d07cee4a9e1738a67fb",
+        "expected_text_sha256": "1f8c908b99716db8a973481396abd92f47303c329ce53d07cee4a9e1738a67fb",
+        "duration_ms": 12080,
+        "status": "PASS",
+        "reason": "blocked before enqueue (no delivery job created)",
+        "target_message_id": null,
+        "target_text_sha256": null,
+        "correlation_id": null,
+        "job_status": "NONE",
+        "filter_decision": "REJECT-pre-enqueue",
+        "ai_status": "n/a (AI off)",
+        "baseline_pickups_this_run": 0
+      }
+    ],
+    "C": [
+      {
+        "cell": "C",
+        "kind": "pass",
+        "rule_id": "mtx-c-1793802137",
+        "source_message_id": 303,
+        "sent_text_sha256": "3692326ac149919f630023aaf0df27bca98ea392bab3cf54c67522fb174102a6",
+        "expected_text_sha256": "a264b92b020be664338bc7ff0c158e6fbb0af1436c6162e0ca6c09afa3414b06",
+        "duration_ms": 1138,
+        "status": "PASS",
+        "reason": "delivered",
+        "target_message_id": 251,
+        "target_text_sha256": "a264b92b020be664338bc7ff0c158e6fbb0af1436c6162e0ca6c09afa3414b06",
+        "correlation_id": "corr_1a73f4735650",
+        "job_status": "SENT",
+        "filter_decision": null,
+        "ai_status": "n/a (AI off)",
+        "payload_has_raw_text": true,
+        "baseline_pickups_this_run": 0,
+        "worker_delivered_line": true
+      },
+      {
+        "cell": "C",
+        "kind": "block",
+        "rule_id": "mtx-c-1793802137",
+        "source_message_id": 304,
+        "sent_text_sha256": "e3d4ab9578f4a78a9d3ee46b88718c50353eb54b4cc14e9e83a5bb4ae1ce4791",
+        "expected_text_sha256": "e3d4ab9578f4a78a9d3ee46b88718c50353eb54b4cc14e9e83a5bb4ae1ce4791",
+        "duration_ms": 12084,
+        "status": "PASS",
+        "reason": "blocked before enqueue (no delivery job created)",
+        "target_message_id": null,
+        "target_text_sha256": null,
+        "correlation_id": null,
+        "job_status": "NONE",
+        "filter_decision": "REJECT-pre-enqueue",
+        "ai_status": "n/a (AI off)",
+        "baseline_pickups_this_run": 0
+      }
+    ],
+    "D": [
+      {
+        "cell": "D",
+        "kind": "pass",
+        "rule_id": "mtx-d-1793802151",
+        "source_message_id": 305,
+        "sent_text_sha256": "22b3f55328e6017057c6ec02acda7524ed670e17544d845a994a89a4b98106c8",
+        "expected_text_sha256": "5bd2c9dcc640210850aa35f49b228f17755d248e1a56a8e24fac299a89c41b5a",
+        "duration_ms": 1322,
+        "status": "PASS",
+        "reason": "delivered",
+        "target_message_id": 252,
+        "target_text_sha256": "5bd2c9dcc640210850aa35f49b228f17755d248e1a56a8e24fac299a89c41b5a",
+        "correlation_id": "corr_3b0d049a0ebc",
+        "job_status": "SENT",
+        "filter_decision": null,
+        "ai_status": "n/a (AI off)",
+        "payload_has_raw_text": true,
+        "baseline_pickups_this_run": 0,
+        "worker_delivered_line": true
+      },
+      {
+        "cell": "D",
+        "kind": "block",
+        "rule_id": "mtx-d-1793802151",
+        "source_message_id": 306,
+        "sent_text_sha256": "df8e90bef3153e34b6ed71792fed55b94d31cc608b9a64d71cc68d53841a8733",
+        "expected_text_sha256": "df8e90bef3153e34b6ed71792fed55b94d31cc608b9a64d71cc68d53841a8733",
+        "duration_ms": 12126,
+        "status": "PASS",
+        "reason": "blocked before enqueue (no delivery job created)",
+        "target_message_id": null,
+        "target_text_sha256": null,
+        "correlation_id": null,
+        "job_status": "NONE",
+        "filter_decision": "REJECT-pre-enqueue",
+        "ai_status": "n/a (AI off)",
+        "baseline_pickups_this_run": 0
+      }
+    ],
+    "E": [
+      {
+        "cell": "E",
+        "kind": "pass",
+        "rule_id": "mtx-e-1793802166",
+        "source_message_id": 307,
+        "sent_text_sha256": "b0226e194649052a28d4cddb0749ee95600183ee9082ab8b3c90e13d315e1927",
+        "expected_text_sha256": "b0226e194649052a28d4cddb0749ee95600183ee9082ab8b3c90e13d315e1927",
+        "duration_ms": 1180,
+        "status": "PASS",
+        "reason": "delivered",
+        "target_message_id": 253,
+        "target_text_sha256": "b0226e194649052a28d4cddb0749ee95600183ee9082ab8b3c90e13d315e1927",
+        "correlation_id": "corr_23b8e072843c",
+        "job_status": "SENT",
+        "filter_decision": null,
+        "ai_status": "see enrich_logs.py (host-side worker log)",
+        "payload_has_raw_text": true,
+        "baseline_pickups_this_run": 0,
+        "worker_delivered_line": true
+      },
+      {
+        "cell": "E",
+        "kind": "block",
+        "rule_id": "mtx-e-1793802166",
+        "source_message_id": 308,
+        "sent_text_sha256": "8d35079a69969234a361e54ca0f7955187235616f166a6beb8bcc08165d26697",
+        "expected_text_sha256": "8d35079a69969234a361e54ca0f7955187235616f166a6beb8bcc08165d26697",
+        "duration_ms": 12086,
+        "status": "PASS",
+        "reason": "blocked before enqueue (no delivery job created)",
+        "target_message_id": null,
+        "target_text_sha256": null,
+        "correlation_id": null,
+        "job_status": "NONE",
+        "filter_decision": "REJECT-pre-enqueue",
+        "ai_status": "see enrich_logs.py (host-side worker log)",
+        "baseline_pickups_this_run": 0
+      }
+    ],
+    "F": [
+      {
+        "cell": "F",
+        "kind": "pass",
+        "rule_id": "mtx-f-1793802181",
+        "source_message_id": 309,
+        "sent_text_sha256": "97c639948407064ba21ef875ecd67898cc601dfe705571d2acca32e9cf5cd32d",
+        "expected_text_sha256": "97c639948407064ba21ef875ecd67898cc601dfe705571d2acca32e9cf5cd32d",
+        "duration_ms": 1194,
+        "status": "PASS",
+        "reason": "delivered",
+        "target_message_id": 254,
+        "target_text_sha256": "97c639948407064ba21ef875ecd67898cc601dfe705571d2acca32e9cf5cd32d",
+        "correlation_id": "corr_c84063fb0db2",
+        "job_status": "SENT",
+        "filter_decision": null,
+        "ai_status": "see enrich_logs.py (host-side worker log)",
+        "payload_has_raw_text": true,
+        "baseline_pickups_this_run": 0,
+        "worker_delivered_line": true
+      },
+      {
+        "cell": "F",
+        "kind": "block",
+        "rule_id": "mtx-f-1793802181",
+        "source_message_id": 310,
+        "sent_text_sha256": "04687a9fa718f77292e6a7b119da98579b03935b780850355da2d91803d1ea1a",
+        "expected_text_sha256": "04687a9fa718f77292e6a7b119da98579b03935b780850355da2d91803d1ea1a",
+        "duration_ms": 12100,
+        "status": "PASS",
+        "reason": "blocked before enqueue (no delivery job created)",
+        "target_message_id": null,
+        "target_text_sha256": null,
+        "correlation_id": null,
+        "job_status": "NONE",
+        "filter_decision": "REJECT-pre-enqueue",
+        "ai_status": "see enrich_logs.py (host-side worker log)",
+        "baseline_pickups_this_run": 0
+      }
+    ]
+  },
+  "media": {
+    "cell": "MEDIA",
+    "kind": "media",
+    "rule_id": "mtx-media-1793802196",
+    "source_message_id": 311,
+    "duration_ms": 60429,
+    "status": "FAIL",
+    "reason": "timeout waiting for job terminal state",
+    "caption_sha256": "72fb95b9a2410a2df642ed491a2192561b675c57109aa52894e4adc501e5dfe9",
+    "target_message_id": null,
+    "job_status": null,
+    "correlation_id": null,
+    "photo": false,
+    "caption_text_len": 45
+  },
+  "forward_every_n": {
+    "cell": "FEN",
+    "kind": "fen",
+    "rule_id": "mtx-fen-1793802258",
+    "source_message_ids": [
+      312,
+      313,
+      314
+    ],
+    "job_states": [
+      [
+        312,
+        "NONE"
+      ],
+      [
+        313,
+        "NONE"
+      ],
+      [
+        314,
+        "NONE"
+      ]
+    ],
+    "b_side_delivered": 0,
+    "status": "FAIL",
+    "reason": "jobs SENT=0 of 3, B-side messages=0 (expected exactly 2)",
+    "duration_ms": 49982
+  },
+  "failure_injection": [
+    {
+      "cell": "INJ1",
+      "kind": "restart",
+      "rule_id": "mtx-inj-restart-1793802309",
+      "source_message_id": 315,
+      "pending_before": [],
+      "job_status": null,
+      "correlation_id": null,
+      "b_side_delivered": false,
+      "status": "FAIL",
+      "reason": "recovered=False found=False status=None"
+    },
+    {
+      "cell": "INJ2",
+      "kind": "duplicate_ingress",
+      "rule_id": "mtx-inj-dup-1793802398",
+      "source_message_ids": [
+        316
+      ],
+      "status": "FAIL",
+      "reason": "first delivery did not settle: None"
+    }
+  ],
+  "source": -1004400615270,
+  "target": -1003915313919,
+  "replica_rule_ids": [
+    "mtx-a-1793802107",
+    "mtx-b-1793802122",
+    "mtx-c-1793802137",
+    "mtx-d-1793802151",
+    "mtx-e-1793802166",
+    "mtx-f-1793802181",
+    "mtx-media-1793802196",
+    "mtx-fen-1793802258",
+    "mtx-inj-restart-1793802309",
+    "mtx-inj-dup-1793802398"
+  ],
+  "replicas_removed": null,
+  "log_enrichment": {
+    "enriched_at": "2026-11-04T14:27:34Z",
+    "source": "docker logs atf-worker (host-side)",
+    "probes_seen": 6
+  }
+}

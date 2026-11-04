@@ -241,8 +241,8 @@ jobs:
         run: |
           # The suites create and drop their own scratch databases per test, so
           # runs never collide with each other or the service's own bookkeeping.
-          go test ./internal/queue/ ./internal/engine/scheduler/ -run '^TestPostgres' -v -timeout 300s
-          go test ./internal/queue/ ./internal/engine/scheduler/ -run '^TestPostgres' -race -timeout 300s
+          go test ./internal/queue/ ./internal/engine/scheduler/ ./internal/ops/opsstore_test/ -run '^TestPostgres' -v -timeout 300s
+          go test ./internal/queue/ ./internal/engine/scheduler/ ./internal/ops/opsstore_test/ -run '^TestPostgres' -race -timeout 300s
       - name: Cross-engine parity suite
         # The Go side of the parity harness compares against the committed
         # references produced by the REAL Python FilterEngine and the REAL
