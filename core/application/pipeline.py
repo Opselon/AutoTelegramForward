@@ -1063,6 +1063,21 @@ class DurableMessagePipeline:
         # Deciding from a count read in Python — or from a cached value — lets
         # both read 4 and both forward.
         every_n = int(getattr(rule, "forward_every_n", 1) or 1)
+        # Stage 6 boundary: when the Go Worker owns delivery execution it also
+        # owns the cadence gate (delivery.forwardEveryNGate over the same
+        # rule_counters table). Advancing the counter here too counted every
+        # message TWICE — sequences advanced 2,4,6 for three messages under
+        # N=2, and every slot landed between the two engines so nothing was
+        # forwarded at all. One owner, one advance.
+        if self._worker_owns_execution():
+            # Fall through to the rest of the pipeline: the cadence decision
+            # moves with the job, the transform/enqueue stages still run here.
+            ctx.record_stage(PipelineStage.FORWARD_INTERVAL, True,
+                             reason="deferred_to_go_worker")
+            logger.info(
+                "[PIPELINE:INTERVAL] [%s] Rule %s cadence deferred to the Go Worker",
+                ctx.correlation_id[:8], rule.id[:8],
+            )
         # An edit updates a copy that already had its slot: counting it would
         # both consume a slot and let an edit beat a real message to it.
         if every_n > 1 and not payload.is_edit and self._counters is not None:
