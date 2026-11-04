@@ -227,7 +227,7 @@ func (h *Harness) Enqueue(taskID, sourceChat string, sourceMsg int64, targetChat
 		"forward_mode": "COPY_MESSAGE", "has_media": false, "media_type": "TEXT",
 		"session_id": "sess-ownership", "source_chat_id": sourceChat,
 		"source_message_id": sourceMsg, "target_chat_id": targetChat,
-		"owner_user_id": h.owner,
+		"owner_user_id":  h.owner,
 		"correlation_id": fmt.Sprintf("own-%s-%d", taskID, sourceMsg),
 	}
 	for _, e := range extra {

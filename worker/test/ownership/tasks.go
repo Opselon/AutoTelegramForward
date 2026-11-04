@@ -30,13 +30,13 @@ type TaskSpec struct {
 // PolicySpec is the metadata.content_policy shape the Python pipeline and the
 // Go transform pipeline both read.
 type PolicySpec struct {
-	Enabled        *bool
-	BlacklistWords []string
-	WhitelistWords []string
-	WhitelistMode  string
-	BlockLinks     bool
-	RemoveLinks    bool
-	StripWords     []string
+	Enabled             *bool
+	BlacklistWords      []string
+	WhitelistWords      []string
+	WhitelistMode       string
+	BlockLinks          bool
+	RemoveLinks         bool
+	StripWords          []string
 	Replacements        map[string]string
 	OrderedReplacements [][2]string
 	RegexBlock          []string

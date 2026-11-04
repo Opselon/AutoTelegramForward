@@ -9,13 +9,13 @@
 // Two independent observation channels are pinned, because they answer two
 // different questions:
 //
-//	1. delivery.StageObserver (the engine's own pipeline telemetry hook)
-//	   records the stages the engine walked, in the order it walked them.
-//	   A recorded stage is OBSERVED EXECUTION: the engine called the hook.
+//  1. delivery.StageObserver (the engine's own pipeline telemetry hook)
+//     records the stages the engine walked, in the order it walked them.
+//     A recorded stage is OBSERVED EXECUTION: the engine called the hook.
 //
-//	2. cleaning.DecisionEvent.StageNames (the transform pipeline's decision
-//	   log) records which TEXT stages changed the body, in the order they
-//	   changed it. A stage that appears there OBSERVEDLY MUTATED the text.
+//  2. cleaning.DecisionEvent.StageNames (the transform pipeline's decision
+//     log) records which TEXT stages changed the body, in the order they
+//     changed it. A stage that appears there OBSERVEDLY MUTATED the text.
 //
 // The proof is load-bearing in both directions: it proves the documented
 // order is the executed order, and it proves a filter rejection happens
@@ -227,7 +227,7 @@ func TestStageOrderIsObservedNotAsserted(t *testing.T) {
 		rec := NewRecorder()
 		h := NewHarness(t, 5094837833)
 		h.Install(TaskSpec{ID: "task-ord3", Source: "-1001", Target: "-9003", Active: true,
-			Header: "HDR:",
+			Header:   "HDR:",
 			Metadata: map[string]any{"header": "HDR:"},
 			Policy: &PolicySpec{Enabled: boolPtr(true),
 				Replacements: map[string]string{"TOK": "REPLACED"},
