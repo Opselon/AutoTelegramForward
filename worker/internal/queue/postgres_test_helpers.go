@@ -17,6 +17,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 	"testing"
 	"time"
@@ -203,28 +204,10 @@ func pgxParse(dsn string) (*pgconn.Config, error) {
 // parser: the DSN may carry a password, sslmode and query parameters, and
 // replacing "/postgres" by hand would corrupt them.
 func pgSetDatabase(dsn, dbName string) (string, error) {
-	cfg, err := pgconn.ParseConfig(dsn)
+	u, err := url.Parse(dsn)
 	if err != nil {
 		return "", err
 	}
-	cfg.Database = dbName
-	return pgconnToString(cfg), nil
-}
-
-// pgconnToString renders a parsed config back to a connectable string
-// (pgconn.Config has no String method; the fields are the DSN's and a
-// minimal render covers what this file's callers set).
-func pgconnToString(cfg *pgconn.Config) string {
-	if cfg == nil {
-		return ""
-	}
-	host := cfg.Host
-	if host == "" {
-		host = "localhost"
-	}
-	port := cfg.Port
-	if port == 0 {
-		port = 5432
-	}
-	return fmt.Sprintf("postgres://%s@%s:%d/%s", cfg.User, host, port, cfg.Database)
+	u.Path = "/" + dbName
+	return u.String(), nil
 }
