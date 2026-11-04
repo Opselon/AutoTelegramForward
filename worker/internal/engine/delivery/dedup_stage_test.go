@@ -90,11 +90,17 @@ func replayJob() *job.DeliveryJob {
 	}
 }
 
-// TestEventAlreadyProcessedClosesSentWithoutSend is the W3 contract: a job
-// whose event was already processed must close as SENT without touching
-// Telegram. The message WAS delivered (through a prior job, or by the
-// enqueue the marker accompanies) — re-sending is the duplicate.
-func TestEventAlreadyProcessedClosesSentWithoutSend(t *testing.T) {
+// TestEventMarkedAtEnqueueStillDispatches is the regression test for the
+// production defect: Python writes the processed_messages marker at ENQUEUE
+// (pipeline.py:1444), so EVERY legitimately-enqueued first-time job carries
+// it. A delivery-side gate that treats the marker as "already sent" drops
+// 100% of new traffic — exactly the live failure on task_ea565d5c (jobs
+// closed SENT with target_message_id=0, no Telegram call).
+//
+// The delivery-side idempotency is the send fence (FenceClaim /
+// FenceAlreadySent), which collapses only onto a CONFIRMED send. The ingest
+// marker belongs to the ingest gate that reads it (pipeline.py:867).
+func TestEventMarkedAtEnqueueStillDispatches(t *testing.T) {
 	h, d := newDedupHarness(t)
 	ctx := context.Background()
 
@@ -108,13 +114,13 @@ func TestEventAlreadyProcessedClosesSentWithoutSend(t *testing.T) {
 		t.Fatalf("process: %v", err)
 	}
 	if h.metrics.sent != 1 {
-		t.Errorf("sent outcome = %d, want 1 (the SENT-without-send close)", h.metrics.sent)
+		t.Errorf("sent outcome = %d, want 1", h.metrics.sent)
 	}
-	if calls := h.gateway.Recorded(); len(calls) != 0 {
-		t.Errorf("gateway was called %d time(s); an already-processed event must never reach Telegram", len(calls))
+	if calls := h.gateway.Recorded(); len(calls) == 0 {
+		t.Error("a job whose event was marked AT ENQUEUE never reached the gateway — the delivery engine is dropping new traffic")
 	}
 	if status := directStatus(t, h.store, j.ID); status != "SENT" {
-		t.Errorf("job status = %s, want SENT (closed without a send)", status)
+		t.Errorf("job status = %s, want SENT", status)
 	}
 }
 
@@ -157,7 +163,7 @@ func TestEventDedupIsScopedByRuleChatMessage(t *testing.T) {
 		messageID            int64
 		wantGatewayCallCount int
 	}{
-		{"same event is a replay", "r1", "c", 5, 0},
+		{"same event still delivers (marker is written at enqueue)", "r1", "c", 5, 1},
 		{"another task sees it fresh", "r2", "c", 5, 1},
 		{"another source chat is fresh", "r1", "other", 5, 1},
 		{"another message is fresh", "r1", "c", 6, 1},
@@ -165,7 +171,7 @@ func TestEventDedupIsScopedByRuleChatMessage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			h.gateway.Reset()
 			j := &job.DeliveryJob{
-				ID: tc.ruleID + ":" + tc.chatID + ":" + itoa(tc.messageID) + ":t",
+				ID:     tc.ruleID + ":" + tc.chatID + ":" + itoa(tc.messageID) + ":t",
 				RuleID: tc.ruleID, SourceChatID: tc.chatID, SourceMessageID: tc.messageID,
 				TargetChatID: "t", Status: job.StatusPending, MaxAttempts: 5, CreatedAt: 1,
 				Payload: *jobPayload(map[string]any{"text": "hello"}),
@@ -244,31 +250,35 @@ func TestEventDedupCloseLeavesNoFenceClaim(t *testing.T) {
 	}
 }
 
-// TestEventDedupCloseIsIdempotentAcrossReclaims: the same replay arriving
-// twice (a re-claimed job, a repair re-enqueue) closes the same way both
-// times, with no Telegram call ever. The gate must be as replay-proof as
-// the marker it reads.
+// TestEventDedupCloseIsIdempotentAcrossReclaims pins the FREEDOM from the
+// old defect: with the marker written at enqueue (the production reality),
+// a job re-claimed after a lease expiry must be collapsed by the FENCE onto
+// its confirmed send — never by a "was it marked" guess that would also
+// collapse first-time traffic.
 func TestEventDedupCloseIsIdempotentAcrossReclaims(t *testing.T) {
-	h, d := newDedupHarness(t)
+	h, _ := newDedupHarness(t)
 	ctx := context.Background()
 
 	j := replayJob()
-	if err := d.MarkProcessed(ctx, j.RuleID, j.SourceChatID, j.SourceMessageID, ""); err != nil {
-		t.Fatalf("mark processed: %v", err)
+	h.enqueue(t, j)
+	if err := h.engine.Process(ctx, j); err != nil {
+		t.Fatalf("first process: %v", err)
 	}
-	for i := 0; i < 2; i++ {
-		h.enqueue(t, j)
-		if err := h.engine.Process(ctx, j); err != nil {
-			t.Fatalf("process pass %d: %v", i, err)
-		}
+	first := len(h.gateway.Recorded())
+	if first == 0 {
+		t.Fatal("first-time job never reached the gateway")
 	}
-	if calls := h.gateway.Recorded(); len(calls) != 0 {
-		t.Errorf("gateway called %d time(s) across replays; a replayed event must never reach Telegram", len(calls))
+
+	// A re-claim of the same job: the fence has a confirmed send, so no
+	// duplicate Telegram call happens — that collapse is the fence's job.
+	if err := h.engine.Process(ctx, j); err != nil {
+		t.Fatalf("replay process: %v", err)
+	}
+	if got := len(h.gateway.Recorded()); got != first {
+		t.Errorf("gateway called %d time(s) across replays, want %d (the fence collapses the replay)", got, first)
 	}
 }
 
-// errorDedupStore is a dedup.Store whose every read errors, for the
-// fail-open test.
 type errorDedupStore struct{}
 
 func (errorDedupStore) WasProcessed(context.Context, string, string, int64) (bool, error) {
