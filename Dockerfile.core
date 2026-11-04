@@ -17,6 +17,11 @@ COPY core/ ./core/
 # must ship in this image. Without it the gateway reports "unavailable" and
 # the worker has no transport to send through.
 COPY telegram_runtime/ ./telegram_runtime/
+# The runtime serves worker/proto/telegram_gateway.proto and resolves the
+# generated Python stubs by climbing to the repo root, so the worker proto
+# tree must be in the image at the same relative path (/app/worker/proto).
+COPY worker/proto/gen/ ./worker/proto/gen/
+COPY worker/proto/telegram_gateway.proto ./worker/proto/telegram_gateway.proto
 # The product version this build reports. The Go API image ships the same file
 # at /etc/atf/VERSION and points ATF_VERSION_FILE at it; the core resolves it
 # from the same locations, so the file has to be there for /api/stats to agree
