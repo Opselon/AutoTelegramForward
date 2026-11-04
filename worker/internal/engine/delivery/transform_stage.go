@@ -58,8 +58,18 @@ func (e *Engine) ownsTransforms(j *job.DeliveryJob) bool {
 	if !workerOwnsTransforms.Load() {
 		return false
 	}
-	if _, already := j.Payload.Raw()[transformsVersionKey]; already {
-		return false
+	// A job is "already transformed" only when the marker is PRESENT and
+	// non-empty. Python writes transforms_version: null alongside raw_text
+	// when ATF_WORKER_TRANSFORMS=1 (durable_queue._transform_boundary_payload
+	// returns (raw, None)) — the null is its "Python did NOT transform"
+	// value, not a version. Treating key-presence as the marker made every
+	// Python-enqueued job look pre-transformed, so neither engine applied
+	// the stage: replacements, cleaner, header/footer and AI all silently
+	// did nothing while the worker still logged "delivered".
+	if v, already := j.Payload.Raw()[transformsVersionKey]; already {
+		if s, ok := v.(string); ok && s != "" {
+			return false
+		}
 	}
 	// Only a job that actually carries a raw snapshot can be transformed
 	// here. Anything else has nothing to re-run the pipeline against.

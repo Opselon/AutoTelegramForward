@@ -706,6 +706,14 @@ func (s *Store) getFilter(ctx context.Context, filterID string, ruleOwnerUserID 
 		&regexPatternsJSON, &allowedJSON, &blockedJSON, &dropService, &minLen, &maxLen, &filterOwner); err != nil {
 		return nil, fmt.Errorf("scan filter_rules %s: %w", filterID, err)
 	}
+	// Release the cursor NOW, not on return. The optional* helpers below run
+	// fresh single-row queries through this same *sql.DB, which runs with
+	// SetMaxOpenConns(1) — a still-open cursor owns that one connection and
+	// the helpers would block on it until queryTimeout fires and the column
+	// (is_enabled in particular) is never read, silently leaving the filter
+	// at its pre-v30 default of ENABLED. An owner who toggled a filter off
+	// would get a filter that still drops messages.
+	rows.Close()
 
 	// Tenant isolation: the task may only be filtered by its own filter. An
 	// owner_user_id of 0 is a pre-ownership row and stays the task's own
