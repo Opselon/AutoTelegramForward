@@ -38,6 +38,7 @@ import (
 	"atf/worker/internal/infra/aiprovider"
 	"atf/worker/internal/queue"
 	"atf/worker/internal/rulestore"
+	"atf/worker/internal/telegraph"
 	"atf/worker/internal/telegraph/fakegateway"
 )
 
@@ -599,4 +600,44 @@ func (h *Harness) SetHasMedia(j *job.DeliveryJob, has bool) {
 // then succeed — the transient-failure path.
 func (h *Harness) SetErrorOnce(targetChat string) {
 	h.Gateway.SetErrorOnce(targetChat)
+}
+
+// Lookup reloads a job by ID from the queue store.
+func (h *Harness) Lookup(id string) *job.DeliveryJob {
+	h.t.Helper()
+	row := queue.StoreDB(h.t, h.Store).QueryRow(
+		`SELECT id, rule_id, source_chat_id, source_message_id, target_chat_id,
+		        status, attempts, max_attempts, payload_json, created_at, updated_at
+		 FROM delivery_jobs WHERE id = ?`, id)
+	var j job.DeliveryJob
+	var status, payload string
+	if err := row.Scan(&j.ID, &j.RuleID, &j.SourceChatID, &j.SourceMessageID, &j.TargetChatID,
+		&status, &j.Attempts, &j.MaxAttempts, &payload, &j.CreatedAt, &j.UpdatedAt); err != nil {
+		h.t.Fatalf("lookup %s: %v", id, err)
+	}
+	j.Status = job.Status(status)
+	j.Payload = *job.NewPayload(mustJSONMap(payload))
+	return &j
+}
+
+// permanentFailure is a non-retryable Telegram refusal.
+func permanentFailure() *telegraph.DeliveryFailure {
+	return &telegraph.DeliveryFailure{Code: "PERMISSION_DENIED", ErrorType: "CHAT_WRITE_FORBIDDEN", ErrorCode: "400", Message: "write forbidden"}
+}
+
+// transientFailure is a retryable Telegram outage.
+func transientFailure() *telegraph.DeliveryFailure {
+	return &telegraph.DeliveryFailure{Code: "TIMEOUT", ErrorType: "ETIMEDOUT", ErrorCode: "504", Message: "transport timeout"}
+}
+
+// floodWaitFailure is Telegram's rate-limit demand.
+func floodWaitFailure() *telegraph.DeliveryFailure {
+	return &telegraph.DeliveryFailure{Code: "FLOOD_WAIT", ErrorType: "FLOOD_WAIT_5", RetryAfterSeconds: 5, Message: "flood wait"}
+}
+
+// mustJSONMap decodes a payload_json blob into a map.
+func mustJSONMap(raw string) map[string]any {
+	out := map[string]any{}
+	_ = json.Unmarshal([]byte(raw), &out)
+	return out
 }
