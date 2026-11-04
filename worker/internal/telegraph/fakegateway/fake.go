@@ -42,8 +42,13 @@ type Fake struct {
 	SendFailsWith           *telegraph.DeliveryFailure
 	CopyMediaGroupFailsWith *telegraph.DeliveryFailure
 	DownloadFailsWith       *telegraph.DeliveryFailure
-	SessionReady            bool
-	SessionState            string
+
+	// failOnce[targetChat] = true makes the next send to that target fail
+	// once with a transient error, then clear. E2E retry-path scenarios use
+	// it instead of a blanket SendFailsWith.
+	failOnce     map[string]bool
+	SessionReady bool
+	SessionState string
 
 	// RestrictedSource makes ForwardMessages fail with a typed
 	// FORWARDING_RESTRICTED, so the fallback path can be exercised without
@@ -460,4 +465,16 @@ func (f *Fake) SetDeleteScript(script *DeleteResult) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.deleteScript = script
+}
+
+// SetErrorOnce makes the very next send to targetChat fail once with a
+// transient error, then succeed again. Used by E2E scenarios that must
+// exercise the retry path without a real Telegram outage.
+func (f *Fake) SetErrorOnce(targetChat string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.failOnce == nil {
+		f.failOnce = map[string]bool{}
+	}
+	f.failOnce[targetChat] = true
 }
