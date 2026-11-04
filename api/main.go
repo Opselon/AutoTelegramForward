@@ -287,6 +287,14 @@ func main() {
 	// Administrator Control Plane endpoints (strictly gated by RequireAdmin)
 	adminMux := http.NewServeMux()
 	adminMux.HandleFunc("GET /overview", h.AdminOverview)
+	// Go Worker operational surface (contract: devops-contract.md §1-2).
+	// The worker is the single telemetry owner; these routes proxy its
+	// /ops endpoints over the internal network and report an unreachable
+	// worker explicitly, never a zeroed snapshot that looks like "idle".
+	adminMux.HandleFunc("GET /worker/status", h.WorkerStatus)
+	adminMux.HandleFunc("GET /worker/queue", h.WorkerQueue)
+	adminMux.HandleFunc("GET /worker/tasks", h.WorkerTasks)
+	adminMux.HandleFunc("GET /worker/errors", h.WorkerErrors)
 	adminMux.HandleFunc("GET /users", h.AdminListUsers)
 	adminMux.HandleFunc("POST /users/{id}/status", h.AdminSetUserStatus)
 	adminMux.HandleFunc("POST /broadcast", h.AdminBroadcast)

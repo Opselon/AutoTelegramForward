@@ -2283,6 +2283,120 @@ paths:
               schema: { type: object }
         "401": { $ref: '#/components/responses/Unauthorized' }
         "403": { $ref: '#/components/responses/Forbidden' }
+  /api/admin/worker/status:
+    get:
+      tags: [admin, worker]
+      summary: 'Go Worker operational snapshot (proxied from the worker /ops surface)'
+      operationId: getApiAdminWorkerStatus
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "503":
+          description: Worker unreachable — the response body says so explicitly and never reports a zeroed snapshot.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  worker_reachable: { type: boolean }
+                  error: { type: string }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+  /api/admin/worker/queue:
+    get:
+      tags: [admin, worker]
+      summary: 'Queue depth, latency percentiles, backlog trend, derived load status'
+      operationId: getApiAdminWorkerQueue
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "503":
+          description: Worker unreachable.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  worker_reachable: { type: boolean }
+                  error: { type: string }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+  /api/admin/worker/tasks:
+    get:
+      tags: [admin, worker]
+      summary: 'Per-task operational rows derived from durable delivery_jobs'
+      operationId: getApiAdminWorkerTasks
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "503":
+          description: Worker unreachable.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  worker_reachable: { type: boolean }
+                  error: { type: string }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+  /api/admin/worker/errors:
+    get:
+      tags: [admin, worker]
+      summary: 'Bounded, deduplicated worker error/warning ring'
+      operationId: getApiAdminWorkerErrors
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      parameters:
+        - in: query
+          name: severity
+          schema: { type: string }
+        - in: query
+          name: component
+          schema: { type: string }
+        - in: query
+          name: rule_id
+          schema: { type: string }
+        - in: query
+          name: since
+          schema: { type: integer }
+          description: Unix seconds; entries older than this are excluded.
+        - in: query
+          name: limit
+          schema: { type: integer, maximum: 256 }
+          description: Capped at 256 per request.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "503":
+          description: Worker unreachable.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  worker_reachable: { type: boolean }
+                  error: { type: string }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
   /api/admin/users:
     get:
       tags: [admin]
