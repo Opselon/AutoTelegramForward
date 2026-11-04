@@ -109,8 +109,9 @@ func bootstrapSchema(t *testing.T, dbPath string) {
 		)`,
 		`CREATE TABLE IF NOT EXISTS rule_counters (
 			rule_id TEXT PRIMARY KEY,
-			accepted INTEGER NOT NULL DEFAULT 0,
 			owner_user_id INTEGER NOT NULL DEFAULT 0,
+			every_n INTEGER NOT NULL DEFAULT 1,
+			accepted INTEGER NOT NULL DEFAULT 0,
 			updated_at INTEGER NOT NULL DEFAULT 0
 		)`,
 		`CREATE TABLE IF NOT EXISTS bot_tokens (

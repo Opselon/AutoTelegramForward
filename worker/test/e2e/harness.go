@@ -641,3 +641,9 @@ func mustJSONMap(raw string) map[string]any {
 	_ = json.Unmarshal([]byte(raw), &out)
 	return out
 }
+
+// ResetCalls clears the gateway's recorded call log so a scenario can
+// assert on traffic after a mid-flight configuration change.
+func (h *Harness) ResetCalls() {
+	h.Gateway.Reset()
+}
