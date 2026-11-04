@@ -368,46 +368,28 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	}
 
 
-	// 2d. Stage 4.5 (W3) — event-level dedup: a job whose event the task
-	// already processed closes as SENT-without-send.
+	// 2d. Stage 4.5 (W3) — event-level dedup: REMOVED (production defect).
 	//
-	// This is the reconnect-replay protection the Python pipeline applies
-	// at ingest (pipeline.py:867, `was_processed`), now applied on the
-	// worker side of the boundary too. It exists for the one replay path
-	// Python's marker cannot cover: a job re-claimed after a lease expiry
-	// or re-enqueued by a repair path, whose event Python already marked
-	// processed at enqueue time (pipeline.py:1444) but whose delivery fence
-	// carries no confirmed send. Re-dispatching it would re-send a message
-	// the task already delivered through a previous job.
+	// The Python pipeline writes the processed_messages marker at ENQUEUE
+	// (pipeline.py:1444), not at delivery: it marks "the ingest side has
+	// taken responsibility for this event" and is read only by the ingest
+	// gate (pipeline.py:867, `was_processed`) to collapse a reconnect
+	// replay. It is never read on the Python delivery side.
 	//
-	// The close mirrors the fence's own FenceAlreadySent branch: SENT with
-	// a zero target id, the mapping row noted, no Telegram call. Like that
-	// branch it runs in preflight — before the fence is claimed — so the
-	// decision never leaves an unresolved CLAIMED fence row behind.
+	// A delivery-side read of that same marker therefore sees `seen` for
+	// EVERY legitimately-enqueued first-time message and closes it
+	// SENT-without-send — silently dropping 100% of new traffic the moment
+	// the Go Worker owns delivery. That is exactly the failure observed on
+	// the live task_ea565d5c (messages 109-112: SENT, target_message_id=0).
 	//
-	// A missing store, or a store error, is NOT a drop: the Python gate
-	// remains authoritative and this is defence-in-depth. The job proceeds
-	// to a normal dispatch rather than being refused over bookkeeping —
-	// the same fail-open posture the Python pipeline takes when the
-	// processed-messages repository could not be queried.
-	if e.dedup != nil {
-		seen, err := e.dedup.WasProcessed(ctx, j.RuleID, j.SourceChatID, j.SourceMessageID)
-		if err != nil {
-			logger.Warn("event-level dedup store unavailable — continuing to dispatch",
-				"error", err)
-		} else if seen {
-			logger.Warn("event already processed for this task — closing SENT without re-sending",
-				"decision", "SENT_WITHOUT_SEND", "reason_code", "DUPLICATE_EVENT")
-			if err := e.store.NoteMapping(ctx, j, job.StatusSent, 0); err != nil {
-				logger.Warn("mapping note failed for already-processed job", "error", err)
-			}
-			if err := e.store.MarkSent(ctx, j.ID, 0); err != nil {
-				logger.Warn("mark_sent failed for already-processed job", "error", err)
-			}
-			e.metrics.Outcome("sent")
-			return nil
-		}
-	}
+	// The correct delivery-side idempotency is the send fence this engine
+	// already owns (FenceClaim / FenceAlreadySent): a job re-claimed after
+	// a lease expiry or re-enqueued by a repair path is collapsed onto its
+	// own confirmed send, so no replay can double-deliver. The marker stays
+	// untouched for the ingest gate that actually owns it.
+	//
+	// (Historical note: this block originally gated on WasProcessed and is
+	// intentionally left as a comment so the trap is not re-introduced.)
 
 	// 2d. Stage 4.5 (W2): the Forward-Every-N cadence gate. The job's
 	// message owns a slot only when its position in the task's sequence of
