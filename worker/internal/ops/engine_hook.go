@@ -98,4 +98,3 @@ func (o *EngineObserver) RecordError(component, severity, msg string, fields map
 	}
 	o.collector.RecordError(e)
 }
-

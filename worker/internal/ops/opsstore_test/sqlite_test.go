@@ -60,9 +60,9 @@ func (f *opsFixture) seed(t *testing.T) {
 	insert("a4", "ruleA", job.StatusSent, 1, 5, now-20, 0, 0)
 	insert("a5", "ruleA", job.StatusFailed, 1, 5, now-15, 0, 0)
 	// ruleB
-	insert("b1", "ruleB", job.StatusRetryWait, 1, 5, now-40, 0, 0) // backoff elapsed
+	insert("b1", "ruleB", job.StatusRetryWait, 1, 5, now-40, 0, 0)                // backoff elapsed
 	insert("b2", "ruleB", job.StatusRetryWait, 2, 5, now-25, float64(now+120), 0) // delayed
-	insert("b3", "ruleB", job.StatusFailed, 5, 5, now-12, 0, 0)   // exhausted → dead letter
+	insert("b3", "ruleB", job.StatusFailed, 5, 5, now-12, 0, 0)                   // exhausted → dead letter
 	// ruleC
 	insert("c1", "ruleC", job.StatusSent, 1, 5, now-8, 0, 0)
 	insert("c2", "ruleC", job.StatusUnknown, 1, 5, now-6, 0, 0)

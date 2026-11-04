@@ -357,6 +357,20 @@ func (c *Collector) E2E() *latencyRing { return c.e2e }
 // QueueWait is the queue-wait latency ring (ms).
 func (c *Collector) QueueWait() *latencyRing { return c.wait }
 
+// E2EPercentile is the p-th percentile of the end-to-end window (ms),
+// exported so out-of-package tests can read the ring without the
+// package's unexported ring type.
+func (c *Collector) E2EPercentile(p float64) float64 { return c.e2e.percentile(p) }
+
+// QueueWaitPercentile is the p-th percentile of the queue-wait window (ms).
+func (c *Collector) QueueWaitPercentile(p float64) float64 { return c.wait.percentile(p) }
+
+// E2ECount is the number of observations in the end-to-end window.
+func (c *Collector) E2ECount() int64 { return c.e2e.countInWindow() }
+
+// QueueWaitCount is the number of observations in the queue-wait window.
+func (c *Collector) QueueWaitCount() int64 { return c.wait.countInWindow() }
+
 // Errors is the deduped error ring.
 func (c *Collector) Errors() *errorRing { return c.errors }
 

@@ -1,8 +1,6 @@
 package opsstore_test
 
 import (
-	"testing"
-
 	"atf/worker/internal/ops"
 )
 
