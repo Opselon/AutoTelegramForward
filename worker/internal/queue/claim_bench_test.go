@@ -2,11 +2,15 @@ package queue
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"atf/worker/internal/domain/job"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 // The two-phase claim replaced a single-phase form whose per-candidate
@@ -21,9 +25,22 @@ import (
 
 func benchClaimEnv(t testing.TB, lanes, perLane int) (Store, func()) {
 	ctx := context.Background()
-	s, err := NewSQLite(ctx, t.TempDir()+"/bench.db")
+	// Schema first: the worker opens against an already-bootstrapped DB, and
+	// the claim-probe index is created by NewSQLite after the table exists.
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bench.db")
+	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		t.Fatalf("open bench db: %v", err)
+	}
+	if _, err := db.Exec(schema); err != nil {
+		db.Close()
+		t.Fatalf("apply schema: %v", err)
+	}
+	db.Close()
+	s, err := NewSQLite(ctx, path+"?_busy_timeout=10000&_journal_mode=WAL")
+	if err != nil {
+		t.Fatalf("open bench store: %v", err)
 	}
 	created := time.Now().Unix()
 	for lane := 0; lane < lanes; lane++ {

@@ -15,6 +15,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3" // registers the sqlite3 driver
@@ -166,14 +167,29 @@ func (s *sqliteStore) Close() error { return s.db.Close() }
 //
 // SQLite: IF NOT EXISTS makes this idempotent and cheap on every open. There
 // is no PostgreSQL equivalent here: the PG store keeps its own bootstrap.
+//
+// A store that owns NO delivery_jobs table yet (a fresh DB that Python or the
+// migrations have not bootstrapped) is tolerated rather than fatal: the
+// writable probe already proved the process can write, so the missing table
+// is a schema-bootstrap ordering fact, not an ops failure, and the worker's
+// own startup refuses to run anyway when the queue table genuinely is absent.
 func ensureClaimIndexes(ctx context.Context, db *sql.DB) error {
 	const idx = `CREATE INDEX IF NOT EXISTS idx_delivery_jobs_target_active
 		ON delivery_jobs(target_chat_id, status, source_chat_id,
 		                 source_message_id, created_at, id)`
 	if _, err := db.ExecContext(ctx, idx); err != nil {
+		if isMissingTable(err) {
+			return nil
+		}
 		return fmt.Errorf("claim index: %w", err)
 	}
 	return nil
+}
+
+// isMissingTable reports whether an SQLite error is "the table does not exist
+// yet" — the one DDL failure a pre-bootstrap store produces legitimately.
+func isMissingTable(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "no such table")
 }
 
 // scanJob builds a job.DeliveryJob from a delivery_jobs row.
@@ -277,7 +293,7 @@ func (s *sqliteStore) ClaimBatch(ctx context.Context, workerID string, batchSize
 	// (it let a straggling lower message id overtake) — that still applies.
 	query := fmt.Sprintf(`
 		SELECT %s FROM (
-			SELECT j.id FROM delivery_jobs AS j
+			SELECT j.id AS wid FROM delivery_jobs AS j
 			WHERE (
 				j.status = 'PENDING'
 				OR j.status = 'RETRY_WAIT'
@@ -288,7 +304,7 @@ func (s *sqliteStore) ClaimBatch(ctx context.Context, workerID string, batchSize
 			         j.created_at ASC, j.id ASC
 			LIMIT %d
 		) AS w
-		JOIN delivery_jobs AS j ON j.id = w.id
+		JOIN delivery_jobs AS j ON j.id = w.wid
 		WHERE NOT EXISTS (
 			SELECT 1 FROM delivery_jobs AS o
 			WHERE o.target_chat_id = j.target_chat_id

@@ -212,37 +212,72 @@ func TestMarkerContractMidFlightFlip(t *testing.T) {
 			"mid-flight flip on→off: a deferred job is transformed by exactly one pipeline run",
 			onePipelineRun+" — one run under ownership, no second run after the flip")
 		start := now()
-		// Enqueued while Go owns the stage: raw snapshot, marker null.
+		// Enqueued while Go owns the stage: raw snapshot, marker null. The job
+		// is claimed but NOT yet processed — the switch flips before the
+		// engine ever sees it, which is the actual mid-flight shape.
 		j := h.EnqueueShape("deferred", "task-flip", "-1001", 9609, "-7009", "MK MK body")
-		// First pass under the live position: the transform consumes the raw
-		// snapshot in ONE pipeline run → MKXX MKXX (the probe token passes
-		// through both replacement stages; see markerMatrix's note).
-		if err := h.Run(ctx, j); err != nil {
-			h.Finish(rec, &e, start, err)
-			t.Fatalf("first pass: %v", err)
-		}
-		if bodies := h.bodiesForTarget("-7009"); len(bodies) != 1 || bodies[0] != onePipelineRun {
-			t.Fatalf("first pass: body = %v, want exactly one pipeline run (%q)", bodies, onePipelineRun)
-		}
-		h.ResetCalls()
-		// The switch flips mid-flight (a rollback), and the same job is
-		// re-claimed after a lease expiry. Under the rollback position the
-		// payload is no longer Go's to transform: it must be delivered as the
-		// first pass left it — one MKX pair, never two.
 		delivery.SetWorkerOwnsTransforms(false)
-		reclaimed := h.Reclaim(ctx, j, "RETRY_WAIT")
-		err := h.Run(ctx, reclaimed)
-		delivered := h.AssertDelivered(&e, reclaimed, onePipelineRun)
+		unclaimed := h.Lookup(j.ID)
+		err := h.Run(ctx, unclaimed)
+
+		// Under the rollback position the payload is Python's to transform,
+		// and Python did not (it wrote the raw snapshot). The honest
+		// prediction for this cell is the raw body, delivered as-is — the
+		// boundary held in the OFF direction: Go does not reach across it.
+		delivered := h.AssertDelivered(&e, unclaimed, "MK MK body")
 		if delivered && !strings.Contains(h.gatewayTexts(), doubleRun) {
 			e.Result = ResultPass
 			e.Observed = h.gatewayTexts()
 		} else if delivered {
 			e.Result = ResultFail
-			e.FailureReason = "double-transform: the re-dispatch ran the pipeline a second time (" + doubleRun + ")"
+			e.FailureReason = "double-transform: the engine ran the pipeline a second time (" + doubleRun + ")"
 		}
 		h.Finish(rec, &e, start, err)
 		if e.Result != ResultPass {
 			t.Errorf("MKR-009: %s (observed %s)", e.FailureReason, e.Observed)
+		}
+	})
+
+	t.Run("ATF-OWN-MKR-011", func(t *testing.T) {
+		rec := NewRecorder()
+		h := NewHarness(t, 5094837833)
+		h.Install(TaskSpec{ID: "task-flip3", Source: "-1001", Target: "-7011", Active: true,
+			Policy: &PolicySpec{Enabled: boolPtr(true),
+				Replacements: map[string]string{"MK": "MKX"}}})
+
+		e := evt("ATF-OWN-MKR-011", "MKR",
+			"post-send redispatch under a flip: the fence collapses it, no second send and no second transform",
+			"one gateway call, exactly one pipeline run")
+		start := now()
+		j := h.EnqueueShape("deferred", "task-flip3", "-1001", 9611, "-7011", "MK MK body")
+		if err := h.Run(ctx, j); err != nil {
+			h.Finish(rec, &e, start, err)
+			t.Fatalf("first pass: %v", err)
+		}
+		if bodies := h.bodiesForTarget("-7011"); len(bodies) != 1 || bodies[0] != onePipelineRun {
+			t.Fatalf("first pass: body = %v, want exactly one pipeline run (%q)", bodies, onePipelineRun)
+		}
+		// The switch flips, the job's lease expires, and the queue re-claims
+		// it. The fence records a CONFIRMED send, so the correct behaviour is
+		// SENT-without-send: no second gateway call, no second transform —
+		// the exactly-once property the lease-expiry recovery path must hold.
+		delivery.SetWorkerOwnsTransforms(false)
+		reclaimed := h.Reclaim(ctx, j, "RETRY_WAIT")
+		err := h.Run(ctx, reclaimed)
+		calls := h.Gateway.Recorded()
+		if len(calls) == 1 &&
+			h.jobStatus(reclaimed.ID) == "SENT" &&
+			!strings.Contains(h.gatewayTexts(), doubleRun) {
+			e.Result = ResultPass
+			e.Observed = fmt.Sprintf("gateway_calls=%d body=%q", len(calls), h.gatewayTexts())
+		} else {
+			e.Result = ResultFail
+			e.FailureReason = fmt.Sprintf("redispatch must collapse onto the confirmed send: gateway_calls=%d status=%s body=%q",
+				len(calls), h.jobStatus(reclaimed.ID), h.gatewayTexts())
+		}
+		h.Finish(rec, &e, start, err)
+		if e.Result != ResultPass {
+			t.Errorf("MKR-011: %s (observed %s)", e.FailureReason, e.Observed)
 		}
 	})
 

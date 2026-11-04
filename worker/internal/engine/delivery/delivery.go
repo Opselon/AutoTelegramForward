@@ -69,6 +69,41 @@ type Metrics interface {
 	ObserveWait(seconds float64)
 }
 
+// StageObserver is the pipeline telemetry hook the engine calls as it
+// walks the delivery stages. Each method is a "this stage just did one
+// unit of work (or failed)" notification; the engine supplies the latency
+// it already measured, so the observer adds no timers of its own.
+//
+// The stage names are the contract's fixed 11 (see internal/ops.StageNames)
+// — the engine only ever calls the subset it actually owns (queue,
+// task_resolution, filter, replacement, cleaner, header_footer, ai,
+// delivery); the rest stay "waiting", which is the honest answer for a
+// stage the ingest side or the Python pipeline owns.
+type StageObserver interface {
+	// StageRecord marks one processed item of the named stage.
+	StageRecord(stage string, latencyMs float64)
+	// StageRecordSkipped marks one item the stage declined to pass
+	// (the filter's skipped_by_policy is the contract's named example).
+	StageRecordSkipped(stage string, latencyMs float64)
+	// StageFail records a stage failure with a sanitized message.
+	StageFail(stage, msg string)
+	// StageEnabled sets the stage's configured state.
+	StageEnabled(stage string, enabled bool)
+
+	// DeliveryOutcome is the outcome vocabulary Metrics.Outcome already
+	// used; threaded through the same hook so the collector sees one
+	// coherent event stream per job.
+	DeliveryOutcome(kind string, ruleID string, latencyMs float64)
+
+	// RecordError feeds the classified-failure path: a typed Telegram
+	// failure becomes a deduped ring entry without the engine routing it
+	// through a log line it was not otherwise going to emit.
+	RecordError(component, severity, msg string, fields map[string]string)
+}
+
+// SetStageObserver wires the pipeline telemetry hook.
+func (e *Engine) SetStageObserver(o StageObserver) { e.ops = o }
+
 // Options tunes the delivery engine. Defaults come from the shared
 // ATF_QUEUE_* configuration so both engines behave the same way.
 type Options struct {
@@ -142,6 +177,14 @@ type Engine struct {
 	mu      sync.Mutex
 	rate    map[string][]time.Time // per-target send timestamps
 	scratch string                 // shared media scratch dir
+
+	// ops is the pipeline telemetry hook. It is DELIBERATELY an interface
+	// defined here (not a pointer to internal/ops) so this package stays
+	// import-cycle-free: the ops surface depends on the engine's Metrics,
+	// the engine never depends on the ops package. nil (every unit test,
+	// any engine built before the wiring landed) makes every observation a
+	// no-op.
+	ops StageObserver
 }
 
 // SetDedupStore wires the event/content idempotency store. It is a separate
@@ -184,6 +227,49 @@ func New(store queue.Store, rules rule.Store, gateway telegraph.Gateway, schedul
 	}
 }
 
+// stage helpers: every call site goes through these so a nil observer
+// costs one branch and no allocation, and the engine's call sites stay
+// one short line.
+func (e *Engine) stageRecord(stage string, start time.Time) {
+	if e.ops == nil {
+		return
+	}
+	e.ops.StageRecord(stage, float64(time.Since(start).Microseconds())/1000.0)
+}
+
+func (e *Engine) stageSkipped(stage string, start time.Time) {
+	if e.ops == nil {
+		return
+	}
+	e.ops.StageRecordSkipped(stage, float64(time.Since(start).Microseconds())/1000.0)
+}
+
+func (e *Engine) stageFail(stage, msg string) {
+	if e.ops == nil {
+		return
+	}
+	e.ops.StageFail(stage, msg)
+}
+
+func (e *Engine) outcome(kind string, j *job.DeliveryJob, start time.Time) {
+	if e.ops == nil {
+		return
+	}
+	e.ops.DeliveryOutcome(kind, j.RuleID, float64(time.Since(start).Microseconds())/1000.0)
+}
+
+func (e *Engine) failureToRing(ferr *telegraph.DeliveryFailure, j *job.DeliveryJob) {
+	if e.ops == nil || ferr == nil {
+		return
+	}
+	e.ops.RecordError("worker.delivery", "ERROR", ferr.Message, map[string]string{
+		"code":       ferr.Code,
+		"error_type": ferr.ErrorType,
+		"rule_id":    j.RuleID,
+		"job_id":     j.ID,
+	})
+}
+
 // SetDecisionRecorder installs the central-log recorder the transform
 // pipeline reports through. The Worker main calls it once after
 // constructing the engine; a nil recorder is explicitly allowed and
@@ -199,6 +285,11 @@ func (e *Engine) SetDecisionRecorder(recorder cleaning.DecisionRecorder) {
 // (store unavailable). A defer/retry is a terminal-for-now state, not an
 // error.
 func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
+	// jobStart bounds the /ops end-to-end latency: claim → terminal
+	// outcome. Every exit path below reports through it, so the ring sees
+	// the defers and the drops too, not only the happy path — the panel's
+	// p99 would otherwise read as "fast" because it only ever saw sends.
+	jobStart := time.Now()
 	logger := e.jobLogger(j)
 
 	// ---------------------------------------------------------------------------
@@ -217,25 +308,33 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	// 1. Re-check the task at delivery time. A job can sit in the queue
 	// while its owner deletes or pauses the task; delivering then would
 	// forward a message the owner has already removed.
+	stageStart := time.Now()
 	r, f, err := e.rules.GetByID(j.RuleID)
+	e.stageRecord("task_resolution", stageStart)
 	if err != nil {
 		// A rule-store outage is the environment, not the job: defer without
 		// spending an attempt, and without claiming any fence.
 		logger.Warn("rule store unavailable — deferring", "error", err)
+		e.stageFail("task_resolution", "rule store unavailable")
 		_ = e.store.Defer(ctx, j.ID, "rule store unavailable", 5*time.Second)
 		e.metrics.Outcome("retried")
+		e.outcome("retried", j, jobStart)
 		return nil
 	}
 	if r == nil {
 		logger.Warn("rule no longer exists — dropping job", "decision", "DROP", "reason_code", "RULE_NOT_FOUND")
+		e.stageFail("task_resolution", "RULE_NOT_FOUND")
 		_ = e.store.MarkFailed(ctx, j.ID, "Rule no longer exists")
 		e.metrics.Outcome("failed")
+		e.outcome("failed", j, jobStart)
 		return nil
 	}
 	if !r.IsActive {
 		logger.Warn("rule is disabled — dropping job", "decision", "DROP", "reason_code", "RULE_DISABLED")
+		e.stageFail("task_resolution", "RULE_DISABLED")
 		_ = e.store.MarkFailed(ctx, j.ID, "Rule disabled")
 		e.metrics.Outcome("failed")
+		e.outcome("failed", j, jobStart)
 		return nil
 	}
 	if r.AutoPauseReason != "" {
@@ -272,14 +371,19 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	// A filter drop is a permanent decision about this content: no send ever
 	// happens, so it must not leave an unresolved fence claim behind.
 	if f != nil {
+		fStart := time.Now()
 		text := j.Payload.Text()
 		res := e.filters.Evaluate(text, j.Payload.MediaType(), false, f)
 		if res.Action == filter.Drop {
+			e.stageSkipped("filter", fStart)
+			e.stageFail("filter", res.Reason)
 			logger.Warn("job dropped by attached filter at delivery time", "decision", "DROP", "reason_code", "FILTER_RULE_REJECTED", "filter_reason", res.Reason, "filter_id", f.ID)
 			_ = e.store.MarkFailed(ctx, j.ID, "Filter: "+res.Reason)
 			e.metrics.Outcome("failed")
+			e.outcome("failed", j, jobStart)
 			return nil
 		}
+		e.stageRecord("filter", fStart)
 	}
 
 	// 2b. Task-level block_links gate (F-12). This is the projection of the
@@ -454,12 +558,15 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 		JobKind:         j.JobKind,
 	}
 	leaseUntil := float64(time.Now().Add(2 * e.opts.LeaseDuration).Unix())
+	fStart := time.Now()
 	fenceOutcome, fenceRow, err := e.store.FenceClaim(ctx, key, e.workerID, leaseUntil)
+	e.stageRecord("queue", fStart)
 	if err != nil {
 		// A fence-store hiccup must never silently disable the fence: the
 		// send is refused loudly rather than dispatched unprotected.
 		logger.Error("idempotency fence unavailable — refusing to dispatch unprotected",
 			"error", err)
+		e.stageFail("queue", "idempotency fence unavailable")
 		_ = e.store.Defer(ctx, j.ID, "idempotency fence unavailable", 5*time.Second)
 		return nil
 	}
@@ -481,6 +588,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 			logger.Warn("mark_sent failed for already-sent job", "error", err)
 		}
 		e.metrics.Outcome("sent")
+		e.outcome("sent", j, jobStart)
 		return nil
 	case job.FenceInFlight, job.FenceStale, job.FenceUnknown:
 		// Another worker holds a live claim, or an earlier send's outcome
@@ -490,6 +598,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 			"fence_outcome", string(fenceOutcome))
 		_ = e.store.Defer(ctx, j.ID, "delivery fence: "+string(fenceOutcome), 15*time.Second)
 		e.metrics.Outcome("retried")
+		e.outcome("retried", j, jobStart)
 		return nil
 	case job.FenceDispatch:
 		// fall through: this worker owns the send
@@ -539,9 +648,13 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	}
 
 	// 5. Dispatch (Stage 2 for branded deliveries; direct for unbranded).
+	dStart := time.Now()
 	targetID, ferr := e.dispatch(ctx, j, r)
+	e.stageRecord("delivery", dStart)
 
 	if ferr != nil {
+		e.stageFail("delivery", ferr.Code)
+		e.failureToRing(ferr, j)
 		return e.handleFailure(ctx, j, logger, key, ferr)
 	}
 
@@ -568,6 +681,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	}
 	e.recordSend(j.TargetChatID)
 	e.metrics.Outcome("sent")
+	e.outcome("sent", j, jobStart)
 	logger.Info("delivered",
 		"target_message_id", targetID,
 		"session_id", redacted(j.Payload.SessionID()))
@@ -969,6 +1083,7 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 	// Ambiguous: Telegram may have accepted the send. Never a plain FAILED,
 	// never an automatic re-dispatch — reconciliation owns this row.
 	if ferr.IsAmbiguous() {
+		e.failureToRing(ferr, j)
 		_ = e.store.FenceRecordOutcome(ctx, key, e.workerID, "UNKNOWN", ferr.Message)
 		logger.Error("ambiguous delivery outcome — marking UNKNOWN for reconciliation",
 			"code", ferr.Code, "error_type", ferr.ErrorType, "message", ferr.Message)
@@ -1009,6 +1124,7 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 	// Authentication: the session cannot perform operations at all. Nothing
 	// the retry loop can fix — fail it loudly and visibly.
 	if ferr.Code == "AUTHENTICATION_ERROR" {
+		e.failureToRing(ferr, j)
 		_ = e.store.FenceRecordOutcome(ctx, key, e.workerID, "FAILED", ferr.Message)
 		logger.Error("session authentication failure — marking job FAILED",
 			"session_id", redacted(j.Payload.SessionID()))
@@ -1019,6 +1135,7 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 
 	// Permanent Telegram refusals: no retry can help.
 	if !ferr.IsTransient() {
+		e.failureToRing(ferr, j)
 		_ = e.store.FenceRecordOutcome(ctx, key, e.workerID, "FAILED", ferr.Message)
 		logger.Error("permanent Telegram failure — marking job FAILED",
 			"code", ferr.Code, "error_type", ferr.ErrorType)

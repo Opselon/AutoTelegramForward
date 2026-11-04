@@ -386,6 +386,16 @@ func (c *Collector) Stages() []map[string]any {
 	return out
 }
 
+// StageClearFailure clears a stage's last-failure flag — the recovery half
+// of the health derivation. A stage that failed and then succeeded reads
+// degraded (visible, not hidden); clearing on a success keeps the flag
+// from outliving the recovery the operator already sees.
+func (c *Collector) StageClearFailure(stage string) {
+	if s := c.stageOf(stage); s != nil {
+		s.lastFailed.Store(false)
+	}
+}
+
 func (c *Collector) stageOf(name string) *stageStats {
 	c.stageLock.RLock()
 	defer c.stageLock.RUnlock()

@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"net"
 	"net/http"
 	"os"
@@ -253,6 +252,7 @@ func run() (runErr error) {
 	})
 	engine.SetDedupStore(dedupStore)
 	engine.SetCounters(cadenceStore)
+	engine.SetStageObserver(ops.NewEngineObserver(collector))
 
 	// Stage 5 (W4): the AI rewrite stage. The transformer resolves prompts
 	// through the SAME owner-scoped ai_configs store the channel-rewrite and
@@ -271,7 +271,12 @@ func run() (runErr error) {
 		factory := aiprovider.NewFactory()
 		transformer := aiprovider.NewTransformer(
 			aiConfigs, circuit.NewRegistry(), validator.New(), factory)
-		engine.SetAITransformer(transformer, aiConfigs, &aiMetricsCounters{})
+		engine.SetAITransformer(transformer, aiConfigs, ops.NewAIMetricsObserver(collector))
+		// A wired transformer is the difference between "the AI stage is
+		// configured" and "the AI stage has a provider": the stage reports
+		// enabled only when a provider path actually exists, so the panel
+		// never paints AI as merely-off when it is in fact unwired.
+		collector.StageEnabled("ai", true)
 		if ps, perr := prompt.NewSQLiteStore(aiCfgCtx, cfg.DSN()); perr == nil {
 			engine.SetPromptStore(ps)
 		} else {
@@ -353,6 +358,36 @@ func run() (runErr error) {
 	// restart forever; the lease + fence make that cut safe.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
+	// Connectivity probes + rate sampling. One goroutine, one 15s ticker:
+	//
+	//   - TELEGRAM: the gateway's IsSessionReady against the session the
+	//     runtime owns. A gateway that cannot answer is an unreachable
+	//     runtime, exactly the "telegram_connected" the /ops contract
+	//     names. The fake gateway (tests, shadow-mode) answers ready.
+	//   - AI: the LAST provider outcome is the probe — there is no cheaper
+	//     health check for a paid endpoint than "did the last call work",
+	//     and no call is made here. Before any call, reachability is the
+	//     AI stage's wiring (a wired transformer means a provider exists).
+	//   - RATES: the collector's 1-minute windows advance even when nobody
+	//     polls /ops, so a worker delivering in the dark still graphs.
+	//
+	// Every probe outcome lands on the collector's atomic flags; no DB
+	// write, no per-message write, no per-heartbeat write.
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		probeTelegram(ctx, collector, gateway, log)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				probeTelegram(ctx, collector, gateway, log)
+				collector.SampleRates(time.Now())
+			}
+		}
+	}()
+
 
 	var schedWG sync.WaitGroup
 	schedWG.Add(1)
@@ -692,49 +727,13 @@ func version() string {
 }
 
 // --- adapters: keep the engine free of logging/metrics plumbing ------------ //
-
-type metricsCounters struct {
-	mu        sync.Mutex
-	sent      int64
-	retried   int64
-	failed    int64
-	unknown   int64
-	rpcCount  int64
-	rpcSum    float64
-	waitSum   float64
-	waitCount int64
-}
-
-func (c *metricsCounters) Outcome(kind string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	switch kind {
-	case "sent":
-		c.sent++
-	case "retried":
-		c.retried++
-	case "failed":
-		c.failed++
-	case "unknown":
-		c.unknown++
-	}
-}
-
-func (c *metricsCounters) ObserveRPC(operation string, seconds float64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.rpcCount++
-	c.rpcSum += seconds
-}
-
-func (c *metricsCounters) ObserveWait(seconds float64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if seconds > 0 && !math.IsNaN(seconds) {
-		c.waitCount++
-		c.waitSum += seconds
-	}
-}
+//
+// metricsCounters is GONE: it was the second, competing owner of the very
+// counters /healthz reported (the delivered=0-on-41-real-deliveries
+// defect). The engine now reports through the ops collector, which is the
+// same object the health and ops surfaces read. If a future metrics owner
+// is needed outside those surfaces, add it here — never a second one for
+// the same numbers.
 
 // openSchedulerStore opens the durable scheduled_actions store against the
 // same database the delivery queue uses (PostgreSQL when configured,
@@ -890,4 +889,29 @@ func openAIConfigStore(ctx context.Context, cfg *config.Config) (aiconfig.Store,
 	// ai_configs is SQLite-only in the Python Core (the repository reads it
 	// from the shared atf.db), so the Go side mirrors that placement.
 	return aiconfig.NewSQLiteStore(ctx, cfg.DSN(), crypto)
+}
+
+// --- probes ---------------------------------------------------------------- //
+
+// probeTelegram answers the /ops contract's telegram_connected field from
+// the ONE thing the field actually means: can the Telegram Runtime serve
+// MTProto work for a session right now.
+//
+// It is deliberately NOT a per-target or per-job call: the probe's cost is
+// bounded (one gRPC per tick, RPC-timeout'd) and its outcome is an atomic
+// flag plus a timestamp, never a queue write. A failed probe degrades the
+// /ops connectivity chip; it never fails a delivery — the delivery path's
+// own SESSION_UNAVAILABLE handling owns that decision.
+func probeTelegram(ctx context.Context, collector *ops.Collector, gateway telegraph.Gateway, log *slog.Logger) {
+	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	ok := false
+	if ready, _, err := gateway.IsSessionReady(probeCtx, ""); err == nil {
+		ok = ready
+	} else if log != nil {
+		// A probe failure is operational noise worth one line, not a
+		// retry loop: the ticker will ask again in 15s.
+		log.Debug("telegram probe failed", "error", err)
+	}
+	collector.RecordTelegram(ok, time.Now())
 }

@@ -118,6 +118,20 @@ func loadTransformSwitch() bool {
 // policy stages and before the final replacements + header/footer — and
 // there is exactly one transform owner, never two.
 func (e *Engine) applyTransformPipeline(ctx context.Context, j *job.DeliveryJob, r *rule.ForwardRule, logger Logger) error {
+	tStart := time.Now()
+	defer func() {
+		// The transform pipeline IS the four text stages (cleaner, link
+		// policy/replacement, header/footer, AI). They run as one ordered
+		// ApplyText call, so one observation per stage in the aggregate is
+		// the honest measurement: splitting them would mean re-timing a
+		// library call that reports no per-stage clock.
+		ms := float64(time.Since(tStart).Microseconds()) / 1000.0
+		e.stageRecord("cleaner", tStart)
+		e.stageRecord("replacement", tStart)
+		e.stageRecord("header_footer", tStart)
+		e.stageRecord("ai", tStart)
+		_ = ms
+	}()
 	raw := payloadRawText(j)
 	if raw == "" {
 		// Nothing to transform and nothing to drop: a snapshot of an empty
@@ -204,6 +218,7 @@ func (e *Engine) applyTransformPipeline(ctx context.Context, j *job.DeliveryJob,
 	}
 
 	if result.EmptyAfterClean && !result.AIDrop {
+		e.stageFail("cleaner", "EMPTY_AFTER_CLEAN")
 		// The only transform-internal drop: the stages stripped the whole
 		// body of a message that had content. The Python pipeline audits
 		// exactly this decision (pipeline.py:1467-1486); the Worker makes
@@ -217,6 +232,7 @@ func (e *Engine) applyTransformPipeline(ctx context.Context, j *job.DeliveryJob,
 		return errTransformDrop
 	}
 	if result.AIDrop {
+		e.stageFail("ai", result.AIClassification)
 		// Stage 5 (W4): the AI rewrite failed and the rule's fallback
 		// policy is DROP, RETRY or QUARANTINE. The three share one
 		// terminal outcome on the transform side — nothing is sendable —
