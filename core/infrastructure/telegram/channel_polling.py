@@ -29,7 +29,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("atf.boot")
 
@@ -724,6 +724,33 @@ class ChannelPollingService:
             chat_name or chat_id, len(messages),
         )
 
+        # --- Self-send blind spot ------------------------------------------- #
+        # `pts` came from the channel's CURRENT pts (GetFullChannel), which is
+        # the pts Telegram expects a client to pass when it has ALREADY seen
+        # everything. Posts written through this very session (an operator
+        # probe, a same-account tool, any client sharing the auth key) are
+        # included in that pts, so GetChannelDifference answers EMPTY for them
+        # — the post exists, the history read sees it, the difference does not.
+        # Live updates do not arrive for them either: the update loop believes
+        # the session already knows its own write.
+        #
+        # The empty-difference case therefore cannot be trusted as "nothing
+        # new": when top > cursor the id range demonstrably contains work, so
+        # fall back to a plain history read of the window before recording the
+        # ids as durable gap recovery work. The history read carries no pts
+        # gate and returns the posts.
+        if not returned_ids:
+            recovered = await self._history_fetch_window(
+                client, chat_id, lo, hi, session_id=session_id,
+            )
+            if recovered:
+                logger.info(
+                    "[POLL TRACE] channel=%s (%s): difference was empty but the history "
+                    "read recovered %d post(s) in [%d..%d] — the pts gate hid them",
+                    chat_name or chat_id, chat_id, recovered, lo, hi,
+                )
+                return recovered
+
         # --- Audit finding #1: a truncated difference must not move the
         # cursor past the ids Telegram did not return. ----------------------- #
         # `lo..top` is what we ASKED for; `returned_ids` is what we GOT BACK.
@@ -893,9 +920,82 @@ class ChannelPollingService:
                 logger.warning("poll: history read of %s failed: %s", chat_id, exc)
         return None
 
-    # ------------------------------------------------------------------ #
-    # Cursor persistence (survives restarts)
-    # ------------------------------------------------------------------ #
+    async def _history_fetch_window(
+        self, client, chat_id: str, lo: int, hi: int, session_id: str = "",
+    ) -> int:
+        """Recover a message-id window the pts gate hid from GetChannelDifference.
+
+        GetChannelDifference with the channel's CURRENT pts answers EMPTY for
+        any post the session itself wrote (its pts already covers the write),
+        and the live update loop agrees — those posts arrive through neither
+        path. A plain history read carries no pts gate and returns them, so
+        this is the authoritative fallback for an empty difference.
+
+        Dispatches the recovered posts through the bound message handler and
+        advances the cursor to the newest dispatched id, so the next sweep
+        cannot re-deliver them. Every stage below is idempotent (event-level
+        dedup plus the enqueue's unique key), so a crash between dispatch and
+        the cursor write re-delivers at most once.
+
+        Returns the number of posts dispatched, or 0 when the window genuinely
+        has nothing (the difference was right).
+        """
+        target = int(chat_id) if str(chat_id).lstrip("-").isdigit() else chat_id
+        limit = min(max(1, hi - lo + 1) + 8, 100)
+
+        async def _read(peer: Any) -> List[Any]:
+            out: List[Any] = []
+            async for m in client.get_chat_history(peer, limit=limit):
+                mid = int(getattr(m, "id", 0) or 0)
+                if lo <= mid <= hi:
+                    out.append(m)
+            return out
+
+        found: List[Any] = []
+        try:
+            found = await _read(target)
+        except Exception:
+            try:
+                found = await _read(chat_id)
+            except Exception as exc:
+                logger.warning(
+                    "poll: history fallback read of %s failed: %s", chat_id, exc,
+                )
+                return 0
+        if not found:
+            return 0
+
+        getter = getattr(self._dispatcher, "message_handler", None)
+        handler = getter(session_id) if getter is not None else None
+        if handler is None:
+            logger.warning(
+                "[POLL FALLBACK] channel=%s: no message handler bound for session %s — "
+                "cannot dispatch %d recovered post(s)",
+                chat_id, (session_id or "?")[:8], len(found),
+            )
+            return 0
+
+        # The history read yields newest-first; dispatch in ascending id order
+        # so the pipeline sees the source's own order.
+        dispatched = 0
+        newest = 0
+        for m in sorted(found, key=lambda x: int(getattr(x, "id", 0) or 0)):
+            mid = int(getattr(m, "id", 0) or 0)
+            try:
+                await handler(client, m)
+                dispatched += 1
+                newest = max(newest, mid)
+            except Exception as exc:
+                logger.error(
+                    "[POLL FALLBACK] channel=%s id=%s: dispatch failed: %s",
+                    chat_id, mid, exc, exc_info=True,
+                )
+        if newest and newest > self._state.get(chat_id, 0):
+            self._state[chat_id] = newest
+            await self._persist_cursors()
+        return dispatched
+
+
     async def _restore_cursors(self) -> None:
         if self._state_store is None:
             return

@@ -302,6 +302,13 @@ services:
       # root, so the volume init below grants group write access to atf.db
       # before this container starts.
       ATF_DB_PATH: /app/data/atf.db
+      # The master key behind every encrypted column the worker must READ:
+      # ai_configs.api_key_encrypted (the PVA consumer and the channel
+      # rewriter resolve provider credentials through it) and the bot token
+      # vault. Same secret the Core's CryptoService derives from
+      # (core/infrastructure/security/crypto.py); without it the worker
+      # fail-closed rather than decrypting with a wrong key.
+      ATF_MASTER_KEY: ${ATF_MASTER_KEY}
       # The Python Telegram Runtime's gRPC endpoint.
       ATF_TELEGRAM_RUNTIME_ADDR: ${ATF_TELEGRAM_RUNTIME_ADDR:-core:50053}
       # Queue knobs shared 1:1 with the Python worker's ATF_QUEUE_* names.
