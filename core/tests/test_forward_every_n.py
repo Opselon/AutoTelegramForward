@@ -457,6 +457,41 @@ class TestThePipelineGate:
                 db.close()
         asyncio.run(body())
 
+    def test_worker_owned_execution_defers_the_gate_and_writes_no_counter(self, tmp_path):
+        """Stage 6 boundary: under ATF_WORKER_ENABLED the Go Worker owns the cadence.
+
+        Advancing the counter on BOTH sides counted every message twice —
+        three messages under N=2 produced sequences 2,4,6 and no slot was
+        ever owned, so nothing forwarded at all. Python must record the
+        deferral and never touch rule_counters.
+        """
+        async def body():
+            db = SqliteDatabase(str(tmp_path / "deferred.db"))
+            try:
+                rule = make_rule(every_n=2)
+                pipeline, queue, counters, processed = await self._enqueue_marks(db, rule)
+                import os
+                os.environ["ATF_WORKER_ENABLED"] = "1"
+                try:
+                    for message_id in (1, 2, 3, 4):
+                        ctx = await pipeline.process(payload(message_id))
+                        # The cadence stage is recorded as deferred, and the
+                        # message still flows to the enqueue stage: Python is
+                        # not the owner, so nothing is skipped here.
+                        interval = [r for r in ctx.stage_results
+                                    if r.stage == PipelineStage.FORWARD_INTERVAL]
+                        assert interval and interval[0].reason == "deferred_to_go_worker"
+                        assert any(r.stage == PipelineStage.ENQUEUE and r.success
+                                   for r in ctx.stage_results)
+                    # The counter must be untouched: the Go side advances it.
+                    assert await counters.peek(rule.id) is None
+                    assert pipeline.metrics.forward_interval_skipped_total == 0
+                finally:
+                    os.environ.pop("ATF_WORKER_ENABLED", None)
+            finally:
+                db.close()
+        asyncio.run(body())
+
     def test_filtered_messages_never_consume_a_slot(self, tmp_path):
         """A message the filter drops is not part of the cadence.
 

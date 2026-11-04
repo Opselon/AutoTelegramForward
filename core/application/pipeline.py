@@ -1080,7 +1080,10 @@ class DurableMessagePipeline:
             )
         # An edit updates a copy that already had its slot: counting it would
         # both consume a slot and let an edit beat a real message to it.
-        if every_n > 1 and not payload.is_edit and self._counters is not None:
+        # Under worker-owned execution the Go side owns the advance (above),
+        # so this block must not run at all.
+        if every_n > 1 and not payload.is_edit and self._counters is not None \
+                and not self._worker_owns_execution():
             sequence = 0
             try:
                 sequence = int(await self._counters.advance(
