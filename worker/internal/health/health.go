@@ -37,8 +37,40 @@ func (s State) String() string {
 	return "starting"
 }
 
-// Tracker is a concurrency-safe worker state holder.
-type Tracker struct {
+// Tracker is the worker state holder the health surface reports.
+//
+// It is an INTERFACE on purpose: the operational collector
+// (internal/ops.Collector, through ops.TrackerBridge) is the metrics
+// owner, and the health surface must read the counters the delivery
+// engine actually increments rather than a second set that counts
+// nothing. The in-process default (localTracker) is the pre-ops
+// implementation, kept so a health.Server built without a collector still
+// works — tests and the worker's own unit surface.
+//
+// THE DEFECT THE INTERFACE CLOSES: /healthz used to report a Tracker's
+// delivered=0 on a worker whose engine had delivered 41 messages, because
+// the engine counted elsewhere. Exactly one owner may hold these numbers.
+type Tracker interface {
+	// SetState changes the worker's execution state.
+	SetState(s State)
+	// State returns the current execution state.
+	State() State
+	// Active is the current in-flight delivery count.
+	Active() int64
+	// Enter marks one delivery as in-flight, returning the new count.
+	Enter() int64
+	// Leave marks one delivery as complete, returning the new count.
+	Leave() int64
+	// Outcome records a delivery outcome (sent|retried|failed|unknown).
+	Outcome(kind string)
+	// Snapshot returns the operational counters for the /healthz report.
+	Snapshot() map[string]any
+}
+
+// localTracker is the in-process default: a concurrency-safe state holder
+// that counts what THIS process did. It is the pre-ops implementation,
+// unchanged, and exists so the health surface remains usable standalone.
+type localTracker struct {
 	state       atomic.Uint32
 	concurrency atomic.Int64
 	delivered   atomic.Int64
@@ -48,28 +80,24 @@ type Tracker struct {
 	startedAt   time.Time
 }
 
-// NewTracker returns a Tracker in StateStarting.
-func NewTracker() *Tracker {
-	return &Tracker{startedAt: time.Now()}
+// NewTracker returns a Tracker in StateStarting. Callers that own an
+// ops.Collector should pass ops.NewTrackerBridge(collector) to NewServer
+// instead, so the health surface reports the collector's counters.
+func NewTracker() Tracker {
+	return &localTracker{startedAt: time.Now()}
 }
 
-// SetState changes the worker's execution state.
-func (t *Tracker) SetState(s State) { t.state.Store(uint32(s)) }
+func (t *localTracker) SetState(s State) { t.state.Store(uint32(s)) }
 
-// State returns the current execution state.
-func (t *Tracker) State() State { return State(t.state.Load()) }
+func (t *localTracker) State() State { return State(t.state.Load()) }
 
-// ACTIVE is the current in-flight delivery count (for the goroutine limit).
-func (t *Tracker) Active() int64 { return t.concurrency.Load() }
+func (t *localTracker) Active() int64 { return t.concurrency.Load() }
 
-// Enter marks one delivery as in-flight, returning the new count.
-func (t *Tracker) Enter() int64 { return t.concurrency.Add(1) }
+func (t *localTracker) Enter() int64 { return t.concurrency.Add(1) }
 
-// Leave marks one delivery as complete, returning the new count.
-func (t *Tracker) Leave() int64 { return t.concurrency.Add(-1) }
+func (t *localTracker) Leave() int64 { return t.concurrency.Add(-1) }
 
-// Outcome records a delivery outcome on the counters.
-func (t *Tracker) Outcome(kind string) {
+func (t *localTracker) Outcome(kind string) {
 	switch kind {
 	case "sent":
 		t.delivered.Add(1)
@@ -82,8 +110,7 @@ func (t *Tracker) Outcome(kind string) {
 	}
 }
 
-// Snapshot returns the operational counters for the /healthz report.
-func (t *Tracker) Snapshot() map[string]any {
+func (t *localTracker) Snapshot() map[string]any {
 	return map[string]any{
 		"state":          t.State().String(),
 		"uptime_seconds": int(time.Since(t.startedAt).Seconds()),
@@ -99,16 +126,21 @@ func (t *Tracker) Snapshot() map[string]any {
 //
 // readiness checks the delivery store's reachability through the supplied
 // probe; liveness only needs the run loop to be advancing.
+//
+// Mux exposes the HTTP mux so the ops surface can attach /ops to the SAME
+// listener — one process, one port, one telemetry owner.
 type Server struct {
-	tracker *Tracker
+	tracker Tracker
 	probe   func(ctx context.Context) error
 	server  *http.Server
+	mux     *http.ServeMux
 }
 
 // NewServer binds the health surface on addr.
-func NewServer(addr string, tracker *Tracker, probe func(ctx context.Context) error) *Server {
+func NewServer(addr string, tracker Tracker, probe func(ctx context.Context) error) *Server {
 	mux := http.NewServeMux()
 	s := &Server{tracker: tracker, probe: probe,
+		mux:    mux,
 		server: &http.Server{Addr: addr, Handler: mux, ReadHeaderTimeout: 10 * time.Second}}
 
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -142,6 +174,11 @@ func NewServer(addr string, tracker *Tracker, probe func(ctx context.Context) er
 	})
 	return s
 }
+
+// Mux returns the mux the health surface is bound to, so the ops surface
+// can attach its routes to the same listener instead of opening a second
+// port. Nil is never returned from a server built with NewServer.
+func (s *Server) Mux() *http.ServeMux { return s.mux }
 
 // Start begins serving.
 func (s *Server) Start() error {

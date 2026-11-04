@@ -1,0 +1,15 @@
+{
+  "started_at": "2026-11-04T12:00:00Z",
+  "phase": "inspection",
+  "baseline": {
+    "rule_id": "ea565d5c-ccce-4f1c-b5f5-79eca2911642",
+    "priority": 10,
+    "version": 33,
+    "is_active": 1,
+    "is_paused": 0,
+    "metadata_every_n_present": false,
+    "ai_config_id": "d63b3267-ceb0-45b2-bf39-7dbdc935a9ba",
+    "filter_rule_id": null,
+    "metadata_paid_addons_ai_rewrite": false
+  }
+}

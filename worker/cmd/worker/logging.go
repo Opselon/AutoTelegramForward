@@ -8,6 +8,7 @@ import (
 
 	"atf/worker/internal/domain/cleaning"
 	"atf/worker/internal/observability"
+	"atf/worker/internal/ops"
 )
 
 // fanoutHandler keeps the JSON container stream and the shared Rust Log Monitor
@@ -114,9 +115,18 @@ func slogLevelName(level slog.Level) string {
 
 // slogLogger adapts delivery/scheduler's narrow interface to the shared slog
 // pipeline while tagging each event with its owning Worker subsystem.
+//
+// ops is the operational collector. When wired, WARN/ERROR lines ALSO land
+// in the /ops error ring — this is the "fed from the engine's existing
+// logger.Warn/Error paths" requirement, and it costs the pipeline nothing
+// new: the line was already being emitted, it is now counted too. The
+// fields the ring needs (severity, component, rule_id, job_id, code,
+// correlation_id) are read out of the same args the log line carries, and
+// the message is sanitized inside the ring.
 type slogLogger struct {
-	log *slog.Logger
+	log    *slog.Logger
 	module string
+	ops    *ops.Collector
 }
 
 func (l *slogLogger) Info(msg string, args ...any) {
@@ -124,9 +134,15 @@ func (l *slogLogger) Info(msg string, args ...any) {
 }
 func (l *slogLogger) Warn(msg string, args ...any) {
 	l.log.Warn(msg, append(args, "module", l.module)...)
+	if l.ops != nil {
+		l.ops.RecordLogEntry("WARN", l.module, msg, args)
+	}
 }
 func (l *slogLogger) Error(msg string, args ...any) {
 	l.log.Error(msg, append(args, "module", l.module)...)
+	if l.ops != nil {
+		l.ops.RecordLogEntry("ERROR", l.module, msg, args)
+	}
 }
 
 func workerLogLevel() slog.Level {
