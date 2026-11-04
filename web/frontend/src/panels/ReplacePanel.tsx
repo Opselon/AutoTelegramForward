@@ -17,7 +17,7 @@
  * locales honest. Layout mirrors for Persian through the shell's `dir`, so this
  * file uses logical properties (`marginInlineStart`) rather than `left`/`right`.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ChevronLeft,
   ChevronRight,
@@ -352,10 +352,24 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
       />
 
       {/* Counts are the server's, over the filtered set: a chip beside a task
-          filter must not count a rule that task does not run. */}
+          filter must not count a rule that task does not run. The catalog
+          sentence carries 🟢/🔴 as its legend; they are split out here and
+          rendered as token-coloured status dots, so no emoji reaches the
+          screen in any locale. */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
         <Badge tone="neutral">
-          {t('ui_rp_counts', { total: counts.total, on: counts.enabled, off: counts.disabled })}
+          {(() => {
+            const parts = t('ui_rp_counts', {
+              total: counts.total,
+              on: counts.enabled,
+              off: counts.disabled,
+            }).split(/(🟢|🔴)/)
+            return parts.map((part, index) => {
+              if (part === '🟢') return <span key={index} className="rp-dot rp-dot--on" aria-hidden="true" />
+              if (part === '🔴') return <span key={index} className="rp-dot rp-dot--off" aria-hidden="true" />
+              return <Fragment key={index}>{part}</Fragment>
+            })
+          })()}
         </Badge>
       </div>
 
@@ -470,9 +484,11 @@ export default function ReplacePanel({ d }: { d: DashboardCtx }) {
             <Card key={rule.id}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
-                  <span aria-hidden="true" style={{ fontSize: 'var(--type-md)', marginTop: 1 }}>
-                    {rule.enabled ? '🟢' : '🔴'}
-                  </span>
+                  <span
+                    aria-hidden="true"
+                    className={`rp-dot${rule.enabled ? ' rp-dot--on' : ' rp-dot--off'}`}
+                    style={{ marginBlockStart: 4 }}
+                  />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontWeight: 700, fontSize: '0.92rem', wordBreak: 'break-word' }}>
                       {ruleTitle(rule)}

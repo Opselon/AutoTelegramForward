@@ -27,6 +27,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Trash2,
+  AlertTriangle,
 } from 'lucide-react'
 import { DiagnosticsPanel } from '../components/DiagnosticsPanel'
 import { ConfirmDialog } from '../components/ConfirmDialog'
@@ -330,9 +331,13 @@ const RuleCard = memo(function RuleCard({
             fontSize: 'var(--type-xs)',
             fontFamily: "'JetBrains Mono', Consolas, monospace",
             wordBreak: 'break-word',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: 6,
           }}
         >
-          ⚠️ {liveStat.last_error.slice(0, 160)}
+          <AlertTriangle size={12} aria-hidden="true" style={{ flexShrink: 0, marginBlockStart: 1 }} />
+          <span style={{ flex: 1, minWidth: 0 }}>{liveStat.last_error.slice(0, 160)}</span>
         </div>
       )}
 

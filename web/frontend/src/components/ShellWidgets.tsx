@@ -5,8 +5,8 @@
  * The AI panel needs two of them; a lazy chunk importing the shell would be a
  * cycle, so they live in their own module. Moved verbatim from `App.tsx`.
  */
-import { useState } from 'react'
-import { CheckCircle2, Crown, FlaskConical, HeartPulse, Loader2, LogOut, Play, Save, Star, Trash2, User, XCircle } from 'lucide-react'
+import { Fragment, useState } from 'react'
+import { CheckCircle2, Crown, FlaskConical, HeartPulse, Loader2, LogOut, PenLine, Play, Save, Star, Trash2, User, XCircle } from 'lucide-react'
 import { api } from '../api'
 import { clearSession } from '../session'
 import { describeKeyCheck } from '../providerKey'
@@ -248,10 +248,29 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <div>
           <h2 style={{ fontSize: 'var(--type-xl)', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 10 }}>
-            ✍️ {t('ui_rewrite_prompt_editor')}
+            <PenLine size={20} aria-hidden="true" /> {t('ui_rewrite_prompt_editor')}
           </h2>
           <p style={{ fontSize: 'var(--type-sm)', color: 'var(--color-text-muted)', marginTop: 4 }}>
-            {t('ui_reusable_rewrite_prompts_for_forward_rules_system_prompts_read_o')}
+            {/*
+              The catalog sentence carries a ⭐ legend marker; it is split out here
+              and rendered as the same SVG star the prompt rows use, so no emoji
+              reaches the screen.
+            */}
+            {(() => {
+              const parts = t('ui_reusable_rewrite_prompts_for_forward_rules_system_prompts_read_o').split('⭐')
+              return parts.map((part, index) => (
+                <Fragment key={index}>
+                  {part}
+                  {index < parts.length - 1 && (
+                    <Star
+                      size={12}
+                      aria-hidden="true"
+                      style={{ display: 'inline-flex', verticalAlign: '-1px', marginInline: 3, color: 'var(--color-warning)' }}
+                    />
+                  )}
+                </Fragment>
+              ))
+            })()}
           </p>
         </div>
         <button onClick={() => openEditor(null)} className="btn btn-primary" style={{ padding: '8px 14px' }}>

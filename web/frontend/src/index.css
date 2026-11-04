@@ -3133,6 +3133,23 @@ input[type='radio']:disabled {
   color: var(--color-warning);
 }
 
+/* Enabled/disabled status dot (replace rules): token-coloured circle that
+   replaces the 🟢/🔴 emoji, including inside the counts badge legend. */
+.rp-dot {
+  display: inline-block;
+  inline-size: 9px;
+  block-size: 9px;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+}
+.rp-dot--on {
+  background: var(--color-success);
+  box-shadow: 0 0 6px color-mix(in oklab, var(--color-success) 55%, transparent);
+}
+.rp-dot--off {
+  background: var(--color-danger);
+}
+
 .home-hero__meta {
   display: flex;
   align-items: center;
