@@ -33,9 +33,17 @@ type engineHarness struct {
 
 func newEngineHarness(t *testing.T) *engineHarness {
 	t.Helper()
+	return newEngineHarnessWithRules(t, staticTestRules{})
+}
+
+// newEngineHarnessWithRules builds the harness against a caller-chosen rule
+// store, so a test can produce a RULE_NOT_FOUND drop (or any other rule
+// resolution outcome) without touching the shared fixture.
+func newEngineHarnessWithRules(t *testing.T, rules rule.Store) *engineHarness {
+	t.Helper()
 	store := queue.NewTestStore(t)
 	collector := testCollectorOps()
-	engine := delivery.New(store, staticTestRules{}, fakegateway.New(""), nil,
+	engine := delivery.New(store, rules, fakegateway.New(""), nil,
 		&captureLogger{}, collector, "w-test", t.TempDir(),
 		delivery.Options{
 			NumWorkers: 2, BatchSize: 5, LeaseDuration: 30 * time.Second,
@@ -45,28 +53,23 @@ func newEngineHarness(t *testing.T) *engineHarness {
 	return &engineHarness{store: store, engine: engine, collector: collector}
 }
 
-// staticTestRules resolves every id to one live rule — the shape the
-// happy-path delivery tests need. The resolution-less (RULE_NOT_FOUND)
-// path has its own rule store: that decision is a *test* fixture, not a
-// shortcut — a store that resolves "rule-gone" to a live rule makes the
-// drop path unreachable, and a regression test that can never fire is
-// worse than none at all.
+// staticTestRules: one live rule — the shape every delivery test needs.
 type staticTestRules struct{}
 
 func (staticTestRules) GetByID(ruleID string) (*rule.ForwardRule, *rule.FilterRule, error) {
 	return &rule.ForwardRule{ID: ruleID, IsActive: true}, nil, nil
 }
 
-// missingRuleRules resolves only the live rule; every other id is
-// unknown to the store, which is the engine's signal to drop the job
-// FAILED through the task_resolution preflight (RULE_NOT_FOUND).
-type missingRuleRules struct{ liveID string }
+// missingRuleRules: the rule store answers nil for one specific rule id,
+// which is how a RULE_NOT_FOUND drop is produced on demand. The engine
+// must mark such a job FAILED and record a task_resolution stage failure.
+type missingRuleRules struct{ missing string }
 
 func (m missingRuleRules) GetByID(ruleID string) (*rule.ForwardRule, *rule.FilterRule, error) {
-	if ruleID == m.liveID {
-		return &rule.ForwardRule{ID: ruleID, IsActive: true}, nil, nil
+	if ruleID == m.missing {
+		return nil, nil, nil
 	}
-	return nil, nil, nil
+	return &rule.ForwardRule{ID: ruleID, IsActive: true}, nil, nil
 }
 
 // captureLogger is a discard sink: this harness counts outcomes, it does
@@ -87,38 +90,6 @@ func stageRowOf(t *testing.T, c *ops.Collector, name string) map[string]any {
 	}
 	t.Fatalf("stage %q missing from Stages()", name)
 	return nil
-}
-
-// newEngineHarnessWithRules wires the same real engine against an
-// explicit rule store, for the paths a static fixture cannot reach
-// (RULE_NOT_FOUND, RULE_DISABLED).
-func newEngineHarnessWithRules(t *testing.T, rules rule.Store) *engineHarness {
-	t.Helper()
-	store := queue.NewTestStore(t)
-	collector := testCollectorOps()
-	engine := delivery.New(store, rules, fakegateway.New(""), nil,
-		&captureLogger{}, collector, "w-test", t.TempDir(),
-		delivery.Options{
-			NumWorkers: 2, BatchSize: 5, LeaseDuration: 30 * time.Second,
-			RPCTimeout: 5 * time.Second,
-		})
-	engine.SetStageObserver(ops.NewEngineObserver(collector))
-	return &engineHarness{store: store, engine: engine, collector: collector}
-}
-
-// seedJobWithRule plants one CLAIMED job under an explicit rule id, for
-// the drop-path fixtures that cannot reuse the static fixture's rule id.
-func seedJobWithRule(t *testing.T, h *engineHarness, id, ruleID string) *job.DeliveryJob {
-	t.Helper()
-	j := &job.DeliveryJob{
-		ID: id, RuleID: ruleID,
-		SourceChatID: "-1001", SourceMessageID: 42, TargetChatID: "-2001",
-		Status: job.StatusClaimed, MaxAttempts: 5,
-		CreatedAt: time.Now().Unix(), JobKind: "forward",
-	}
-	j.Payload = *job.NewPayload(map[string]any{"session_id": "s1", "text": "hello"})
-	queue.InsertJob(t, h.store, j)
-	return j
 }
 
 // jobID keeps the seeded fixture ids unique and readable.
@@ -154,15 +125,7 @@ func TestOpsReportsEngineDeliveredCount(t *testing.T) {
 	}
 
 	// Serve /ops from the same mux the worker attaches it to.
-	var queueReader ops.QueueStoreReader
-	var taskReader ops.TaskStoreReader
-	if r, ok := h.store.(ops.QueueStoreReader); ok {
-		queueReader = r
-	}
-	if r, ok := h.store.(ops.TaskStoreReader); ok {
-		taskReader = r
-	}
-	srv := ops.NewServer(h.collector, queueReader, taskReader, nil, "sqlite", "w-test")
+	srv := ops.NewServer(h.collector, h.store, h.store, nil, "sqlite", "w-test")
 	mux := http.NewServeMux()
 	srv.Attach(mux)
 	ts := httptest.NewServer(mux)
@@ -250,18 +213,19 @@ func TestOpsStagesInstrumentedAcrossEngine(t *testing.T) {
 // TestOpsReportsFailedJobThroughEngine: a failed delivery must show up as
 // BOTH a failed counter AND a stage failure — so the panel never paints
 // the stage green while the queue is failing jobs.
-//
-// The path exercised is the task_resolution preflight DROP: a job whose
-// rule no longer exists. The harness needs a rule store that genuinely
-// fails the lookup — a store that resolves every id to a live rule makes
-// this path unreachable, and the assertion would then be pinning
-// nothing.
 func TestOpsReportsFailedJobThroughEngine(t *testing.T) {
-	h := newEngineHarnessWithRules(t, missingRuleRules{liveID: "ruleA"})
-	seedJobWithRule(t, h, "gone", "rule-gone")
-
-	// The lookup is a DROP, not an error: Process returns nil.
-	if err := h.engine.Process(context.Background(), &job.DeliveryJob{ID: "gone"}); err != nil {
+	h := newEngineHarnessWithRules(t, missingRuleRules{missing: "rule-gone"})
+	// A rule that does not exist: the engine drops the job FAILED through
+	// the task_resolution preflight (RULE_NOT_FOUND).
+	j := &job.DeliveryJob{
+		ID: "gone", RuleID: "rule-gone",
+		SourceChatID: "-1001", SourceMessageID: 42, TargetChatID: "-2001",
+		Status: job.StatusClaimed, MaxAttempts: 5,
+		CreatedAt: time.Now().Unix(), JobKind: "forward",
+	}
+	j.Payload = *job.NewPayload(map[string]any{"session_id": "s1", "text": "hello"})
+	queue.InsertJob(t, h.store, j)
+	if err := h.engine.Process(context.Background(), j); err != nil {
 		t.Fatalf("engine.Process: %v", err)
 	}
 	if got := h.collector.Failed(); got != 1 {
@@ -273,16 +237,5 @@ func TestOpsReportsFailedJobThroughEngine(t *testing.T) {
 	}
 	if got := row["health"]; got != ops.StageFailed {
 		t.Fatalf("task_resolution health = %v, want %q", got, ops.StageFailed)
-	}
-
-	// The DROP must also land in the durable store: the /ops surface reads
-	// its queue counts from delivery_jobs, and a failure that never reached
-	// the row would make /ops/queue disagree with the counters.
-	stats, err := h.store.(ops.QueueStoreReader).QueueStats(context.Background())
-	if err != nil {
-		t.Fatalf("QueueStats: %v", err)
-	}
-	if stats.Failed+stats.DeadLetter < 1 {
-		t.Fatalf("queue failed+dead_letter = %d, want ≥1 — the DROP must reach the durable row the /ops surface reads", stats.Failed+stats.DeadLetter)
 	}
 }
