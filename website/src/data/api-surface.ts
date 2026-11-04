@@ -837,6 +837,22 @@ export const endpointDetail: Record<string, EndpointDetail> = {
   },
 
   // --------------------------------------------------------------- administration
+  'GET /api/admin/worker/status': {
+    summary: 'Live Go Worker snapshot: identity, version, uptime, resource use and connectivity probes. Proxied to the worker, never a zeroed idle-looking stub.',
+    statuses: ['200', '401', '403', '502'],
+  },
+  'GET /api/admin/worker/queue': {
+    summary: 'Queue depth, throughput and latency percentiles the worker aggregated in memory.',
+    statuses: ['200', '401', '403', '502'],
+  },
+  'GET /api/admin/worker/tasks': {
+    summary: 'Per-task operational state: pending, delivered, failed, last error and the switches each task runs under.',
+    statuses: ['200', '401', '403', '502'],
+  },
+  'GET /api/admin/worker/errors': {
+    summary: 'Deduplicated, time-windowed worker errors with severity, component, task and correlation id — never raw message content.',
+    statuses: ['200', '401', '403', '502'],
+  },
   'GET /api/admin/overview': {
     summary: 'Installation totals: accounts, tasks, deliveries, queue depth and service health in one response.',
     statuses: ['200', '401', '403'],

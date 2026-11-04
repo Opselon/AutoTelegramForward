@@ -844,3 +844,19 @@ func aiRewriteActive(aiConfigID string, meta map[string]any) bool {
 	}
 	return metaBool(addons, "ai_rewrite", false)
 }
+
+// OpsDB exposes the reader the /ops surface's per-task join needs. It is
+// the handle that ALREADY serves forward_rules (PostgreSQL only when the
+// Core's composition root moved it there, SQLite otherwise) — the ops
+// surface reads through it rather than opening a second connection, so
+// there is one DB client per backend, not two.
+//
+// Read-only by construction: the ops join is a SELECT over forward_rules
+// (id, is_active, source_chat_id, target_chat_id, updated_at). Nothing
+// here ever writes; the rule store's writes belong to the Python Core.
+func (s *Store) OpsDB() *sql.DB { return s.rulesDB }
+
+// OpsBackend labels which backend OpsDB serves ("sqlite" or "postgres") so
+// the ops join can use the backend's placeholder convention — the same
+// convention rulesQuery applies to the shared projections.
+func (s *Store) OpsBackend() string { return s.rulesBackend }

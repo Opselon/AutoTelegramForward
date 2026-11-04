@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 
 	"atf/worker/internal/domain/job"
+	"atf/worker/internal/ops"
 )
 
 // pgStore is the PostgreSQL implementation of Store over the existing
@@ -769,3 +770,91 @@ var (
 	_ Store = (*pgStore)(nil)
 	_       = stdlib.GetDefaultDriver
 )
+
+// --- ops: the read-only queue-status and per-task aggregations ---------- //
+//
+// Same contract as the SQLite implementation (see sqlite.go's block
+// comment): pure SELECTs over delivery_jobs, no writes, no new tables, and
+// the same dead-letter definition (FAILED with attempts >= max_attempts —
+// the exact condition under which MarkRetry writes its DLQ row).
+//
+// PostgreSQL spells the conditional aggregates as ANSI FILTER (WHERE ...)
+// where SQLite uses its bare boolean SUM(cond); the two must produce
+// identical numbers for identical data, and that parity is pinned by the
+// ops tests on both backends.
+
+// QueueStats aggregates delivery_jobs into the /ops/queue status counts.
+func (s *pgStore) QueueStats(ctx context.Context) (*ops.QueueStats, error) {
+	const q = `
+		SELECT
+			COUNT(*) FILTER (WHERE status = 'PENDING')                       AS pending,
+			COUNT(*) FILTER (WHERE status = 'CLAIMED' AND lease_until > $1)   AS processing,
+			COUNT(*) FILTER (WHERE status = 'SENT')                           AS delivered,
+			COUNT(*) FILTER (WHERE status = 'FAILED' AND attempts < max_attempts)  AS failed,
+			COUNT(*) FILTER (WHERE status = 'FAILED' AND attempts >= max_attempts) AS dead_letter,
+			COUNT(*) FILTER (WHERE status = 'RETRY_WAIT' AND next_retry_at > $2)   AS delayed,
+			COUNT(*) FILTER (WHERE status = 'RETRY_WAIT' AND next_retry_at <= $3)  AS retry_pending,
+			COUNT(*) FILTER (WHERE status = 'UNKNOWN')                        AS unknown,
+			COALESCE(MIN(CASE WHEN status IN ('PENDING','RETRY_WAIT')
+			                  THEN EXTRACT(EPOCH FROM NOW()) - created_at
+			                  END), 0)                                        AS oldest_pending_age
+		FROM delivery_jobs`
+	now := float64(time.Now().Unix())
+	row := s.db.QueryRowContext(ctx, q, now, now, now)
+	var st ops.QueueStats
+	var oldest sql.NullFloat64
+	if err := row.Scan(&st.Pending, &st.Processing, &st.Delivered, &st.Failed,
+		&st.DeadLetter, &st.Delayed, &st.RetryPending, &st.Unknown, &oldest); err != nil {
+		return nil, fmt.Errorf("ops queue stats: %w", err)
+	}
+	if oldest.Valid {
+		st.OldestPendingAgeSeconds = oldest.Float64
+	}
+	return &st, nil
+}
+
+// TaskRows aggregates delivery_jobs by rule_id into the /ops/tasks rows.
+func (s *pgStore) TaskRows(ctx context.Context, limit int) ([]*ops.TaskRow, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	const q = `
+		SELECT rule_id,
+			COUNT(*) FILTER (WHERE status = 'PENDING')     AS pending,
+			COUNT(*) FILTER (WHERE status = 'CLAIMED')     AS processing,
+			COUNT(*) FILTER (WHERE status = 'SENT')        AS delivered,
+			COUNT(*) FILTER (WHERE status = 'FAILED')      AS failed,
+			COALESCE(SUM(attempts), 0)                     AS retries,
+			COALESCE(MAX(CASE WHEN status = 'SENT'   THEN updated_at ELSE 0 END), 0) AS last_success_at,
+			COALESCE(MAX(CASE WHEN status = 'FAILED' THEN updated_at ELSE 0 END), 0) AS last_error_at,
+			''                                            AS last_error
+		FROM delivery_jobs
+		GROUP BY rule_id
+		ORDER BY MAX(updated_at) DESC
+		LIMIT $1`
+	rows, err := s.db.QueryContext(ctx, q, limit)
+	if err != nil {
+		return nil, fmt.Errorf("ops task rows: %w", err)
+	}
+	defer rows.Close()
+	out := make([]*ops.TaskRow, 0, 16)
+	for rows.Next() {
+		var (
+			r         ops.TaskRow
+			lastOkAt  sql.NullInt64
+			lastErrAt sql.NullInt64
+		)
+		if err := rows.Scan(&r.RuleID, &r.Pending, &r.Processing, &r.Delivered,
+			&r.Failed, &r.Retries, &lastOkAt, &lastErrAt, &r.LastError); err != nil {
+			return nil, fmt.Errorf("ops task rows scan: %w", err)
+		}
+		if lastOkAt.Valid && lastOkAt.Int64 > 0 {
+			r.LastSuccessAt = ops.RFC3339(lastOkAt.Int64)
+		}
+		if lastErrAt.Valid && lastErrAt.Int64 > 0 {
+			r.LastErrorAt = ops.RFC3339(lastErrAt.Int64)
+		}
+		out = append(out, &r)
+	}
+	return out, rows.Err()
+}

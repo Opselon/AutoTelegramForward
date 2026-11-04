@@ -147,7 +147,6 @@ func insertJob(t *testing.T, s Store, j *job.DeliveryJob) {
 	}
 }
 
-
 // storeDB digs the *sql.DB out of the store for direct row assertions.
 func storeDB(t *testing.T, s Store) *sql.DB {
 	t.Helper()

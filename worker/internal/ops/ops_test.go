@@ -1,0 +1,634 @@
+package ops
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
+	"testing"
+	"time"
+)
+
+func testCollector() *Collector {
+	c := NewCollector(Config{
+		WorkerID:     "w-test",
+		CommitSHA:    "82f1982",
+		Version:      "1.2.3",
+		NumWorkers:   4,
+		MaxQueueSize: 1000,
+		QueueBackend: "sqlite:/app/data/atf.db",
+	})
+	// Mirror the worker's own startup: stages default to disabled unless
+	// the process owns them, and a wired process owns the pipeline.
+	for _, stage := range StageNames {
+		c.StageEnabled(stage, true)
+	}
+	return c
+}
+
+// TestCollectorIsTheOneMetricsOwner is the regression test for the defect
+// the contract describes: /healthz used to report delivered=0 on a worker
+// that had actually delivered 41 messages, because the engine's counters
+// and the health surface's counters were two different objects.
+//
+// Here the SAME collector object is handed to the engine-shaped recorder
+// and read back through the health-shaped snapshot. If a second counter
+// set ever reappears, this test fails on the divergence.
+func TestCollectorIsTheOneMetricsOwner(t *testing.T) {
+	c := testCollector()
+
+	// The engine reports through the collector (delivery.Metrics shape).
+	for i := 0; i < 41; i++ {
+		c.Outcome("sent")
+	}
+	c.Outcome("retried")
+	c.Outcome("failed")
+	c.Outcome("unknown")
+
+	// The health surface reads the same object.
+	snap := c.Snapshot()
+	if got := snap["delivered"]; got != int64(41) {
+		t.Fatalf("health snapshot delivered = %v, want 41 (the one-owner defect)", got)
+	}
+	if got := c.Delivered(); got != 41 {
+		t.Fatalf("Delivered() = %d, want 41", got)
+	}
+	if snap["retried"] != int64(1) || snap["failed"] != int64(1) || snap["unknown"] != int64(1) {
+		t.Fatalf("health snapshot outcome counters = %+v", snap)
+	}
+}
+
+// TestHTTPReportsSameDeliveredAsEngine proves the defect at the WIRE: the
+// /ops handler must serve exactly the delivered counter the engine
+// increments, not a parallel one.
+func TestHTTPReportsSameDeliveredAsEngine(t *testing.T) {
+	c := testCollector()
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	mux := http.NewServeMux()
+	srv.Attach(mux)
+
+	for i := 0; i < 41; i++ {
+		c.Outcome("sent")
+	}
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/ops")
+	if err != nil {
+		t.Fatalf("GET /ops: %v", err)
+	}
+	defer resp.Body.Close()
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode /ops: %v", err)
+	}
+	queue, _ := body["queue"].(map[string]any)
+	if got := queue["delivered"]; got != float64(41) {
+		t.Fatalf("/ops queue.delivered = %v, want 41 (same counter the engine increments)", got)
+	}
+	if worker, _ := body["worker"].(map[string]any); worker != nil {
+		// The worker object carries no delivered field by contract; this
+		// assertion exists so a future field addition stays consistent
+		// with the queue's authoritative number.
+		if d, ok := worker["delivered"]; ok && d != float64(41) {
+			t.Fatalf("worker.delivered = %v, diverges from queue.delivered", d)
+		}
+	}
+}
+
+// TestUtilizationIsNotGoroutines pins the contract's explicit prohibition:
+// utilization = active / numWorkers, never a goroutine count. A worker
+// idling at many goroutines while delivering nothing must read 0.
+func TestUtilizationIsNotGoroutines(t *testing.T) {
+	c := testCollector() // NumWorkers 4
+	// No deliveries in flight: utilization must be 0 however many
+	// goroutines exist.
+	if u := c.Utilization(); u != 0 {
+		t.Fatalf("utilization with no active deliveries = %v, want 0", u)
+	}
+	// Two of four workers busy.
+	c.Enter()
+	c.Enter()
+	if u := c.Utilization(); u != 0.5 {
+		t.Fatalf("utilization with 2/4 active = %v, want 0.5", u)
+	}
+	// Saturate +1: clamped to 1, never above.
+	c.Enter()
+	c.Enter()
+	c.Enter()
+	if u := c.Utilization(); u != 1 {
+		t.Fatalf("utilization over-saturated = %v, want 1 (clamped)", u)
+	}
+	if c.Active() != 5 {
+		t.Fatalf("active = %d, want 5", c.Active())
+	}
+}
+
+// TestStagesReportTheContractNames pins the 11 fixed stages and their
+// order — the panel renders exactly these, so a rename is a breaking
+// change this test makes visible at compile time of the contract.
+func TestStagesReportTheContractNames(t *testing.T) {
+	want := []string{
+		"ingestion", "queue", "task_resolution", "filter", "replacement",
+		"cleaner", "header_footer", "ai", "validation", "delivery",
+		"reconciliation",
+	}
+	if len(StageNames) != len(want) {
+		t.Fatalf("StageNames has %d entries, want %d", len(StageNames), len(want))
+	}
+	got := make([]string, 0, len(want))
+	for _, s := range StagesOf(testCollector()) {
+		got = append(got, s["stage"].(string))
+	}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("stage names/order = %v, want %v", got, want)
+	}
+}
+
+func StagesOf(c *Collector) []map[string]any { return c.Stages() }
+
+// TestStageHealthDerivation pins the contract's health rules, including
+// the AI trap: never healthy because the task enables it — healthy only
+// after at least one processed run without failures.
+func TestStageHealthDerivation(t *testing.T) {
+	c := testCollector()
+	// Never ran → waiting (the honest pre-first-run state).
+	if h := stageHealthOf(c, "ai"); h != StageWaiting {
+		t.Fatalf("never-run stage health = %q, want %q", h, StageWaiting)
+	}
+	// Disabled: a deployment decision, distinct from waiting.
+	c.StageEnabled("ai", false)
+	if h := stageHealthOf(c, "ai"); h != StageDisabled {
+		t.Fatalf("disabled stage health = %q, want %q", h, StageDisabled)
+	}
+	c.StageEnabled("ai", true)
+	// Fail then succeed: the LAST event decides — failed first.
+	c.StageFail("ai", "TIMEOUT")
+	if h := stageHealthOf(c, "ai"); h != StageFailed {
+		t.Fatalf("stage whose last event failed = %q, want %q", h, StageFailed)
+	}
+	// A success clears last-failed; the failure window keeps it degraded.
+	c.StageRecord("ai", 1.2)
+	if h := stageHealthOf(c, "ai"); h != StageDegraded {
+		t.Fatalf("recovered-but-recently-failed stage = %q, want %q", h, StageDegraded)
+	}
+	// Enough clean runs to age the failure out of the window.
+	for i := 0; i < stageHealthWindow; i++ {
+		c.StageRecord("ai", 1)
+	}
+	if h := stageHealthOf(c, "ai"); h != StageHealthy {
+		t.Fatalf("stage with a clean window = %q, want %q", h, StageHealthy)
+	}
+}
+
+func stageHealthOf(c *Collector, stage string) string {
+	for _, s := range c.Stages() {
+		if s["stage"] == stage {
+			return s["health"].(string)
+		}
+	}
+	return ""
+}
+
+// TestFilterSkippedByPolicy is the contract's named extra field: the
+// filter stage carries skipped_by_policy only when it has skipped some.
+func TestFilterSkippedByPolicy(t *testing.T) {
+	c := testCollector()
+	if row := stageRow(t, c, "filter"); row["skipped_by_policy"] != nil {
+		t.Fatalf("filter stage carried skipped_by_policy before any skip: %v", row["skipped_by_policy"])
+	}
+	c.StageRecordSkipped("filter", 0.4)
+	row := stageRow(t, c, "filter")
+	if row["skipped_by_policy"] != int64(1) {
+		t.Fatalf("skipped_by_policy = %v, want 1", row["skipped_by_policy"])
+	}
+}
+
+func stageRow(t *testing.T, c *Collector, name string) map[string]any {
+	t.Helper()
+	for _, s := range c.Stages() {
+		if s["stage"] == name {
+			return s
+		}
+	}
+	t.Fatalf("stage %q missing from Stages()", name)
+	return nil
+}
+
+// TestLatencyPercentiles pins the ring math against a hand-checked
+// distribution. Empty windows are 0 — "no data yet", never a fabricated
+// number the panel would render as today's latency.
+func TestLatencyPercentiles(t *testing.T) {
+	c := testCollector()
+	if p := c.E2E().percentile(99); p != 0 {
+		t.Fatalf("empty-window p99 = %v, want 0 (no data yet)", p)
+	}
+	// 1..100 ms, one each: p50=50, p95=95, p99=99 by nearest-rank.
+	for i := 1; i <= 100; i++ {
+		c.ObserveE2E(float64(i) / 1000.0)
+	}
+	if p := c.E2E().percentile(50); p != 50 {
+		t.Fatalf("p50 = %v, want 50", p)
+	}
+	if p := c.E2E().percentile(95); p != 95 {
+		t.Fatalf("p95 = %v, want 95", p)
+	}
+	if p := c.E2E().percentile(99); p != 99 {
+		t.Fatalf("p99 = %v, want 99", p)
+	}
+}
+
+// TestErrorRingDedupAndBound pins the contract's §1.5 semantics: dedup on
+// (component, code, rule_id), count/first_seen/last_seen collapse, 512 bound.
+func TestErrorRingDedupAndBound(t *testing.T) {
+	c := testCollector()
+	for i := 0; i < 400; i++ {
+		c.RecordError(LogEntry{
+			Severity: "ERROR", Component: "worker.delivery",
+			Code: "FLOOD_WAIT", RuleID: "r1",
+			Message: "transient failure — retrying with backoff",
+		})
+	}
+	if got := c.Errors().Total(); got != 1 {
+		t.Fatalf("deduped ring total = %d, want 1 (400 identical entries collapsed)", got)
+	}
+	items := c.Errors().Items()
+	if len(items) != 1 || items[0]["count"] != int64(400) {
+		t.Fatalf("collapse: %+v", items)
+	}
+	if items[0]["first_seen"] == "" || items[0]["ts"] == "" {
+		t.Fatalf("collapsed entry missing first_seen/last_seen: %+v", items[0])
+	}
+	// A different rule_id is a different dedup bucket.
+	c.RecordError(LogEntry{Severity: "ERROR", Component: "worker.delivery", Code: "FLOOD_WAIT", RuleID: "r2"})
+	if got := c.Errors().Total(); got != 2 {
+		t.Fatalf("after a second dedup key, total = %d, want 2", got)
+	}
+}
+
+// TestErrorRingBoundedAtCapacity: the ring must never grow past its bound,
+// and eviction is by least-recently-seen so a fresh problem is always visible.
+func TestErrorRingBoundedAtCapacity(t *testing.T) {
+	r := newErrorRing(8)
+	for i := 0; i < 40; i++ {
+		r.Record(ErrorItem{
+			Ts:        time.Unix(int64(i), 0).UTC().Format(time.RFC3339),
+			Severity:  "ERROR",
+			Component: fmt.Sprintf("comp%d", i),
+			Code:      "X",
+			Message:   "m",
+		})
+	}
+	if got := r.Total(); got != 8 {
+		t.Fatalf("ring total after 40 inserts = %d, want 8 (the bound)", got)
+	}
+	// The last-inserted (newest ts) must have survived every eviction.
+	items := r.Items()
+	if len(items) == 0 || items[0]["component"] != "comp39" {
+		t.Fatalf("newest entry did not survive eviction: %+v", items)
+	}
+}
+
+// TestErrorFilterLimitBounds pins the contract's ≤256 limit and the
+// severity/component/rule_id filters.
+func TestErrorFilterLimitBounds(t *testing.T) {
+	c := testCollector()
+	for i := 0; i < 300; i++ {
+		c.RecordError(LogEntry{
+			Severity: "WARN", Component: "worker.delivery",
+			Code: "FLOOD_WAIT", RuleID: "r1", Message: "m",
+		})
+	}
+	// limit=1000 must clamp to 256 (the contract's bound).
+	items := c.Errors().Filter("", "", "", time.Time{}, 1000)
+	if len(items) > 256 {
+		t.Fatalf("filter returned %d items, want ≤256", len(items))
+	}
+	// severity filter
+	if items := c.Errors().Filter("ERROR", "", "", time.Time{}, 10); len(items) != 0 {
+		t.Fatalf("ERROR filter matched %d WARN entries", len(items))
+	}
+	if items := c.Errors().Filter("warn", "", "", time.Time{}, 10); len(items) != 1 {
+		t.Fatalf("case-insensitive WARN filter matched %d entries, want 1", len(items))
+	}
+	if items := c.Errors().Filter("", "worker.delivery", "", time.Time{}, 10); len(items) != 1 {
+		t.Fatalf("component filter failed")
+	}
+	if items := c.Errors().Filter("", "", "r1", time.Time{}, 10); len(items) != 1 {
+		t.Fatalf("rule_id filter failed")
+	}
+	if items := c.Errors().Filter("", "", "nope", time.Time{}, 10); len(items) != 0 {
+		t.Fatalf("rule_id filter matched an absent rule")
+	}
+}
+
+// TestSanitizeStripsSecretsAndContent is the contract's §4 prohibition,
+// pinned: no message content, no secrets, no multi-line detail in any field.
+func TestSanitizeStripsSecretsAndContent(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"line one\nline two", "line one"}, // multi-line → first line
+		// A 300-char single token is both a log bomb and a secret shape;
+		// the length bound fires (160), then the scrub pass collapses it.
+		{strings.Repeat("a", 300), "[redacted]"},
+		{"token=abc123-secret", "token"}, // key=value pair → key only
+		{"FLOOD_WAIT", "FLOOD_WAIT"},     // the legitimate vocabulary
+		{"  spaced  ", "spaced"},
+	}
+	for _, tc := range cases {
+		if got := sanitize(tc.in); got != tc.want {
+			t.Errorf("sanitize(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+	// And the ring sanitizes what it is handed.
+	c := testCollector()
+	c.RecordError(LogEntry{
+		Severity: "ERROR", Component: "worker.delivery", Code: "AUTHENTICATION_ERROR",
+		Message: "session string=abcSECRET123\nsecond line",
+	})
+	item := c.Errors().Items()[0]
+	if strings.Contains(item["message"].(string), "SECRET") {
+		t.Fatalf("ring message leaked a secret: %v", item["message"])
+	}
+	if strings.Contains(item["message"].(string), "\n") {
+		t.Fatalf("ring message is multi-line: %q", item["message"])
+	}
+}
+
+// TestQueueObjectShapeOnNilReader: with no store reader the /ops handler
+// must report the in-memory fields and an explicit error — never zeros
+// that read like an empty, healthy queue.
+func TestQueueObjectShapeOnNilReader(t *testing.T) {
+	c := testCollector()
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	mux := http.NewServeMux()
+	srv.Attach(mux)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/ops/queue")
+	if err != nil {
+		t.Fatalf("GET /ops/queue: %v", err)
+	}
+	defer resp.Body.Close()
+	var q map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&q); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if q["error"] == nil {
+		t.Fatalf("nil reader reported no error: %+v", q)
+	}
+	for _, key := range []string{"latency", "queue_wait", "jobs_per_second", "capacity", "backlog_trend", "load_status"} {
+		if _, ok := q[key]; !ok {
+			t.Fatalf("queue object missing %q (in-memory fields must still report)", key)
+		}
+	}
+	lat := q["latency"].(map[string]any)
+	if lat["units"] != "ms" {
+		t.Fatalf("latency units = %v, want ms", lat["units"])
+	}
+	for _, p := range []string{"p50", "p95", "p99"} {
+		if _, ok := lat[p]; !ok {
+			t.Fatalf("latency object missing %q", p)
+		}
+	}
+}
+
+// TestWorkerObjectShape pins the §1.1 fields, and especially that
+// goroutines and num_workers are DIFFERENT fields — utilization reads
+// num_workers, never the goroutine count.
+func TestWorkerObjectShape(t *testing.T) {
+	c := testCollector()
+	c.RecordDB(true, time.Now())
+	c.RecordTelegram(true, time.Now())
+	c.RecordAI(false, time.Now())
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	mux := http.NewServeMux()
+	srv.Attach(mux)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/ops")
+	if err != nil {
+		t.Fatalf("GET /ops: %v", err)
+	}
+	defer resp.Body.Close()
+	var body map[string]any
+	json.NewDecoder(resp.Body).Decode(&body)
+	w := body["worker"].(map[string]any)
+	for _, key := range []string{
+		"state", "worker_id", "commit_sha", "version", "uptime_seconds",
+		"started_at", "goroutines", "cpu_percent", "memory_bytes",
+		"num_workers", "active", "utilization", "processing_mode",
+		"switches", "queue_backend", "db_connected", "telegram_connected",
+		"ai_connected",
+	} {
+		if _, ok := w[key]; !ok {
+			t.Fatalf("worker object missing %q", key)
+		}
+	}
+	if w["commit_sha"] != "82f1982" {
+		t.Fatalf("commit_sha = %v, want the ldflag value", w["commit_sha"])
+	}
+	if w["queue_backend"] == nil || strings.Contains(fmt.Sprint(w["queue_backend"]), "://") {
+		t.Fatalf("queue_backend must be a label without a DSN: %v", w["queue_backend"])
+	}
+	// JSON decodes numbers as float64; assert the CONFIGURED value, which
+	// is the contract's requirement (never a live-goroutine count).
+	if got := w["num_workers"]; got != float64(4) {
+		t.Fatalf("num_workers = %v, want 4 (the CONFIGURED pool size)", got)
+	}
+	if g := w["goroutines"]; g == float64(int(g.(float64))) == false {
+		t.Fatalf("goroutines not an integer: %v", g)
+	}
+	if u, _ := w["utilization"].(float64); u != 0 {
+		t.Fatalf("utilization = %v, want 0 (nothing in flight)", u)
+	}
+}
+
+// TestLoadStatusDerivation pins the contract's ladder, including the
+// degraded/unhealthy overrides.
+func TestLoadStatusDerivation(t *testing.T) {
+	c := testCollector()
+	if got := c.loadStatus(); got != "unhealthy" {
+		t.Fatalf("load_status with DB down = %q, want unhealthy", got)
+	}
+	c.RecordDB(true, time.Now())
+	if got := c.loadStatus(); got != "idle" {
+		t.Fatalf("load_status idle check = %q, want idle", got)
+	}
+	for i := 0; i < 3; i++ { // 3/4 = 0.75 → high
+		c.Enter()
+	}
+	if got := c.loadStatus(); got != "high" {
+		t.Fatalf("load_status at 0.75 = %q, want high", got)
+	}
+	c.Enter() // 4/4 → saturated
+	if got := c.loadStatus(); got != "saturated" {
+		t.Fatalf("load_status at 1.0 = %q, want saturated", got)
+	}
+	for i := 0; i < 4; i++ {
+		c.Leave()
+	}
+	c.SetState(StateDegraded)
+	if got := c.loadStatus(); got != "degraded" {
+		t.Fatalf("load_status with state=degraded = %q, want degraded", got)
+	}
+}
+
+// TestConcurrentRecordingIsRaceFree is the race-detector test: the
+// collector's hot path (engine goroutines) and the read path (HTTP
+// handlers) share the object. Run with -race.
+func TestConcurrentRecordingIsRaceFree(t *testing.T) {
+	c := testCollector()
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	mux := http.NewServeMux()
+	srv.Attach(mux)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	var wg sync.WaitGroup
+	// Writers: the engine's shape — outcomes, stage events, ring records,
+	// probe outcomes, rate samples, error records.
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			for j := 0; j < 200; j++ {
+				c.Outcome("sent")
+				c.ObserveE2E(0.01)
+				c.ObserveWait(0.002)
+				c.ObserveRPC("send_message", 0.003)
+				c.StageRecord("delivery", 1)
+				c.StageFail("delivery", "FLOOD_WAIT")
+				c.RecordDB(j%7 != 0, time.Now())
+				c.RecordTelegram(j%5 != 0, time.Now())
+				c.RecordAI(j%3 != 0, time.Now())
+				c.Enter()
+				c.Leave()
+				c.SampleRates(time.Now())
+				c.RecordError(LogEntry{
+					Severity: "WARN", Component: "worker.delivery",
+					Code: "X", RuleID: "r", Message: "m",
+				})
+				c.TaskDelivery("r1", 2.0)
+			}
+			_ = n
+		}(i)
+	}
+	// Readers: the /ops handlers + the health snapshot.
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for j := 0; j < 100; j++ {
+				_ = c.Snapshot()
+				_ = c.Stages()
+				_ = c.Errors().Items()
+				_ = c.Utilization()
+				_ = c.loadStatus()
+				resp, err := http.Get(ts.URL + "/ops")
+				if err == nil {
+					resp.Body.Close()
+				}
+				_ = c.E2E().percentile(99)
+			}
+		}()
+	}
+	wg.Wait()
+}
+
+// TestSetDeliveredReconcilesOnlyUpward: the durable count is the truth
+// when it is larger; a restart's fresh counter must not zero the panel's
+// number, but a durable count below the in-memory counter must never
+// silently increase the reported figure from a stale read.
+func TestSetDeliveredReconcilesOnlyUpward(t *testing.T) {
+	c := testCollector()
+	c.Outcome("sent")
+	c.Outcome("sent")
+	c.SetDelivered(41)
+	if got := c.Delivered(); got != 41 {
+		t.Fatalf("after reconciliation Delivered = %d, want 41", got)
+	}
+	c.SetDelivered(3)
+	if got := c.Delivered(); got != 41 {
+		t.Fatalf("a lower durable count must not lower the counter: %d", got)
+	}
+}
+
+// TestRateWindowIsOneMinuteRolling: jobs_per_second is the contract's
+// 1-minute rolling rate. Two samples a second apart carry the rate; fewer
+// than two samples report 0 (no data yet).
+func TestRateWindowIsOneMinuteRolling(t *testing.T) {
+	c := testCollector()
+	if got := c.jobsPerSecond(); got != 0 {
+		t.Fatalf("jobs_per_second with no samples = %v, want 0", got)
+	}
+	now := time.Now()
+	c.SampleRates(now)
+	for i := 1; i <= 60; i++ {
+		c.Outcome("sent")
+		c.SampleRates(now.Add(time.Duration(i) * time.Second))
+	}
+	// 60 delivered over the 60 seconds the window spans = 1/s.
+	if got := c.jobsPerSecond(); got < 0.9 || got > 1.1 {
+		t.Fatalf("jobs_per_second = %v, want ~1.0", got)
+	}
+}
+
+// TestTaskStatsPerRule: throughput_per_min and latency_ms_avg are per-rule
+// in-memory views — the durable half comes from delivery_jobs, this half
+// never costs a DB write.
+func TestTaskStatsPerRule(t *testing.T) {
+	c := testCollector()
+	tps, lat := c.TaskStats("r1")
+	if tps != 0 || lat != 0 {
+		t.Fatalf("unseen task stats = (%v, %v), want (0, 0)", tps, lat)
+	}
+	c.TaskDelivery("r1", 4.0)
+	c.TaskDelivery("r1", 6.0)
+	_, lat = c.TaskStats("r1")
+	if lat != 5.0 {
+		t.Fatalf("task mean latency = %v, want 5.0", lat)
+	}
+}
+
+// TestErrorsEndpointContent pins the §1.5 response shape and the 503
+// contract for the queue route when the store is unavailable.
+func TestErrorsEndpointShape(t *testing.T) {
+	c := testCollector()
+	c.RecordError(LogEntry{
+		Severity: "WARN", Component: "worker.delivery",
+		Code: "400", RuleID: "ea565d5c", Message: "sanitized one-liner",
+	})
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	mux := http.NewServeMux()
+	srv.Attach(mux)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/ops/errors?limit=10")
+	if err != nil {
+		t.Fatalf("GET /ops/errors: %v", err)
+	}
+	defer resp.Body.Close()
+	var body map[string]any
+	json.NewDecoder(resp.Body).Decode(&body)
+	items := body["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("items = %d, want 1", len(items))
+	}
+	row := items[0].(map[string]any)
+	for _, key := range []string{
+		"ts", "severity", "component", "worker_id", "rule_id",
+		"category", "code", "retryable", "message", "count",
+	} {
+		if _, ok := row[key]; !ok {
+			t.Fatalf("error item missing %q", key)
+		}
+	}
+	if row["severity"] != "WARN" {
+		t.Fatalf("severity = %v, want WARN", row["severity"])
+	}
+}

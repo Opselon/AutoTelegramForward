@@ -24,8 +24,8 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"net/url"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -120,10 +120,10 @@ const pgTestEnv = "ATF_TEST_POSTGRES_DSN"
 
 // pgSuite is one throwaway database plus a store opened against it.
 type pgSuite struct {
-	t        *testing.T
+	t       *testing.T
 	rootDSN string
-	dbName   string
-	store    Store
+	dbName  string
+	store   Store
 }
 
 // db returns the suite's live connection, for direct row assertions the
@@ -183,7 +183,6 @@ func newPGSuite(t *testing.T) *pgSuite {
 	})
 	return s
 }
-
 
 // pgRewriteDatabase swaps the database in a DSN by parsing it, never by
 // string surgery: "postgres://postgres@h/postgres" contains the substring
@@ -343,9 +342,9 @@ func TestPostgresTwoWorkersClaimConcurrently(t *testing.T) {
 	}
 	// DIFFERENT targets: concurrent claims must not collide on rows.
 	var (
-		wg      sync.WaitGroup
-		got     atomic.Int64
-		errors  atomic.Int64
+		wg     sync.WaitGroup
+		got    atomic.Int64
+		errors atomic.Int64
 	)
 	for w := 0; w < 4; w++ {
 		wg.Add(1)
@@ -689,10 +688,10 @@ func TestPostgresMarkRetryDeadLettersWhenExhausted(t *testing.T) {
 		t.Fatalf("mark retry: %v", err)
 	}
 	var (
-		status     string
-		attempts   int
-		dlqCount   int
-		lastError  string
+		status    string
+		attempts  int
+		dlqCount  int
+		lastError string
 	)
 	if err := s.db().QueryRowContext(context.Background(),
 		`SELECT status, attempts, error_detail FROM delivery_jobs WHERE id=$1`, "j1").
@@ -977,9 +976,9 @@ func TestPostgresGoStatePythonFenceRead(t *testing.T) {
 	}
 	// The exact projection the Python claim_or_check reads.
 	var (
-		status  string
-		holder  string
-		target  sql.NullInt64
+		status string
+		holder string
+		target sql.NullInt64
 	)
 	if err := s.db().QueryRowContext(context.Background(),
 		`SELECT status, worker_id, target_message_id FROM delivery_attempts WHERE id=$1`,

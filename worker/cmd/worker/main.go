@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"math"
 	"net"
 	"net/http"
 	"os"
@@ -47,6 +46,7 @@ import (
 	"atf/worker/internal/infra/aiprovider/validator"
 	autoreplystore "atf/worker/internal/infra/autoreply/store"
 	"atf/worker/internal/observability"
+	"atf/worker/internal/ops"
 	"atf/worker/internal/queue"
 	"atf/worker/internal/rulestore"
 	"atf/worker/internal/telegraph"
@@ -204,8 +204,45 @@ func run() (runErr error) {
 	}
 	defer cadenceStore.Close()
 
-	deliveryLog := &slogLogger{log: log, module: "worker.delivery"}
-	engine := delivery.New(store, rules, gateway, schedStore, deliveryLog, &metricsCounters{}, workerID(), cfg.MediaDir, delivery.Options{
+	// THE ONE METRICS OWNER (the defect this closes: the engine used to own
+	// a private metricsCounters and /healthz read a health.Tracker that
+	// counted nothing, so /healthz could report delivered=0 on a worker
+	// that had delivered 41 messages). The collector IS delivery.Metrics —
+	// the engine reports through it — and the same object feeds /healthz,
+	// /livez, /metrics and /ops. No second chain exists anywhere.
+	collector := ops.NewCollector(ops.Config{
+		WorkerID:       workerID(),
+		CommitSHA:      CommitSHA,
+		Version:        version(),
+		NumWorkers:     cfg.NumWorkers,
+		MaxQueueSize:   cfg.MaxQueueSize,
+		QueueBackend:   dbLabel(cfg),
+		ProcessingMode: processingMode(cfg),
+		Switches: ops.Switches{
+			WorkerEnabled: cfg.WorkerEnabled,
+			Transforms:    cfg.WorkerTransforms,
+			Autoreply:     autoreplyEnabled(),
+		},
+	})
+	collector.SetState(ops.StateStarting)
+
+	// Pipeline stage switches: the stages the process owns are enabled, the
+	// ones Python owns are disabled. A stage that never runs reports
+	// "waiting", a stage whose switch is off reports "disabled" — the two
+	// are different operator questions and the panel distinguishes them.
+	for _, stage := range ops.StageNames {
+		collector.StageEnabled(stage, true)
+	}
+	if !cfg.WorkerEnabled {
+		// An unactivated worker owns no stage of the delivery pipeline:
+		// the Python Core executes everything.
+		for _, stage := range ops.StageNames {
+			collector.StageEnabled(stage, false)
+		}
+	}
+
+	deliveryLog := &slogLogger{log: log, module: "worker.delivery", ops: collector}
+	engine := delivery.New(store, rules, gateway, schedStore, deliveryLog, collector, workerID(), cfg.MediaDir, delivery.Options{
 		NumWorkers:            cfg.NumWorkers,
 		BatchSize:             cfg.BatchSize,
 		LeaseDuration:         time.Duration(cfg.LeaseSeconds * float64(time.Second)),
@@ -215,6 +252,7 @@ func run() (runErr error) {
 	})
 	engine.SetDedupStore(dedupStore)
 	engine.SetCounters(cadenceStore)
+	engine.SetStageObserver(ops.NewEngineObserver(collector))
 
 	// Stage 5 (W4): the AI rewrite stage. The transformer resolves prompts
 	// through the SAME owner-scoped ai_configs store the channel-rewrite and
@@ -233,7 +271,12 @@ func run() (runErr error) {
 		factory := aiprovider.NewFactory()
 		transformer := aiprovider.NewTransformer(
 			aiConfigs, circuit.NewRegistry(), validator.New(), factory)
-		engine.SetAITransformer(transformer, aiConfigs, &aiMetricsCounters{})
+		engine.SetAITransformer(transformer, aiConfigs, ops.NewAIMetricsObserver(collector))
+		// A wired transformer is the difference between "the AI stage is
+		// configured" and "the AI stage has a provider": the stage reports
+		// enabled only when a provider path actually exists, so the panel
+		// never paints AI as merely-off when it is in fact unwired.
+		collector.StageEnabled("ai", true)
 		if ps, perr := prompt.NewSQLiteStore(aiCfgCtx, cfg.DSN()); perr == nil {
 			engine.SetPromptStore(ps)
 		} else {
@@ -262,11 +305,48 @@ func run() (runErr error) {
 	schedulerLog := &slogLogger{log: log, module: "worker.scheduler"}
 	schedEngine := scheduler.New(schedStore, gateway, schedulerLog, &schedCounters{}, workerID(), "", scheduler.Defaults())
 
-	tracker := health.NewTracker()
+	// The health surface reads the SAME collector the delivery engine
+	// reports through (health.Server takes a Tracker-shaped adapter — see
+	// collector_bridge.go — so /healthz's existing contract is preserved
+	// while its counters become the real ones). One owner, one listener:
+	// /ops attaches to this server's mux.
+	tracker := ops.NewTrackerBridge(collector)
 	healthSrv := health.NewServer(cfg.ListenAddr, tracker, func(ctx context.Context) error {
 		_, err := store.PendingCount(ctx)
-		return err
+		// The probe's outcome feeds the connectivity flag /ops reports, so
+		// "db_connected" is answered by the same call that answers
+		// readiness — never a second, divergent probe.
+		collector.RecordDB(err == nil, time.Now())
+		if err != nil {
+			return err
+		}
+		if n, err := store.PendingCount(ctx); err == nil {
+			collector.RecordPendingDepth(int64(n))
+		}
+		return nil
 	})
+
+	// /ops: the operational snapshot, served from the same :8090 listener
+	// as /healthz. The queue and task readers are the store's own read-only
+	// aggregations (queue.StoreStats / queue.TaskRows); the rules join uses
+	// the rule store's handle, never a second connection.
+	// The ops surface reads the queue through the store's own read-only
+	// aggregations: a type assertion keeps the queue.Store interface (the
+	// engine's write path) untouched while /ops gets the reader it needs.
+	// A store that does not implement it (a test double) yields nil and
+	// /ops reports the fields it cannot read — never fake values.
+	var queueReader ops.QueueStoreReader
+	var taskReader ops.TaskStoreReader
+	if reader, ok := store.(ops.QueueStoreReader); ok {
+		queueReader = reader
+	}
+	if reader, ok := store.(ops.TaskStoreReader); ok {
+		taskReader = reader
+	}
+	opsSrv := ops.NewServer(collector, queueReader, taskReader, rulesDBFor(rules), rulesBackendFor(rules), workerID())
+	if mux := healthSrv.Mux(); mux != nil {
+		opsSrv.Attach(mux)
+	}
 	go func() {
 		if err := healthSrv.Start(); err != nil && !errors.Is(err, net.ErrClosed) {
 			log.Warn("health server stopped", "error", err)
@@ -278,6 +358,36 @@ func run() (runErr error) {
 	// restart forever; the lease + fence make that cut safe.
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
 	defer stop()
+	// Connectivity probes + rate sampling. One goroutine, one 15s ticker:
+	//
+	//   - TELEGRAM: the gateway's IsSessionReady against the session the
+	//     runtime owns. A gateway that cannot answer is an unreachable
+	//     runtime, exactly the "telegram_connected" the /ops contract
+	//     names. The fake gateway (tests, shadow-mode) answers ready.
+	//   - AI: the LAST provider outcome is the probe — there is no cheaper
+	//     health check for a paid endpoint than "did the last call work",
+	//     and no call is made here. Before any call, reachability is the
+	//     AI stage's wiring (a wired transformer means a provider exists).
+	//   - RATES: the collector's 1-minute windows advance even when nobody
+	//     polls /ops, so a worker delivering in the dark still graphs.
+	//
+	// Every probe outcome lands on the collector's atomic flags; no DB
+	// write, no per-message write, no per-heartbeat write.
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		probeTelegram(ctx, collector, gateway, log)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				probeTelegram(ctx, collector, gateway, log)
+				collector.SampleRates(time.Now())
+			}
+		}
+	}()
+
 
 	var schedWG sync.WaitGroup
 	schedWG.Add(1)
@@ -334,7 +444,7 @@ func run() (runErr error) {
 // The claimer hands batches to a bounded channel consumed by the workers,
 // which gives natural backpressure — a slow Telegram never piles up an
 // unbounded in-memory queue of claimed jobs.
-func runLoop(ctx context.Context, log *slog.Logger, engine *delivery.Engine, store queue.Store, tracker *health.Tracker, cfg *config.Config) error {
+func runLoop(ctx context.Context, log *slog.Logger, engine *delivery.Engine, store queue.Store, tracker health.Tracker, cfg *config.Config) error {
 	if !config.ClaimsEnabled(cfg) {
 		// The disabled worker reports ready (its health surface is up) but
 		// deliberately never claims. Logged once at startup and on shutdown so
@@ -575,6 +685,34 @@ func dbLabel(cfg *config.Config) string {
 	return "sqlite:" + cfg.DBPath
 }
 
+// processingMode reports whether THIS process owns delivery execution
+// ("worker") or the Python Core does ("legacy") — the /ops field of the
+// same name. It is the strangler-fig switch re-read, nothing more.
+func processingMode(cfg *config.Config) string {
+	if cfg.WorkerEnabled {
+		return "worker"
+	}
+	return "legacy"
+}
+
+// rulesDBFor returns the rule store's forward_rules reader for the /ops
+// per-task join (nil when none is configured).
+func rulesDBFor(rules *rulestore.Store) *sql.DB {
+	if rules == nil {
+		return nil
+	}
+	return rules.OpsDB()
+}
+
+// rulesBackendFor labels the rule store's backend so the /ops join picks
+// the right placeholder convention.
+func rulesBackendFor(rules *rulestore.Store) string {
+	if rules == nil {
+		return "sqlite"
+	}
+	return rules.OpsBackend()
+}
+
 // versionString reports the product version the worker belongs to: the repo's
 // VERSION file, baked in at build time the same way CommitSHA is. Empty means
 // "built without the flag"; the startup log says so rather than inventing a
@@ -589,49 +727,13 @@ func version() string {
 }
 
 // --- adapters: keep the engine free of logging/metrics plumbing ------------ //
-
-type metricsCounters struct {
-	mu        sync.Mutex
-	sent      int64
-	retried   int64
-	failed    int64
-	unknown   int64
-	rpcCount  int64
-	rpcSum    float64
-	waitSum   float64
-	waitCount int64
-}
-
-func (c *metricsCounters) Outcome(kind string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	switch kind {
-	case "sent":
-		c.sent++
-	case "retried":
-		c.retried++
-	case "failed":
-		c.failed++
-	case "unknown":
-		c.unknown++
-	}
-}
-
-func (c *metricsCounters) ObserveRPC(operation string, seconds float64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.rpcCount++
-	c.rpcSum += seconds
-}
-
-func (c *metricsCounters) ObserveWait(seconds float64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if seconds > 0 && !math.IsNaN(seconds) {
-		c.waitCount++
-		c.waitSum += seconds
-	}
-}
+//
+// metricsCounters is GONE: it was the second, competing owner of the very
+// counters /healthz reported (the delivered=0-on-41-real-deliveries
+// defect). The engine now reports through the ops collector, which is the
+// same object the health and ops surfaces read. If a future metrics owner
+// is needed outside those surfaces, add it here — never a second one for
+// the same numbers.
 
 // openSchedulerStore opens the durable scheduled_actions store against the
 // same database the delivery queue uses (PostgreSQL when configured,
@@ -787,4 +889,29 @@ func openAIConfigStore(ctx context.Context, cfg *config.Config) (aiconfig.Store,
 	// ai_configs is SQLite-only in the Python Core (the repository reads it
 	// from the shared atf.db), so the Go side mirrors that placement.
 	return aiconfig.NewSQLiteStore(ctx, cfg.DSN(), crypto)
+}
+
+// --- probes ---------------------------------------------------------------- //
+
+// probeTelegram answers the /ops contract's telegram_connected field from
+// the ONE thing the field actually means: can the Telegram Runtime serve
+// MTProto work for a session right now.
+//
+// It is deliberately NOT a per-target or per-job call: the probe's cost is
+// bounded (one gRPC per tick, RPC-timeout'd) and its outcome is an atomic
+// flag plus a timestamp, never a queue write. A failed probe degrades the
+// /ops connectivity chip; it never fails a delivery — the delivery path's
+// own SESSION_UNAVAILABLE handling owns that decision.
+func probeTelegram(ctx context.Context, collector *ops.Collector, gateway telegraph.Gateway, log *slog.Logger) {
+	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	ok := false
+	if ready, _, err := gateway.IsSessionReady(probeCtx, ""); err == nil {
+		ok = ready
+	} else if log != nil {
+		// A probe failure is operational noise worth one line, not a
+		// retry loop: the ticker will ask again in 15s.
+		log.Debug("telegram probe failed", "error", err)
+	}
+	collector.RecordTelegram(ok, time.Now())
 }

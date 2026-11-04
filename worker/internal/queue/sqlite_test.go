@@ -15,7 +15,6 @@ import (
 // SqliteDatabase._migrate creates) so the store is tested against the real
 // shape rather than a hand-rolled approximation.
 
-
 func mustParseJob(t *testing.T, raw map[string]any) *job.Payload {
 	t.Helper()
 	return job.NewPayload(raw)
@@ -430,5 +429,3 @@ func containsStr(s, sub string) bool {
 	}
 	return false
 }
-
-

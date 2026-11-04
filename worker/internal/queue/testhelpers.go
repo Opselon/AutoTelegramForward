@@ -33,3 +33,29 @@ func StoreDB(t *testing.T, s Store) *sql.DB {
 	t.Fatalf("store is not a sqliteStore")
 	return nil
 }
+
+// StoreDBForOps digs the *sql.DB out of a store for the ops surface's
+// read-only join queries (the per-task forward_rules lookup). It is the
+// exported twin of StoreDB, named for what it is FOR rather than what it
+// returns, so no future reader mistakes it for a write path.
+func StoreDBForOps(s Store) *sql.DB {
+	if st, ok := s.(*sqliteStore); ok {
+		return st.db
+	}
+	if st, ok := s.(*pgStore); ok {
+		return st.db
+	}
+	return nil
+}
+
+// BackendLabel reports which backend a store serves: "sqlite" or
+// "postgres". The ops surface uses it to pick the placeholder convention
+// for its join queries (the same convention rulestore's rulesQuery applies
+// to its own projections) and to label /ops's queue_backend — never to log
+// a DSN.
+func BackendLabel(s Store) string {
+	if _, ok := s.(*pgStore); ok {
+		return "postgres"
+	}
+	return "sqlite"
+}

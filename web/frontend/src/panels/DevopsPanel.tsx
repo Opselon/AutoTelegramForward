@@ -38,6 +38,7 @@ import {
 import type { DashboardCtx } from '../App'
 import { LogPolicyPanel } from '../components/LogPolicyPanel'
 import { LoggingHealth } from '../components/LoggingHealth'
+import WorkerControlCenter from '../components/WorkerControlCenter'
 
 export default function DevopsPanel({ d }: { d: DashboardCtx }) {
   const {
@@ -118,8 +119,15 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
 
   return (
     <>
+      {/* -------------------------------------------- Go Worker Control Center -- */}
+      {currentUser?.is_admin ? (
+        <section className="glass-panel ops-section" style={{ '--ops-i': 0 } as React.CSSProperties}>
+          <WorkerControlCenter lang={lang} />
+        </section>
+      ) : null}
+
       {/* ---------------------------------------------------------- Topology -- */}
-      <section className="glass-panel ops-section" style={{ '--ops-i': 0 } as React.CSSProperties}>
+      <section className="glass-panel ops-section" style={{ '--ops-i': 1 } as React.CSSProperties}>
         <div className="ops-head">
           <h3 className="ops-head__title">
             <HeartPulse
@@ -246,7 +254,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
       {/* The hero instrument: filter bar, quick metrics, history paging,
           purge, and the terminal. The explorer used to be a card that
           swallowed the backup and errors sections; it is one section now. */}
-      <section className="glass-panel ops-section" style={{ '--ops-i': 1 } as React.CSSProperties}>
+      <section className="glass-panel ops-section" style={{ '--ops-i': 2 } as React.CSSProperties}>
         <div className="ops-head">
           <h3 className="ops-head__title">
             <Terminal size={17} color="var(--color-accent-violet)" />
@@ -761,7 +769,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
       {/* Migrate this install to another server. A sibling section — it used
           to live inside the log explorer's card, one feature buried in
           another. */}
-      <section className="glass-panel ops-section" style={{ '--ops-i': 2 } as React.CSSProperties}>
+      <section className="glass-panel ops-section" style={{ '--ops-i': 3 } as React.CSSProperties}>
         <div className="ops-head">
           <h3 className="ops-head__title">
             <Database size={17} color="var(--color-info)" />
@@ -910,7 +918,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
       {/* Triage queue for things to fix next. A sibling section. */}
       <section
         className="glass-panel ops-section"
-        style={{ '--ops-i': 3, marginBlockEnd: 0 } as React.CSSProperties}
+        style={{ '--ops-i': 4, marginBlockEnd: 0 } as React.CSSProperties}
       >
         <div className="ops-head">
           <h3 className="ops-head__title">
