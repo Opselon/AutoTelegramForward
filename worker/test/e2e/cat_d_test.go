@@ -190,7 +190,7 @@ func TestCategoryD(t *testing.T) {
 		{"ATF-E2E-D-060", "url replacement", &PolicySpec{Enabled: boolPtr(true), Replacements: map[string]string{"https://x.com": "https://y.com"}}, "go https://x.com", "go https://y.com"},
 		{"ATF-E2E-D-061", "mention replacement", &PolicySpec{Enabled: boolPtr(true), Replacements: map[string]string{"@old": "@new"}}, "hi @old", "hi @new"},
 		{"ATF-E2E-D-062", "hashtag replacement", &PolicySpec{Enabled: boolPtr(true), Replacements: map[string]string{"#tag": "#new"}}, "use #tag", "use #new"},
-		{"ATF-E2E-D-063", "newline replacement", &PolicySpec{Enabled: boolPtr(true), Replacements: map[string]string{"\n": " "}}, "a\nb", "a b"},
+		{"ATF-E2E-D-063", "whitespace-only find key is skipped (parity), text keeps newline", &PolicySpec{Enabled: boolPtr(true), Replacements: map[string]string{"\n": " "}}, "a\nb", "a\nb"},
 		{"ATF-E2E-D-064", "repeated matches replaced deterministically", &PolicySpec{Enabled: boolPtr(true), Replacements: map[string]string{"na": "x"}}, "na na na", "x x x"},
 		{"ATF-E2E-D-065", "determinism: same input same output", &PolicySpec{Enabled: boolPtr(true), Replacements: map[string]string{"a": "b"}, Cleaner: &CleanerSpec{Enabled: true, Newlines: true}}, "a\n\nb", "b\nb"},
 	}

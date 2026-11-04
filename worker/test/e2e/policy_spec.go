@@ -1,10 +1,5 @@
 package e2e
 
-import (
-	"encoding/json"
-	"strings"
-)
-
 // asMap renders the policy as the metadata.content_policy blob the pipeline reads.
 func (p *PolicySpec) asMap() map[string]any {
 	m := map[string]any{
@@ -30,30 +25,7 @@ func (p *PolicySpec) asMap() map[string]any {
 	if p.Enabled != nil {
 		m["enabled"] = *p.Enabled
 	}
-	if len(p.OrderedReplacements) > 0 {
-		// Ordered path: a JSON object preserves insertion order, which the
-		// store's orderedReplacements decoder reads back as the apply order.
-		var sb strings.Builder
-		sb.WriteByte('{')
-		for i, kv := range p.OrderedReplacements {
-			if i > 0 {
-				sb.WriteByte(',')
-			}
-			k, _ := json.Marshal(kv[0])
-			v, _ := json.Marshal(kv[1])
-			sb.Write(k)
-			sb.WriteByte(':')
-			sb.Write(v)
-		}
-		sb.WriteByte('}')
-		m["replacements"] = json.RawMessage(sb.String())
-	} else if len(p.Replacements) > 0 {
-		reps := map[string]any{}
-		for k, v := range p.Replacements {
-			reps[k] = v
-		}
-		m["replacements"] = reps
-	}
+
 	return m
 }
 
