@@ -1298,7 +1298,28 @@ export const uz: Catalog = {
   "ui_diag_stuck_claimed": "Yopashib qolgan claimlar",
   "ui_diag_stuck_pending": "Ochlangan kutilayotganlar",
   "ui_diag_poison_jobs": "Zaharli ishlar",
-  "ui_diag_retry_storm": "Qayta urinish to'foni (keyingi 60s)",
+  "ui_diag_retry_storm": "Qayta urinish to'foni (keyingi 60s)",  "ui_incident_center": "Xato insidentlari",
+  "ui_incident_state_all": "Barcha holatlar",
+  "ui_incident_state_open": "Ochiq",
+  "ui_incident_state_recurrent": "Takroriy",
+  "ui_incident_state_acknowledged": "Tasdiqlangan",
+  "ui_incident_state_recovered": "Tiklangan",
+  "ui_incident_state_suppressed": "Bostirilgan",
+  "ui_incident_filter_state": "Insidentlarni holat bo'yicha filtrlash",
+  "ui_incident_empty": "Bu holatda insident yo'q — takroriy xatolar shu yerda guruhlanadi.",
+  "ui_incident_worker_unreachable": "Worker yetib bo'lmaydi — insident holati noma'lum, bo'sh emas.",
+  "ui_incident_fetch_failed": "Insidentlarni olish amalga oshmadi",
+  "ui_incident_state_hint": "Hosil qilingan holat: ochiq = sodir bo'layotgan, tiklangan = oynadan keyin jim, takroriy = tiklangan va yana sodir bo'layotgan, tasdiqlangan = operator tomonidan, bostirilgan = faqat panelda cheklangan.",
+  "ui_incident_recoveries": "{n} marta tiklangan",
+  "ui_incident_last_seen_ago": "so'nggi ko'rinish {age} oldin",
+  "ui_incident_span": "{first} → {last}",
+  "ui_incident_pattern_suspected": "Shubhali naqsh",
+  "ui_incident_affected": "Workerlar: {workers} · Qoidalar: {rules} · Ishlar: {jobs}",
+  "ui_incident_acked_by": "{who} tomonidan {at} da tasdiqlangan",
+  "ui_incident_ack": "Tasdiqlash",
+  "ui_incident_ack_confirm": "Bu insident tasdiqlansinmi? Ochiq bo'lguncha tasdiqlangan holatda qoladi; tiklanish tasdiqni tozalaydi.",
+
+
 
 
 

@@ -1298,7 +1298,28 @@ export const fr: Catalog = {
   "ui_diag_stuck_claimed": "Bails bloqués",
   "ui_diag_stuck_pending": "En attente affamés",
   "ui_diag_poison_jobs": "Jobs poison",
-  "ui_diag_retry_storm": "Tempête de relances (60s prochaines)",
+  "ui_diag_retry_storm": "Tempête de relances (60s prochaines)",  "ui_incident_center": "Incidents d'erreur",
+  "ui_incident_state_all": "Tous les états",
+  "ui_incident_state_open": "Ouvert",
+  "ui_incident_state_recurrent": "Récurrent",
+  "ui_incident_state_acknowledged": "Acquitté",
+  "ui_incident_state_recovered": "Récupéré",
+  "ui_incident_state_suppressed": "Supprimé",
+  "ui_incident_filter_state": "Filtrer les incidents par état du cycle de vie",
+  "ui_incident_empty": "Aucun incident dans cet état — les erreurs répétées seront regroupées ici.",
+  "ui_incident_worker_unreachable": "Worker injoignable — l'état des incidents est inconnu, pas vide.",
+  "ui_incident_fetch_failed": "Échec de la récupération des incidents",
+  "ui_incident_state_hint": "État dérivé : open = en cours, recovered = silencieux au-delà de la fenêtre, recurrent = récupéré et actif à nouveau, acknowledged = acquitté par un opérateur, suppressed = limité au panneau uniquement.",
+  "ui_incident_recoveries": "récupéré {n}×",
+  "ui_incident_last_seen_ago": "vu il y a {age}",
+  "ui_incident_span": "{first} → {last}",
+  "ui_incident_pattern_suspected": "Modèle suspect",
+  "ui_incident_affected": "Workers : {workers} · Règles : {rules} · Jobs : {jobs}",
+  "ui_incident_acked_by": "Acquitté par {who} à {at}",
+  "ui_incident_ack": "Acquitter",
+  "ui_incident_ack_confirm": "Acquitter cet incident ? Il reste acquitté tant qu'il est ouvert ; une récupération l'efface.",
+
+
 
 
 

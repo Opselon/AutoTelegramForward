@@ -1298,7 +1298,28 @@ export const pt: Catalog = {
   "ui_diag_stuck_claimed": "Claims presos",
   "ui_diag_stuck_pending": "Pendentes esfomeados",
   "ui_diag_poison_jobs": "Jobs venenosos",
-  "ui_diag_retry_storm": "Tempestade de retentativa (próx. 60s)",
+  "ui_diag_retry_storm": "Tempestade de retentativa (próx. 60s)",  "ui_incident_center": "Incidentes de erro",
+  "ui_incident_state_all": "Todos os estados",
+  "ui_incident_state_open": "Aberto",
+  "ui_incident_state_recurrent": "Recorrente",
+  "ui_incident_state_acknowledged": "Reconhecido",
+  "ui_incident_state_recovered": "Recuperado",
+  "ui_incident_state_suppressed": "Suprimido",
+  "ui_incident_filter_state": "Filtrar incidentes por estado do ciclo de vida",
+  "ui_incident_empty": "Nenhum incidente neste estado — erros repetidos serão agrupados aqui.",
+  "ui_incident_worker_unreachable": "Worker inacessível — o estado dos incidentes é desconhecido, não vazio.",
+  "ui_incident_fetch_failed": "Falha ao buscar incidentes",
+  "ui_incident_state_hint": "Estado do ciclo de vida derivado: aberto = ocorrendo, recuperado = silencioso além da janela, recorrente = recuperado e disparando novamente, reconhecido = confirmado por um operador, suprimido = limitado apenas no painel.",
+  "ui_incident_recoveries": "recuperado {n}×",
+  "ui_incident_last_seen_ago": "visto há {age}",
+  "ui_incident_span": "{first} → {last}",
+  "ui_incident_pattern_suspected": "Padrão suspeito",
+  "ui_incident_affected": "Workers: {workers} · Regras: {rules} · Jobs: {jobs}",
+  "ui_incident_acked_by": "Reconhecido por {who} em {at}",
+  "ui_incident_ack": "Reconhecer",
+  "ui_incident_ack_confirm": "Reconhecer este incidente? Ele permanece reconhecido enquanto estiver aberto; uma recuperação limpa o reconhecimento.",
+
+
 
 
 

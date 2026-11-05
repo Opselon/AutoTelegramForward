@@ -1298,7 +1298,28 @@ export const id: Catalog = {
   "ui_diag_stuck_claimed": "Claim terhenti",
   "ui_diag_stuck_pending": "Pending kelaparan",
   "ui_diag_poison_jobs": "Job racun",
-  "ui_diag_retry_storm": "Badai retry (60s ke depan)",
+  "ui_diag_retry_storm": "Badai retry (60s ke depan)",  "ui_incident_center": "Insiden error",
+  "ui_incident_state_all": "Semua status",
+  "ui_incident_state_open": "Terbuka",
+  "ui_incident_state_recurrent": "Berulang",
+  "ui_incident_state_acknowledged": "Diakui",
+  "ui_incident_state_recovered": "Pulih",
+  "ui_incident_state_suppressed": "Ditekan",
+  "ui_incident_filter_state": "Filter insiden berdasarkan status siklus hidup",
+  "ui_incident_empty": "Tidak ada insiden pada status ini — error berulang akan dikelompokkan di sini.",
+  "ui_incident_worker_unreachable": "Worker tidak terjangkau — status insiden tidak diketahui, bukan kosong.",
+  "ui_incident_fetch_failed": "Gagal mengambil insiden",
+  "ui_incident_state_hint": "Status turunan: open = terjadi, recovered = tenang melewati jendela, recurrent = pulih dan terjadi lagi, acknowledged = diakui operator, suppressed = dibatasi hanya di panel.",
+  "ui_incident_recoveries": "pulih {n}×",
+  "ui_incident_last_seen_ago": "terakhir terlihat {age} lalu",
+  "ui_incident_span": "{first} → {last}",
+  "ui_incident_pattern_suspected": "Pola yang dicurigai",
+  "ui_incident_affected": "Worker: {workers} · Aturan: {rules} · Job: {jobs}",
+  "ui_incident_acked_by": "Diakui oleh {who} pada {at}",
+  "ui_incident_ack": "Akui",
+  "ui_incident_ack_confirm": "Akui insiden ini? Tetap diakui selama masih terbuka; pemulihan menghapus pengakuan.",
+
+
 
 
 

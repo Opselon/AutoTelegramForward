@@ -1298,7 +1298,28 @@ export const it: Catalog = {
   "ui_diag_stuck_claimed": "Claim bloccati",
   "ui_diag_stuck_pending": "In attesa affamati",
   "ui_diag_poison_jobs": "Job velenosi",
-  "ui_diag_retry_storm": "Tempesta di retry (prossimi 60s)",
+  "ui_diag_retry_storm": "Tempesta di retry (prossimi 60s)",  "ui_incident_center": "Incidenti di errore",
+  "ui_incident_state_all": "Tutti gli stati",
+  "ui_incident_state_open": "Aperto",
+  "ui_incident_state_recurrent": "Ricorrente",
+  "ui_incident_state_acknowledged": "Riconosciuto",
+  "ui_incident_state_recovered": "Recuperato",
+  "ui_incident_state_suppressed": "Soppresso",
+  "ui_incident_filter_state": "Filtra gli incidenti per stato del ciclo di vita",
+  "ui_incident_empty": "Nessun incidente in questo stato — gli errori ripetuti verranno raggruppati qui.",
+  "ui_incident_worker_unreachable": "Worker non raggiungibile — lo stato degli incidenti è sconosciuto, non vuoto.",
+  "ui_incident_fetch_failed": "Recupero degli incidenti non riuscito",
+  "ui_incident_state_hint": "Stato derivato: open = in corso, recovered = silenzioso oltre la finestra, recurrent = recuperato e di nuovo attivo, acknowledged = riconosciuto da un operatore, suppressed = limitato solo al pannello.",
+  "ui_incident_recoveries": "recuperato {n}×",
+  "ui_incident_last_seen_ago": "visto {age} fa",
+  "ui_incident_span": "{first} → {last}",
+  "ui_incident_pattern_suspected": "Modello sospetto",
+  "ui_incident_affected": "Worker: {workers} · Regole: {rules} · Job: {jobs}",
+  "ui_incident_acked_by": "Riconosciuto da {who} alle {at}",
+  "ui_incident_ack": "Riconosci",
+  "ui_incident_ack_confirm": "Riconoscere questo incidente? Rimane riconosciuto finché è aperto; un ripristino cancella il riconoscimento.",
+
+
 
 
 

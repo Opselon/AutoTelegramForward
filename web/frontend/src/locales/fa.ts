@@ -1298,7 +1298,28 @@ export const fa: Catalog = {
   "ui_diag_stuck_claimed": "ادعاهای گیر کرده",
   "ui_diag_stuck_pending": "در انتظار گرسنه",
   "ui_diag_poison_jobs": "کارهای سمی",
-  "ui_diag_retry_storm": "طوفان تلاش مجدد (۶۰ ثانیه آینده)",
+  "ui_diag_retry_storm": "طوفان تلاش مجدد (۶۰ ثانیه آینده)",  "ui_incident_center": "رویدادهای خطا",
+  "ui_incident_state_all": "همه وضعیت‌ها",
+  "ui_incident_state_open": "باز",
+  "ui_incident_state_recurrent": "عودتی",
+  "ui_incident_state_acknowledged": "تأیید شده",
+  "ui_incident_state_recovered": "بهبود یافته",
+  "ui_incident_state_suppressed": "سرکوب شده",
+  "ui_incident_filter_state": "فیلتر رویدادها بر اساس وضعیت چرخه حیات",
+  "ui_incident_empty": "رویدادی در این وضعیت نیست — خطاهای تکراری اینجا گروه‌بندی می‌شوند.",
+  "ui_incident_worker_unreachable": "کارگر در دسترس نیست — وضعیت رویداد ناشناخته است، نه خالی.",
+  "ui_incident_fetch_failed": "دریافت رویداد ناموفق بود",
+  "ui_incident_state_hint": "وضعیت مشتق‌شده چرخه حیات: باز = در حال وقوع، بهبود یافته = ساکت پس از پنجره، عودتی = بهبود یافته و دوباره در وقوع، تأیید شده توسط اپراتور، سرکوب شده = فقط در پنل محدود نرخ.",
+  "ui_incident_recoveries": "{n} بار بهبود یافت",
+  "ui_incident_last_seen_ago": "آخرین مشاهده {age} پیش",
+  "ui_incident_span": "{first} → {last}",
+  "ui_incident_pattern_suspected": "الگوی مشکوک",
+  "ui_incident_affected": "کارگران: {workers} · قواعد: {rules} · کارها: {jobs}",
+  "ui_incident_acked_by": "تأیید توسط {who} در {at}",
+  "ui_incident_ack": "تأیید",
+  "ui_incident_ack_confirm": "این رویداد تأیید شود؟ تا زمان باز ماندن تأیید باقی می‌ماند؛ بهبود تأیید را پاک می‌کند.",
+
+
 
 
 

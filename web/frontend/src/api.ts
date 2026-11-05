@@ -75,6 +75,7 @@ import { clearSession, getToken } from './session'
 import type {
   WorkerErrorQuery,
   WorkerErrorsResponse,
+  WorkerIncidentsResponse,
   WorkerQueueResponse,
   WorkerStatusResponse,
   WorkerTasksResponse,
@@ -874,6 +875,16 @@ export const api = {
     const s = q.toString()
     return fetchJson<WorkerErrorsResponse>(`${API_BASE}/worker/errors${s ? '?' + s : ''}`)
   },
+  // Incidents (§9): repeated failures grouped into a lifecycle with a
+  // suspected pattern + hint. state is validated at the API edge.
+  workerIncidents: (state?: string) => {
+    const q = state ? `?state=${encodeURIComponent(state)}` : ''
+    return fetchJson<WorkerIncidentsResponse>(`${API_BASE}/worker/incidents${q}`)
+  },
+  workerIncidentAck: (id: string) =>
+    fetchJson<{ acknowledged: string }>(`${API_BASE}/worker/incidents/ack?id=${encodeURIComponent(id)}`, {
+      method: 'POST',
+    }),
 
   adminListUsers: (limit = 50, offset = 0) =>
     fetchJson<{ users: any[]; total: number }>(`${API_BASE}/admin/users?limit=${limit}&offset=${offset}`),

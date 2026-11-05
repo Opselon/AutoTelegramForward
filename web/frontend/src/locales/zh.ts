@@ -1298,7 +1298,28 @@ export const zh: Catalog = {
   "ui_diag_stuck_claimed": "卡住的领取",
   "ui_diag_stuck_pending": "饥饿的待处理",
   "ui_diag_poison_jobs": "毒消息作业",
-  "ui_diag_retry_storm": "重试风暴（未来 60 秒）",
+  "ui_diag_retry_storm": "重试风暴（未来 60 秒）",  "ui_incident_center": "错误事件",
+  "ui_incident_state_all": "全部状态",
+  "ui_incident_state_open": "进行中",
+  "ui_incident_state_recurrent": "反复发作",
+  "ui_incident_state_acknowledged": "已确认",
+  "ui_incident_state_recovered": "已恢复",
+  "ui_incident_state_suppressed": "已抑制",
+  "ui_incident_filter_state": "按生命周期状态筛选事件",
+  "ui_incident_empty": "此状态下没有事件——重复的错误将在此分组。",
+  "ui_incident_worker_unreachable": "Worker 不可达——事件状态未知，而非为空。",
+  "ui_incident_fetch_failed": "事件获取失败",
+  "ui_incident_state_hint": "派生状态：open=正在发生，recovered=静默超过窗口期，recurrent=恢复后再次发生，acknowledged=操作员已确认，suppressed=仅在面板中限流。",
+  "ui_incident_recoveries": "已恢复 {n} 次",
+  "ui_incident_last_seen_ago": "{age} 前出现",
+  "ui_incident_span": "{first} → {last}",
+  "ui_incident_pattern_suspected": "疑似模式",
+  "ui_incident_affected": "Worker：{workers} · 规则：{rules} · 作业：{jobs}",
+  "ui_incident_acked_by": "由 {who} 于 {at} 确认",
+  "ui_incident_ack": "确认",
+  "ui_incident_ack_confirm": "确认此事件？在处于进行中状态期间保持已确认；恢复后会清除确认。",
+
+
 
 
 

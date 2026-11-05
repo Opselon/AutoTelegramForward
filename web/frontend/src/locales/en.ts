@@ -1298,7 +1298,28 @@ export const en: Catalog = {
   "ui_diag_stuck_claimed": "Stuck claims",
   "ui_diag_stuck_pending": "Starved pending",
   "ui_diag_poison_jobs": "Poison jobs",
-  "ui_diag_retry_storm": "Retry storm (next 60s)",
+  "ui_diag_retry_storm": "Retry storm (next 60s)",  "ui_incident_center": "Error Incidents",
+  "ui_incident_state_all": "All states",
+  "ui_incident_state_open": "Open",
+  "ui_incident_state_recurrent": "Recurrent",
+  "ui_incident_state_acknowledged": "Acknowledged",
+  "ui_incident_state_recovered": "Recovered",
+  "ui_incident_state_suppressed": "Suppressed",
+  "ui_incident_filter_state": "Filter incidents by lifecycle state",
+  "ui_incident_empty": "No incidents in this state — repeated errors will be grouped here.",
+  "ui_incident_worker_unreachable": "Worker unreachable — incident state is unknown, not empty.",
+  "ui_incident_fetch_failed": "Incident fetch failed",
+  "ui_incident_state_hint": "Derived lifecycle state: open = occurring, recovered = quiet past the window, recurrent = recovered and firing again, acknowledged = acked by an operator, suppressed = rate-limited in the panel only.",
+  "ui_incident_recoveries": "recovered {n}×",
+  "ui_incident_last_seen_ago": "last seen {age} ago",
+  "ui_incident_span": "{first} → {last}",
+  "ui_incident_pattern_suspected": "Suspected pattern",
+  "ui_incident_affected": "Workers: {workers} · Rules: {rules} · Jobs: {jobs}",
+  "ui_incident_acked_by": "Acknowledged by {who} at {at}",
+  "ui_incident_ack": "Acknowledge",
+  "ui_incident_ack_confirm": "Acknowledge this incident? It stays acknowledged while it remains open; a recovery clears the ack.",
+
+
 
 
 

@@ -201,6 +201,45 @@ export interface WorkerTasksBody {
 export type WorkerTasksResponse = WorkerTasksBody | WorkerUnreachable
 export type WorkerErrorsResponse = WorkerErrorsBody | WorkerUnreachable
 
+/** §9: one tracked incident — repeated failures of one fingerprint, with a
+ *  lifecycle, the workers/rules/jobs it touched, and a SUSPECTED pattern.
+ *  The pattern is labeled suspected, never confirmed: the hint says what to
+ *  CHECK, the error code only proves what FAILED. */
+export interface IncidentPattern {
+  name: string
+  suspected: boolean
+  hint: string
+}
+
+export interface WorkerIncident {
+  id: string
+  fingerprint: string
+  severity: string
+  category: string
+  code: string
+  component: string
+  retryable: boolean
+  message: string
+  count: number
+  recoveries: number
+  first_seen: string
+  last_seen: string
+  affected_workers: string[]
+  affected_rules: string[]
+  related_jobs: string[]
+  pattern?: IncidentPattern
+  state: 'open' | 'recovered' | 'recurrent' | 'acknowledged' | 'suppressed' | string
+  acked_by?: string
+  acked_at?: string
+}
+
+export interface WorkerIncidentsBody {
+  total: number
+  incidents: WorkerIncident[]
+}
+
+export type WorkerIncidentsResponse = WorkerIncidentsBody | WorkerUnreachable
+
 export interface WorkerErrorQuery {
   severity?: string
   component?: string

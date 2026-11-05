@@ -1298,7 +1298,28 @@ export const ru: Catalog = {
   "ui_diag_stuck_claimed": "Зависшие аренды",
   "ui_diag_stuck_pending": "Голодные ожидания",
   "ui_diag_poison_jobs": "Ядовитые задания",
-  "ui_diag_retry_storm": "Шторм повторов (ближ. 60с)",
+  "ui_diag_retry_storm": "Шторм повторов (ближ. 60с)",  "ui_incident_center": "Инциденты ошибок",
+  "ui_incident_state_all": "Все состояния",
+  "ui_incident_state_open": "Открытые",
+  "ui_incident_state_recurrent": "Повторные",
+  "ui_incident_state_acknowledged": "Подтверждённые",
+  "ui_incident_state_recovered": "Восстановленные",
+  "ui_incident_state_suppressed": "Подавленные",
+  "ui_incident_filter_state": "Фильтр инцидентов по состоянию жизненного цикла",
+  "ui_incident_empty": "Инцидентов в этом состоянии нет — повторяющиеся ошибки будут сгруппированы здесь.",
+  "ui_incident_worker_unreachable": "Воркер недоступен — состояние инцидентов неизвестно, а не пусто.",
+  "ui_incident_fetch_failed": "Не удалось получить инциденты",
+  "ui_incident_state_hint": "Производное состояние: open = происходит, recovered = тишина дольше окна, recurrent = восстановился и снова повторяется, acknowledged = подтверждён оператором, suppressed = ограничено только в панели.",
+  "ui_incident_recoveries": "восстановлений: {n}",
+  "ui_incident_last_seen_ago": "последний раз {age} назад",
+  "ui_incident_span": "{first} → {last}",
+  "ui_incident_pattern_suspected": "Подозрительный шаблон",
+  "ui_incident_affected": "Воркеры: {workers} · Правила: {rules} · Задания: {jobs}",
+  "ui_incident_acked_by": "Подтвердил {who} в {at}",
+  "ui_incident_ack": "Подтвердить",
+  "ui_incident_ack_confirm": "Подтвердить инцидент? Подтверждение держится, пока он открыт; восстановление снимает подтверждение.",
+
+
 
 
 

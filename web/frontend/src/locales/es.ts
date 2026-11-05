@@ -1298,7 +1298,28 @@ export const es: Catalog = {
   "ui_diag_stuck_claimed": "Claims atascados",
   "ui_diag_stuck_pending": "Pendientes hambrientos",
   "ui_diag_poison_jobs": "Jobs venenosos",
-  "ui_diag_retry_storm": "Tormenta de reintentos (próx. 60s)",
+  "ui_diag_retry_storm": "Tormenta de reintentos (próx. 60s)",  "ui_incident_center": "Incidentes de error",
+  "ui_incident_state_all": "Todos los estados",
+  "ui_incident_state_open": "Abierto",
+  "ui_incident_state_recurrent": "Recurrente",
+  "ui_incident_state_acknowledged": "Reconocido",
+  "ui_incident_state_recovered": "Recuperado",
+  "ui_incident_state_suppressed": "Suprimido",
+  "ui_incident_filter_state": "Filtrar incidentes por estado del ciclo de vida",
+  "ui_incident_empty": "No hay incidentes en este estado — los errores repetidos se agruparán aquí.",
+  "ui_incident_worker_unreachable": "Worker inalcanzable — el estado de los incidentes es desconocido, no vacío.",
+  "ui_incident_fetch_failed": "Error al obtener incidentes",
+  "ui_incident_state_hint": "Estado derivado: open = ocurriendo, recovered = en silencio más allá de la ventana, recurrent = recuperado y disparando de nuevo, acknowledged = confirmado por un operador, suppressed = limitado solo en el panel.",
+  "ui_incident_recoveries": "recuperado {n}×",
+  "ui_incident_last_seen_ago": "visto hace {age}",
+  "ui_incident_span": "{first} → {last}",
+  "ui_incident_pattern_suspected": "Patrón sospechoso",
+  "ui_incident_affected": "Workers: {workers} · Reglas: {rules} · Jobs: {jobs}",
+  "ui_incident_acked_by": "Reconocido por {who} en {at}",
+  "ui_incident_ack": "Reconocer",
+  "ui_incident_ack_confirm": "¿Reconocer este incidente? Permanece reconocido mientras esté abierto; una recuperación limpia el reconocimiento.",
+
+
 
 
 
