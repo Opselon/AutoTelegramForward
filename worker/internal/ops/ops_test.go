@@ -983,3 +983,23 @@ func TestThroughputCounterRestart(t *testing.T) {
 		t.Errorf("last_1m after restart = %d, want 5", w["last_1m"])
 	}
 }
+
+// TestThroughputHistoryAgeIsObservedNotGap: historyAgeMinutes must report
+// how many minutes of history the ring HOLDS, not the gap to the last tick.
+// While ticks flow the gap is 0 — reporting it as "0 minutes of history"
+// would make the console hide windows it can actually answer.
+func TestThroughputHistoryAgeIsObservedNotGap(t *testing.T) {
+	h := newThroughputHistory(0)
+	now := time.Unix(1_800_000_000, 0)
+	var delivered int64
+	for m := 0; m < 3; m++ {
+		now = now.Add(time.Minute)
+		delivered += 5
+		h.observe(now, delivered)
+	}
+	// Immediately after the last tick the gap is zero but the ring holds
+	// three minutes of real history.
+	if age := h.historyAgeMinutes(now); age != 3 {
+		t.Errorf("historyAgeMinutes = %d, want 3 (minutes held, not the gap to the last tick)", age)
+	}
+}
