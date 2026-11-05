@@ -178,6 +178,11 @@ func (s *Server) workerSnapshot() map[string]any {
 	if ts := c.tgCheckedAt.Load(); ts > 0 {
 		out["telegram_checked_at"] = time.Unix(ts, 0).UTC().Format(time.RFC3339)
 	}
+	// ai_checked_at is the difference between "no provider configured" and
+	// "the provider is failing": ai_connected alone cannot tell them apart,
+	// and the contract's probe semantics (the LAST provider outcome) leave
+	// the flag false until the first call — a timestamp of zero means "no
+	// call yet", never "provider down".
 	if ts := c.aiCheckedAt.Load(); ts > 0 {
 		out["ai_checked_at"] = time.Unix(ts, 0).UTC().Format(time.RFC3339)
 	}

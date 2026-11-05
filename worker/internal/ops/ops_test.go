@@ -632,3 +632,44 @@ func TestErrorsEndpointShape(t *testing.T) {
 		t.Fatalf("severity = %v, want WARN", row["severity"])
 	}
 }
+
+// TestOpsExposesEveryProbeTimestamp pins the parity the DevOps console
+// depends on: the worker tracks db/telegram/AI probe timestamps, and the
+// /ops snapshot must expose ALL THREE. ai_checked_at was missing even though
+// the collector stored it, so the UI could not tell "no AI call yet" from
+// "the provider is failing" — both render as ai_connected=false without a
+// timestamp to disambiguate.
+func TestOpsExposesEveryProbeTimestamp(t *testing.T) {
+	c := testCollector()
+	c.RecordTelegram(true, time.Now())
+	c.RecordAI(true, time.Now())
+	c.RecordDB(true, time.Now())
+
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	mux := http.NewServeMux()
+	srv.Attach(mux)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/ops")
+	if err != nil {
+		t.Fatalf("GET /ops: %v", err)
+	}
+	defer resp.Body.Close()
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode /ops: %v", err)
+	}
+	w, ok := body["worker"].(map[string]any)
+	if !ok {
+		t.Fatalf("decode /ops: worker block missing: %#v", body)
+	}
+	for _, key := range []string{"db_checked_at", "telegram_checked_at", "ai_checked_at"} {
+		if v, ok := w[key]; !ok || v == "" {
+			t.Errorf("/ops %s = %v (ok=%v), want an RFC3339 timestamp — every probe the collector tracks must be visible to the console", key, v, ok)
+		}
+	}
+	if v, _ := w["ai_connected"]; v != true {
+		t.Errorf("/ops ai_connected = %v, want true after RecordAI(true)", v)
+	}
+}
