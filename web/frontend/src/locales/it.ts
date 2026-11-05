@@ -1317,7 +1317,11 @@ export const it: Catalog = {
   "ui_incident_affected": "Worker: {workers} · Regole: {rules} · Job: {jobs}",
   "ui_incident_acked_by": "Riconosciuto da {who} alle {at}",
   "ui_incident_ack": "Riconosci",
-  "ui_incident_ack_confirm": "Riconoscere questo incidente? Rimane riconosciuto finché è aperto; un ripristino cancella il riconoscimento.",
+  "ui_incident_ack_confirm": "Riconoscere questo incidente? Rimane riconosciuto finché è aperto; un ripristino cancella il riconoscimento.",  "ui_stale_data": "Obsoleto ({age}s)",
+  "ui_stale_data_hint": "I dati così vecchi sono etichettati come obsoleti, non mostrati come live: l'ultimo poll è fallito e questi sono i numeri più recenti ricevuti dal worker.",
+  "ui_last_update_hint": "L'ultimo poll è andato a buon fine; questi sono dati live dal worker.",
+
+
 
 
 

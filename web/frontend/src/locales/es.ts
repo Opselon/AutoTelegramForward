@@ -1317,7 +1317,11 @@ export const es: Catalog = {
   "ui_incident_affected": "Workers: {workers} · Reglas: {rules} · Jobs: {jobs}",
   "ui_incident_acked_by": "Reconocido por {who} en {at}",
   "ui_incident_ack": "Reconocer",
-  "ui_incident_ack_confirm": "¿Reconocer este incidente? Permanece reconocido mientras esté abierto; una recuperación limpia el reconocimiento.",
+  "ui_incident_ack_confirm": "¿Reconocer este incidente? Permanece reconocido mientras esté abierto; una recuperación limpia el reconocimiento.",  "ui_stale_data": "Obsoleto ({age}s)",
+  "ui_stale_data_hint": "Los datos tan antiguos se marcan como obsoletos, no como en vivo: el último sondeo falló y estos son los números más recientes que el worker respondió.",
+  "ui_last_update_hint": "El sondeo más reciente tuvo éxito; estos son datos en vivo del worker.",
+
+
 
 
 

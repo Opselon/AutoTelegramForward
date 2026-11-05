@@ -1317,7 +1317,11 @@ export const fr: Catalog = {
   "ui_incident_affected": "Workers : {workers} · Règles : {rules} · Jobs : {jobs}",
   "ui_incident_acked_by": "Acquitté par {who} à {at}",
   "ui_incident_ack": "Acquitter",
-  "ui_incident_ack_confirm": "Acquitter cet incident ? Il reste acquitté tant qu'il est ouvert ; une récupération l'efface.",
+  "ui_incident_ack_confirm": "Acquitter cet incident ? Il reste acquitté tant qu'il est ouvert ; une récupération l'efface.",  "ui_stale_data": "Obsolète ({age}s)",
+  "ui_stale_data_hint": "Les données aussi anciennes sont marquées comme obsolètes, jamais comme 'en direct' : le dernier sondage a échoué et ce sont les derniers chiffres renvoyés par le worker.",
+  "ui_last_update_hint": "Le dernier sondage a réussi ; ce sont des données en direct du worker.",
+
+
 
 
 

@@ -1317,7 +1317,11 @@ export const id: Catalog = {
   "ui_incident_affected": "Worker: {workers} · Aturan: {rules} · Job: {jobs}",
   "ui_incident_acked_by": "Diakui oleh {who} pada {at}",
   "ui_incident_ack": "Akui",
-  "ui_incident_ack_confirm": "Akui insiden ini? Tetap diakui selama masih terbuka; pemulihan menghapus pengakuan.",
+  "ui_incident_ack_confirm": "Akui insiden ini? Tetap diakui selama masih terbuka; pemulihan menghapus pengakuan.",  "ui_stale_data": "Stale ({age}s)",
+  "ui_stale_data_hint": "Data yang sudah lama diberi label stale, bukan ditampilkan sebagai live: poll terakhir gagal dan ini adalah angka terbaru yang dijawab worker.",
+  "ui_last_update_hint": "Poll terbaru berhasil; ini adalah data langsung dari worker.",
+
+
 
 
 

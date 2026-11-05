@@ -1317,7 +1317,11 @@ export const uz: Catalog = {
   "ui_incident_affected": "Workerlar: {workers} · Qoidalar: {rules} · Ishlar: {jobs}",
   "ui_incident_acked_by": "{who} tomonidan {at} da tasdiqlangan",
   "ui_incident_ack": "Tasdiqlash",
-  "ui_incident_ack_confirm": "Bu insident tasdiqlansinmi? Ochiq bo'lguncha tasdiqlangan holatda qoladi; tiklanish tasdiqni tozalaydi.",
+  "ui_incident_ack_confirm": "Bu insident tasdiqlansinmi? Ochiq bo'lguncha tasdiqlangan holatda qoladi; tiklanish tasdiqni tozalaydi.",  "ui_stale_data": "Eski ({age}s)",
+  "ui_stale_data_hint": "Shunchalik eski ma'lumotlar jonli emas, eskilan deb belgilanadi: oxirgi so'rov amalga oshmadi va bular worker javob bergan eng so'nggi raqamlar.",
+  "ui_last_update_hint": "Oxirgi so'rov muvaffaqiyatli; bu workerdan jonli ma'lumot.",
+
+
 
 
 
