@@ -23,7 +23,7 @@ func (l *testLogger) Info(msg string, args ...any)  { l.lines = append(l.lines, 
 func (l *testLogger) Warn(msg string, args ...any)  { l.lines = append(l.lines, "WARN "+msg) }
 func (l *testLogger) Error(msg string, args ...any) { l.lines = append(l.lines, "ERROR "+msg) }
 
-type testMetrics struct{ sent, retried, failed, unknown int }
+type testMetrics struct{ sent, retried, failed, rejected, unknown int }
 
 func (m *testMetrics) Outcome(kind string) {
 	switch kind {
@@ -33,6 +33,8 @@ func (m *testMetrics) Outcome(kind string) {
 		m.retried++
 	case "failed":
 		m.failed++
+	case "rejected":
+		m.rejected++
 	case "unknown":
 		m.unknown++
 	}
@@ -662,8 +664,10 @@ func TestTaskBlockLinksDropsLinkBearingJob(t *testing.T) {
 	}
 
 	assertJobStatus(t, h.store, j.ID, string(job.StatusFailed))
-	if h.metrics.failed != 1 {
-		t.Errorf("failed = %d, want 1", h.metrics.failed)
+	// A deliberate link block is a policy REJECTION, not a delivery failure:
+	// counting it as "failed" made a healthy task look degraded in ops.
+	if h.metrics.failed != 0 || h.metrics.rejected != 1 {
+		t.Errorf("outcomes: failed=%d rejected=%d, want rejected=1 failed=0", h.metrics.failed, h.metrics.rejected)
 	}
 	if got := jobReason(t, h.store, j.ID); !strings.Contains(got, "link_blocked") {
 		t.Errorf("job reason = %q, want it to contain link_blocked", got)

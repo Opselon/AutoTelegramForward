@@ -144,8 +144,8 @@ func TestFenEveryFifthMessageGoesThrough(t *testing.T) {
 	if got := len(h.gateway.Recorded()); got != 3 {
 		t.Errorf("gateway calls = %d, want 3 (messages 1, 6, 11)", got)
 	}
-	if h.metrics.failed != 9 {
-		t.Errorf("failed outcomes = %d, want 9 (cadence skips close the job)", h.metrics.failed)
+	if h.metrics.rejected != 9 || h.metrics.failed != 0 {
+		t.Errorf("outcomes = %d failed / %d rejected, want 9 rejected (cadence skips are deliberate non-deliveries, not failures)", h.metrics.failed, h.metrics.rejected)
 	}
 	row, err := cadence.Peek(context.Background(), "r1")
 	if err != nil || row == nil {
@@ -175,8 +175,8 @@ func TestFenACadenceSkipIsNotAnAttempt(t *testing.T) {
 	if calls := h.gateway.Recorded(); len(calls) != 0 {
 		t.Errorf("gateway calls = %d, want 0 (a skip never reaches Telegram)", len(calls))
 	}
-	if h.metrics.sent != 0 || h.metrics.retried != 0 || h.metrics.failed != 1 {
-		t.Errorf("outcomes: sent=%d retried=%d failed=%d, want failed=1 only", h.metrics.sent, h.metrics.retried, h.metrics.failed)
+	if h.metrics.sent != 0 || h.metrics.retried != 0 || h.metrics.failed != 0 || h.metrics.rejected != 1 {
+		t.Errorf("outcomes: sent=%d retried=%d failed=%d rejected=%d, want rejected=1 only", h.metrics.sent, h.metrics.retried, h.metrics.failed, h.metrics.rejected)
 	}
 	if !strings.Contains(h.log.lines[0], "skipped by forward-every-n cadence") {
 		t.Errorf("log lines = %v, want the cadence skip line first", h.log.lines)
@@ -354,8 +354,8 @@ func TestFenAnEditNeverCountsOrUsesASlot(t *testing.T) {
 	if got := len(h.gateway.Recorded()); got != 1 {
 		t.Errorf("gateway calls = %d, want 1 (message 10 is held at sequence 2)", got)
 	}
-	if h.metrics.failed != 1 {
-		t.Errorf("failed outcomes = %d, want 1 (message 10 skipped by cadence)", h.metrics.failed)
+	if h.metrics.rejected != 1 {
+		t.Errorf("rejected outcomes = %d, want 1 (message 10 skipped by cadence)", h.metrics.rejected)
 	}
 }
 
@@ -412,8 +412,8 @@ func TestFenAFilterDropNeverConsumesASlot(t *testing.T) {
 	if err := engine.Process(context.Background(), j); err != nil {
 		t.Fatalf("process: %v", err)
 	}
-	if len(gw.Recorded()) != 0 || metrics.failed != 1 {
-		t.Errorf("gateway=%d outcomes: failed=%d, want a filter drop (failed=1)", len(gw.Recorded()), metrics.failed)
+	if len(gw.Recorded()) != 0 || metrics.rejected != 1 || metrics.failed != 0 {
+		t.Errorf("gateway=%d outcomes: failed=%d rejected=%d, want a filter drop (rejected=1, not a failure)", len(gw.Recorded()), metrics.failed, metrics.rejected)
 	}
 	if row, _ := cadence2.Peek(context.Background(), "r1"); row != nil {
 		t.Errorf("counter row = %+v, want none (a filtered message never consumes a slot)", row)

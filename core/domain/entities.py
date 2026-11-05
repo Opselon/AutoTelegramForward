@@ -1840,20 +1840,38 @@ class ForwardRule:
             self.metadata = {}
         self.metadata["watermark_text"] = str(val or "")
 
+    # Paid-addon keys the catalogue clients write, mapped onto the engine's
+    # canonical gate keys. The bot catalogue rows (pro_bot_ui _ADDON_ROWS)
+    # and the web dashboard's add-ons panel predate the engine key
+    # vocabulary and still record the short spellings; a paid add-on whose
+    # entitlement was recorded by ANY client must fire — silently never
+    # firing is the worst outcome for a feature a user paid for and enabled.
+    ADDON_KEY_ALIASES = {
+        "keyword_reply": ("kw_reply",),
+        "auto_delete_message": ("auto_del",),
+        "affiliate_kit": ("affiliate",),
+    }
+
     def is_addon_enabled(self, key: str) -> bool:
         """Server-side paid-addon entitlement check.
 
         A client-supplied `paid_addons` flag is NEVER trusted on its own: the
         addon must be marked enabled in the persisted rule metadata. This is
         the single enforcement point consulted by the pipeline before any
-        premium transformation runs.
+        premium transformation runs. Canonical keys and the catalogue
+        clients' recorded aliases are both honored (see ADDON_KEY_ALIASES).
         """
         if not isinstance(self.metadata, dict):
             return False
         addons = self.metadata.get("paid_addons", {})
         if not isinstance(addons, dict):
             return False
-        return bool(addons.get(key, False))
+        if bool(addons.get(key, False)):
+            return True
+        for alias in self.ADDON_KEY_ALIASES.get(key, ()):
+            if bool(addons.get(alias, False)):
+                return True
+        return False
 
     @property
     def link_replacement(self) -> str:

@@ -47,6 +47,7 @@ type Collector struct {
 	delivered atomic.Int64
 	retried   atomic.Int64
 	failed    atomic.Int64
+	rejected  atomic.Int64
 	unknown   atomic.Int64
 
 	// ACTIVE: in-flight deliveries. utilization = active / numWorkers. NOT
@@ -307,9 +308,13 @@ func (c *Collector) RecordPendingDepth(n int64) { c.pendingDepth.Store(n) }
 
 // --- the delivery.Metrics surface (the engine's only metrics owner) -------- //
 
-// Outcome bumps a delivery outcome counter (sent|retried|failed|unknown).
-// This is the single place a delivery outcome is counted anywhere in the
-// worker — the one owner the contract demands.
+// Outcome bumps a delivery outcome counter
+// (sent|retried|failed|rejected|unknown). This is the single place a
+// delivery outcome is counted anywhere in the worker — the one owner the
+// contract demands. "rejected" counts a DELIBERATE non-delivery (attached
+// filter drop, task-level block_links, forward-every-n cadence skip): a
+// policy decision about the content, not a malfunction. Counting it as
+// "failed" made a healthy task look degraded.
 func (c *Collector) Outcome(kind string) {
 	switch kind {
 	case "sent":
@@ -318,6 +323,8 @@ func (c *Collector) Outcome(kind string) {
 		c.retried.Add(1)
 	case "failed":
 		c.failed.Add(1)
+	case "rejected":
+		c.rejected.Add(1)
 	case "unknown":
 		c.unknown.Add(1)
 	}
@@ -333,6 +340,10 @@ func (c *Collector) Retried() int64 { return c.retried.Load() }
 
 // Failed returns the failure counter.
 func (c *Collector) Failed() int64 { return c.failed.Load() }
+
+// Rejected returns the deliberate-non-delivery counter (policy decisions,
+// not failures).
+func (c *Collector) Rejected() int64 { return c.rejected.Load() }
 
 // Unknown returns the ambiguous-outcome counter.
 func (c *Collector) Unknown() int64 { return c.unknown.Load() }
@@ -414,6 +425,7 @@ func (c *Collector) Snapshot() map[string]any {
 		"delivered":      c.Delivered(),
 		"retried":        c.Retried(),
 		"failed":         c.Failed(),
+		"rejected":       c.Rejected(),
 		"unknown":        c.Unknown(),
 	}
 }

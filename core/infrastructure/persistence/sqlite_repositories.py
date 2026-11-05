@@ -2497,6 +2497,43 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
                     # The unique key answered after all: a row for this
                     # delivery already exists (someone replayed it first).
                     return False
+                # Restore the placeholder mapping row the enqueue path
+                # guarantees. Cleanup purges message_map rows after 30 days
+                # while dead-letter entries persist, so a replay of a purged
+                # row would otherwise rebuild a forward job whose mapping row
+                # never returns — and the worker's NoteMapping (UPDATE-only)
+                # would silently drop the confirmed target id, leaving
+                # edit/delete sync blind to this delivery. The upsert is the
+                # enqueue path's own never-regress shape: a mapping row that
+                # still says SENT is never flipped back.
+                try:
+                    payload_data = SqliteDatabase.loads(payload, {})
+                except Exception:
+                    payload_data = {}
+                if not payload_data.get("is_reply"):
+                    # Replies share the mapping key with the primary forward
+                    # (durable_queue._write_mapping_and_job); writing here
+                    # would refresh a row that describes another deliverable.
+                    conn.execute(
+                        """
+                        INSERT INTO message_map (
+                            id, rule_id, source_chat_id, source_message_id, target_chat_id,
+                            target_message_id, media_group_id, delivery_status, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, NULL, ?, 'PENDING', ?, ?)
+                        ON CONFLICT(rule_id, source_chat_id, source_message_id, target_chat_id) DO UPDATE SET
+                            delivery_status = CASE
+                                WHEN message_map.delivery_status IN ('SENT') THEN message_map.delivery_status
+                                ELSE excluded.delivery_status
+                            END,
+                            updated_at = excluded.updated_at
+                        """,
+                        (
+                            f"map:{rule_id}:{src_chat}:{src_msg}:{tgt_chat}",
+                            rule_id, src_chat, src_msg, tgt_chat,
+                            str(payload_data.get("media_group_id") or ""),
+                            now, now,
+                        ),
+                    )
                 conn.execute("DELETE FROM dead_letter_queue WHERE id=?", (str(entry_id),))
                 return True
 

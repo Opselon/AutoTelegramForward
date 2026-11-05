@@ -497,3 +497,57 @@ class TestKeywordReplyJobIsolation:
 
         assert captured["payload_data"].get("is_reply", False) is False
         assert "keyword_reply" not in captured["job_id"]
+
+
+# --------------------------------------------------- catalogue key aliases --
+class TestCatalogueAddonKeyAliases:
+    """The bot catalogue rows and the web dashboard record the short
+    spellings (kw_reply / auto_del / affiliate); the engine gates read the
+    canonical vocabulary (keyword_reply / auto_delete_message /
+    affiliate_kit). The gate accepts both: a paid add-on whose entitlement
+    was recorded by ANY client must fire. The production defect this pins:
+    three paid add-ons never fired from a real client because the gate read
+    a key nothing wrote — the canonical keys existed only in tests."""
+
+    def test_is_addon_enabled_accepts_both_spellings(self):
+        for canonical, alias in (
+            ("keyword_reply", "kw_reply"),
+            ("auto_delete_message", "auto_del"),
+            ("affiliate_kit", "affiliate"),
+        ):
+            canonical_rule = _rule(paid_addons={canonical: True})
+            alias_rule = _rule(paid_addons={alias: True})
+            assert canonical_rule.is_addon_enabled(canonical) is True
+            assert alias_rule.is_addon_enabled(canonical) is True, (
+                f"catalogue spelling {alias!r} did not reach the {canonical!r} gate"
+            )
+            assert _rule(paid_addons={alias: False}).is_addon_enabled(canonical) is False
+            assert _rule(paid_addons={alias: True}).is_addon_enabled("crypto_mode") is False
+
+    def test_affiliate_kit_transform_runs_through_the_alias(self):
+        rule = _rule(
+            paid_addons={"affiliate": True},
+            affiliate_kit={"enabled": True, "prefix": "https://t.me/capxi/"},
+        )
+        text, applied = AdvancedSettingsEngine.apply_content_transforms(
+            "visit https://example.com now", rule
+        )
+        assert "affiliate_kit" in applied
+        assert text.startswith("visit https://t.me/capxi/https://example.com")
+
+    def test_keyword_reply_fires_through_the_alias(self):
+        rule = _rule(
+            paid_addons={"kw_reply": True},
+            keyword_confirmation=True,
+            keyword_reply="hey!",
+            whitelist=["hello"],
+        )
+        assert AdvancedSettingsEngine.classify_keyword_trigger("hello there", rule) == "hey!"
+
+    def test_auto_delete_ttl_flows_through_the_alias(self):
+        rule = _rule(paid_addons={"auto_del": True}, auto_delete_seconds=3600)
+        assert AdvancedSettingsEngine.get_auto_delete_seconds(rule) == 3600
+
+    def test_alias_false_keeps_the_gate_off(self):
+        rule = _rule(paid_addons={"auto_del": False}, auto_delete_seconds=3600)
+        assert AdvancedSettingsEngine.get_auto_delete_seconds(rule) == 0

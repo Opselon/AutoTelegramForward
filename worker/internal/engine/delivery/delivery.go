@@ -375,12 +375,15 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 		text := j.Payload.Text()
 		res := e.filters.Evaluate(text, j.Payload.MediaType(), false, f)
 		if res.Action == filter.Drop {
+			// A deliberate drop is stage SKIPPED-BY-POLICY, never stage
+			// FAILED: the filter working as configured is healthy behavior,
+			// and counting it as a stage failure degraded a healthy task's
+			// ops panel.
 			e.stageSkipped("filter", fStart)
-			e.stageFail("filter", res.Reason)
 			logger.Warn("job dropped by attached filter at delivery time", "decision", "DROP", "reason_code", "FILTER_RULE_REJECTED", "filter_reason", res.Reason, "filter_id", f.ID)
 			_ = e.store.MarkFailed(ctx, j.ID, "Filter: "+res.Reason)
-			e.metrics.Outcome("failed")
-			e.outcome("failed", j, jobStart)
+			e.metrics.Outcome("rejected")
+			e.outcome("rejected", j, jobStart)
 			return nil
 		}
 		e.stageRecord("filter", fStart)
@@ -406,7 +409,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	if r.BlockLinks && policy.HasLink(j.Payload.Text()) {
 		logger.Warn("job dropped by task-level block_links at delivery time", "decision", "DROP", "reason_code", "LINK_BLOCKED")
 		_ = e.store.MarkFailed(ctx, j.ID, "Filter: link_blocked")
-		e.metrics.Outcome("failed")
+		e.metrics.Outcome("rejected")
 		return nil
 	}
 

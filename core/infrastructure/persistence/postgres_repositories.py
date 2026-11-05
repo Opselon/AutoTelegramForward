@@ -1368,6 +1368,38 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
                         payload, max(1, max_attempts), now, now,
                     ),
                 )
+                # Restore the placeholder mapping row the enqueue path
+                # guarantees (parity with the SQLite replay): mapping rows are
+                # purged after 30 days while dead-letter entries persist, so a
+                # rebuilt forward job must not stay mapping-less — the
+                # worker's NoteMapping only UPDATEs and would silently drop
+                # the confirmed target id. The never-regress guard keeps a
+                # mapping row that still says SENT exactly as it is.
+                try:
+                    payload_data = json.loads(payload) if isinstance(payload, str) else {}
+                except Exception:
+                    payload_data = {}
+                if not (payload_data or {}).get("is_reply"):
+                    # Replies share the mapping key with the primary forward;
+                    # writing here would refresh another deliverable's row.
+                    await _execute_db(
+                        self._db,
+                        "INSERT INTO message_map ("
+                        " id, rule_id, source_chat_id, source_message_id, target_chat_id,"
+                        " target_message_id, media_group_id, delivery_status, created_at, updated_at"
+                        ") VALUES (%s, %s, %s, %s, %s, NULL, %s, 'PENDING', %s, %s)"
+                        " ON CONFLICT (rule_id, source_chat_id, source_message_id, target_chat_id) DO UPDATE SET"
+                        " delivery_status = CASE"
+                        " WHEN message_map.delivery_status IN ('SENT') THEN message_map.delivery_status"
+                        " ELSE EXCLUDED.delivery_status END,"
+                        " updated_at = EXCLUDED.updated_at",
+                        (
+                            f"map:{rule_id}:{src_chat}:{src_msg}:{tgt_chat}",
+                            rule_id, src_chat, src_msg, tgt_chat,
+                            str((payload_data or {}).get("media_group_id") or ""),
+                            now, now,
+                        ),
+                    )
             await _execute_db(self._db, "DELETE FROM dead_letter_queue WHERE id=%s", (str(entry_id),))
         except Exception as exc:
             logger.warning("replay of dead letter %s failed: %s", entry_id, exc)

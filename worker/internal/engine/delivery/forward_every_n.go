@@ -132,7 +132,9 @@ func (e *Engine) forwardEveryNGate(ctx context.Context, j *job.DeliveryJob, r *r
 		"rule_id", j.RuleID, "message_id", j.SourceMessageID,
 		"sequence", sequence, "every_n", everyN)
 	_ = e.store.MarkFailed(ctx, j.ID, "Forward every N: skipped by cadence")
-	e.metrics.Outcome("failed")
+	// A cadence skip is the add-on working exactly as configured — counted
+	// as "rejected" (a deliberate non-delivery), never as "failed".
+	e.metrics.Outcome("rejected")
 	// The sentinel is the gate's terminal signal: Process must stop here so
 	// no fence claim and no Telegram call follows a job that will not send.
 	return errFenSkipped

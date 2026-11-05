@@ -86,6 +86,7 @@ func (b *TrackerBridge) Snapshot() map[string]any {
 		"delivered":      c.Delivered(),
 		"retried":        c.Retried(),
 		"failed":         c.Failed(),
+		"rejected":       c.Rejected(),
 		"unknown":        c.Unknown(),
 	}
 }
