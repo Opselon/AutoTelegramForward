@@ -1277,5 +1277,21 @@ export const en: Catalog = {
   "ui_filter_matched_entries": "Matched: {list}",
   "ui_filter_missing_entries": "Missing: {list}",
   "ui_theme_switch_to_light": "Switch to light theme",
-  "ui_theme_switch_to_dark": "Switch to dark theme",
+  "ui_theme_switch_to_dark": "Switch to dark theme",  "ui_worker_log_center": "Worker Log Center",
+  "ui_live_tail": "Live tail",
+  "ui_export_csv": "Export CSV",
+  "ui_search_logs": "Search logs…",
+  "ui_log_fetch_failed": "Log fetch failed",
+  "ui_log_empty": "No log entries match these filters.",
+  "ui_copy_diagnostics": "Copy sanitized diagnostics",
+  "ui_load_more": "Load more",
+  "ui_log_count": "{shown} shown of {total}",
+  "ui_last_update": "Last update",
+  "ui_component": "Component",
+  "ui_log_severity_error": "errors",
+  "ui_log_severity_warn": "warnings",
+  "ui_log_severity_info": "info",
+  "ui_log_severity_debug": "debug",
+
+
 }

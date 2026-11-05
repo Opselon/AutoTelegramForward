@@ -1277,5 +1277,21 @@ export const uz: Catalog = {
   "ui_filter_matched_entries": "Moslar: {list}",
   "ui_filter_missing_entries": "Yetishmayapti: {list}",
   "ui_theme_switch_to_light": "Yorugʻ mavzuga oʻtish",
-  "ui_theme_switch_to_dark": "Tungi mavzuga oʻtish",
+  "ui_theme_switch_to_dark": "Tungi mavzuga oʻtish",  "ui_worker_log_center": "Worker Log Markazi",
+  "ui_live_tail": "Jonli oqim",
+  "ui_export_csv": "CSV eksport",
+  "ui_search_logs": "Loglarni qidirish…",
+  "ui_log_fetch_failed": "Loglarni olish amalga oshmadi",
+  "ui_log_empty": "Bu filtrlarga mos loglar yo‘q.",
+  "ui_copy_diagnostics": "Tozalangan diagnostikani nusxalash",
+  "ui_load_more": "Ko‘proq yuklash",
+  "ui_log_count": "{total} dan {shown} ko‘rsatilgan",
+  "ui_last_update": "So‘nggi yangilanish",
+  "ui_component": "Komponent",
+  "ui_log_severity_error": "xatolar",
+  "ui_log_severity_warn": "ogohlantirishlar",
+  "ui_log_severity_info": "ma'lumot",
+  "ui_log_severity_debug": "debug",
+
+
 }

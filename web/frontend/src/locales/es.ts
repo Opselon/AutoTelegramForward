@@ -1277,5 +1277,21 @@ export const es: Catalog = {
   "ui_filter_matched_entries": "Coincidencias: {list}",
   "ui_filter_missing_entries": "Ausentes: {list}",
   "ui_theme_switch_to_light": "Cambiar al tema claro",
-  "ui_theme_switch_to_dark": "Cambiar al tema oscuro",
+  "ui_theme_switch_to_dark": "Cambiar al tema oscuro",  "ui_worker_log_center": "Centro de Registros del Worker",
+  "ui_live_tail": "Transmisión en vivo",
+  "ui_export_csv": "Exportar CSV",
+  "ui_search_logs": "Buscar registros…",
+  "ui_log_fetch_failed": "Error al obtener registros",
+  "ui_log_empty": "Ningún registro coincide con estos filtros.",
+  "ui_copy_diagnostics": "Copiar diagnósticos sanitizados",
+  "ui_load_more": "Cargar más",
+  "ui_log_count": "{shown} mostrados de {total}",
+  "ui_last_update": "Última actualización",
+  "ui_component": "Componente",
+  "ui_log_severity_error": "errores",
+  "ui_log_severity_warn": "advertencias",
+  "ui_log_severity_info": "información",
+  "ui_log_severity_debug": "depuración",
+
+
 }

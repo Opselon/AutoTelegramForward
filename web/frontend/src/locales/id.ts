@@ -1277,5 +1277,21 @@ export const id: Catalog = {
   "ui_filter_matched_entries": "Cocok: {list}",
   "ui_filter_missing_entries": "Tidak ada: {list}",
   "ui_theme_switch_to_light": "Beralih ke tema terang",
-  "ui_theme_switch_to_dark": "Beralih ke tema gelap",
+  "ui_theme_switch_to_dark": "Beralih ke tema gelap",  "ui_worker_log_center": "Pusat Log Worker",
+  "ui_live_tail": "Langsung",
+  "ui_export_csv": "Ekspor CSV",
+  "ui_search_logs": "Cari log…",
+  "ui_log_fetch_failed": "Pengambilan log gagal",
+  "ui_log_empty": "Tidak ada log yang cocok dengan filter ini.",
+  "ui_copy_diagnostics": "Salin diagnostik yang disanitasi",
+  "ui_load_more": "Muat lebih banyak",
+  "ui_log_count": "{shown} ditampilkan dari {total}",
+  "ui_last_update": "Pembaruan terakhir",
+  "ui_component": "Komponen",
+  "ui_log_severity_error": "kesalahan",
+  "ui_log_severity_warn": "peringatan",
+  "ui_log_severity_info": "info",
+  "ui_log_severity_debug": "debug",
+
+
 }

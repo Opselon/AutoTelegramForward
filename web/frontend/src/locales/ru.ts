@@ -1277,5 +1277,21 @@ export const ru: Catalog = {
   "ui_filter_matched_entries": "Совпадения: {list}",
   "ui_filter_missing_entries": "Отсутствуют: {list}",
   "ui_theme_switch_to_light": "Переключить на светлую тему",
-  "ui_theme_switch_to_dark": "Переключить на тёмную тему",
+  "ui_theme_switch_to_dark": "Переключить на тёмную тему",  "ui_worker_log_center": "Центр логов воркера",
+  "ui_live_tail": "Живой хвост",
+  "ui_export_csv": "Экспорт CSV",
+  "ui_search_logs": "Поиск по логам…",
+  "ui_log_fetch_failed": "Не удалось получить логи",
+  "ui_log_empty": "Нет записей, соответствующих этим фильтрам.",
+  "ui_copy_diagnostics": "Скопировать дезинфицированную диагностику",
+  "ui_load_more": "Загрузить ещё",
+  "ui_log_count": "Показано {shown} из {total}",
+  "ui_last_update": "Последнее обновление",
+  "ui_component": "Компонент",
+  "ui_log_severity_error": "ошибки",
+  "ui_log_severity_warn": "предупреждения",
+  "ui_log_severity_info": "информация",
+  "ui_log_severity_debug": "отладка",
+
+
 }

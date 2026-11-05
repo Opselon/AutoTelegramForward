@@ -1277,5 +1277,21 @@ export const fa: Catalog = {
   "ui_filter_matched_entries": "تطبیق‌ها: {list}",
   "ui_filter_missing_entries": "یافت‌نشده: {list}",
   "ui_theme_switch_to_light": "تغییر به تم روشن",
-  "ui_theme_switch_to_dark": "تغییر به تم تاریک",
+  "ui_theme_switch_to_dark": "تغییر به تم تاریک",  "ui_worker_log_center": "مرکز لاگ ورکر",
+  "ui_live_tail": "دنباله زنده",
+  "ui_export_csv": "خروجی CSV",
+  "ui_search_logs": "جستجوی لاگ…",
+  "ui_log_fetch_failed": "دریافت لاگ ناموفق بود",
+  "ui_log_empty": "هیچ لاگ‌ای با این فیلترها مطابقت ندارد.",
+  "ui_copy_diagnostics": "کپی تشخیص‌های پاک‌سازی‌شده",
+  "ui_load_more": "بیشتر بارگذاری کنید",
+  "ui_log_count": "{shown} نمایش از {total}",
+  "ui_last_update": "آخرین به‌روزرسانی",
+  "ui_component": "مولفه",
+  "ui_log_severity_error": "خطاها",
+  "ui_log_severity_warn": "هشدارها",
+  "ui_log_severity_info": "اطلاعات",
+  "ui_log_severity_debug": "دیباگ",
+
+
 }

@@ -1277,5 +1277,21 @@ export const zh: Catalog = {
   "ui_filter_matched_entries": "匹配：{list}",
   "ui_filter_missing_entries": "未满足：{list}",
   "ui_theme_switch_to_light": "切换到浅色主题",
-  "ui_theme_switch_to_dark": "切换到深色主题",
+  "ui_theme_switch_to_dark": "切换到深色主题",  "ui_worker_log_center": "Worker 日志中心",
+  "ui_live_tail": "实时跟踪",
+  "ui_export_csv": "导出 CSV",
+  "ui_search_logs": "搜索日志…",
+  "ui_log_fetch_failed": "日志获取失败",
+  "ui_log_empty": "没有符合条件的日志。",
+  "ui_copy_diagnostics": "复制脱敏诊断",
+  "ui_load_more": "加载更多",
+  "ui_log_count": "已显示 {shown} / 共 {total}",
+  "ui_last_update": "最后更新",
+  "ui_component": "组件",
+  "ui_log_severity_error": "错误",
+  "ui_log_severity_warn": "警告",
+  "ui_log_severity_info": "信息",
+  "ui_log_severity_debug": "调试",
+
+
 }

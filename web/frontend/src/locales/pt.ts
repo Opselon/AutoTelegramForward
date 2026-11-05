@@ -1277,5 +1277,21 @@ export const pt: Catalog = {
   "ui_filter_matched_entries": "Correspondências: {list}",
   "ui_filter_missing_entries": "Ausentes: {list}",
   "ui_theme_switch_to_light": "Mudar para o tema claro",
-  "ui_theme_switch_to_dark": "Mudar para o tema escuro",
+  "ui_theme_switch_to_dark": "Mudar para o tema escuro",  "ui_worker_log_center": "Central de Logs do Worker",
+  "ui_live_tail": "Transmissão ao vivo",
+  "ui_export_csv": "Exportar CSV",
+  "ui_search_logs": "Pesquisar logs…",
+  "ui_log_fetch_failed": "Falha ao buscar logs",
+  "ui_log_empty": "Nenhum registro corresponde a estes filtros.",
+  "ui_copy_diagnostics": "Copiar diagnósticos sanitizados",
+  "ui_load_more": "Carregar mais",
+  "ui_log_count": "{shown} exibidos de {total}",
+  "ui_last_update": "Última atualização",
+  "ui_component": "Componente",
+  "ui_log_severity_error": "erros",
+  "ui_log_severity_warn": "avisos",
+  "ui_log_severity_info": "informações",
+  "ui_log_severity_debug": "depuração",
+
+
 }
