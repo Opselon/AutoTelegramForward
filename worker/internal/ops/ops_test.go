@@ -673,3 +673,102 @@ func TestOpsExposesEveryProbeTimestamp(t *testing.T) {
 		t.Errorf("/ops ai_connected = %v, want true after RecordAI(true)", v)
 	}
 }
+
+// TestDerivedHealthState pins the console's "is the worker alive?" answer.
+// The requirement is explicit: a worker must not stay ONLINE forever because
+// an old record exists, "nobody is polling" must never read as "worker is
+// down", and alive-but-broken must read degraded, not online.
+func TestDerivedHealthState(t *testing.T) {
+	c := testCollector()
+	c.RecordDB(true, time.Now())
+
+	cases := []struct {
+		name  string
+		setup func()
+		age   int64
+		want  string
+	}{
+		{
+			name:  "no heartbeat yet is starting, never offline",
+			setup: func() {},
+			age:   -1,
+			want:  "starting",
+		},
+		{
+			name:  "fresh heartbeat + ready + db is online",
+			setup: func() { c.SetState(StateReady) },
+			age:   2,
+			want:  "online",
+		},
+		{
+			name: "stale heartbeat is offline regardless of state",
+			setup: func() {
+				c.SetState(StateReady)
+			},
+			age:  int64(HeartbeatFreshnessBudget/time.Second) + 10,
+			want: "offline",
+		},
+		{
+			name:  "degraded state is degraded even with fresh heartbeat",
+			setup: func() { c.SetState(StateDegraded) },
+			age:   1,
+			want:  "degraded",
+		},
+		{
+			name: "alive but db down is degraded, not online",
+			setup: func() {
+				c.SetState(StateReady)
+				c.RecordDB(false, time.Now())
+			},
+			age:  1,
+			want: "degraded",
+		},
+		{
+			name:  "stopping is stopping",
+			setup: func() { c.SetState(StateStopping) },
+			age:   1,
+			want:  "stopping",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setup()
+			if got := derivedHealthState(c, tc.age); got != tc.want {
+				t.Errorf("derivedHealthState(age=%d) = %q, want %q", tc.age, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestOpsExposesHeartbeatAge asserts /ops serializes heartbeat_age_seconds
+// alongside last_heartbeat so the console can paint freshness without
+// parsing timestamps client-side.
+func TestOpsExposesHeartbeatAge(t *testing.T) {
+	c := testCollector()
+	c.SelfHeartbeat()
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	mux := http.NewServeMux()
+	srv.Attach(mux)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/ops")
+	if err != nil {
+		t.Fatalf("GET /ops: %v", err)
+	}
+	defer resp.Body.Close()
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode /ops: %v", err)
+	}
+	w, ok := body["worker"].(map[string]any)
+	if !ok {
+		t.Fatalf("decode /ops: worker block missing: %#v", body)
+	}
+	if _, ok := w["heartbeat_age_seconds"]; !ok {
+		t.Error("/ops worker.heartbeat_age_seconds missing — the console cannot derive freshness from last_heartbeat alone")
+	}
+	if _, ok := w["health_state"]; !ok {
+		t.Error("/ops worker.health_state missing — the console needs a derived liveness answer, not just the execution state")
+	}
+}

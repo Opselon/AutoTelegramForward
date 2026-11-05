@@ -188,7 +188,20 @@ func (s *Server) workerSnapshot() map[string]any {
 	}
 	if hb := c.lastHeartbeat.Load(); hb > 0 {
 		out["last_heartbeat"] = time.Unix(hb, 0).UTC().Format(time.RFC3339)
+		out["heartbeat_age_seconds"] = c.HeartbeatAge()
 	}
+	// health_state is the DERIVED liveness answer the console paints with:
+	//   online  — heartbeat fresh (worker is alive and observable)
+	//   offline — heartbeat older than the freshness budget (process dead
+	//             or wedged; nothing else can say this — an old DB record
+	//             must not keep a worker "online" forever)
+	//   degraded — the process reports it is alive but its own state is
+	//             degraded, or its DB/Telegram probes are down
+	//   starting / stopping / unknown — the execution state when it is not
+	//             yet ready or already shutting down.
+	// A worker that nobody polls still heartbeats on its own tick, so
+	// "nobody is looking" never collides with "worker is down".
+	out["health_state"] = derivedHealthState(c, c.HeartbeatAge())
 	return out
 }
 

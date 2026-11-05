@@ -272,6 +272,23 @@ func (c *Collector) AIConnected() bool { return c.aiConnected.Load() }
 // looking".
 func (c *Collector) Heartbeat() { c.lastHeartbeat.Store(time.Now().Unix()) }
 
+// HeartbeatAge is how long ago the last heartbeat (self or poll) landed.
+// /ops serializes it as heartbeat_age_seconds so the console can render
+// freshness without time-math on a string timestamp.
+func (c *Collector) HeartbeatAge() int64 {
+	hb := c.lastHeartbeat.Load()
+	if hb <= 0 {
+		return -1 // never: distinguish from a fresh heartbeat
+	}
+	return time.Now().Unix() - hb
+}
+
+// SelfHeartbeat is the worker's OWN liveness mark, independent of anyone
+// polling /ops. Without it last_heartbeat only advanced when a client
+// looked, so a healthy-but-unobserved worker read as offline. The run loop
+// ticks this on a fixed cadence; it costs one atomic store, no DB write.
+func (c *Collector) SelfHeartbeat() { c.lastHeartbeat.Store(time.Now().Unix()) }
+
 // RecordPendingDepth feeds the backlog sampler from the depth the claim
 // loop already measured — no extra DB read, no per-heartbeat write.
 func (c *Collector) RecordPendingDepth(n int64) { c.pendingDepth.Store(n) }
