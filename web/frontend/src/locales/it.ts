@@ -1319,7 +1319,17 @@ export const it: Catalog = {
   "ui_incident_ack": "Riconosci",
   "ui_incident_ack_confirm": "Riconoscere questo incidente? Rimane riconosciuto finché è aperto; un ripristino cancella il riconoscimento.",  "ui_stale_data": "Obsoleto ({age}s)",
   "ui_stale_data_hint": "I dati così vecchi sono etichettati come obsoleti, non mostrati come live: l'ultimo poll è fallito e questi sono i numeri più recenti ricevuti dal worker.",
-  "ui_last_update_hint": "L'ultimo poll è andato a buon fine; questi sono dati live dal worker.",
+  "ui_last_update_hint": "L'ultimo poll è andato a buon fine; questi sono dati live dal worker.",  "ui_task_sort": "Ordina per",
+  "ui_task_sort_hint": "Quale task risponde alla tua domanda: il più trafficato (throughput), quello che fallisce di più, con il backlog più profondo, il più lento o con più consegne.",
+  "ui_task_sort_throughput": "Throughput (più trafficato)",
+  "ui_task_sort_failed": "Fallimenti (di più)",
+  "ui_task_sort_pending": "Backlog (più profondo)",
+  "ui_task_sort_latency": "Latenza (più lento)",
+  "ui_task_sort_delivered": "Consegnati (di più)",
+  "ui_task_attention": "Solo quelli che necessitano attenzione",
+  "ui_task_attention_hint": "Nasconde task senza fallimenti e senza job in attesa — quelli sani non rispondono a 'cosa richiede la mia attenzione ora'.",
+
+
 
 
 

@@ -252,6 +252,12 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
   const [severity, setSeverity] = useState<Severity>('all')
   const [component, setComponent] = useState<Component>('all')
   const [expandedTask, setExpandedTask] = useState<string | null>(null)
+  // §6: the task monitor must answer WHICH task is failing / busiest /
+  // slowest, not just list them. Sorting + a failure filter turn the table
+  // into that question; a flat table makes the operator compute it.
+  type TaskSortKey = 'throughput' | 'failed' | 'pending' | 'latency' | 'delivered'
+  const [taskSort, setTaskSort] = useState<TaskSortKey>('throughput')
+  const [hideHealthy, setHideHealthy] = useState(false)
   const [pollError, setPollError] = useState<string | null>(null)
   const gen = useRef(0)
   // §11: lastUpdate is the freshness clock. A poll that fails must NOT
@@ -337,6 +343,22 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
   }, [refresh, pollMs])
 
   const comps = component === 'all' ? null : component
+  const sortedTasks = (tasks ?? []).slice()
+  if (hideHealthy) {
+    // "Which task needs attention": anything failing OR with a stale
+    // backlog. A fully-healthy task is not the answer to that question.
+    sortedTasks.splice(0, sortedTasks.length,
+      ...sortedTasks.filter((r) => r.failed > 0 || r.pending > 0))
+  }
+  sortedTasks.sort((a, b) => {
+    switch (taskSort) {
+      case 'failed': return b.failed - a.failed
+      case 'pending': return b.pending - a.pending
+      case 'latency': return b.latency_ms_avg - a.latency_ms_avg
+      case 'delivered': return b.delivered - a.delivered
+      default: return b.throughput_per_min - a.throughput_per_min
+    }
+  })
   const visibleErrors = (errors ?? []).filter(
     (e) => (component === 'all' || e.component === comps) && (severity === 'all' || e.severity === severity),
   )
@@ -523,9 +545,37 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
         <div className="ops-head">
           <Activity size={18} />
           <span className="ops-head__title">{t('ui_tasks')}</span>
-          <span className="ops-head__meta">{t('ui_tasks_configured', { count: tasks?.length ?? 0 })}</span>
+          <span className="ops-head__meta">
+            <span style={{ fontSize: '0.75rem' }}>
+              {t('ui_tasks_configured', { count: tasks?.length ?? 0 })}
+            </span>
+            <label className="ops-filter" style={{ display: 'inline-flex', gap: 6, alignItems: 'center', cursor: 'pointer' }} title={t('ui_task_sort_hint')}>
+              {t('ui_task_sort')}
+              <select
+                value={taskSort}
+                onChange={(e) => setTaskSort(e.target.value as TaskSortKey)}
+                aria-label={t('ui_task_sort')}
+                style={{ background: 'transparent', border: 'none', outline: 'none' }}
+              >
+                <option value="throughput">{t('ui_task_sort_throughput')}</option>
+                <option value="failed">{t('ui_task_sort_failed')}</option>
+                <option value="pending">{t('ui_task_sort_pending')}</option>
+                <option value="latency">{t('ui_task_sort_latency')}</option>
+                <option value="delivered">{t('ui_task_sort_delivered')}</option>
+              </select>
+            </label>
+            <label className="ops-filter" style={{ display: 'inline-flex', gap: 4, alignItems: 'center', cursor: 'pointer' }} title={t('ui_task_attention_hint')}>
+              <input
+                type="checkbox"
+                checked={hideHealthy}
+                onChange={(e) => setHideHealthy(e.target.checked)}
+                aria-label={t('ui_task_attention')}
+              />
+              {t('ui_task_attention')}
+            </label>
+          </span>
         </div>
-        {tasks && tasks.length > 0 ? (
+        {sortedTasks.length > 0 ? (
           <div className="ops-console" style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
               <thead>
@@ -540,7 +590,7 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
                 </tr>
               </thead>
               <tbody>
-                {tasks.map((row) => {
+                {sortedTasks.map((row) => {
                   const open = expandedTask === row.rule_id
                   return (
                     <>

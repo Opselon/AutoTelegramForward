@@ -1319,7 +1319,17 @@ export const zh: Catalog = {
   "ui_incident_ack": "确认",
   "ui_incident_ack_confirm": "确认此事件？在处于进行中状态期间保持已确认；恢复后会清除确认。",  "ui_stale_data": "已过期（{age}秒）",
   "ui_stale_data_hint": "如此旧的数据会被标记为过期，而不会显示为实时：上次轮询失败，这些是 worker 最近一次回答的数据。",
-  "ui_last_update_hint": "最近一次轮询成功；这是来自 worker 的实时数据。",
+  "ui_last_update_hint": "最近一次轮询成功；这是来自 worker 的实时数据。",  "ui_task_sort": "排序方式",
+  "ui_task_sort_hint": "哪个任务回答了你的问题：最繁忙（吞吐量）、失败最多、积压最深、最慢，或投递最多。",
+  "ui_task_sort_throughput": "吞吐量（最繁忙）",
+  "ui_task_sort_failed": "失败（最多）",
+  "ui_task_sort_pending": "积压（最深）",
+  "ui_task_sort_latency": "延迟（最慢）",
+  "ui_task_sort_delivered": "已投递（最多）",
+  "ui_task_attention": "仅显示需关注",
+  "ui_task_attention_hint": "隐藏没有失败且没有待处理作业的任务——健康的任务不是“现在什么需要我”的答案。",
+
+
 
 
 

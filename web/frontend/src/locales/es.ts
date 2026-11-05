@@ -1319,7 +1319,17 @@ export const es: Catalog = {
   "ui_incident_ack": "Reconocer",
   "ui_incident_ack_confirm": "¿Reconocer este incidente? Permanece reconocido mientras esté abierto; una recuperación limpia el reconocimiento.",  "ui_stale_data": "Obsoleto ({age}s)",
   "ui_stale_data_hint": "Los datos tan antiguos se marcan como obsoletos, no como en vivo: el último sondeo falló y estos son los números más recientes que el worker respondió.",
-  "ui_last_update_hint": "El sondeo más reciente tuvo éxito; estos son datos en vivo del worker.",
+  "ui_last_update_hint": "El sondeo más reciente tuvo éxito; estos son datos en vivo del worker.",  "ui_task_sort": "Ordenar por",
+  "ui_task_sort_hint": "Qué tarea responde a tu pregunta: la más activa (rendimiento), la que más falla, la de mayor backlog, la más lenta o la con más entregas.",
+  "ui_task_sort_throughput": "Rendimiento (más activa)",
+  "ui_task_sort_failed": "Fallos (más)",
+  "ui_task_sort_pending": "Backlog (más profundo)",
+  "ui_task_sort_latency": "Latencia (más lenta)",
+  "ui_task_sort_delivered": "Entregados (más)",
+  "ui_task_attention": "Solo las que necesitan atención",
+  "ui_task_attention_hint": "Oculta tareas sin fallos y sin jobs pendientes — las sanas no responden a 'qué me necesita ahora'.",
+
+
 
 
 

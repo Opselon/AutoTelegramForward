@@ -1319,7 +1319,17 @@ export const en: Catalog = {
   "ui_incident_ack": "Acknowledge",
   "ui_incident_ack_confirm": "Acknowledge this incident? It stays acknowledged while it remains open; a recovery clears the ack.",  "ui_stale_data": "Stale ({age}s old)",
   "ui_stale_data_hint": "Data this old is labelled stale, not shown as live: the last poll failed and these are the most recent numbers the worker answered with.",
-  "ui_last_update_hint": "The most recent poll succeeded; this is live data from the worker.",
+  "ui_last_update_hint": "The most recent poll succeeded; this is live data from the worker.",  "ui_task_sort": "Sort by",
+  "ui_task_sort_hint": "Which task answers the question you are asking: busiest (throughput), most failing, deepest backlog, slowest, or most delivered.",
+  "ui_task_sort_throughput": "Throughput (busiest)",
+  "ui_task_sort_failed": "Failures (most)",
+  "ui_task_sort_pending": "Backlog (deepest)",
+  "ui_task_sort_latency": "Latency (slowest)",
+  "ui_task_sort_delivered": "Delivered (most)",
+  "ui_task_attention": "Needs attention only",
+  "ui_task_attention_hint": "Hide tasks with zero failures and zero pending jobs — the healthy ones are not the answer to 'what needs me now'.",
+
+
 
 
 

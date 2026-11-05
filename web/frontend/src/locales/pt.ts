@@ -1319,7 +1319,17 @@ export const pt: Catalog = {
   "ui_incident_ack": "Reconhecer",
   "ui_incident_ack_confirm": "Reconhecer este incidente? Ele permanece reconhecido enquanto estiver aberto; uma recuperação limpa o reconhecimento.",  "ui_stale_data": "Obsoleto ({age}s)",
   "ui_stale_data_hint": "Dados tão antigos são marcados como obsoletos, não mostrados como ao vivo: a última pesquisa falhou e estes são os números mais recentes que o worker forneceu.",
-  "ui_last_update_hint": "A pesquisa mais recente foi bem-sucedida; estes são dados ao vivo do worker.",
+  "ui_last_update_hint": "A pesquisa mais recente foi bem-sucedida; estes são dados ao vivo do worker.",  "ui_task_sort": "Ordenar por",
+  "ui_task_sort_hint": "Qual tarefa responde à pergunta que você está fazendo: a mais movimentada (throughput), a que mais falha, a maior backlog, a mais lenta ou a com mais entregas.",
+  "ui_task_sort_throughput": "Rendimento (mais movimentada)",
+  "ui_task_sort_failed": "Falhas (mais)",
+  "ui_task_sort_pending": "Backlog (mais profundo)",
+  "ui_task_sort_latency": "Latência (mais lenta)",
+  "ui_task_sort_delivered": "Entregues (mais)",
+  "ui_task_attention": "Apenas com problemas",
+  "ui_task_attention_hint": "Oculta tarefas sem falhas e sem jobs pendentes — as saudáveis não respondem a 'o que precisa de mim agora'.",
+
+
 
 
 

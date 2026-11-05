@@ -1319,7 +1319,17 @@ export const uz: Catalog = {
   "ui_incident_ack": "Tasdiqlash",
   "ui_incident_ack_confirm": "Bu insident tasdiqlansinmi? Ochiq bo'lguncha tasdiqlangan holatda qoladi; tiklanish tasdiqni tozalaydi.",  "ui_stale_data": "Eski ({age}s)",
   "ui_stale_data_hint": "Shunchalik eski ma'lumotlar jonli emas, eskilan deb belgilanadi: oxirgi so'rov amalga oshmadi va bular worker javob bergan eng so'nggi raqamlar.",
-  "ui_last_update_hint": "Oxirgi so'rov muvaffaqiyatli; bu workerdan jonli ma'lumot.",
+  "ui_last_update_hint": "Oxirgi so'rov muvaffaqiyatli; bu workerdan jonli ma'lumot.",  "ui_task_sort": "Saralash",
+  "ui_task_sort_hint": "Qaysi vazifa sizning savolingizga javob beradi: eng band (o'tkazuv qobiliyati), eng ko'p xatoliklar, eng katta navbat, eng sekin yoki eng ko'p yetkazib berilgan.",
+  "ui_task_sort_throughput": "O'tkazuv qobiliyati (eng band)",
+  "ui_task_sort_failed": "Xatoliklar (eng ko'p)",
+  "ui_task_sort_pending": "Navbat (eng katta)",
+  "ui_task_sort_latency": "Kechikish (eng sekin)",
+  "ui_task_sort_delivered": "Yetkazib berilgan (eng ko'p)",
+  "ui_task_attention": "Faqat e'tibor talab qiladiganlar",
+  "ui_task_attention_hint": "Xatoligi va kutilayotgan ishi bo'lmagan vazifalarni yashirish — sog'lomlar 'hozir nima kerak' savoliga javob emas.",
+
+
 
 
 
