@@ -630,9 +630,17 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
                         <td style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>{row.pending}</td>
                         <td style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>{row.throughput_per_min.toFixed(1)}{t('ui_per_min')} {fmtMs(row.latency_ms_avg)}</td>
                         <td style={{ padding: '4px 8px' }}>
-                          {[row.features.filter && 'F', row.features.replacement && 'R', row.features.ai && 'AI', row.features.cleaner && 'C', row.features.fen > 1 && `N${row.features.fen}`]
-                            .filter(Boolean)
-                            .join(' ') || '—'}
+                          {/* features is optional in the backend's task row:
+                              the panel renders the columns it HAS and must
+                              not crash the whole DevOps section because one
+                              aggregate lacks the feature breakdown. */}
+                          {(() => {
+                            const f = row.features
+                            if (!f) return '—'
+                            return [f.filter && 'F', f.replacement && 'R', f.ai && 'AI', f.cleaner && 'C', f.fen > 1 ? `N${f.fen}` : '']
+                              .filter(Boolean)
+                              .join(' ') || '—'
+                          })()}
                         </td>
                         <td style={{ padding: '4px 8px', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.last_error ?? undefined}>
                           {row.last_error ?? <span style={{ color: 'var(--color-success)' }}>{t('ui_ok')}</span>}
@@ -644,7 +652,9 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
                             <div>{t('ui_source')} <code>{row.source}</code> {t('ui_arrow_to')} <code>{row.target}</code></div>
                             <div>{t('ui_retries_label')} {row.retries} {t('ui_worker_label')} {row.worker_id || '—'} {t('ui_last_success_label')} {row.last_success_at ?? '—'}</div>
                             <div>
-                              {t('ui_filter_label')} {String(row.features.filter)} · {t('ui_replacement_label')} {String(row.features.replacement)} · {t('ui_ai_label')} {String(row.features.ai)} · {t('ui_cleaner_label')} {String(row.features.cleaner)} · {t('ui_header_label')} {String(row.features.header)} · {t('ui_footer_label')} {String(row.features.footer)} · {t('ui_media_label')} {String(row.features.media)} · {t('ui_fallback_label')} {String(row.features.fallback)}
+                              {row.features
+                                ? `${t('ui_filter_label')} ${String(row.features.filter)} · ${t('ui_replacement_label')} ${String(row.features.replacement)} · ${t('ui_ai_label')} ${String(row.features.ai)} · ${t('ui_cleaner_label')} ${String(row.features.cleaner)} · ${t('ui_header_label')} ${String(row.features.header)} · ${t('ui_footer_label')} ${String(row.features.footer)} · ${t('ui_media_label')} ${String(row.features.media)} · ${t('ui_fallback_label')} ${String(row.features.fallback)}`
+                                : t('ui_task_features_unavailable')}
                             </div>
                           </td>
                         </tr>

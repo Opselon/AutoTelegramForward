@@ -1341,7 +1341,9 @@ export const en: Catalog = {
   "ui_control_audit": "Audit trail (newest first, bounded)",
   "ui_control_no_ops": "No control operations yet.",
   "ui_control_unavailable": "Worker control surface unavailable on this build — pause/resume is not available.",
-  "ui_control_worker_unreachable": "Worker unreachable — control state is unknown, not 'running'.",  "ui_ops_telemetry_proxy": "ops telemetry",  "ui_control_error": "Control error",
+  "ui_control_worker_unreachable": "Worker unreachable — control state is unknown, not 'running'.",  "ui_ops_telemetry_proxy": "ops telemetry",  "ui_control_error": "Control error",  "ui_task_features_unavailable": "Feature breakdown unavailable for this task",
+
+
 
 
 

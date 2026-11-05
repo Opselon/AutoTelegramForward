@@ -258,15 +258,18 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
             which is the bare-metal unit; this stack runs under
             docker compose, where that command restarts nothing
             and the operator is left believing they acted. */}
-        {servicesHealth && servicesHealth.status !== 'healthy' && (
+        {/* servicesHealth?.status only: a loading/null state must not crash
+            the whole panel by entering this branch with an object that has
+            no services array. */}
+        {servicesHealth?.status && servicesHealth.status !== 'healthy' && (
           <div
             className="p-note p-note--danger"
             style={{ marginBlockStart: 'var(--space-3)', fontSize: 'var(--type-xs)' }}
           >
             {t('ui_down_services')}
-            {servicesHealth.services.filter((x) => !x.online).map((x) => x.name).join(', ')}
+            {(servicesHealth?.services ?? []).filter((x) => !x.online).map((x) => x.name).join(', ')}
             <span style={{ color: 'var(--color-text-muted)' }}>
-              {' — '}docker compose restart {servicesHealth.services.filter((x) => !x.online).map((x) => x.name).join(' ')}
+              {' — '}docker compose restart {(servicesHealth?.services ?? []).filter((x) => !x.online).map((x) => x.name).join(' ')}
             </span>
           </div>
         )}

@@ -1341,7 +1341,9 @@ export const uz: Catalog = {
   "ui_control_audit": "Audit izi (yangisi birinchi, cheklangan)",
   "ui_control_no_ops": "Hali boshqaruv operatsiyasi yo'q.",
   "ui_control_unavailable": "Ushbu build-da worker boshqaruv yuzasi mavjud emas — to'xtatish/davom ettirish mumkin emas.",
-  "ui_control_worker_unreachable": "Worker yetib bo'lmaydi — boshqaruv holati noma'lum, 'ishlamoqda' emas.",  "ui_ops_telemetry_proxy": "ops telemetriyasi",  "ui_control_error": "Boshqaruv xatosi",
+  "ui_control_worker_unreachable": "Worker yetib bo'lmaydi — boshqaruv holati noma'lum, 'ishlamoqda' emas.",  "ui_ops_telemetry_proxy": "ops telemetriyasi",  "ui_control_error": "Boshqaruv xatosi",  "ui_task_features_unavailable": "Bu vazifa uchun xususiyatlar tafsilotlari mavjud emas",
+
+
 
 
 

@@ -1341,7 +1341,9 @@ export const zh: Catalog = {
   "ui_control_audit": "审计记录（最新优先，有界）",
   "ui_control_no_ops": "尚无控制操作。",
   "ui_control_unavailable": "此构建中 worker 控制面不可用——无法暂停/恢复。",
-  "ui_control_worker_unreachable": "Worker 不可达——控制状态未知，而非“运行中”。",  "ui_ops_telemetry_proxy": "运维遥测",  "ui_control_error": "控制错误",
+  "ui_control_worker_unreachable": "Worker 不可达——控制状态未知，而非“运行中”。",  "ui_ops_telemetry_proxy": "运维遥测",  "ui_control_error": "控制错误",  "ui_task_features_unavailable": "此任务的特性明细不可用",
+
+
 
 
 

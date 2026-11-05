@@ -1341,7 +1341,9 @@ export const pt: Catalog = {
   "ui_control_audit": "Trilha de auditoria (mais recente primeiro, limitada)",
   "ui_control_no_ops": "Nenhuma operação de controle ainda.",
   "ui_control_unavailable": "Surface de controle do worker indisponível nesta versão — pause/resume indisponível.",
-  "ui_control_worker_unreachable": "Worker inacessível — o estado de controle é desconhecido, não 'em execução'.",  "ui_ops_telemetry_proxy": "telemetria de ops",  "ui_control_error": "Erro de controle",
+  "ui_control_worker_unreachable": "Worker inacessível — o estado de controle é desconhecido, não 'em execução'.",  "ui_ops_telemetry_proxy": "telemetria de ops",  "ui_control_error": "Erro de controle",  "ui_task_features_unavailable": "Detalhamento de recursos indisponível para esta tarefa",
+
+
 
 
 

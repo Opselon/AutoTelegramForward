@@ -1341,7 +1341,9 @@ export const fa: Catalog = {
   "ui_control_audit": "رد حسابرسی (اول جدیدترین، محدود)",
   "ui_control_no_ops": "هنوز هیچ عملیات کنترلی وجود ندارد.",
   "ui_control_unavailable": "سطح کنترل کارگر در این نسخه در دسترس نیست — توقف/ازسرگیری ممکن نیست.",
-  "ui_control_worker_unreachable": "کارگر در دسترس نیست — وضعیت کنترل ناشناخته است، نه «در حال اجرا».",  "ui_ops_telemetry_proxy": "تله‌متری عملیات",  "ui_control_error": "خطای کنترل",
+  "ui_control_worker_unreachable": "کارگر در دسترس نیست — وضعیت کنترل ناشناخته است، نه «در حال اجرا».",  "ui_ops_telemetry_proxy": "تله‌متری عملیات",  "ui_control_error": "خطای کنترل",  "ui_task_features_unavailable": "تفکیک ویژگی‌ها برای این کار در دسترس نیست",
+
+
 
 
 
