@@ -1291,7 +1291,12 @@ export const pt: Catalog = {
   "ui_log_severity_error": "erros",
   "ui_log_severity_warn": "avisos",
   "ui_log_severity_info": "informações",
-  "ui_log_severity_debug": "depuração",
+  "ui_log_severity_debug": "depuração",  "ui_worker_health_hint": "Derivado da frescura do heartbeat e do estado de execução — não de um registro armazenado.",
+  "ui_worker_execution_state_hint": "Estado de execução: o que o worker está fazendo.",
+  "ui_worker_heartbeat": "Idade do pulso",
+  "ui_worker_heartbeat_hint": "Segundos desde o último pulso (auto-tick do worker ou pesquisa /ops).",
+
+
 
 
 }

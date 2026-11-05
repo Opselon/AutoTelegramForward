@@ -361,7 +361,7 @@ export default function WorkerLogCenter({ lang }: { lang: UiLang }) {
             ) : null}
           </div>
         </>
-      )}
+      ) : null}
     </div>
   )
 }

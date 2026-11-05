@@ -1291,7 +1291,12 @@ export const en: Catalog = {
   "ui_log_severity_error": "errors",
   "ui_log_severity_warn": "warnings",
   "ui_log_severity_info": "info",
-  "ui_log_severity_debug": "debug",
+  "ui_log_severity_debug": "debug",  "ui_worker_health_hint": "Derived from heartbeat freshness and execution state — not a stored record.",
+  "ui_worker_execution_state_hint": "Execution state: what the worker is doing (starting/ready/degraded/stopping).",
+  "ui_worker_heartbeat": "Heartbeat age",
+  "ui_worker_heartbeat_hint": "Seconds since the last heartbeat (worker self-tick or /ops poll).",
+
+
 
 
 }

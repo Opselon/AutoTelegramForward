@@ -1291,7 +1291,12 @@ export const it: Catalog = {
   "ui_log_severity_error": "errori",
   "ui_log_severity_warn": "avvisi",
   "ui_log_severity_info": "informazioni",
-  "ui_log_severity_debug": "debug",
+  "ui_log_severity_debug": "debug",  "ui_worker_health_hint": "Derivato dalla freschezza del battito e dallo stato di esecuzione, non da un record memorizzato.",
+  "ui_worker_execution_state_hint": "Stato di esecuzione: cosa sta facendo il worker.",
+  "ui_worker_heartbeat": "Età del battito",
+  "ui_worker_heartbeat_hint": "Secondi dall'ultimo battito (tick del worker o polling /ops).",
+
+
 
 
 }

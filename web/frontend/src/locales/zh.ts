@@ -1291,7 +1291,12 @@ export const zh: Catalog = {
   "ui_log_severity_error": "错误",
   "ui_log_severity_warn": "警告",
   "ui_log_severity_info": "信息",
-  "ui_log_severity_debug": "调试",
+  "ui_log_severity_debug": "调试",  "ui_worker_health_hint": "根据心跳新鲜度和执行状态推导，而非存储的记录。",
+  "ui_worker_execution_state_hint": "执行状态：worker 正在做什么。",
+  "ui_worker_heartbeat": "心跳间隔",
+  "ui_worker_heartbeat_hint": "距离上次心跳的秒数（worker 自检或 /ops 轮询）。",
+
+
 
 
 }

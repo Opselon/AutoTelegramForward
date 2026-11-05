@@ -1291,7 +1291,12 @@ export const uz: Catalog = {
   "ui_log_severity_error": "xatolar",
   "ui_log_severity_warn": "ogohlantirishlar",
   "ui_log_severity_info": "ma'lumot",
-  "ui_log_severity_debug": "debug",
+  "ui_log_severity_debug": "debug",  "ui_worker_health_hint": "Heartbeat yangiligi va ijro holatidan olingan — saqlangan yozuvdan emas.",
+  "ui_worker_execution_state_hint": "Ijro holati: worker nimа qilmoqda.",
+  "ui_worker_heartbeat": "Heartbeat yoshi",
+  "ui_worker_heartbeat_hint": "So'nggi heartbeaddan buyon soniyalar (worker o'z tiki yoki /ops so'rovi).",
+
+
 
 
 }

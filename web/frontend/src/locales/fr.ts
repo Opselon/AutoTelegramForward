@@ -1291,7 +1291,12 @@ export const fr: Catalog = {
   "ui_log_severity_error": "erreurs",
   "ui_log_severity_warn": "avertissements",
   "ui_log_severity_info": "informations",
-  "ui_log_severity_debug": "débogage",
+  "ui_log_severity_debug": "débogage",  "ui_worker_health_hint": "Dérivé de la fraîcheur du pouls et de l'état d'exécution — pas d'un enregistrement stocké.",
+  "ui_worker_execution_state_hint": "État d'exécution : ce que fait le worker.",
+  "ui_worker_heartbeat": "Ancienneté du pouls",
+  "ui_worker_heartbeat_hint": "Secondes depuis le dernier pouls (tick propre au worker ou sondage /ops).",
+
+
 
 
 }

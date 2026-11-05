@@ -44,6 +44,12 @@ export interface WorkerInfo {
   telegram_connected: boolean
   ai_connected: boolean
   last_heartbeat: string
+  /** Seconds since the last heartbeat (self or poll); -1 = never. */
+  heartbeat_age_seconds?: number
+  /** Derived liveness the console paints with, from heartbeat freshness +
+   * execution state — an old durable record can no longer keep a worker
+   * 'online' forever. */
+  health_state?: 'online' | 'offline' | 'degraded' | 'starting' | 'stopping' | 'unknown'
 }
 
 export interface LatencyPercentiles {

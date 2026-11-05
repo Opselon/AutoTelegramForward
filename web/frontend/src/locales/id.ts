@@ -1291,7 +1291,12 @@ export const id: Catalog = {
   "ui_log_severity_error": "kesalahan",
   "ui_log_severity_warn": "peringatan",
   "ui_log_severity_info": "info",
-  "ui_log_severity_debug": "debug",
+  "ui_log_severity_debug": "debug",  "ui_worker_health_hint": "Diturunkan dari kesegaran heartbeat dan status eksekusi — bu catatan tersimpan.",
+  "ui_worker_execution_state_hint": "Status eksekusi: apa yang sedang dikerjakan worker.",
+  "ui_worker_heartbeat": "Usia heartbeat",
+  "ui_worker_heartbeat_hint": "Detik sejak heartbeat terakhir (tick worker atau polling /ops).",
+
+
 
 
 }

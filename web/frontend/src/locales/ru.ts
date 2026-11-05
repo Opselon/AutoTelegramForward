@@ -1291,7 +1291,12 @@ export const ru: Catalog = {
   "ui_log_severity_error": "ошибки",
   "ui_log_severity_warn": "предупреждения",
   "ui_log_severity_info": "информация",
-  "ui_log_severity_debug": "отладка",
+  "ui_log_severity_debug": "отладка",  "ui_worker_health_hint": "Выводится из свежести пульса и состояния выполнения, а не из сохранённой записи.",
+  "ui_worker_execution_state_hint": "Состояние выполнения: чем воркер занимается сейчас.",
+  "ui_worker_heartbeat": "Возраст пульса",
+  "ui_worker_heartbeat_hint": "Секунд с последнего пульса (собственный тик воркера или опрос /ops).",
+
+
 
 
 }

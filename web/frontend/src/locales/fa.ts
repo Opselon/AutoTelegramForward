@@ -1291,7 +1291,12 @@ export const fa: Catalog = {
   "ui_log_severity_error": "خطاها",
   "ui_log_severity_warn": "هشدارها",
   "ui_log_severity_info": "اطلاعات",
-  "ui_log_severity_debug": "دیباگ",
+  "ui_log_severity_debug": "دیباگ",  "ui_worker_health_hint": "بر اساس تازگی ضربان قلب و وضعیت اجرا — نه یک رکورد ذخیره‌شده.",
+  "ui_worker_execution_state_hint": "وضعیت اجرا: کارگر در حال انجام چه کاری است.",
+  "ui_worker_heartbeat": "سن ضربان قلب",
+  "ui_worker_heartbeat_hint": "ثانیه‌ها از آخرین ضربان قلب (تیک خودکار کارگر یا نظرسنجی /ops).",
+
+
 
 
 }
