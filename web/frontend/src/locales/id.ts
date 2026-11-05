@@ -1294,7 +1294,13 @@ export const id: Catalog = {
   "ui_log_severity_debug": "debug",  "ui_worker_health_hint": "Diturunkan dari kesegaran heartbeat dan status eksekusi — bu catatan tersimpan.",
   "ui_worker_execution_state_hint": "Status eksekusi: apa yang sedang dikerjakan worker.",
   "ui_worker_heartbeat": "Usia heartbeat",
-  "ui_worker_heartbeat_hint": "Detik sejak heartbeat terakhir (tick worker atau polling /ops).",
+  "ui_worker_heartbeat_hint": "Detik sejak heartbeat terakhir (tick worker atau polling /ops).",  "ui_queue_diagnostics_hint": "Diagnostik: 'stuck' berarti lease CLAIMED kedaluwarsa lebih dari {claimed}s lalu, baris PENDING menunggu lebih dari {pending}s, badai retry adalah retry yang tiba dalam {storm}s.",
+  "ui_diag_stuck_claimed": "Claim terhenti",
+  "ui_diag_stuck_pending": "Pending kelaparan",
+  "ui_diag_poison_jobs": "Job racun",
+  "ui_diag_retry_storm": "Badai retry (60s ke depan)",
+
+
 
 
 

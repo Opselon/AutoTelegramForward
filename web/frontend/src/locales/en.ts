@@ -1294,7 +1294,13 @@ export const en: Catalog = {
   "ui_log_severity_debug": "debug",  "ui_worker_health_hint": "Derived from heartbeat freshness and execution state — not a stored record.",
   "ui_worker_execution_state_hint": "Execution state: what the worker is doing (starting/ready/degraded/stopping).",
   "ui_worker_heartbeat": "Heartbeat age",
-  "ui_worker_heartbeat_hint": "Seconds since the last heartbeat (worker self-tick or /ops poll).",
+  "ui_worker_heartbeat_hint": "Seconds since the last heartbeat (worker self-tick or /ops poll).",  "ui_queue_diagnostics_hint": "Diagnostics: stuck means a CLAIMED lease expired over {claimed}s ago, a PENDING row waited over {pending}s, a retry storm is retries landing within {storm}s.",
+  "ui_diag_stuck_claimed": "Stuck claims",
+  "ui_diag_stuck_pending": "Starved pending",
+  "ui_diag_poison_jobs": "Poison jobs",
+  "ui_diag_retry_storm": "Retry storm (next 60s)",
+
+
 
 
 

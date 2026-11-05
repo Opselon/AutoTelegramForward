@@ -1294,7 +1294,13 @@ export const fr: Catalog = {
   "ui_log_severity_debug": "débogage",  "ui_worker_health_hint": "Dérivé de la fraîcheur du pouls et de l'état d'exécution — pas d'un enregistrement stocké.",
   "ui_worker_execution_state_hint": "État d'exécution : ce que fait le worker.",
   "ui_worker_heartbeat": "Ancienneté du pouls",
-  "ui_worker_heartbeat_hint": "Secondes depuis le dernier pouls (tick propre au worker ou sondage /ops).",
+  "ui_worker_heartbeat_hint": "Secondes depuis le dernier pouls (tick propre au worker ou sondage /ops).",  "ui_queue_diagnostics_hint": "Diagnostic : « bloqué » signifie qu'un bail CLAIMED a expiré depuis plus de {claimed}s, une ligne PENDING attend depuis plus de {pending}s, une tempête de relances est des relances arrivant en {storm}s.",
+  "ui_diag_stuck_claimed": "Bails bloqués",
+  "ui_diag_stuck_pending": "En attente affamés",
+  "ui_diag_poison_jobs": "Jobs poison",
+  "ui_diag_retry_storm": "Tempête de relances (60s prochaines)",
+
+
 
 
 

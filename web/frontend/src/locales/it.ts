@@ -1294,7 +1294,13 @@ export const it: Catalog = {
   "ui_log_severity_debug": "debug",  "ui_worker_health_hint": "Derivato dalla freschezza del battito e dallo stato di esecuzione, non da un record memorizzato.",
   "ui_worker_execution_state_hint": "Stato di esecuzione: cosa sta facendo il worker.",
   "ui_worker_heartbeat": "Età del battito",
-  "ui_worker_heartbeat_hint": "Secondi dall'ultimo battito (tick del worker o polling /ops).",
+  "ui_worker_heartbeat_hint": "Secondi dall'ultimo battito (tick del worker o polling /ops).",  "ui_queue_diagnostics_hint": "Diagnostica: 'bloccato' significa che un lease CLAIMED è scaduto da più di {claimed}s, una riga PENDING aspetta da più di {pending}s, una tempesta di retry sono retry in arrivo entro {storm}s.",
+  "ui_diag_stuck_claimed": "Claim bloccati",
+  "ui_diag_stuck_pending": "In attesa affamati",
+  "ui_diag_poison_jobs": "Job velenosi",
+  "ui_diag_retry_storm": "Tempesta di retry (prossimi 60s)",
+
+
 
 
 

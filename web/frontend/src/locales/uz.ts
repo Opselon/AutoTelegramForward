@@ -1294,7 +1294,13 @@ export const uz: Catalog = {
   "ui_log_severity_debug": "debug",  "ui_worker_health_hint": "Heartbeat yangiligi va ijro holatidan olingan — saqlangan yozuvdan emas.",
   "ui_worker_execution_state_hint": "Ijro holati: worker nimа qilmoqda.",
   "ui_worker_heartbeat": "Heartbeat yoshi",
-  "ui_worker_heartbeat_hint": "So'nggi heartbeaddan buyon soniyalar (worker o'z tiki yoki /ops so'rovi).",
+  "ui_worker_heartbeat_hint": "So'nggi heartbeaddan buyon soniyalar (worker o'z tiki yoki /ops so'rovi).",  "ui_queue_diagnostics_hint": "Diagnostika: 'yopashib qolish' — CLAIMED lizenzasi {claimed}s dan oldin tugagan, PENDING qatori {pending}s dan ko'p kutgan, qayta urinish to'foni — {storm}s ichida keladigan qayta urinishlar.",
+  "ui_diag_stuck_claimed": "Yopashib qolgan claimlar",
+  "ui_diag_stuck_pending": "Ochlangan kutilayotganlar",
+  "ui_diag_poison_jobs": "Zaharli ishlar",
+  "ui_diag_retry_storm": "Qayta urinish to'foni (keyingi 60s)",
+
+
 
 
 

@@ -1294,7 +1294,13 @@ export const fa: Catalog = {
   "ui_log_severity_debug": "دیباگ",  "ui_worker_health_hint": "بر اساس تازگی ضربان قلب و وضعیت اجرا — نه یک رکورد ذخیره‌شده.",
   "ui_worker_execution_state_hint": "وضعیت اجرا: کارگر در حال انجام چه کاری است.",
   "ui_worker_heartbeat": "سن ضربان قلب",
-  "ui_worker_heartbeat_hint": "ثانیه‌ها از آخرین ضربان قلب (تیک خودکار کارگر یا نظرسنجی /ops).",
+  "ui_worker_heartbeat_hint": "ثانیه‌ها از آخرین ضربان قلب (تیک خودکار کارگر یا نظرسنجی /ops).",  "ui_queue_diagnostics_hint": "تشخیص: گیر کردن یعنی اجاره CLAIMED بیش از {claimed} ثانیه پیش منقضی شده، یک ردیف PENDING بیش از {pending} ثانیه منتظر مانده، طوفان تلاش مجدد = تلاش‌های مجدد در عرض {storm} ثانیه.",
+  "ui_diag_stuck_claimed": "ادعاهای گیر کرده",
+  "ui_diag_stuck_pending": "در انتظار گرسنه",
+  "ui_diag_poison_jobs": "کارهای سمی",
+  "ui_diag_retry_storm": "طوفان تلاش مجدد (۶۰ ثانیه آینده)",
+
+
 
 
 

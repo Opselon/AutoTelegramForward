@@ -1294,7 +1294,13 @@ export const zh: Catalog = {
   "ui_log_severity_debug": "调试",  "ui_worker_health_hint": "根据心跳新鲜度和执行状态推导，而非存储的记录。",
   "ui_worker_execution_state_hint": "执行状态：worker 正在做什么。",
   "ui_worker_heartbeat": "心跳间隔",
-  "ui_worker_heartbeat_hint": "距离上次心跳的秒数（worker 自检或 /ops 轮询）。",
+  "ui_worker_heartbeat_hint": "距离上次心跳的秒数（worker 自检或 /ops 轮询）。",  "ui_queue_diagnostics_hint": "诊断：「卡住」指 CLAIMED 租约已过期超过 {claimed}s，PENDING 行已等待超过 {pending}s，重试风暴指在 {storm}s 内到来的重试。",
+  "ui_diag_stuck_claimed": "卡住的领取",
+  "ui_diag_stuck_pending": "饥饿的待处理",
+  "ui_diag_poison_jobs": "毒消息作业",
+  "ui_diag_retry_storm": "重试风暴（未来 60 秒）",
+
+
 
 
 

@@ -428,6 +428,23 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
                 <LatencyBars l={queue.queue_wait} unavailable={t('ui_latency_unavailable')} />
               </div>
             </div>
+            {queue.diagnostics ? (
+              <div style={{ marginTop: 10, padding: '8px 10px', border: '1px solid var(--color-border)', borderRadius: 8, background: 'var(--color-surface)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: 6 }}>
+                  {t('ui_queue_diagnostics_hint', {
+                    claimed: queue.diagnostics.stuck_claimed_threshold_seconds,
+                    pending: queue.diagnostics.stuck_pending_threshold_seconds,
+                    storm: queue.diagnostics.retry_storm_window_seconds,
+                  })}
+                </div>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                  <Metric icon={<AlertTriangle size={14} />} label={t('ui_diag_stuck_claimed')} value={String(queue.diagnostics.stuck_claimed)} />
+                  <Metric icon={<Timer size={14} />} label={t('ui_diag_stuck_pending')} value={String(queue.diagnostics.stuck_pending)} />
+                  <Metric icon={<XCircle size={14} />} label={t('ui_diag_poison_jobs')} value={String(queue.diagnostics.poison_jobs)} />
+                  <Metric icon={<Activity size={14} />} label={t('ui_diag_retry_storm')} value={String(queue.diagnostics.retry_storm)} />
+                </div>
+              </div>
+            ) : null}
           </>
         ) : (
           <EmptyState icon={<Layers size={22} />} title={t('ui_queue_snapshot_unavailable')} />

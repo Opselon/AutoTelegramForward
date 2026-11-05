@@ -1294,7 +1294,13 @@ export const pt: Catalog = {
   "ui_log_severity_debug": "depuração",  "ui_worker_health_hint": "Derivado da frescura do heartbeat e do estado de execução — não de um registro armazenado.",
   "ui_worker_execution_state_hint": "Estado de execução: o que o worker está fazendo.",
   "ui_worker_heartbeat": "Idade do pulso",
-  "ui_worker_heartbeat_hint": "Segundos desde o último pulso (auto-tick do worker ou pesquisa /ops).",
+  "ui_worker_heartbeat_hint": "Segundos desde o último pulso (auto-tick do worker ou pesquisa /ops).",  "ui_queue_diagnostics_hint": "Diagnóstico: \"preso\" significa que um lease CLAIMED expirou há mais de {claimed}s, uma linha PENDING esperou mais de {pending}s, uma tempestade de retentativas são retentativas chegando em {storm}s.",
+  "ui_diag_stuck_claimed": "Claims presos",
+  "ui_diag_stuck_pending": "Pendentes esfomeados",
+  "ui_diag_poison_jobs": "Jobs venenosos",
+  "ui_diag_retry_storm": "Tempestade de retentativa (próx. 60s)",
+
+
 
 
 

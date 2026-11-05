@@ -1294,7 +1294,13 @@ export const ru: Catalog = {
   "ui_log_severity_debug": "отладка",  "ui_worker_health_hint": "Выводится из свежести пульса и состояния выполнения, а не из сохранённой записи.",
   "ui_worker_execution_state_hint": "Состояние выполнения: чем воркер занимается сейчас.",
   "ui_worker_heartbeat": "Возраст пульса",
-  "ui_worker_heartbeat_hint": "Секунд с последнего пульса (собственный тик воркера или опрос /ops).",
+  "ui_worker_heartbeat_hint": "Секунд с последнего пульса (собственный тик воркера или опрос /ops).",  "ui_queue_diagnostics_hint": "Диагностика: «застрял» — аренда CLAIMED истекла более {claimed}s назад, строка PENDING ждёт более {pending}s, шторм повторов — повторы в течение {storm}s.",
+  "ui_diag_stuck_claimed": "Зависшие аренды",
+  "ui_diag_stuck_pending": "Голодные ожидания",
+  "ui_diag_poison_jobs": "Ядовитые задания",
+  "ui_diag_retry_storm": "Шторм повторов (ближ. 60с)",
+
+
 
 
 

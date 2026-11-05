@@ -82,6 +82,22 @@ export interface WorkerQueue {
   oldest_pending_age_seconds: number
   backlog_trend: number[]
   load_status: LoadStatus
+  /** §5 diagnostics: is the queue broken, or just busy? Absent when the
+   *  store cannot compute the section (legacy backend) — never zeros. */
+  diagnostics?: QueueDiagnostics
+}
+
+export interface QueueDiagnostics {
+  stuck_claimed: number
+  stuck_pending: number
+  poison_jobs: number
+  retry_storm: number
+  oldest_pending_age_seconds: number
+  /** The thresholds the values above were computed with, so the console
+   *  never has to guess what 'stuck' meant for this snapshot. */
+  stuck_claimed_threshold_seconds: number
+  stuck_pending_threshold_seconds: number
+  retry_storm_window_seconds: number
 }
 
 export type StageHealth =
