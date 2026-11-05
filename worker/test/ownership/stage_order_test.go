@@ -196,23 +196,29 @@ func TestStageOrderIsObservedNotAsserted(t *testing.T) {
 
 		e := evt("ATF-OWN-ORD-002", "ORD",
 			"filter rejection precedes every transform stage",
-			"filter:failed observed, no cleaner/replacement/header stage ever recorded")
+			"filter stage observed (failed or policy-skipped), no cleaner/replacement/header stage ever recorded")
 		start := now()
 		j := h.Enqueue("task-ord2", "-1001", 9802, "-9002", "BANNED TOK body")
 		err := h.Run(ctx, j)
 
 		stages := obs.observed()
 		dropped := h.AssertDropped(&e, j)
-		// The filter stage failed, and no transform stage was ever walked.
-		filterFailed := containsStage(stages, "filter:failed") || containsStage(stages, "filter")
+		// The filter stage was OBSERVED, and no transform stage was ever
+		// walked. The observation may be :failed (stage malfunction) or
+		// :skipped (the filter working as configured — a deliberate policy
+		// drop counts as skipped-by-policy, never as a stage failure); the
+		// ordering contract is only that filter came before any transform.
+		filterSeen := containsStage(stages, "filter") ||
+			containsStage(stages, "filter:failed") ||
+			containsStage(stages, "filter:skipped")
 		noTransform := !containsAny(stages, "cleaner", "replacement", "header_footer", "ai")
-		if dropped && filterFailed && noTransform {
+		if dropped && filterSeen && noTransform {
 			e.Result = ResultPass
 			e.Observed = fmt.Sprintf("stages=%v", stages)
 		} else {
 			e.Result = ResultFail
-			e.FailureReason = fmt.Sprintf("stages=%v dropped=%v filterFailed=%v noTransform=%v",
-				stages, dropped, filterFailed, noTransform)
+			e.FailureReason = fmt.Sprintf("stages=%v dropped=%v filterSeen=%v noTransform=%v",
+				stages, dropped, filterSeen, noTransform)
 		}
 		h.Finish(rec, &e, start, err)
 		if e.Result != ResultPass {

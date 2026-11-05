@@ -52,6 +52,15 @@ def repo(db):
     return SqliteDeliveryQueueRepository(db)
 
 
+@pytest.fixture
+def map_repo(db):
+    from core.infrastructure.persistence.sqlite_repositories import (
+        SqliteMessageMapRepository,
+    )
+
+    return SqliteMessageMapRepository(db)
+
+
 def _job(
     i: int,
     rule_id: str = MINE,
@@ -401,7 +410,7 @@ async def test_replay_logs_ids_but_never_the_payload(db, repo, caplog):
 # --------------------------------------------------------------------- #
 # The rebuilt row is not mapping-blind
 # --------------------------------------------------------------------- #
-async def test_a_replay_of_a_purged_row_restores_the_mapping_placeholder(db, repo):
+async def test_a_replay_of_a_purged_row_restores_the_mapping_placeholder(db, repo, map_repo):
     """The mapping invariant must survive a replay of a purged row.
 
     Retention purges message_map rows after 30 days; dead-letter entries
@@ -431,7 +440,7 @@ async def test_a_replay_of_a_purged_row_restores_the_mapping_placeholder(db, rep
     assert dict(row)["target_message_id"] is None
 
     # And the worker's UPDATE-only success write now actually lands.
-    await repo.update_delivery(
+    await map_repo.update_delivery(
         MINE, "-100111", 100, "-100777", 555, DeliveryStatus.SENT,
     )
     confirmed = dict(db.query_one(
@@ -442,16 +451,25 @@ async def test_a_replay_of_a_purged_row_restores_the_mapping_placeholder(db, rep
 
 
 @pytest.mark.asyncio
-async def test_a_replay_never_regresses_a_surviving_sent_mapping(db, repo):
+async def test_a_replay_never_regresses_a_surviving_sent_mapping(db, repo, map_repo):
     """A mapping row that still says SENT is never flipped back to PENDING."""
     await repo.enqueue(_job(0))
     await _exhaust(repo, "job:0")
 
     # The delivery actually landed (mapping says SENT), but the terminal job
     # row was purged by cleanup — the DLQ entry was written before the send
-    # eventually confirmed.
+    # eventually confirmed. The placeholder exists first (the enqueue path's
+    # write), then the worker's success write marks it SENT.
+    db.execute(
+        "INSERT INTO message_map (id, rule_id, source_chat_id, source_message_id,"
+        " target_chat_id, target_message_id, media_group_id, delivery_status,"
+        " created_at, updated_at)"
+        " VALUES ('map-job0', ?, '-100111', 100, '-100777', NULL, '', 'PENDING',"
+        " strftime('%s','now'), strftime('%s','now'))",
+        (MINE,),
+    )
+    await map_repo.update_delivery(MINE, "-100111", 100, "-100777", 42, DeliveryStatus.SENT)
     db.execute("DELETE FROM delivery_jobs WHERE id='job:0'")
-    await repo.update_delivery(MINE, "-100111", 100, "-100777", 42, DeliveryStatus.SENT)
 
     result = await repo.replay_dead_letter("dlq_job:0", [MINE])
     assert result == "requeued"

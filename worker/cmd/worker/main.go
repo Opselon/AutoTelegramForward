@@ -231,7 +231,15 @@ func run() (runErr error) {
 	// ones Python owns are disabled. A stage that never runs reports
 	// "waiting", a stage whose switch is off reports "disabled" — the two
 	// are different operator questions and the panel distinguishes them.
+	//
+	// "ai" is excluded from the blanket enable: it is enabled further down
+	// ONLY when a transformer is actually wired, so an AI store that failed
+	// to open leaves the stage honestly "waiting" instead of painted
+	// enabled-without-a-provider.
 	for _, stage := range ops.StageNames {
+		if stage == "ai" {
+			continue
+		}
 		collector.StageEnabled(stage, true)
 	}
 	if !cfg.WorkerEnabled {
@@ -313,17 +321,17 @@ func run() (runErr error) {
 	// /ops attaches to this server's mux.
 	tracker := ops.NewTrackerBridge(collector)
 	healthSrv := health.NewServer(cfg.ListenAddr, tracker, func(ctx context.Context) error {
-		_, err := store.PendingCount(ctx)
-		// The probe's outcome feeds the connectivity flag /ops reports, so
-		// "db_connected" is answered by the same call that answers
-		// readiness — never a second, divergent probe.
+		// One probe answers both: the outcome feeds the connectivity flag
+		// /ops reports AND the pending-depth sampler — never a second,
+		// divergent probe. The 15s ticker below keeps the flag fresh even
+		// when nobody polls readiness, so a healthy-but-unobserved worker
+		// no longer reads as db_connected=false / degraded.
+		n, err := store.PendingCount(ctx)
 		collector.RecordDB(err == nil, time.Now())
 		if err != nil {
 			return err
 		}
-		if n, err := store.PendingCount(ctx); err == nil {
-			collector.RecordPendingDepth(int64(n))
-		}
+		collector.RecordPendingDepth(int64(n))
 		return nil
 	})
 
@@ -388,6 +396,15 @@ func run() (runErr error) {
 				return
 			case <-ticker.C:
 				probeTelegram(ctx, collector, gateway, log)
+				// The DB probe rides the same cadence: db_connected and the
+				// pending-depth sampler stay truthful without anyone
+				// polling /healthz first.
+				if n, err := store.PendingCount(ctx); err == nil {
+					collector.RecordDB(true, time.Now())
+					collector.RecordPendingDepth(int64(n))
+				} else {
+					collector.RecordDB(false, time.Now())
+				}
 				// The worker's own liveness mark: /ops only advanced the
 				// heartbeat when someone looked, so a healthy worker with no
 				// observers read as offline. This store is what keeps

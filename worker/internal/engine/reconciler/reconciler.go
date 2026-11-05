@@ -96,7 +96,11 @@ func (r *Reconciler) RunOnce(ctx context.Context) (resolved, remaining int, err 
 		ok, rerr := r.store.ReconcileUnknown(ctx, f.Key, r.workerID, reason)
 		if rerr != nil {
 			r.log.Error("reconcile of an ambiguous delivery failed",
-				"job_id", f.Key.String(), "error", rerr.Error())
+				"worker_id", r.workerID,
+				"job_id", f.Key.String(),
+				"rule_id", f.Key.RuleID,
+				"source_message_id", f.Key.SourceMessageID,
+				"error", rerr.Error())
 			remaining++
 			continue
 		}
@@ -125,6 +129,8 @@ func (r *Reconciler) Start(ctx context.Context) {
 			}
 			if resolved > 0 {
 				r.log.Warn("reconciler closed ambiguous deliveries",
+					"worker_id", r.workerID,
+					"component", "worker.reconciler",
 					"resolved", resolved, "left_unknown", remaining)
 			}
 		}

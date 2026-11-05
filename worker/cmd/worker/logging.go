@@ -29,7 +29,13 @@ func (h *fanoutHandler) Enabled(ctx context.Context, level slog.Level) bool {
 func (h *fanoutHandler) Handle(ctx context.Context, record slog.Record) error {
 	var err error
 	if h.stdout.Enabled(ctx, record.Level) {
-		err = h.stdout.Handle(ctx, record)
+		// The stdout stream carries the SAME redaction the central client
+		// applies to its own records: secret-shaped keys and content fields
+		// become [REDACTED], secret-shaped substrings inside messages and
+		// error strings are masked. The container stdout is what a log
+		// collector actually scrapes — one careless "error", err argument
+		// must not leak a token there.
+		err = h.stdout.Handle(ctx, redactedRecord(record))
 	}
 	if h.central == nil {
 		return err
@@ -45,6 +51,31 @@ func (h *fanoutHandler) Handle(ctx context.Context, record slog.Record) error {
 	})
 	h.central.Emit(slogLevelName(record.Level), "", h.module, record.Message, fields...)
 	return err
+}
+
+// redactedRecord rebuilds a record with the shared redaction applied to the
+// message and every attribute (groups recursed, structure preserved). The
+// per-call attributes all flow through Handle, so this is the one choke
+// point the stdout sink needs.
+func redactedRecord(record slog.Record) slog.Record {
+	out := slog.NewRecord(record.Time, record.Level, observability.RedactSlogText(record.Message), record.PC)
+	record.Attrs(func(attr slog.Attr) bool {
+		out.AddAttrs(redactAttr(attr))
+		return true
+	})
+	return out
+}
+
+func redactAttr(attr slog.Attr) slog.Attr {
+	value := attr.Value.Resolve()
+	if value.Kind() == slog.KindGroup {
+		group := slog.Group(attr.Key)
+		for _, sub := range value.Group() {
+			group.Value = slog.GroupValue(append(group.Value.Group(), redactAttr(sub))...)
+		}
+		return group
+	}
+	return slog.Attr{Key: attr.Key, Value: slog.AnyValue(observability.RedactSlogValue(attr.Key, value.Any()))}
 }
 
 func (h *fanoutHandler) WithAttrs(attrs []slog.Attr) slog.Handler {

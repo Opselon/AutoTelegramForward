@@ -120,16 +120,21 @@ func loadTransformSwitch() bool {
 func (e *Engine) applyTransformPipeline(ctx context.Context, j *job.DeliveryJob, r *rule.ForwardRule, logger Logger) error {
 	tStart := time.Now()
 	defer func() {
-		// The transform pipeline IS the four text stages (cleaner, link
-		// policy/replacement, header/footer, AI). They run as one ordered
+		// The transform pipeline IS the text stages (cleaner, link
+		// policy/replacement, header/footer). They run as one ordered
 		// ApplyText call, so one observation per stage in the aggregate is
 		// the honest measurement: splitting them would mean re-timing a
 		// library call that reports no per-stage clock.
+		//
+		// "ai" is NOT recorded here: most jobs carry no AI rewrite at all,
+		// and counting them made the stage read healthy-with-usage it never
+		// had — while jobs that DID rewrite were counted twice (once here,
+		// once per attempt by the AIMetricsObserver). The AI stage counts
+		// through its own observer only.
 		ms := float64(time.Since(tStart).Microseconds()) / 1000.0
 		e.stageRecord("cleaner", tStart)
 		e.stageRecord("replacement", tStart)
 		e.stageRecord("header_footer", tStart)
-		e.stageRecord("ai", tStart)
 		_ = ms
 	}()
 	raw := payloadRawText(j)

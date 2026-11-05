@@ -263,10 +263,11 @@ func (e *Engine) failureToRing(ferr *telegraph.DeliveryFailure, j *job.DeliveryJ
 		return
 	}
 	e.ops.RecordError("worker.delivery", "ERROR", ferr.Message, map[string]string{
-		"code":       ferr.Code,
-		"error_type": ferr.ErrorType,
-		"rule_id":    j.RuleID,
-		"job_id":     j.ID,
+		"code":          ferr.Code,
+		"error_type":    ferr.ErrorType,
+		"rule_id":       j.RuleID,
+		"job_id":        j.ID,
+		"correlation_id": j.Payload.CorrelationID(),
 	})
 }
 
@@ -343,6 +344,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 		logger.Warn("rule is auto-paused — dropping job", "decision", "DROP", "reason_code", "RULE_AUTO_PAUSED", "reason", r.AutoPauseReason)
 		_ = e.store.MarkFailed(ctx, j.ID, "Task paused: "+r.AutoPauseReason)
 		e.metrics.Outcome("failed")
+		e.outcome("failed", j, jobStart)
 		return nil
 	}
 	// A paused task is not a failure: the job waits for the pause to lift.
@@ -615,7 +617,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	// "durable enqueue must happen before the branding side effect".
 	// The job is claimed, the send fence is held, and stage 1 runs as part
 	// of the claimed execution — never before enqueue.
-	if err := e.ensureBrandingStage1(ctx, j, r, logger); err != nil {
+	if err := e.ensureBrandingStage1(ctx, j, r, logger, jobStart); err != nil {
 		return err
 	}
 
@@ -657,7 +659,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	if ferr != nil {
 		e.stageFail("delivery", ferr.Code)
 		e.failureToRing(ferr, j)
-		return e.handleFailure(ctx, j, logger, key, ferr)
+		return e.handleFailure(ctx, j, logger, key, ferr, jobStart)
 	}
 
 	// 5. Confirmed. Record the send on the fence BEFORE the job-row commit:
@@ -1145,7 +1147,7 @@ func (e *Engine) scratchPath(j *job.DeliveryJob) string {
 //     the attempt budget is not wasted on something that cannot succeed.
 //   - anything else → MarkRetry with exponential backoff, dead-lettering
 //     when the budget is spent.
-func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger Logger, key job.AttemptKey, ferr *telegraph.DeliveryFailure) error {
+func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger Logger, key job.AttemptKey, ferr *telegraph.DeliveryFailure, jobStart time.Time) error {
 	// Ambiguous: Telegram may have accepted the send. Never a plain FAILED,
 	// never an automatic re-dispatch — reconciliation owns this row.
 	if ferr.IsAmbiguous() {
@@ -1157,6 +1159,7 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 			logger.Warn("mark_unknown failed", "error", err)
 		}
 		e.metrics.Outcome("unknown")
+		e.outcome("unknown", j, jobStart)
 		return nil
 	}
 
@@ -1173,6 +1176,7 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 			"retry_after_seconds", ferr.RetryAfterSeconds)
 		_ = e.store.Defer(ctx, j.ID, "FloodWait: "+ferr.Message, wait)
 		e.metrics.Outcome("retried")
+		e.outcome("retried", j, jobStart)
 		return nil
 	}
 
@@ -1184,6 +1188,7 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 		logger.Warn("dependency unavailable — deferring", "code", ferr.Code)
 		_ = e.store.Defer(ctx, j.ID, ferr.Code+": "+ferr.Message, 10*time.Second)
 		e.metrics.Outcome("retried")
+		e.outcome("retried", j, jobStart)
 		return nil
 	}
 
@@ -1196,6 +1201,7 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 			"session_id", redacted(j.Payload.SessionID()))
 		_ = e.store.MarkFailed(ctx, j.ID, "Auth: "+ferr.Message)
 		e.metrics.Outcome("failed")
+		e.outcome("failed", j, jobStart)
 		return nil
 	}
 
@@ -1207,6 +1213,7 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 			"code", ferr.Code, "error_type", ferr.ErrorType)
 		_ = e.store.MarkFailed(ctx, j.ID, ferr.Code+": "+ferr.Message)
 		e.metrics.Outcome("failed")
+		e.outcome("failed", j, jobStart)
 		return nil
 	}
 
@@ -1221,6 +1228,7 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 		logger.Warn("mark_retry failed", "error", err)
 	}
 	e.metrics.Outcome("retried")
+	e.outcome("retried", j, jobStart)
 	return nil
 }
 
@@ -1285,6 +1293,7 @@ func (e *Engine) recordSend(target string) {
 func (e *Engine) jobLogger(j *job.DeliveryJob) Logger {
 	return &fieldLogger{base: e.log, fields: []any{
 		"correlation_id", j.Payload.CorrelationID(),
+		"worker_id", e.workerID,
 		"job_id", j.ID,
 		"rule_id", j.RuleID,
 		"owner_user_id", j.Payload.OwnerUserID(),
@@ -1387,7 +1396,7 @@ func messageIDs(list any, single any) []int64 {
 // Ordering guarantee: the send fence is already held, the delivery job is
 // CLAIMED, and stage 1 runs as part of the claimed execution — never before
 // the job is durable.
-func (e *Engine) ensureBrandingStage1(ctx context.Context, j *job.DeliveryJob, r *rule.ForwardRule, logger Logger) error {
+func (e *Engine) ensureBrandingStage1(ctx context.Context, j *job.DeliveryJob, r *rule.ForwardRule, logger Logger, jobStart time.Time) error {
 	plan := readHopPlan(j)
 	if plan == nil || !plan.isIntent() {
 		// Not an intent: either unbranded, or a legacy already-performed
@@ -1441,7 +1450,7 @@ func (e *Engine) ensureBrandingStage1(ctx context.Context, j *job.DeliveryJob, r
 			SourceMessageID: j.SourceMessageID, TargetChatID: j.TargetChatID,
 			JobKind: j.JobKind,
 		}
-		_ = e.handleFailure(ctx, j, logger, key, ferr)
+		_ = e.handleFailure(ctx, j, logger, key, ferr, jobStart)
 		return fmt.Errorf("branding stage 1 failed: %s", ferr.Message)
 	}
 
