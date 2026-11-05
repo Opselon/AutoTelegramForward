@@ -2397,6 +2397,92 @@ paths:
                   error: { type: string }
         "401": { $ref: '#/components/responses/Unauthorized' }
         "403": { $ref: '#/components/responses/Forbidden' }
+  /api/admin/worker/incidents:
+    get:
+      tags: [admin, worker]
+      summary: 'Repeated failures grouped into incidents with a tracked lifecycle'
+      description: >
+        Error intelligence: the worker aggregates deduplicated failures into
+        incidents keyed by (component, code, rule_id), each with a lifecycle
+        state (open, recovered, recurrent, acknowledged, suppressed), the
+        workers/rules/jobs it touched, and a SUSPECTED pattern with an
+        actionable hint. The hint says what to CHECK; the error code only
+        proves what FAILED — suspected, never confirmed.
+      operationId: getApiAdminWorkerIncidents
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      parameters:
+        - in: query
+          name: state
+          schema:
+            type: string
+            enum: [open, recovered, recurrent, acknowledged, suppressed]
+          description: Filter by lifecycle state; validated at the API edge.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "400":
+          description: Invalid state filter.
+          content:
+            application/json:
+              schema: { type: object }
+        "503":
+          description: Worker unreachable; incident state is unknown, not empty.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  worker_reachable: { type: boolean }
+                  error: { type: string }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+  /api/admin/worker/incidents/ack:
+    post:
+      tags: [admin, worker]
+      summary: 'Acknowledge an incident by its stable id'
+      description: >
+        POST-only: acknowledging mutates operational state, so a prefetch or a
+        browser navigational request can never ackidentally acknowledge
+        anything. The ack is sticky while the incident stays open and is
+        cleared by a recovery — it acknowledged the problem, not the
+        fingerprint. The acker is recorded for the audit trail.
+      operationId: postApiAdminWorkerIncidentsAck
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      parameters:
+        - in: query
+          name: id
+          required: true
+          schema: { type: string }
+          description: The incident's stable fingerprint id.
+      responses:
+        "200":
+          description: Acknowledged.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  acknowledged: { type: string }
+        "400": { description: Missing incident id. }
+        "404": { description: Unknown incident id — never a silent success. }
+        "405":
+          description: GET is not allowed; the Allow header names POST.
+        "503":
+          description: Worker unreachable.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  worker_reachable: { type: boolean }
+                  error: { type: string }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
   /api/admin/users:
     get:
       tags: [admin]

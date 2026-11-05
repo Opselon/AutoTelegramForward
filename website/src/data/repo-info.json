@@ -7,9 +7,9 @@
   "version": "2.4.0",
   "releaseTag": "v2.4.0",
   "releaseDate": "2026-10-16",
-  "gitCommit": "451dc10",
-  "gitDate": "2026-11-04T14:30:12Z",
-  "syncTimestamp": "2026-11-04T15:01:39.943Z",
+  "gitCommit": "24191b3",
+  "gitDate": "2026-11-05T05:39:56Z",
+  "syncTimestamp": "2026-11-05T05:46:48.533Z",
   "author": "Opselon",
   "maintainer": {
     "name": "𝐂ap$iz𝗲Ʀ",
@@ -30,7 +30,7 @@
   ],
   "i18nKeyCount": 1985,
   "stats": {
-    "pythonTests": 226,
+    "pythonTests": 227,
     "goTests": 55,
     "grpcRpcCount": 113,
     "cliGroups": 30,
@@ -41,7 +41,7 @@
     "implementedFeatures": 51,
     "partialFeatures": 8,
     "plannedFeatures": 5,
-    "apiRoutes": 155
+    "apiRoutes": 157
   },
   "featureCatalog": [
     "FilterRule attached-filter evaluation",
@@ -3797,6 +3797,20 @@
       "method": "GET",
       "path": "/api/admin/worker/errors",
       "handler": "h.WorkerErrors",
+      "auth": "admin"
+    },
+    {
+      "group": "Administration",
+      "method": "GET",
+      "path": "/api/admin/worker/incidents",
+      "handler": "h.WorkerIncidents",
+      "auth": "admin"
+    },
+    {
+      "group": "Administration",
+      "method": "POST",
+      "path": "/api/admin/worker/incidents/ack",
+      "handler": "h.WorkerIncidentAck",
       "auth": "admin"
     },
     {
