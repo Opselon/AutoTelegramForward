@@ -325,6 +325,7 @@ class ChannelPollingService:
             self._task = None
 
     async def _run(self) -> None:
+        last_gap_retention = 0.0
         while not self._stop.is_set():
             try:
                 if await self._may_sweep():
@@ -335,6 +336,23 @@ class ChannelPollingService:
                 # are still lost, just with a row saying so.
                 if self._gaps is not None:
                     await self._recover_gaps()
+                    # Gap retention: terminal (FAILED) rows older than the
+                    # 30-day window go, on the same hourly cadence the
+                    # durable queue's retention sweep uses. Without it the
+                    # table grows monotonically with every permanently-absent
+                    # id. One indexed DELETE per hour; a failure only delays
+                    # the next sweep.
+                    now_ts = time.time()
+                    if now_ts - last_gap_retention >= 3600:
+                        last_gap_retention = now_ts
+                        try:
+                            purged = await self._gaps.cleanup()
+                            if purged:
+                                logger.info(
+                                    "Gap retention purged %d terminal row(s).", purged
+                                )
+                        except Exception as exc:
+                            logger.warning("poll: gap retention sweep failed: %s", exc)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:

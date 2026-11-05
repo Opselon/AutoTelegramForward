@@ -79,10 +79,26 @@ def clone_rule(c: sqlite3.Connection, base: sqlite3.Row, marker: str,
     return rid
 
 
-def drop_rule(c: sqlite3.Connection, rid: str, keep_jobs: bool = False) -> None:
-    if not keep_jobs:
-        c.execute("DELETE FROM delivery_jobs WHERE rule_id=?", (rid,))
-    c.execute("DELETE FROM rule_counters WHERE rule_id=?", (rid,))
+def drop_rule(c: sqlite3.Connection, rid: str) -> None:
+    """Delete a matrix replica's ENTIRE footprint from the live store.
+
+    This tool runs against the production database by design (it lives in
+    the core container next to the real session), so its cleanup is the
+    safety property that keeps it acceptable: every row it created — job
+    rows, fence rows, mappings, counters, the rule itself — is removed, and
+    nothing but its own mtx-* replicas is ever a candidate. Production
+    previously accumulated test rows (e2e-go-*, mtx-*) because the cleanup
+    stopped at rules + counters and deliberately kept delivery_jobs.
+    """
+    if not str(rid).startswith("mtx-"):
+        raise RuntimeError(
+            f"refusing to drop {rid!r}: the matrix only ever deletes its own "
+            "mtx-* replicas — a non-replica id here means a caller bug, not "
+            "a cleanup target"
+        )
+    for table in ("delivery_jobs", "delivery_attempts", "message_map",
+                  "dead_letter_queue", "rule_counters"):
+        c.execute(f"DELETE FROM {table} WHERE rule_id=?", (rid,))
     c.execute("DELETE FROM forward_rules WHERE id=?", (rid,))
     c.commit()
 
@@ -191,7 +207,12 @@ def cell_replica(client, c: sqlite3.Connection, base: sqlite3.Row, cell: str,
             "job_status": status,
         }
     finally:
-        drop_rule(c, rid, keep_jobs=True)
+        # Full replica cleanup — the outcome is already captured in the
+        # result dict, so the rows carry no information worth keeping. The
+        # tool's own docstring promises this ("Every replica is deleted at
+        # the end"); keeping job rows behind is what seeded production with
+        # orphaned test traffic.
+        drop_rule(c, rid)
         c.execute("UPDATE forward_rules SET is_paused=? WHERE id=?", (0, BASELINE))
         c.commit()
 

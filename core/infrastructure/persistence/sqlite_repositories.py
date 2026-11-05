@@ -2996,6 +2996,25 @@ class SqliteIngestionGapRepository(IIngestionGapRepository):
         )
         return [dict(r) for r in rows or []]
 
+    async def cleanup(self, retention_seconds: int = 60 * 60 * 24 * 30) -> int:
+        """Bounded retention for terminal gap rows.
+
+        ``FAILED`` rows are deliberate loss records ("visibly, never
+        silently") — but terminal records are not exempt from bounded
+        storage, and without a sweep the table grows monotonically with
+        every permanently-absent id. Terminal rows older than the window go,
+        on the same 30-day retention the message map applies to delivery
+        confirmations. Open rows (``PENDING``/``RETRYING``) are live
+        recovery work and are never touched.
+        """
+        cutoff = _now() - int(retention_seconds)
+        cur = self._db.execute(
+            "DELETE FROM ingestion_gaps"
+            " WHERE state IN ('RESOLVED','FAILED') AND updated_at < ?",
+            (cutoff,),
+        )
+        return cur.rowcount
+
     async def open_gaps(self, session_id: str, source_chat_id: str,
                         below: int = 0, limit: int = 100) -> List[dict]:
         """Still-open recovery work for one channel.

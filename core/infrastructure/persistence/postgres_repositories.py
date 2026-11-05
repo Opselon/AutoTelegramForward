@@ -1776,6 +1776,18 @@ class PostgresIngestionGapRepository(IIngestionGapRepository):
         count = getattr(res, "rowcount", None)
         return (count > 0) if count is not None else True
 
+    async def cleanup(self, retention_seconds: int = 60 * 60 * 24 * 30) -> int:
+        """Bounded retention for terminal gap rows (parity with SQLite)."""
+        cutoff = int(time.time()) - int(retention_seconds)
+        res = await _execute_db(
+            self._db,
+            "DELETE FROM ingestion_gaps"
+            " WHERE state IN ('RESOLVED','FAILED') AND updated_at < %s",
+            (cutoff,),
+        )
+        count = getattr(res, "rowcount", None)
+        return int(count) if count is not None else 0
+
     async def pending_gaps(self, session_id: str, source_chat_id: str,
                            limit: int = 100) -> List[dict]:
         rows = await _fetch_all_db(

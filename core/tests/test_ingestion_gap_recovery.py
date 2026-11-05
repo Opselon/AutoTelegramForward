@@ -271,3 +271,37 @@ async def test_a_failed_dispatch_does_not_advance_the_cursor(db, gaps):
     # And those posts became recovery work rather than vanishing.
     pending = await gaps.pending_gaps(SESSION, CHAT)
     assert sorted(g["source_message_id"] for g in pending) == list(range(61, 71))
+
+
+# --------------------------------------------------------------------------- #
+# Bounded retention for terminal rows
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.asyncio
+async def test_terminal_gaps_age_out_but_open_ones_never_do(db, gaps):
+    """FAILED rows are deliberate loss records, not exempt from bounded
+    storage: without retention the table grows monotonically with every
+    permanently-absent id (production reached 468). Terminal rows older
+    than the window go; open rows are live recovery work and are never
+    touched, whatever their age."""
+    import time as _time
+
+    await gaps.record_gaps(SESSION, CHAT, [80, 81, 82])
+    await gaps.mark_gap_attempt("gap:%s:%s:80" % (SESSION, CHAT), "never returned", 0.0,
+                                exhausted=True)
+
+    # Backdate the FAILED row past the retention window; leave the open
+    # ones untouched but backdate one of them too — age alone must not
+    # delete live work.
+    old = int(_time.time()) - 60 * 60 * 24 * 31
+    db.execute("UPDATE ingestion_gaps SET updated_at=? WHERE source_message_id=80", (old,))
+    db.execute("UPDATE ingestion_gaps SET updated_at=? WHERE source_message_id=81", (old,))
+
+    purged = await gaps.cleanup()
+    assert purged == 1
+
+    rows = {g["source_message_id"]: g["state"] for g in
+            (await gaps.pending_gaps(SESSION, CHAT))}
+    assert 80 not in rows, "the aged FAILED row must be gone"
+    assert rows.get(81) == "PENDING", "an open row is never retained away"
+    assert rows.get(82) == "PENDING"
