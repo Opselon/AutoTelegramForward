@@ -3,6 +3,7 @@ package delivery
 import (
 	"context"
 	"database/sql"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -22,7 +23,7 @@ func (l *testLogger) Info(msg string, args ...any)  { l.lines = append(l.lines, 
 func (l *testLogger) Warn(msg string, args ...any)  { l.lines = append(l.lines, "WARN "+msg) }
 func (l *testLogger) Error(msg string, args ...any) { l.lines = append(l.lines, "ERROR "+msg) }
 
-type testMetrics struct{ sent, retried, failed, unknown int }
+type testMetrics struct{ sent, retried, failed, rejected, unknown int }
 
 func (m *testMetrics) Outcome(kind string) {
 	switch kind {
@@ -32,6 +33,8 @@ func (m *testMetrics) Outcome(kind string) {
 		m.retried++
 	case "failed":
 		m.failed++
+	case "rejected":
+		m.rejected++
 	case "unknown":
 		m.unknown++
 	}
@@ -661,8 +664,10 @@ func TestTaskBlockLinksDropsLinkBearingJob(t *testing.T) {
 	}
 
 	assertJobStatus(t, h.store, j.ID, string(job.StatusFailed))
-	if h.metrics.failed != 1 {
-		t.Errorf("failed = %d, want 1", h.metrics.failed)
+	// A deliberate link block is a policy REJECTION, not a delivery failure:
+	// counting it as "failed" made a healthy task look degraded in ops.
+	if h.metrics.failed != 0 || h.metrics.rejected != 1 {
+		t.Errorf("outcomes: failed=%d rejected=%d, want rejected=1 failed=0", h.metrics.failed, h.metrics.rejected)
 	}
 	if got := jobReason(t, h.store, j.ID); !strings.Contains(got, "link_blocked") {
 		t.Errorf("job reason = %q, want it to contain link_blocked", got)
@@ -808,5 +813,265 @@ func TestTaskBlockLinksDropLeavesNoFenceClaim(t *testing.T) {
 	}
 	if outcome == job.FenceInFlight || outcome == job.FenceStale {
 		t.Errorf("a link-blocked drop left a fence row in %s state — the job is unresolved", outcome)
+	}
+}
+
+// TestMediaForwardTargetRejectsCopy: the production defect this test pins:
+// a target chat rejects the copied media (PHOTO_EXT_INVALID — the copy
+// itself is permitted, the payload is incompatible), and the job must fall
+// back to re-upload rather than die as a permanent failure.
+//
+// 12 real jobs on rule 40edad5a failed exactly this way: the fallback
+// trigger only ever asked IsForwardingRestricted(), so a media-rejection
+// error went straight to FAILED and the message was never delivered.
+// NeedsReupload covers both reasons for re-uploading.
+func TestMediaForwardTargetRejectsCopy(t *testing.T) {
+	h := newHarness(t)
+	j := &job.DeliveryJob{
+		ID: "r1:c:9:t", RuleID: "r1", SourceChatID: "c", SourceMessageID: 9,
+		TargetChatID: "t", Status: job.StatusPending, MaxAttempts: 5,
+		Payload: *jobPayload(map[string]any{
+			"text": "caption", "has_media": true, "media_type": "photo",
+			"fallback_enabled": true,
+		}),
+	}
+	h.enqueue(t, j)
+	h.gateway.Reset()
+	h.gateway.CopyMediaRejected = true
+
+	if err := h.engine.Process(context.Background(), j); err != nil {
+		t.Fatalf("process media-rejected: %v", err)
+	}
+	// The rejected copy must NOT fail the job: re-upload delivers it.
+	assertJobStatus(t, h.store, j.ID, string(job.StatusSent))
+	downs := 0
+	for _, c := range h.gateway.Recorded() {
+		if c.Op == "DownloadMedia" {
+			downs++
+		}
+	}
+	if downs == 0 {
+		t.Error("target media rejection with fallback_enabled did not stage a re-upload download — the job would have been marked FAILED without trying the recovery")
+	}
+}
+
+// TestMediaRejectedNoFallback: without the task's opt-in, a media-rejected
+// copy is a failure, not a silent re-upload. The operator chose no
+// fallback; honoring that is not optional.
+func TestMediaRejectedNoFallback(t *testing.T) {
+	h := newHarness(t)
+	j := &job.DeliveryJob{
+		ID: "r1:c:10:t", RuleID: "r1", SourceChatID: "c", SourceMessageID: 10,
+		TargetChatID: "t", Status: job.StatusPending, MaxAttempts: 5,
+		Payload: *jobPayload(map[string]any{
+			"text": "caption", "has_media": true, "media_type": "photo",
+			"fallback_enabled": false,
+		}),
+	}
+	h.enqueue(t, j)
+	h.gateway.Reset()
+	h.gateway.CopyMediaRejected = true
+
+	if err := h.engine.Process(context.Background(), j); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	downs := 0
+	for _, c := range h.gateway.Recorded() {
+		if c.Op == "DownloadMedia" {
+			downs++
+		}
+	}
+	if downs > 0 {
+		t.Errorf("re-upload ran with fallback_enabled=false — the operator's opt-out was not honored (%d downloads)", downs)
+	}
+}
+
+// --- the re-upload staging contract (the PHOTO_EXT_INVALID root cause) ----- //
+
+// stagedPaths extracts the recorded DownloadMedia / PrepareMediaUpload
+// staging paths (last of each op wins; re-upload records exactly one of
+// each per delivery attempt).
+func stagedPaths(h *harness) (down, prep string) {
+	for _, c := range h.gateway.Recorded() {
+		switch c.Op {
+		case "DownloadMedia":
+			down = c.MediaPath
+		case "PrepareMediaUpload":
+			prep = c.MediaPath
+		}
+	}
+	return down, prep
+}
+
+// reuploadHarness builds a photo job whose copy is rejected by the target
+// (PHOTO_EXT_INVALID) with the fallback allowed — the shape that reaches
+// the re-upload staging path in production.
+func reuploadHarness(t *testing.T) (*harness, *job.DeliveryJob) {
+	h := newHarness(t)
+	j := &job.DeliveryJob{
+		ID: "r1:c:20:t", RuleID: "r1", SourceChatID: "c", SourceMessageID: 20,
+		TargetChatID: "t", Status: job.StatusPending, MaxAttempts: 5,
+		Payload: *jobPayload(map[string]any{
+			"text": "caption", "has_media": true, "media_type": "photo",
+			"fallback_enabled": true,
+		}),
+	}
+	h.enqueue(t, j)
+	h.gateway.Reset()
+	h.gateway.CopyMediaRejected = true
+	return h, j
+}
+
+// TestReuploadStagesFileWithExtension pins the root-cause fix: Telegram's
+// messages.SendMedia infers the MIME type from the staged file's name, so
+// the scratch file must carry the source media's extension. The runtime
+// reports ".JPG" here; the staged path must carry it normalized — and
+// PrepareMediaUpload must reference the exact file DownloadMedia wrote.
+// 12 production jobs died because the staged name was bare "job-<id>-media".
+func TestReuploadStagesFileWithExtension(t *testing.T) {
+	h, j := reuploadHarness(t)
+	ext := ".JPG"
+	h.gateway.ExtensionOverride = &ext
+
+	if err := h.engine.Process(context.Background(), j); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	assertJobStatus(t, h.store, j.ID, string(job.StatusSent))
+
+	down, prep := stagedPaths(h)
+	if down == "" {
+		t.Fatal("no DownloadMedia recorded for the re-upload")
+	}
+	if !strings.HasSuffix(down, ".jpg") {
+		t.Errorf("staged path %q carries no normalized media extension — messages.SendMedia would reject it with PHOTO_EXT_INVALID again", down)
+	}
+	if prep != down {
+		t.Errorf("PrepareMediaUpload staged %q but DownloadMedia wrote %q — the upload would not find the file", prep, down)
+	}
+}
+
+// TestReuploadExtensionFallsBackToIngestClassification: when the runtime
+// cannot tell the extension (source gone, no inferable name), the staging
+// name falls back to the ingest-side media kind — never back to bare.
+func TestReuploadExtensionFallsBackToIngestClassification(t *testing.T) {
+	h, j := reuploadHarness(t)
+	ext := ""
+	h.gateway.ExtensionOverride = &ext
+
+	if err := h.engine.Process(context.Background(), j); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	down, _ := stagedPaths(h)
+	if !strings.HasSuffix(down, ".jpg") {
+		t.Errorf("unknown runtime extension must fall back to the media kind's canonical extension, staged %q", down)
+	}
+}
+
+// TestReuploadDocumentStaysExtensionless: a document (send_document path)
+// has no canonical extension to guess, and Telegram accepts a bare
+// document — a wrong guess would mislabel real files, so none is made.
+func TestReuploadDocumentStaysExtensionless(t *testing.T) {
+	h, j := reuploadHarness(t)
+	j.Payload = *jobPayload(map[string]any{
+		"text": "caption", "has_media": true, "media_type": "document",
+		"fallback_enabled": true,
+	})
+	ext := ""
+	h.gateway.ExtensionOverride = &ext
+
+	if err := h.engine.Process(context.Background(), j); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	down, _ := stagedPaths(h)
+	if down == "" {
+		t.Fatal("no DownloadMedia recorded for the re-upload")
+	}
+	if strings.HasSuffix(down, j.ID) == false {
+		t.Errorf("document staging must stay extension-less (send_document accepts bare files), staged %q", down)
+	}
+}
+
+// TestReuploadHostileExtensionNeverReachesPath: a runtime-reported suffix
+// is untrusted input. A path-shaped or oversized value must normalize away
+// to the media-kind default — never ride into the staging path.
+func TestReuploadHostileExtensionNeverReachesPath(t *testing.T) {
+	h, j := reuploadHarness(t)
+	ext := "/../../etc/passwd"
+	h.gateway.ExtensionOverride = &ext
+
+	if err := h.engine.Process(context.Background(), j); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	down, _ := stagedPaths(h)
+	if filepath.Base(down) != j.ID+".jpg" {
+		t.Errorf("hostile extension reached the staging path: base=%q, want %q", filepath.Base(down), j.ID+".jpg")
+	}
+}
+
+// TestReuploadExtensionRPCFailureFallsBack: the extension probe failing
+// (source already gone, runtime degraded) must not abort the recovery —
+// the ingest classification answers instead.
+func TestReuploadExtensionRPCFailureFallsBack(t *testing.T) {
+	h, j := reuploadHarness(t)
+	h.gateway.GetFileExtensionFailsWith = &telegraph.DeliveryFailure{
+		Code: "MESSAGE_NOT_FOUND", ErrorType: "MESSAGE_NOT_FOUND",
+		Message: "source message gone since the copy was refused",
+	}
+
+	if err := h.engine.Process(context.Background(), j); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	assertJobStatus(t, h.store, j.ID, string(job.StatusSent))
+	down, _ := stagedPaths(h)
+	if !strings.HasSuffix(down, ".jpg") {
+		t.Errorf("extension probe failure must fall back to the media kind, staged %q", down)
+	}
+}
+
+// TestNormalizeExtension: the sanitizer's full contract — lowercases,
+// dot-prefixes, and rejects path-shaped, oversized, or non-ASCII values.
+func TestNormalizeExtension(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{".JPG", ".jpg"},
+		{"jpg", ".jpg"},
+		{".jpeg", ".jpeg"},
+		{".mp4", ".mp4"},
+		{"  .png  ", ".png"},
+		{"", ""},
+		{".", ""},
+		{".tar.gz", ""},
+		{"../secrets", ""},
+		{".café", ""},
+		{".sixteen-char-ext", ""},
+		{".ok16", ".ok16"},
+	}
+	for _, tc := range cases {
+		if got := normalizeExtension(tc.in); got != tc.want {
+			t.Errorf("normalizeExtension(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestDefaultExtension: the ingest-kind fallback mirrors send_media's
+// dispatch — every kind that maps to a typed send call gets that call's
+// canonical extension; documents and unknown kinds stay bare.
+func TestDefaultExtension(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"photo", ".jpg"},
+		{"video", ".mp4"},
+		{"round_video", ".mp4"},
+		{"animation", ".mp4"},
+		{"video_note", ".mp4"},
+		{"voice", ".ogg"},
+		{"audio", ".mp3"},
+		{"sticker", ".webp"},
+		{"document", ""},
+		{"", ""},
+		{"exotic", ""},
+	}
+	for _, tc := range cases {
+		if got := defaultExtension(tc.in); got != tc.want {
+			t.Errorf("defaultExtension(%q) = %q, want %q", tc.in, got, tc.want)
+		}
 	}
 }

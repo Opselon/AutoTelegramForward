@@ -264,16 +264,37 @@ func ruleMetaStr(meta map[string]any, key, def string) string {
 	return def
 }
 
+// addonKeyAliases maps the catalogue clients' paid-addon spellings onto the
+// canonical engine gate keys — the twin of ForwardRule.ADDON_KEY_ALIASES
+// (entities.py). The bot catalogue rows and the web dashboard's add-ons
+// panel record the short spellings (kw_reply, auto_del, affiliate); a paid
+// add-on whose entitlement was recorded by any client must fire — silently
+// never firing is the worst outcome for a feature a user paid for.
+var addonKeyAliases = map[string][]string{
+	"keyword_reply":       {"kw_reply"},
+	"auto_delete_message": {"auto_del"},
+	"affiliate_kit":       {"affiliate"},
+}
+
 // ruleAddonEnabled is ForwardRule.is_addon_enabled (entities.py:1843):
 // the addon must be marked enabled in the persisted metadata's
 // paid_addons block. A client-supplied flag alone is never sufficient,
-// and a non-dict paid_addons block means no entitlement at all.
+// and a non-dict paid_addons block means no entitlement at all. Canonical
+// keys and the catalogue clients' recorded aliases are both honored.
 func ruleAddonEnabled(meta map[string]any, key string) bool {
 	addons, ok := meta["paid_addons"].(map[string]any)
 	if !ok {
 		return false
 	}
-	return ruleMetaBool(addons, key, false)
+	if ruleMetaBool(addons, key, false) {
+		return true
+	}
+	for _, alias := range addonKeyAliases[key] {
+		if ruleMetaBool(addons, alias, false) {
+			return true
+		}
+	}
+	return false
 }
 
 // whitelistWords is ForwardRule.whitelist (entities.py:1467): the

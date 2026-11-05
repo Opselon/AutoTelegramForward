@@ -2497,6 +2497,43 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
                     # The unique key answered after all: a row for this
                     # delivery already exists (someone replayed it first).
                     return False
+                # Restore the placeholder mapping row the enqueue path
+                # guarantees. Cleanup purges message_map rows after 30 days
+                # while dead-letter entries persist, so a replay of a purged
+                # row would otherwise rebuild a forward job whose mapping row
+                # never returns — and the worker's NoteMapping (UPDATE-only)
+                # would silently drop the confirmed target id, leaving
+                # edit/delete sync blind to this delivery. The upsert is the
+                # enqueue path's own never-regress shape: a mapping row that
+                # still says SENT is never flipped back.
+                try:
+                    payload_data = SqliteDatabase.loads(payload, {})
+                except Exception:
+                    payload_data = {}
+                if not payload_data.get("is_reply"):
+                    # Replies share the mapping key with the primary forward
+                    # (durable_queue._write_mapping_and_job); writing here
+                    # would refresh a row that describes another deliverable.
+                    conn.execute(
+                        """
+                        INSERT INTO message_map (
+                            id, rule_id, source_chat_id, source_message_id, target_chat_id,
+                            target_message_id, media_group_id, delivery_status, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, NULL, ?, 'PENDING', ?, ?)
+                        ON CONFLICT(rule_id, source_chat_id, source_message_id, target_chat_id) DO UPDATE SET
+                            delivery_status = CASE
+                                WHEN message_map.delivery_status IN ('SENT') THEN message_map.delivery_status
+                                ELSE excluded.delivery_status
+                            END,
+                            updated_at = excluded.updated_at
+                        """,
+                        (
+                            f"map:{rule_id}:{src_chat}:{src_msg}:{tgt_chat}",
+                            rule_id, src_chat, src_msg, tgt_chat,
+                            str(payload_data.get("media_group_id") or ""),
+                            now, now,
+                        ),
+                    )
                 conn.execute("DELETE FROM dead_letter_queue WHERE id=?", (str(entry_id),))
                 return True
 
@@ -2958,6 +2995,25 @@ class SqliteIngestionGapRepository(IIngestionGapRepository):
             (str(session_id), str(source_chat_id), max(int(limit), 1)),
         )
         return [dict(r) for r in rows or []]
+
+    async def cleanup(self, retention_seconds: int = 60 * 60 * 24 * 30) -> int:
+        """Bounded retention for terminal gap rows.
+
+        ``FAILED`` rows are deliberate loss records ("visibly, never
+        silently") — but terminal records are not exempt from bounded
+        storage, and without a sweep the table grows monotonically with
+        every permanently-absent id. Terminal rows older than the window go,
+        on the same 30-day retention the message map applies to delivery
+        confirmations. Open rows (``PENDING``/``RETRYING``) are live
+        recovery work and are never touched.
+        """
+        cutoff = _now() - int(retention_seconds)
+        cur = self._db.execute(
+            "DELETE FROM ingestion_gaps"
+            " WHERE state IN ('RESOLVED','FAILED') AND updated_at < ?",
+            (cutoff,),
+        )
+        return cur.rowcount
 
     async def open_gaps(self, session_id: str, source_chat_id: str,
                         below: int = 0, limit: int = 100) -> List[dict]:

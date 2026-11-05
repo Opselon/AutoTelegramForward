@@ -325,6 +325,7 @@ class ChannelPollingService:
             self._task = None
 
     async def _run(self) -> None:
+        last_gap_retention = 0.0
         while not self._stop.is_set():
             try:
                 if await self._may_sweep():
@@ -335,6 +336,23 @@ class ChannelPollingService:
                 # are still lost, just with a row saying so.
                 if self._gaps is not None:
                     await self._recover_gaps()
+                    # Gap retention: terminal (FAILED) rows older than the
+                    # 30-day window go, on the same hourly cadence the
+                    # durable queue's retention sweep uses. Without it the
+                    # table grows monotonically with every permanently-absent
+                    # id. One indexed DELETE per hour; a failure only delays
+                    # the next sweep.
+                    now_ts = time.time()
+                    if now_ts - last_gap_retention >= 3600:
+                        last_gap_retention = now_ts
+                        try:
+                            purged = await self._gaps.cleanup()
+                            if purged:
+                                logger.info(
+                                    "Gap retention purged %d terminal row(s).", purged
+                                )
+                        except Exception as exc:
+                            logger.warning("poll: gap retention sweep failed: %s", exc)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
@@ -397,8 +415,8 @@ class ChannelPollingService:
         gap_id = str(gap.get("id") or "")
         mid = int(gap.get("source_message_id") or 0)
         try:
-            from pyrogram.raw.functions.updates import GetChannelDifference
-            from pyrogram.raw.types import ChannelMessagesFilter, MessageRange
+            from pyrogram.raw.functions.channels import GetMessages as ChannelGetMessages
+            from pyrogram.raw.types import InputMessageID, MessageEmpty
 
             peer = None
             try:
@@ -407,22 +425,24 @@ class ChannelPollingService:
             except Exception as exc:
                 raise PollFailure(f"cannot resolve peer: {exc}", transient=_is_transient(exc)) from exc
 
-            full_pts = 0
-            try:
-                from pyrogram.raw.functions.channels import GetFullChannel
-                full = await client.invoke(GetFullChannel(channel=peer))
-                full_pts = getattr(getattr(full, "full_chat", None), "pts", 0) or 0
-            except Exception:
-                pass  # pts is only a hint for the difference call
-
-            msg_filter = ChannelMessagesFilter(ranges=[MessageRange(min_id=mid, max_id=mid)])
-            diff = await client.invoke(
-                GetChannelDifference(channel=peer, filter=msg_filter, pts=full_pts, limit=1)
+            # Fetch the id directly with channels.getMessages. The earlier
+            # GetChannelDifference approach needed the channel's pts from
+            # GetFullChannel — which Telegram flood-limits (275 rate-limit
+            # waits over one production weekend), and when it failed the
+            # code silently fell back to pts=0, where Telegram rejects the
+            # difference call with PERSISTENT_TIMESTAMP_EMPTY (450
+            # occurrences in the same window): every gap's retry budget was
+            # burned on a request that could never succeed, and the posts
+            # were lost. getMessages answers "does this id exist?" with one
+            # call, no pts, and no flood-sensitive full-channel round-trip.
+            res = await client.invoke(
+                ChannelGetMessages(channel=peer, id=[InputMessageID(id=mid)])
             )
-            raw_messages = getattr(diff, "new_messages", None) or []
+            users = {u.id: u for u in (getattr(res, "users", None) or [])}
+            chats = {c.id: c for c in (getattr(res, "chats", None) or [])}
+            raw_messages = [m for m in (getattr(res, "messages", None) or [])
+                            if not isinstance(m, MessageEmpty)]
             if raw_messages:
-                users = {u.id: u for u in (getattr(diff, "users", None) or [])}
-                chats = {c.id: c for c in (getattr(diff, "chats", None) or [])}
                 for raw in raw_messages:
                     logger.info(
                         "[POLL GAP] recovered post id=%s from %s — dispatching through the pipeline",
@@ -448,19 +468,21 @@ class ChannelPollingService:
                 exhausted=exhausted,
             )
             if exhausted:
-                logger.error(
-                    "[POLL GAP] source %s id=%s could not be recovered after %d attempt(s) — "
-                    "marked FAILED (the post is most likely deleted; no delivery is owed)",
-                    chat_id, mid, GAP_MAX_ATTEMPTS,
-                )
+                # The structured event below is the ONE authoritative record
+                # of this exhaustion (it carries the reason code, the
+                # diagnostic row, and the Log Monitor entry). A second
+                # logger.error of the same fact tripled every terminal row in
+                # the stores (473 + 463 + 463 production rows for one event
+                # class) without adding a single field.
                 self._emit("error", "INGESTION_GAP_EXHAUSTED", (
-                    f"channel {chat_id}: id={mid} not returned after {GAP_MAX_ATTEMPTS} "
-                    f"attempt(s) — marked FAILED (deleted or service post; no delivery owed)"
+                    f"[POLL GAP] source {chat_id} id={mid} could not be recovered after "
+                    f"{GAP_MAX_ATTEMPTS} attempt(s) — marked FAILED (the post is most "
+                    f"likely deleted; no delivery is owed)"
                 ), {
                     "chat_id": str(chat_id), "session_id": str(session_id),
                     "source_message_id": mid, "attempts": GAP_MAX_ATTEMPTS,
                     "raw_error": "ID_NOT_RETURNED",
-                    "error_detail": "GetChannelDifference returned no message at this id",
+                    "error_detail": "channels.GetMessages returned no message at this id",
                     "retryable": False,
                 })
             return 1
@@ -483,7 +505,7 @@ class ChannelPollingService:
                 # a paraphrase of it.
                 from .errors import extract as _extract_error
                 try:
-                    event = _extract_error(exc, method="updates.GetChannelDifference",
+                    event = _extract_error(exc, method="channels.GetMessages",
                                            operation="gap_recovery", chat_id=chat_id,
                                            session_id=session_id, attempt=attempts)
                     raw = str(getattr(event, "error_type", "") or "")

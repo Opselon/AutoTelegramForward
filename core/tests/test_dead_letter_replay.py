@@ -52,6 +52,15 @@ def repo(db):
     return SqliteDeliveryQueueRepository(db)
 
 
+@pytest.fixture
+def map_repo(db):
+    from core.infrastructure.persistence.sqlite_repositories import (
+        SqliteMessageMapRepository,
+    )
+
+    return SqliteMessageMapRepository(db)
+
+
 def _job(
     i: int,
     rule_id: str = MINE,
@@ -396,3 +405,100 @@ async def test_replay_logs_ids_but_never_the_payload(db, repo, caplog):
     logged = "\n".join(r.getMessage() for r in caplog.records)
     assert "dlq_job:0" in logged          # the handle a user quotes
     assert PAYLOAD_SECRET not in logged   # the message body stays in the store
+
+
+# --------------------------------------------------------------------- #
+# The rebuilt row is not mapping-blind
+# --------------------------------------------------------------------- #
+async def test_a_replay_of_a_purged_row_restores_the_mapping_placeholder(db, repo, map_repo):
+    """The mapping invariant must survive a replay of a purged row.
+
+    Retention purges message_map rows after 30 days; dead-letter entries
+    persist. A replay that rebuilds the job therefore had no mapping row —
+    and the Go worker's NoteMapping only UPDATEs, so the confirmed target id
+    would be silently dropped and edit/delete sync would never learn that
+    this delivery happened. The rebuild must restore the placeholder.
+    """
+    await repo.enqueue(_job(0))
+    await _exhaust(repo, "job:0")
+
+    # The retention window passed: job row and mapping row are gone, the
+    # dead-letter entry persists.
+    db.execute("DELETE FROM delivery_jobs WHERE id='job:0'")
+    db.execute("DELETE FROM message_map WHERE rule_id=?", (MINE,))
+
+    result = await repo.replay_dead_letter("dlq_job:0", [MINE])
+    assert result == "requeued"
+
+    row = db.query_one(
+        "SELECT delivery_status, target_message_id FROM message_map"
+        " WHERE rule_id=? AND source_message_id=?",
+        (MINE, 100),
+    )
+    assert row is not None, "rebuilt forward job has no mapping row — the worker's success write will silently no-op"
+    assert dict(row)["delivery_status"] == "PENDING"
+    assert dict(row)["target_message_id"] is None
+
+    # And the worker's UPDATE-only success write now actually lands.
+    await map_repo.update_delivery(
+        MINE, "-100111", 100, "-100777", 555, DeliveryStatus.SENT,
+    )
+    confirmed = dict(db.query_one(
+        "SELECT target_message_id, delivery_status FROM message_map WHERE rule_id=?", (MINE,),
+    ))
+    assert confirmed["target_message_id"] == 555
+    assert confirmed["delivery_status"] == "SENT"
+
+
+@pytest.mark.asyncio
+async def test_a_replay_never_regresses_a_surviving_sent_mapping(db, repo, map_repo):
+    """A mapping row that still says SENT is never flipped back to PENDING."""
+    await repo.enqueue(_job(0))
+    await _exhaust(repo, "job:0")
+
+    # The delivery actually landed (mapping says SENT), but the terminal job
+    # row was purged by cleanup — the DLQ entry was written before the send
+    # eventually confirmed. The placeholder exists first (the enqueue path's
+    # write), then the worker's success write marks it SENT.
+    db.execute(
+        "INSERT INTO message_map (id, rule_id, source_chat_id, source_message_id,"
+        " target_chat_id, target_message_id, media_group_id, delivery_status,"
+        " created_at, updated_at)"
+        " VALUES ('map-job0', ?, '-100111', 100, '-100777', NULL, '', 'PENDING',"
+        " strftime('%s','now'), strftime('%s','now'))",
+        (MINE,),
+    )
+    await map_repo.update_delivery(MINE, "-100111", 100, "-100777", 42, DeliveryStatus.SENT)
+    db.execute("DELETE FROM delivery_jobs WHERE id='job:0'")
+
+    result = await repo.replay_dead_letter("dlq_job:0", [MINE])
+    assert result == "requeued"
+
+    row = dict(db.query_one(
+        "SELECT delivery_status, target_message_id FROM message_map WHERE rule_id=?", (MINE,),
+    ))
+    assert row["delivery_status"] == "SENT"
+    assert row["target_message_id"] == 42
+
+
+@pytest.mark.asyncio
+async def test_a_reply_replay_does_not_touch_the_forward_mapping(db, repo):
+    """Replies share the mapping key with the primary forward; a rebuilt
+    reply must not refresh a row that describes another deliverable."""
+    reply_job = DeliveryJob(
+        id="job:9", rule_id=MINE, source_chat_id="-100111", source_message_id=199,
+        target_chat_id="-100777", status=DeliveryStatus.PENDING, max_attempts=5,
+        payload_data={"text": "auto-reply", "is_reply": True},
+    )
+    await repo.enqueue(reply_job)
+    await _exhaust(repo, "job:9")
+    db.execute("DELETE FROM delivery_jobs WHERE id='job:9'")
+    db.execute("DELETE FROM message_map WHERE rule_id=?", (MINE,))
+
+    result = await repo.replay_dead_letter("dlq_job:9", [MINE])
+    assert result == "requeued"
+
+    # No mapping row was invented for a reply: the key belongs to the
+    # forward, and writing it here would refresh another deliverable's row.
+    row = db.query_one("SELECT 1 FROM message_map WHERE rule_id=?", (MINE,))
+    assert row is None

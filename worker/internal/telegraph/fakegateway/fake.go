@@ -37,11 +37,18 @@ type Fake struct {
 	Calls []Call
 
 	// Scripted behaviours. nil means "no scripted failure for this op".
-	ForwardFailsWith        *telegraph.DeliveryFailure
-	CopyFailsWith           *telegraph.DeliveryFailure
-	SendFailsWith           *telegraph.DeliveryFailure
-	CopyMediaGroupFailsWith *telegraph.DeliveryFailure
-	DownloadFailsWith       *telegraph.DeliveryFailure
+	ForwardFailsWith          *telegraph.DeliveryFailure
+	CopyFailsWith             *telegraph.DeliveryFailure
+	SendFailsWith             *telegraph.DeliveryFailure
+	CopyMediaGroupFailsWith   *telegraph.DeliveryFailure
+	DownloadFailsWith         *telegraph.DeliveryFailure
+	GetFileExtensionFailsWith *telegraph.DeliveryFailure
+
+	// ExtensionOverride, when set, is what GetFileExtension answers instead
+	// of the default ".bin". Tests use it to pin the staging-name contract
+	// for both "the runtime knows the extension" and "the runtime cannot
+	// tell" (the empty string) — including hostile-looking values.
+	ExtensionOverride *string
 
 	// failOnce[targetChat] = true makes the next send to that target fail
 	// once with a transient error, then clear. E2E retry-path scenarios use
@@ -54,6 +61,13 @@ type Fake struct {
 	// FORWARDING_RESTRICTED, so the fallback path can be exercised without
 	// touching a real restricted channel.
 	RestrictedSource bool
+
+	// CopyMediaRejected makes CopyMessage fail with a target-side media
+	// rejection (PHOTO_EXT_INVALID): the copy survives permission-wise but
+	// the destination refuses the media payload itself. The re-upload
+	// fallback is the only recovery — the production signal this knob
+	// exists to reproduce.
+	CopyMediaRejected bool
 
 	// CopyFailOnNth makes the n-th CopyMessage call (1-based) fail with a
 	// transient error — the "split album died on item 3" shape a resume test
@@ -131,9 +145,17 @@ func (f *Fake) GetAlbumMessageIds(ctx context.Context, sessionID string, chatID,
 	return []int64{messageID}, nil
 }
 
-// GetFileExtension returns a plausible extension for the media kind.
+// GetFileExtension returns the scripted extension (".bin" when nothing is
+// scripted — a plausible answer for an unknown document kind), or the
+// scripted failure.
 func (f *Fake) GetFileExtension(ctx context.Context, sessionID string, chatID, messageID int64) (string, *telegraph.DeliveryFailure) {
 	f.record(Call{Op: "GetFileExtension", SessionID: sessionID, ChatID: chatID, MessageID: messageID})
+	if f.GetFileExtensionFailsWith != nil {
+		return "", f.GetFileExtensionFailsWith
+	}
+	if f.ExtensionOverride != nil {
+		return *f.ExtensionOverride, nil
+	}
 	return ".bin", nil
 }
 
@@ -196,6 +218,13 @@ func (f *Fake) CopyMessage(ctx context.Context, sessionID string, targetChatID, 
 			Code:      "FORWARDING_RESTRICTED",
 			ErrorType: "RESTRICTED",
 			Message:   "fake: source forbids copying protected content",
+		}
+	}
+	if f.CopyMediaRejected {
+		return 0, &telegraph.DeliveryFailure{
+			Code:      "TELEGRAM_PERMANENT_ERROR",
+			ErrorType: "PHOTO_EXT_INVALID",
+			Message:   "fake: target rejected the copied photo (extension invalid)",
 		}
 	}
 	if f.CopyFailsWith != nil {

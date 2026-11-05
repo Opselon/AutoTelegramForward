@@ -106,6 +106,16 @@ func (k AttemptKey) String() string {
 		k.SourceMessageID, k.TargetChatID, suffix)
 }
 
+// UnknownFence is an ambiguous delivery attempt awaiting reconciliation: a
+// send whose outcome Telegram never reported, deliberately left UNKNOWN so
+// nothing dispatches it twice. LastError carries the evidence a reconciler
+// needs to decide whether the operation provably never executed.
+type UnknownFence struct {
+	Key       AttemptKey
+	LastError string
+	UpdatedAt int64
+}
+
 // fenceOutcome mirrors what delivery_attempts.claim_or_check returns.
 // The vocabulary is shared with Python on purpose: only "dispatch" allows a
 // send, and SENT/UNKNOWN are never re-dispatched.

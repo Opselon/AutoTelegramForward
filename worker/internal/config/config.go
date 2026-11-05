@@ -51,6 +51,11 @@ type Config struct {
 	LeaseSeconds    float64
 	MaxPerMinutePerTarget int
 
+	// ReconcileIntervalSeconds spaces the ambiguous-delivery reconciliation
+	// passes. The reconciler only closes UNKNOWN rows whose recorded failure
+	// proves no Telegram side effect; everything else stays visible in /ops.
+	ReconcileIntervalSeconds float64
+
 	// Telegram Runtime (gRPC).
 	TelegramRuntimeAddr string
 	// Internal RPC token — the same shared secret the Go API already uses
@@ -84,6 +89,7 @@ func FromEnv() (*Config, error) {
 		BatchSize:              envInt("ATF_QUEUE_BATCH_SIZE", 5),
 		MaxQueueSize:           envInt("ATF_QUEUE_MAX_SIZE", 2000),
 		LeaseSeconds:           envFloat("ATF_QUEUE_LEASE_SECONDS", 30.0),
+		ReconcileIntervalSeconds: envFloat("ATF_RECONCILE_INTERVAL_SECONDS", 60.0),
 		MaxPerMinutePerTarget:  envInt("ATF_QUEUE_MAX_PER_MINUTE", 0),
 		TelegramRuntimeAddr:    envStr("ATF_TELEGRAM_RUNTIME_ADDR", "core:50053"),
 		CoreRPCToken:           os.Getenv("ATF_CORE_RPC_TOKEN"),

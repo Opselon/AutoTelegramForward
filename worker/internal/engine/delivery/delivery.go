@@ -169,10 +169,10 @@ type Engine struct {
 	// Python pipeline's own vocabulary (ai_transforms_*,
 	// ai_fallback_*). Nil is "no recorder".
 	aiMetrics AIMetrics
-	log      Logger
-	metrics  Metrics
-	opts     Options
-	workerID string
+	log       Logger
+	metrics   Metrics
+	opts      Options
+	workerID  string
 
 	mu      sync.Mutex
 	rate    map[string][]time.Time // per-target send timestamps
@@ -263,10 +263,11 @@ func (e *Engine) failureToRing(ferr *telegraph.DeliveryFailure, j *job.DeliveryJ
 		return
 	}
 	e.ops.RecordError("worker.delivery", "ERROR", ferr.Message, map[string]string{
-		"code":       ferr.Code,
-		"error_type": ferr.ErrorType,
-		"rule_id":    j.RuleID,
-		"job_id":     j.ID,
+		"code":          ferr.Code,
+		"error_type":    ferr.ErrorType,
+		"rule_id":       j.RuleID,
+		"job_id":        j.ID,
+		"correlation_id": j.Payload.CorrelationID(),
 	})
 }
 
@@ -343,6 +344,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 		logger.Warn("rule is auto-paused — dropping job", "decision", "DROP", "reason_code", "RULE_AUTO_PAUSED", "reason", r.AutoPauseReason)
 		_ = e.store.MarkFailed(ctx, j.ID, "Task paused: "+r.AutoPauseReason)
 		e.metrics.Outcome("failed")
+		e.outcome("failed", j, jobStart)
 		return nil
 	}
 	// A paused task is not a failure: the job waits for the pause to lift.
@@ -375,12 +377,15 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 		text := j.Payload.Text()
 		res := e.filters.Evaluate(text, j.Payload.MediaType(), false, f)
 		if res.Action == filter.Drop {
+			// A deliberate drop is stage SKIPPED-BY-POLICY, never stage
+			// FAILED: the filter working as configured is healthy behavior,
+			// and counting it as a stage failure degraded a healthy task's
+			// ops panel.
 			e.stageSkipped("filter", fStart)
-			e.stageFail("filter", res.Reason)
 			logger.Warn("job dropped by attached filter at delivery time", "decision", "DROP", "reason_code", "FILTER_RULE_REJECTED", "filter_reason", res.Reason, "filter_id", f.ID)
 			_ = e.store.MarkFailed(ctx, j.ID, "Filter: "+res.Reason)
-			e.metrics.Outcome("failed")
-			e.outcome("failed", j, jobStart)
+			e.metrics.Outcome("rejected")
+			e.outcome("rejected", j, jobStart)
 			return nil
 		}
 		e.stageRecord("filter", fStart)
@@ -406,7 +411,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	if r.BlockLinks && policy.HasLink(j.Payload.Text()) {
 		logger.Warn("job dropped by task-level block_links at delivery time", "decision", "DROP", "reason_code", "LINK_BLOCKED")
 		_ = e.store.MarkFailed(ctx, j.ID, "Filter: link_blocked")
-		e.metrics.Outcome("failed")
+		e.metrics.Outcome("rejected")
 		return nil
 	}
 
@@ -470,7 +475,6 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 			return err
 		}
 	}
-
 
 	// 2d. Stage 4.5 (W3) — event-level dedup: REMOVED (production defect).
 	//
@@ -613,7 +617,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	// "durable enqueue must happen before the branding side effect".
 	// The job is claimed, the send fence is held, and stage 1 runs as part
 	// of the claimed execution — never before enqueue.
-	if err := e.ensureBrandingStage1(ctx, j, r, logger); err != nil {
+	if err := e.ensureBrandingStage1(ctx, j, r, logger, jobStart); err != nil {
 		return err
 	}
 
@@ -655,7 +659,7 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 	if ferr != nil {
 		e.stageFail("delivery", ferr.Code)
 		e.failureToRing(ferr, j)
-		return e.handleFailure(ctx, j, logger, key, ferr)
+		return e.handleFailure(ctx, j, logger, key, ferr, jobStart)
 	}
 
 	// 5. Confirmed. Record the send on the fence BEFORE the job-row commit:
@@ -751,7 +755,7 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.Forwa
 			if ferr == nil {
 				return id, nil
 			}
-			if !ferr.IsForwardingRestricted() || !p.FallbackEnabled() {
+			if !ferr.NeedsReupload() || !p.FallbackEnabled() {
 				return id, ferr
 			}
 			// Restricted from C with the fallback allowed: fall through to
@@ -778,7 +782,7 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.Forwa
 			if ferr == nil && len(ids) > 0 {
 				return firstNonZero(ids), nil
 			}
-			if ferr != nil && !ferr.IsForwardingRestricted() {
+			if ferr != nil && !ferr.NeedsReupload() {
 				return 0, ferr
 			}
 			// Restricted: fall through to copy when fallback is allowed.
@@ -850,7 +854,7 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.Forwa
 		if p.HasMedia() {
 			id, ferr := e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, "", p.TopicID(), j.Payload.DropSourceButtons())
 			e.metrics.ObserveRPC("copy_message", 0)
-			if ferr != nil && ferr.IsForwardingRestricted() && p.FallbackEnabled() {
+			if ferr != nil && ferr.NeedsReupload() && p.FallbackEnabled() {
 				return e.reuploadMedia(callCtx, j, src, srcMsg, "")
 			}
 			return id, ferr
@@ -862,7 +866,7 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.Forwa
 	if p.HasMedia() {
 		id, ferr := e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, caption, p.TopicID(), j.Payload.DropSourceButtons())
 		e.metrics.ObserveRPC("copy_message", 0)
-		if ferr != nil && ferr.IsForwardingRestricted() && p.FallbackEnabled() {
+		if ferr != nil && ferr.NeedsReupload() && p.FallbackEnabled() {
 			return e.reuploadMedia(callCtx, j, src, srcMsg, caption)
 		}
 		return id, ferr
@@ -887,7 +891,7 @@ func (e *Engine) brandingStage(ctx context.Context, sessionID string, target, cC
 		if ferr == nil && len(ids) > 0 {
 			return firstNonZero(ids), nil
 		}
-		if ferr != nil && !ferr.IsForwardingRestricted() {
+		if ferr != nil && !ferr.NeedsReupload() {
 			return 0, ferr
 		}
 		// restricted: fall through to a clean copy of C's post
@@ -901,7 +905,7 @@ func (e *Engine) brandingStage(ctx context.Context, sessionID string, target, cC
 		id, ferr := e.gateway.CopyMessage(ctx, sessionID, target, cChat, cID, caption, j.Payload.TopicID(), j.Payload.DropSourceButtons())
 		e.metrics.ObserveRPC("copy_message", 0)
 		if ferr != nil {
-			if ferr.IsForwardingRestricted() && j.Payload.FallbackEnabled() {
+			if ferr.NeedsReupload() && j.Payload.FallbackEnabled() {
 				id, ferr = e.reuploadMedia(ctx, j, cChat, cID, caption)
 				if ferr != nil {
 					return 0, ferr
@@ -937,7 +941,7 @@ func (e *Engine) dispatchAlbum(ctx context.Context, j *job.DeliveryJob, albumIDs
 	case "first":
 		id, ferr := e.gateway.CopyMessage(ctx, sessionID, target, src, albumIDs[0], caption, p.TopicID(), j.Payload.DropSourceButtons())
 		e.metrics.ObserveRPC("copy_message", 0)
-		if ferr != nil && ferr.IsForwardingRestricted() && p.FallbackEnabled() {
+		if ferr != nil && ferr.NeedsReupload() && p.FallbackEnabled() {
 			return e.reuploadMedia(ctx, j, src, albumIDs[0], caption)
 		}
 		return id, ferr
@@ -968,7 +972,7 @@ func (e *Engine) dispatchAlbum(ctx context.Context, j *job.DeliveryJob, albumIDs
 				// the retry resumes rather than duplicates: the items before
 				// this one are physically in the target now.
 				_ = e.store.RecordAlbumProgress(ctx, j.ID, newSent)
-				if ferr.IsForwardingRestricted() && p.FallbackEnabled() {
+				if ferr.NeedsReupload() && p.FallbackEnabled() {
 					id, ferr = e.reuploadMedia(ctx, j, src, itemID, caption)
 					if ferr != nil {
 						return 0, ferr
@@ -1001,12 +1005,12 @@ func (e *Engine) dispatchAlbum(ctx context.Context, j *job.DeliveryJob, albumIDs
 	if ferr == nil && len(ids) > 0 {
 		return firstNonZero(ids), nil
 	}
-	if ferr != nil && !ferr.IsForwardingRestricted() {
+	if ferr != nil && !ferr.NeedsReupload() {
 		// The group copy failed for a non-restriction reason: fall through to
 		// the per-item re-upload (the Python path does the same).
 		e.jobLogger(j).Warn("album group copy failed — falling back to re-upload", "error", ferr.Message)
 	}
-	if ferr != nil && ferr.IsForwardingRestricted() && !p.FallbackEnabled() {
+	if ferr != nil && ferr.NeedsReupload() && !p.FallbackEnabled() {
 		return 0, ferr
 	}
 	// Per-item re-upload fallback.
@@ -1029,12 +1033,20 @@ func (e *Engine) dispatchAlbum(ctx context.Context, j *job.DeliveryJob, albumIDs
 //
 // Media never enters either process's memory in full: the runtime writes to
 // the shared scratch path, and the upload is staged from that path.
+//
+// The staged name MUST carry the source media's extension. Telegram's
+// messages.SendMedia infers the MIME type from the staged file's name —
+// a bare "job-<id>-media" has none, and the upload dies with
+// PHOTO_EXT_INVALID before it can ever succeed (12 production jobs on rule
+// 40edad5a failed exactly that way: the copy was correctly rejected, the
+// re-upload ran, and the extension-less staging file killed it).
 func (e *Engine) reuploadMedia(ctx context.Context, j *job.DeliveryJob, srcChat, srcMsg int64, caption string) (int64, *telegraph.DeliveryFailure) {
 	p := &j.Payload
 	sessionID := p.SessionID()
+	ext := e.stagedExtension(ctx, sessionID, j, srcChat, srcMsg)
 	dest := telegraph.MediaHandle{
-		Path:     e.scratchPath(j),
-		FileName: fmt.Sprintf("job-%s-media", j.ID),
+		Path:     e.scratchPath(j) + ext,
+		FileName: fmt.Sprintf("job-%s-media%s", j.ID, ext),
 	}
 	if _, ferr := e.gateway.DownloadMedia(ctx, sessionID, srcChat, srcMsg, dest); ferr != nil {
 		return 0, ferr
@@ -1055,6 +1067,62 @@ func (e *Engine) reuploadMedia(ctx context.Context, j *job.DeliveryJob, srcChat,
 	id, sferr := e.gateway.SendMedia(ctx, sessionID, intChat(j.TargetChatID), token, caption, p.MediaType(), p.TopicID())
 	e.metrics.ObserveRPC("send_media", 0)
 	return id, sferr
+}
+
+// stagedExtension resolves the extension the re-upload must be staged under.
+// The runtime reports the source media's real one (the original file_name's
+// suffix, .jpg for photos); when it cannot answer — source gone since the
+// copy was refused, or a kind with no inferable name — fall back to the
+// ingest classification's canonical extension. Documents and unknown kinds
+// stay extension-less on purpose: send_document accepts them, and guessing
+// would mislabel real files.
+func (e *Engine) stagedExtension(ctx context.Context, sessionID string, j *job.DeliveryJob, srcChat, srcMsg int64) string {
+	if ext, ferr := e.gateway.GetFileExtension(ctx, sessionID, srcChat, srcMsg); ferr == nil {
+		if norm := normalizeExtension(ext); norm != "" {
+			return norm
+		}
+	}
+	return defaultExtension(j.Payload.MediaType())
+}
+
+// normalizeExtension sanitizes a runtime-reported extension into something
+// safe to append to a staging path: lowercase, dot-prefixed, short, plain
+// [a-z0-9] only. A malformed or hostile file_name suffix must never become
+// a path surprise; unusable values normalize to "".
+func normalizeExtension(ext string) string {
+	ext = strings.ToLower(strings.TrimSpace(ext))
+	ext = strings.TrimPrefix(ext, ".")
+	if ext == "" || len(ext) > 15 {
+		return ""
+	}
+	for _, r := range ext {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return ""
+		}
+	}
+	return "." + ext
+}
+
+// defaultExtension maps the ingest-side media classification onto the
+// canonical extension Telegram expects for that kind. Only used when the
+// runtime cannot report the real one. The mapping mirrors send_media's
+// dispatch: the kind decides the send call, the send call's validation
+// decides which extensions it accepts.
+func defaultExtension(mediaType string) string {
+	switch strings.ToLower(strings.TrimSpace(mediaType)) {
+	case "photo":
+		return ".jpg"
+	case "video", "round_video", "animation", "video_note":
+		return ".mp4"
+	case "voice":
+		return ".ogg"
+	case "audio":
+		return ".mp3"
+	case "sticker":
+		return ".webp"
+	default:
+		return ""
+	}
 }
 
 // scratchPath is the unique per-job path in the shared media scratch volume.
@@ -1079,7 +1147,7 @@ func (e *Engine) scratchPath(j *job.DeliveryJob) string {
 //     the attempt budget is not wasted on something that cannot succeed.
 //   - anything else → MarkRetry with exponential backoff, dead-lettering
 //     when the budget is spent.
-func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger Logger, key job.AttemptKey, ferr *telegraph.DeliveryFailure) error {
+func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger Logger, key job.AttemptKey, ferr *telegraph.DeliveryFailure, jobStart time.Time) error {
 	// Ambiguous: Telegram may have accepted the send. Never a plain FAILED,
 	// never an automatic re-dispatch — reconciliation owns this row.
 	if ferr.IsAmbiguous() {
@@ -1091,6 +1159,7 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 			logger.Warn("mark_unknown failed", "error", err)
 		}
 		e.metrics.Outcome("unknown")
+		e.outcome("unknown", j, jobStart)
 		return nil
 	}
 
@@ -1107,6 +1176,7 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 			"retry_after_seconds", ferr.RetryAfterSeconds)
 		_ = e.store.Defer(ctx, j.ID, "FloodWait: "+ferr.Message, wait)
 		e.metrics.Outcome("retried")
+		e.outcome("retried", j, jobStart)
 		return nil
 	}
 
@@ -1118,6 +1188,7 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 		logger.Warn("dependency unavailable — deferring", "code", ferr.Code)
 		_ = e.store.Defer(ctx, j.ID, ferr.Code+": "+ferr.Message, 10*time.Second)
 		e.metrics.Outcome("retried")
+		e.outcome("retried", j, jobStart)
 		return nil
 	}
 
@@ -1130,6 +1201,7 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 			"session_id", redacted(j.Payload.SessionID()))
 		_ = e.store.MarkFailed(ctx, j.ID, "Auth: "+ferr.Message)
 		e.metrics.Outcome("failed")
+		e.outcome("failed", j, jobStart)
 		return nil
 	}
 
@@ -1141,6 +1213,7 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 			"code", ferr.Code, "error_type", ferr.ErrorType)
 		_ = e.store.MarkFailed(ctx, j.ID, ferr.Code+": "+ferr.Message)
 		e.metrics.Outcome("failed")
+		e.outcome("failed", j, jobStart)
 		return nil
 	}
 
@@ -1155,6 +1228,7 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 		logger.Warn("mark_retry failed", "error", err)
 	}
 	e.metrics.Outcome("retried")
+	e.outcome("retried", j, jobStart)
 	return nil
 }
 
@@ -1219,6 +1293,7 @@ func (e *Engine) recordSend(target string) {
 func (e *Engine) jobLogger(j *job.DeliveryJob) Logger {
 	return &fieldLogger{base: e.log, fields: []any{
 		"correlation_id", j.Payload.CorrelationID(),
+		"worker_id", e.workerID,
 		"job_id", j.ID,
 		"rule_id", j.RuleID,
 		"owner_user_id", j.Payload.OwnerUserID(),
@@ -1321,7 +1396,7 @@ func messageIDs(list any, single any) []int64 {
 // Ordering guarantee: the send fence is already held, the delivery job is
 // CLAIMED, and stage 1 runs as part of the claimed execution — never before
 // the job is durable.
-func (e *Engine) ensureBrandingStage1(ctx context.Context, j *job.DeliveryJob, r *rule.ForwardRule, logger Logger) error {
+func (e *Engine) ensureBrandingStage1(ctx context.Context, j *job.DeliveryJob, r *rule.ForwardRule, logger Logger, jobStart time.Time) error {
 	plan := readHopPlan(j)
 	if plan == nil || !plan.isIntent() {
 		// Not an intent: either unbranded, or a legacy already-performed
@@ -1375,7 +1450,7 @@ func (e *Engine) ensureBrandingStage1(ctx context.Context, j *job.DeliveryJob, r
 			SourceMessageID: j.SourceMessageID, TargetChatID: j.TargetChatID,
 			JobKind: j.JobKind,
 		}
-		_ = e.handleFailure(ctx, j, logger, key, ferr)
+		_ = e.handleFailure(ctx, j, logger, key, ferr, jobStart)
 		return fmt.Errorf("branding stage 1 failed: %s", ferr.Message)
 	}
 

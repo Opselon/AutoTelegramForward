@@ -225,6 +225,21 @@ func sanitizeValue(value any) any {
 
 func redactText(value string) string { return secretValue.ReplaceAllString(value, "$1=[REDACTED]") }
 
+// RedactSlogValue applies the central client's own redaction rules to one
+// structured-log attribute, for sinks that do not flow through the client —
+// the stdout JSON stream a container collector scrapes. A secret that would
+// be [REDACTED] in the Log Monitor must not appear verbatim on stdout
+// either; the two sinks share one rule set by construction.
+func RedactSlogValue(key string, value any) any {
+	if secretField.MatchString(key) || isContentField(key) {
+		return "[REDACTED]"
+	}
+	return sanitizeValue(value)
+}
+
+// RedactSlogText redacts secret-shaped substrings from a message string.
+func RedactSlogText(message string) string { return redactText(message) }
+
 func toInt64(value any) int64 {
 	switch n := value.(type) {
 	case int: return int64(n)

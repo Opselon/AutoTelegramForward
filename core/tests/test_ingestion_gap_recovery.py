@@ -68,19 +68,29 @@ class FakeTelegram:
     async def invoke(self, req):
         name = type(req).__name__
         if name == "GetFullChannel":
+            # The NORMAL sweep needs the channel's pts for its difference
+            # call — only the single-id recovery was forbidden from this
+            # flood-limited round-trip.
             return types.SimpleNamespace(full_chat=types.SimpleNamespace(pts=103))
         if name == "GetChannelDifference":
             asked_lo = req.filter.ranges[0].min_id
             asked_hi = req.filter.ranges[0].max_id
-            if asked_lo == asked_hi:
-                # A single-id recovery probe: answer only if that id is real
-                # *and* was part of the originally-returned set is too strict —
-                # recovery is precisely for the ids the difference omitted.
-                if asked_lo in self.real_ids:
-                    return FakeDiff([make_raw_message(asked_lo)], self._chats)
-                return FakeDiff([], self._chats)
             rng = [i for i in self.returned_ids if asked_lo <= i <= asked_hi]
             return FakeDiff([make_raw_message(i) for i in sorted(rng)], self._chats)
+        if name == "GetMessages":
+            # channels.getMessages — the recovery path's fetch. A deleted id
+            # answers with MessageEmpty (Telegram's own shape), never an
+            # error; an existing id answers with the raw message.
+            from pyrogram.raw.types import MessageEmpty
+
+            mid = req.id[0].id
+            if mid in self.real_ids:
+                return types.SimpleNamespace(
+                    messages=[make_raw_message(mid)], users=[], chats=self._chats,
+                )
+            return types.SimpleNamespace(
+                messages=[MessageEmpty(id=mid, peer_id=None)], users=[], chats=self._chats,
+            )
         raise AssertionError(name)
 
     def get_chat_history(self, target, limit=1):
@@ -271,3 +281,92 @@ async def test_a_failed_dispatch_does_not_advance_the_cursor(db, gaps):
     # And those posts became recovery work rather than vanishing.
     pending = await gaps.pending_gaps(SESSION, CHAT)
     assert sorted(g["source_message_id"] for g in pending) == list(range(61, 71))
+
+
+# --------------------------------------------------------------------------- #
+# Bounded retention for terminal rows
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.asyncio
+async def test_terminal_gaps_age_out_but_open_ones_never_do(db, gaps):
+    """FAILED rows are deliberate loss records, not exempt from bounded
+    storage: without retention the table grows monotonically with every
+    permanently-absent id (production reached 468). Terminal rows older
+    than the window go; open rows are live recovery work and are never
+    touched, whatever their age."""
+    import time as _time
+
+    await gaps.record_gaps(SESSION, CHAT, [80, 81, 82])
+    await gaps.mark_gap_attempt("gap:%s:%s:80" % (SESSION, CHAT), "never returned", 0.0,
+                                exhausted=True)
+
+    # Backdate the FAILED row past the retention window; leave the open
+    # ones untouched but backdate one of them too — age alone must not
+    # delete live work.
+    old = int(_time.time()) - 60 * 60 * 24 * 31
+    db.execute("UPDATE ingestion_gaps SET updated_at=? WHERE source_message_id=80", (old,))
+    db.execute("UPDATE ingestion_gaps SET updated_at=? WHERE source_message_id=81", (old,))
+
+    purged = await gaps.cleanup()
+    assert purged == 1
+
+    rows = {g["source_message_id"]: g["state"] for g in
+            (await gaps.pending_gaps(SESSION, CHAT))}
+    assert 80 not in rows, "the aged FAILED row must be gone"
+    assert rows.get(81) == "PENDING", "an open row is never retained away"
+    assert rows.get(82) == "PENDING"
+
+
+# --------------------------------------------------------------------------- #
+# The recovery fetch must not depend on pts / GetFullChannel
+# --------------------------------------------------------------------------- #
+
+@pytest.mark.asyncio
+async def test_gap_recovery_uses_get_messages_and_never_pts(db, gaps):
+    """The old recovery built GetChannelDifference from GetFullChannel's pts:
+    flood-limited (275 rate-limit waits in one production weekend), and when
+    it failed the code silently fell back to pts=0, where Telegram rejected
+    EVERY attempt with PERSISTENT_TIMESTAMP_EMPTY — 450 occurrences that
+    burned each gap's budget on a request that could never succeed. The
+    recovery fetch is channels.getMessages: no pts, no full-channel call.
+
+    The FakeTelegram above raises AssertionError on any request it does not
+    implement, and GetFullChannel is no longer implemented — so this test
+    passing IS the proof the pts path is gone."""
+    client = FakeTelegram(list(range(61, 71)), list(range(61, 71)))
+    invoked: list = []
+
+    original_invoke = client.invoke
+
+    async def invoking(req):
+        invoked.append(type(req).__name__)
+        return await original_invoke(req)
+
+    client.invoke = invoking
+
+    await gaps.record_gaps(SESSION, CHAT, [66])
+    poller = make_poller(client, gaps, cursor=60)
+    # Warm the dispatch lanes exactly as the normal sweep does, then drive
+    # the recovery — mirroring the production order.
+    await poller._poll_channel(client, SESSION, CHAT, "A")
+    await asyncio.sleep(0.4)
+    before_recovery = len(invoked)
+    recovered = await poller._recover_gaps(limit=100)
+    await asyncio.sleep(0.4)
+    assert recovered == 1
+
+    # Scope the contract to the RECOVERY window: the warm-up sweep may
+    # legitimately use GetFullChannel/GetChannelDifference — the recovery
+    # fetch must not.
+    recovery_calls = invoked[before_recovery:]
+    assert any(n == "GetMessages" for n in recovery_calls), f"recovery never called channels.getMessages: {recovery_calls}"
+    assert not any(n == "GetFullChannel" for n in recovery_calls), "recovery still consults GetFullChannel (the pts trap)"
+    assert not any(n == "GetChannelDifference" for n in recovery_calls), "single-id recovery still goes through GetChannelDifference"
+
+    # The recovered post reached the dispatcher. The gap row itself is left
+    # to the pipeline observer (only the pipeline seeing the id proves it
+    # was not lost) — and the fake dispatcher runs no pipeline, so the row
+    # legitimately stays open in this harness.
+    assert 66 in client.dispatched, "the recovered post never reached the dispatcher"
+    rows = await gaps.pending_gaps(SESSION, CHAT)
+    assert [g["source_message_id"] for g in rows] == [66]
