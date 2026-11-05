@@ -1330,7 +1330,24 @@ export const es: Catalog = {
   "ui_task_attention_hint": "Oculta tareas sin fallos y sin jobs pendientes — las sanas no responden a 'qué me necesita ahora'.",  "ui_throughput_windows": "Ventanas de rendimiento",
   "ui_throughput_windows_hint": "Mensajes entregados en cada ventana de agregación, del anel de buckets por minutos acotado del worker.",
   "ui_insufficient_history": "historial insuficiente",
-  "ui_throughput_history_partial": "Solo {mins} min de historial hasta ahora; las ventanas más largas permanecen 'insuficientes' hasta acumular una hora.",
+  "ui_throughput_history_partial": "Solo {mins} min de historial hasta ahora; las ventanas más largas permanecen 'insuficientes' hasta acumular una hora.",  "ui_worker_controls": "Controles del worker",
+  "ui_control_running": "EN EJECUCIÓN",
+  "ui_control_paused": "PAUSADO",
+  "ui_control_pause": "Pausar el procesamiento",
+  "ui_control_resume": "Reanudar el procesamiento",
+  "ui_control_pause_confirm": "¿Pausar el procesamiento? El worker sigue vivo y sano; el loop de claim deja de aceptar jobs nuevos y las entregas en curso se completan (no se cancelan).",
+  "ui_control_pause_hint": "La pausa evita que el loop de claim tome nuevos jobs; el worker sigue vivo y sano. Las entregas en curso se completan y nunca se cancelan a mitad de trabajo.",
+  "ui_control_paused_by": "Pausado por {who} en {at}",
+  "ui_control_audit": "Pista de auditoría (más reciente primero, acotada)",
+  "ui_control_no_ops": "Aún no hay operaciones de control.",
+  "ui_control_unavailable": "La superficie de control del worker no está disponible en este build — pausa/reanudación no disponibles.",
+  "ui_control_worker_unreachable": "Worker inalcanzable — el estado de control es desconocido, no 'en ejecución'.",  "ui_ops_telemetry_proxy": "telemetría de ops",  "ui_control_error": "Error de control",
+
+
+
+
+
+
 
 
 

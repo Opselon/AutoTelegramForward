@@ -75,6 +75,8 @@ import { clearSession, getToken } from './session'
 import type {
   WorkerErrorQuery,
   WorkerErrorsResponse,
+  WorkerControlOpResponse,
+  WorkerControlStatusResponse,
   WorkerIncidentsResponse,
   WorkerQueueResponse,
   WorkerStatusResponse,
@@ -862,9 +864,9 @@ export const api = {
   // owner; the API proxies its /ops snapshot. Unreachable => 503 with
   // worker_reachable=false, which the UI must render as "worker offline"
   // and NEVER as an idle, healthy zeroed dashboard.
-  workerStatus: () => fetchJson<WorkerStatusResponse>(`${API_BASE}/worker/status`),
-  workerQueue: () => fetchJson<WorkerQueueResponse>(`${API_BASE}/worker/queue`),
-  workerTasks: () => fetchJson<WorkerTasksResponse>(`${API_BASE}/worker/tasks`),
+  workerStatus: () => fetchJson<WorkerStatusResponse>(`${API_BASE}/admin/worker/status`),
+  workerQueue: () => fetchJson<WorkerQueueResponse>(`${API_BASE}/admin/worker/queue`),
+  workerTasks: () => fetchJson<WorkerTasksResponse>(`${API_BASE}/admin/worker/tasks`),
   workerErrors: (params?: WorkerErrorQuery) => {
     const q = new URLSearchParams()
     if (params?.severity) q.set('severity', params.severity)
@@ -873,18 +875,26 @@ export const api = {
     if (params?.since) q.set('since', String(params.since))
     if (params?.limit) q.set('limit', String(params.limit))
     const s = q.toString()
-    return fetchJson<WorkerErrorsResponse>(`${API_BASE}/worker/errors${s ? '?' + s : ''}`)
+    return fetchJson<WorkerErrorsResponse>(`${API_BASE}/admin/worker/errors${s ? '?' + s : ''}`)
   },
   // Incidents (§9): repeated failures grouped into a lifecycle with a
   // suspected pattern + hint. state is validated at the API edge.
   workerIncidents: (state?: string) => {
     const q = state ? `?state=${encodeURIComponent(state)}` : ''
-    return fetchJson<WorkerIncidentsResponse>(`${API_BASE}/worker/incidents${q}`)
+    return fetchJson<WorkerIncidentsResponse>(`${API_BASE}/admin/worker/incidents${q}`)
   },
   workerIncidentAck: (id: string) =>
-    fetchJson<{ acknowledged: string }>(`${API_BASE}/worker/incidents/ack?id=${encodeURIComponent(id)}`, {
+    fetchJson<{ acknowledged: string }>(`${API_BASE}/admin/worker/incidents/ack?id=${encodeURIComponent(id)}`, {
       method: 'POST',
     }),
+  // §10 worker controls. Pause/resume are POST + UI-confirmed — they mutate
+  // live processing state.
+  workerControlStatus: () =>
+    fetchJson<WorkerControlStatusResponse>(`${API_BASE}/admin/worker/control/status`),
+  workerControlPause: () =>
+    fetchJson<WorkerControlOpResponse>(`${API_BASE}/admin/worker/control/pause`, { method: 'POST' }),
+  workerControlResume: () =>
+    fetchJson<WorkerControlOpResponse>(`${API_BASE}/admin/worker/control/resume`, { method: 'POST' }),
 
   adminListUsers: (limit = 50, offset = 0) =>
     fetchJson<{ users: any[]; total: number }>(`${API_BASE}/admin/users?limit=${limit}&offset=${offset}`),

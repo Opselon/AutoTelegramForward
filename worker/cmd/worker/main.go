@@ -343,7 +343,11 @@ func run() (runErr error) {
 	if reader, ok := store.(ops.TaskStoreReader); ok {
 		taskReader = reader
 	}
-	opsSrv := ops.NewServer(collector, queueReader, taskReader, rulesDBFor(rules), rulesBackendFor(rules), workerID())
+	// §10 control plane: constructed here (before the ops server needs it) —
+	// the pause/resume surface belongs to the live process; a restart resets
+	// it, which is the correct "resume everything" semantics.
+	controls := ops.NewControlPlane(64)
+	opsSrv := ops.NewServer(collector, queueReader, taskReader, rulesDBFor(rules), rulesBackendFor(rules), workerID(), controls)
 	if mux := healthSrv.Mux(); mux != nil {
 		opsSrv.Attach(mux)
 	}
@@ -420,7 +424,7 @@ func run() (runErr error) {
 		log.Info("auto-reply consumer not started — the Python Core owns the PVA queue (ATF_WORKER_AUTOREPLY)")
 	}
 
-	err = runLoop(ctx, log, engine, store, tracker, cfg)
+	err = runLoop(ops.WithPauseGate(ctx, controls), log, engine, store, tracker, cfg, controls)
 	schedWG.Wait()
 	log.Info("worker stopped")
 	if err != nil {
@@ -449,7 +453,7 @@ func run() (runErr error) {
 // The claimer hands batches to a bounded channel consumed by the workers,
 // which gives natural backpressure — a slow Telegram never piles up an
 // unbounded in-memory queue of claimed jobs.
-func runLoop(ctx context.Context, log *slog.Logger, engine *delivery.Engine, store queue.Store, tracker health.Tracker, cfg *config.Config) error {
+func runLoop(ctx context.Context, log *slog.Logger, engine *delivery.Engine, store queue.Store, tracker health.Tracker, cfg *config.Config, controls *ops.ControlPlane) error {
 	if !config.ClaimsEnabled(cfg) {
 		// The disabled worker reports ready (its health surface is up) but
 		// deliberately never claims. Logged once at startup and on shutdown so
@@ -505,6 +509,18 @@ func runLoop(ctx context.Context, log *slog.Logger, engine *delivery.Engine, sto
 			case <-ctx.Done():
 				return
 			default:
+			}
+			// §10 pause gate: consulted once per claim iteration, so a
+			// pause takes effect within one poll interval. In-flight
+			// deliveries are NOT cancelled — a half-sent album is the
+			// exact hazard a mid-job abort would create.
+			if controls != nil && controls.IsPaused() {
+				select {
+				case <-time.After(idle):
+				case <-ctx.Done():
+					return
+				}
+				continue
 			}
 			batch, err := store.ClaimBatch(ctx, workerID(), cfg.BatchSize,
 				time.Duration(cfg.LeaseSeconds*float64(time.Second)))

@@ -300,6 +300,12 @@ func main() {
 	// pattern + hint. Ack is POST-only — it mutates operational state.
 	adminMux.HandleFunc("GET /worker/incidents", h.WorkerIncidents)
 	adminMux.HandleFunc("POST /worker/incidents/ack", h.WorkerIncidentAck)
+	// §10 worker controls. Pause/resume are POST-only — they mutate live
+	// processing state, and a prefetch or a navigational GET must never
+	// stop a production worker. Status is a plain GET.
+	adminMux.HandleFunc("GET /worker/control/status", h.WorkerControlStatus)
+	adminMux.HandleFunc("POST /worker/control/pause", h.WorkerControlPause)
+	adminMux.HandleFunc("POST /worker/control/resume", h.WorkerControlResume)
 	adminMux.HandleFunc("GET /users", h.AdminListUsers)
 	adminMux.HandleFunc("POST /users/{id}/status", h.AdminSetUserStatus)
 	adminMux.HandleFunc("POST /broadcast", h.AdminBroadcast)

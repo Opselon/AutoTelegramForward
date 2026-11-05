@@ -7,9 +7,9 @@
   "version": "2.4.0",
   "releaseTag": "v2.4.0",
   "releaseDate": "2026-10-16",
-  "gitCommit": "24191b3",
-  "gitDate": "2026-11-05T05:39:56Z",
-  "syncTimestamp": "2026-11-05T05:46:48.533Z",
+  "gitCommit": "3026ec0",
+  "gitDate": "2026-11-05T12:24:55+03:30",
+  "syncTimestamp": "2026-11-05T09:20:54.282Z",
   "author": "Opselon",
   "maintainer": {
     "name": "𝐂ap$iz𝗲Ʀ",
@@ -41,7 +41,7 @@
     "implementedFeatures": 51,
     "partialFeatures": 8,
     "plannedFeatures": 5,
-    "apiRoutes": 157
+    "apiRoutes": 160
   },
   "featureCatalog": [
     "FilterRule attached-filter evaluation",
@@ -3790,6 +3790,27 @@
       "method": "POST",
       "path": "/api/admin/users/{id}/status",
       "handler": "h.AdminSetUserStatus",
+      "auth": "admin"
+    },
+    {
+      "group": "Administration",
+      "method": "POST",
+      "path": "/api/admin/worker/control/pause",
+      "handler": "h.WorkerControlPause",
+      "auth": "admin"
+    },
+    {
+      "group": "Administration",
+      "method": "POST",
+      "path": "/api/admin/worker/control/resume",
+      "handler": "h.WorkerControlResume",
+      "auth": "admin"
+    },
+    {
+      "group": "Administration",
+      "method": "GET",
+      "path": "/api/admin/worker/control/status",
+      "handler": "h.WorkerControlStatus",
       "auth": "admin"
     },
     {

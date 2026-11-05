@@ -857,6 +857,18 @@ export const endpointDetail: Record<string, EndpointDetail> = {
     summary: 'Repeated failures grouped into incidents with a tracked lifecycle (open, recovered, recurrent, acknowledged, suppressed), affected workers, tasks and jobs, plus a suspected pattern with an actionable hint.',
     statuses: ['200', '400', '401', '403', '502'],
   },
+  'GET /api/admin/worker/control/status': {
+    summary: 'Worker control state — is processing paused, by whom, and the audit trail of pause/resume operations the worker executed.',
+    statuses: ['200', '401', '403', '502'],
+  },
+  'POST /api/admin/worker/control/pause': {
+    summary: 'Requests a processing pause; POST-only and UI-confirmed. In-flight deliveries complete by design; a no-op pause is reported honestly, not as a state change.',
+    statuses: ['200', '401', '403', '405', '502'],
+  },
+  'POST /api/admin/worker/control/resume': {
+    summary: 'Requests a processing resume; POST-only. A resume while already running is reported honestly, not as a state change.',
+    statuses: ['200', '401', '403', '405', '502'],
+  },
   'POST /api/admin/worker/incidents/ack': {
     summary: 'Acknowledges one incident by its stable id; POST-only so a prefetch can never acknowledge anything. The ack is cleared by a recovery — it acknowledged the problem, not the fingerprint.',
     statuses: ['200', '400', '401', '403', '404', '405', '502'],

@@ -1330,7 +1330,24 @@ export const id: Catalog = {
   "ui_task_attention_hint": "Sembunyikan task tanpa kegagalan dan tanpa job tertunda — yang sehat tidak menjawab 'apa yang butuh saya sekarang'.",  "ui_throughput_windows": "Jendela throughput",
   "ui_throughput_windows_hint": "Pesan terkirim di setiap jendela agregasi, dari ring bucket menit yang dibatasi milik worker.",
   "ui_insufficient_history": "riwayat tidak cukup",
-  "ui_throughput_history_partial": "Baru {mins} menit riwayat; jendela yang lebih lama tetap 'tidak cukup' hingga satu jam terkumpul.",
+  "ui_throughput_history_partial": "Baru {mins} menit riwayat; jendela yang lebih lama tetap 'tidak cukup' hingga satu jam terkumpul.",  "ui_worker_controls": "Kontrol worker",
+  "ui_control_running": "BERJALAN",
+  "ui_control_paused": "DIJEDA",
+  "ui_control_pause": "Jeda pemrosesan",
+  "ui_control_resume": "Lanjutkan pemrosesan",
+  "ui_control_pause_confirm": "Jeda pemrosesan? Worker tetap hidup dan sehat; claim loop berhenti mengambil job baru dan pengiriman yang sedang berjalan diselesaikan (tidak dibatalkan).",
+  "ui_control_pause_hint": "Jeda membuat claim loop berhenti mengambil job baru; worker tetap hidup dan sehat. Pengiriman yang berjalan diselesaikan dan tidak pernah dibatalkan di tengah.",
+  "ui_control_paused_by": "Dijeda oleh {who} pada {at}",
+  "ui_control_audit": "Jejak audit (terbaru lebih dulu, dibatasi)",
+  "ui_control_no_ops": "Belum ada operasi kontrol.",
+  "ui_control_unavailable": "Surface kontrol worker tidak tersedia di build ini — jeda/lanjut tidak tersedia.",
+  "ui_control_worker_unreachable": "Worker tidak terjangkau — status kontrol tidak diketahui, bukan 'berjalan'.",  "ui_ops_telemetry_proxy": "telemetri ops",  "ui_control_error": "Error kontrol",
+
+
+
+
+
+
 
 
 
