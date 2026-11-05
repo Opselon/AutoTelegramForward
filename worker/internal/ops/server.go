@@ -331,6 +331,13 @@ func (s *Server) queueSnapshot(ctx context.Context) (map[string]any, error) {
 	if diag, derr := NewQueueDiagnostics(ctx, s.queue, time.Now().Unix()); derr == nil && diag != nil {
 		out["diagnostics"] = diag
 	}
+	// §4 aggregation windows: delivered count per window with real
+	// timestamps. -1 = not enough history yet (rendered as such, never as
+	// zero). Reported only when the history object exists.
+	if tw := c.ThroughputWindows(); tw != nil {
+		out["throughput_windows"] = tw
+		out["throughput_history_minutes"] = c.throughput.historyAgeMinutes(time.Now())
+	}
 	// The durable count is authoritative whenever the DB is reachable;
 	// reconcile in ONE direction (durable ≥ memory) so a restart cannot
 	// reset the panel's delivered number while the queue still holds the

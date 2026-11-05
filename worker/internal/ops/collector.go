@@ -73,6 +73,10 @@ type Collector struct {
 	// --- error ring -------------------------------------------------------- //
 	errors    *errorRing
 	incidents *incidentTracker
+	// throughputHistory: the §4 aggregation windows (1m/5m/15m/1h), fed
+	// from the delivered counter as a per-tick delta. Bounded by
+	// construction: 60 ints for an hour of history, rate-independent.
+	throughput *throughputHistory
 
 	// --- CPU: process time-on-CPU, baselined at construction so the
 	// reported figure is the average since start (see cpuPercent).
@@ -153,6 +157,7 @@ func NewCollector(cfg Config) *Collector {
 		stages:         map[string]*stageStats{},
 		errors:         newErrorRing(errorRingCapacity),
 		incidents:      newIncidentTracker(256),
+		throughput:     newThroughputHistory(0),
 		cpuStart:       time.Now(),
 		jobsRate:       newRateSampler(rateWindow),
 		backlogRate:    newRateSampler(rateWindow),

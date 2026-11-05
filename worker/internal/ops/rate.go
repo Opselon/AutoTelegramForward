@@ -90,6 +90,22 @@ func (r *rateSampler) rate(now time.Time) float64 {
 func (c *Collector) SampleRates(now time.Time) {
 	c.jobsRate.record(c.Delivered(), now)
 	c.backlogRate.record(c.pendingDepth.Load(), now)
+	// The §4 history rides the same tick: the delivered DELTA lands in the
+	// wall-clock minute bucket it belongs to. One int per tick, no
+	// per-message cost.
+	if c.throughput != nil {
+		c.throughput.observe(now, c.Delivered())
+	}
+}
+
+// ThroughputWindows is the §4 surface: delivered messages in each
+// aggregation window. -1 means "not enough history yet" — the console
+// renders that as insufficient history, never as a misleading zero.
+func (c *Collector) ThroughputWindows() map[string]int64 {
+	if c.throughput == nil {
+		return nil
+	}
+	return c.throughput.windows(time.Now())
 }
 
 // jobsPerSecond is the 1-minute rolling delivery rate.
