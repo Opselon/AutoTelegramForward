@@ -93,6 +93,16 @@ type Store interface {
 	// proved no earlier copy is in the target. The reason is recorded.
 	FenceResolveUnknown(ctx context.Context, key job.AttemptKey, workerID, reason string) error
 
+	// UnknownFences lists ambiguous attempts older than olderThan — the
+	// reconciler's input. Oldest first, bounded by limit.
+	UnknownFences(ctx context.Context, olderThan time.Time, limit int) ([]job.UnknownFence, error)
+
+	// ReconcileUnknown closes one ambiguous delivery atomically: fence
+	// UNKNOWN→FAILED, then job UNKNOWN→FAILED, both status-guarded. It
+	// returns false and changes nothing when either row has already moved —
+	// the guard that keeps a concurrent transition from being clobbered.
+	ReconcileUnknown(ctx context.Context, key job.AttemptKey, workerID, reason string) (bool, error)
+
 	// NoteMapping records the delivery outcome on the job's source->target
 	// message_map row (primary forward only — the Python worker's rule, and
 	// the reason keyword-reply jobs never write there).
@@ -811,6 +821,82 @@ func (s *sqliteStore) FenceResolveUnknown(ctx context.Context, key job.AttemptKe
 		UPDATE delivery_attempts SET status='FAILED', worker_id=?, last_error=?, updated_at=?
 		WHERE id=? AND status='UNKNOWN'`, workerID, reason, time.Now().Unix(), key.String())
 	return err
+}
+
+// UnknownFences lists ambiguous attempts older than olderThan, oldest first.
+// The reconciler's sole input; a pure read.
+func (s *sqliteStore) UnknownFences(ctx context.Context, olderThan time.Time, limit int) ([]job.UnknownFence, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT rule_id, source_chat_id, source_message_id, target_chat_id, job_kind,
+		       last_error, updated_at
+		FROM delivery_attempts
+		WHERE status='UNKNOWN' AND updated_at <= ?
+		ORDER BY updated_at
+		LIMIT ?`, olderThan.Unix(), limit)
+	if err != nil {
+		return nil, fmt.Errorf("unknown fences query: %w", err)
+	}
+	defer rows.Close()
+	var out []job.UnknownFence
+	for rows.Next() {
+		var (
+			f             job.UnknownFence
+			rule, sChat   string
+			sMsg          int64
+			tChat, jKind  string
+		)
+		if err := rows.Scan(&rule, &sChat, &sMsg, &tChat, &jKind, &f.LastError, &f.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("unknown fences scan: %w", err)
+		}
+		f.Key = job.AttemptKey{RuleID: rule, SourceChatID: sChat, SourceMessageID: sMsg, TargetChatID: tChat, JobKind: jKind}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// ReconcileUnknown closes one ambiguous delivery atomically. The fence and
+// the job must agree — an UNKNOWN fence with a non-UNKNOWN job (or the
+// reverse) is precisely the inconsistency reconciliation exists to remove —
+// so both transitions live in one transaction and both are status-guarded:
+// a row that already moved is never clobbered, and a half-reconciliation can
+// never commit.
+func (s *sqliteStore) ReconcileUnknown(ctx context.Context, key job.AttemptKey, workerID, reason string) (bool, error) {
+	now := time.Now().Unix()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("reconcile begin: %w", err)
+	}
+	defer tx.Rollback()
+
+	fr, err := tx.ExecContext(ctx, `
+		UPDATE delivery_attempts SET status='FAILED', worker_id=?, last_error=?, updated_at=?
+		WHERE id=? AND status='UNKNOWN'`, workerID, reason, now, key.String())
+	if err != nil {
+		return false, fmt.Errorf("reconcile fence update: %w", err)
+	}
+	fn, _ := fr.RowsAffected()
+	if fn == 0 {
+		// Another actor resolved (or a dispatcher recorded an outcome on)
+		// this fence first. Nothing to reconcile.
+		return false, nil
+	}
+
+	jr, err := tx.ExecContext(ctx, `
+		UPDATE delivery_jobs SET status='FAILED', error_detail=?, lease_until=0, updated_at=?
+		WHERE id=? AND status='UNKNOWN'`, reason, now, key.String())
+	if err != nil {
+		return false, fmt.Errorf("reconcile job update: %w", err)
+	}
+	jn, _ := jr.RowsAffected()
+	if jn == 0 {
+		// The job row moved while the fence stayed UNKNOWN — the store would
+		// be left inconsistent if this committed. Roll the fence back.
+		return false, tx.Rollback()
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("reconcile commit: %w", err)
+	}
+	return true, nil
 }
 
 // --- ops: the read-only queue-status and per-task aggregations ---------- //

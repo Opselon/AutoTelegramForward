@@ -39,6 +39,7 @@ import (
 	"atf/worker/internal/engine/autoreply"
 	"atf/worker/internal/engine/counters"
 	"atf/worker/internal/engine/delivery"
+	"atf/worker/internal/engine/reconciler"
 	"atf/worker/internal/engine/scheduler"
 	"atf/worker/internal/health"
 	"atf/worker/internal/infra/aiprovider"
@@ -583,6 +584,22 @@ func runLoop(ctx context.Context, log *slog.Logger, engine *delivery.Engine, sto
 				}
 			}
 		}
+	}()
+
+	// The UNKNOWN reconciler: the fence sweep deliberately leaves ambiguous
+	// sends UNKNOWN ("the send may have landed"), but an ambiguity nobody
+	// ever inspects is a job stranded forever — production accumulated a day
+	// of them because the decision step did not exist. This loop closes only
+	// the rows whose recorded failure PROVES the runtime rejected the call
+	// before any Telegram operation; genuinely uncertain rows stay UNKNOWN
+	// and visible in /ops for an operator.
+	reconcileGrace := 2 * time.Duration(cfg.LeaseSeconds*float64(time.Second))
+	reconciler := reconciler.New(store, workerID(), reconcileGrace,
+		time.Duration(cfg.ReconcileIntervalSeconds*float64(time.Second)), log)
+	sweepWG.Add(1)
+	go func() {
+		defer sweepWG.Done()
+		reconciler.Start(ctx)
 	}()
 
 	// Wait for shutdown: stop the claimer first (close(batches) drains the

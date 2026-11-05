@@ -754,6 +754,78 @@ func (s *pgStore) FenceResolveUnknown(ctx context.Context, key job.AttemptKey, w
 	return err
 }
 
+// UnknownFences lists ambiguous attempts older than olderThan, oldest first —
+// the reconciler's input. Pure read; parity with the SQLite implementation.
+func (s *pgStore) UnknownFences(ctx context.Context, olderThan time.Time, limit int) ([]job.UnknownFence, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT rule_id, source_chat_id, source_message_id, target_chat_id, job_kind,
+		       last_error, updated_at
+		FROM delivery_attempts
+		WHERE status='UNKNOWN' AND updated_at <= $1
+		ORDER BY updated_at
+		LIMIT $2`, olderThan.Unix(), limit)
+	if err != nil {
+		return nil, fmt.Errorf("unknown fences query: %w", err)
+	}
+	defer rows.Close()
+	var out []job.UnknownFence
+	for rows.Next() {
+		var (
+			f            job.UnknownFence
+			rule, sChat  string
+			sMsg         int64
+			tChat, jKind string
+		)
+		if err := rows.Scan(&rule, &sChat, &sMsg, &tChat, &jKind, &f.LastError, &f.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("unknown fences scan: %w", err)
+		}
+		f.Key = job.AttemptKey{RuleID: rule, SourceChatID: sChat, SourceMessageID: sMsg, TargetChatID: tChat, JobKind: jKind}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// ReconcileUnknown closes one ambiguous delivery atomically: fence
+// UNKNOWN→FAILED, then job UNKNOWN→FAILED, both status-guarded, one
+// transaction — never a half-reconciliation. Returns false and changes
+// nothing when either row has already moved. Parity with SQLite.
+func (s *pgStore) ReconcileUnknown(ctx context.Context, key job.AttemptKey, workerID, reason string) (bool, error) {
+	now := time.Now().Unix()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("reconcile begin: %w", err)
+	}
+	defer tx.Rollback()
+
+	fr, err := tx.ExecContext(ctx, `
+		UPDATE delivery_attempts SET status='FAILED', worker_id=$1, last_error=$2, updated_at=$3
+		WHERE id=$4 AND status='UNKNOWN'`, workerID, truncateDetail(reason), now, key.String())
+	if err != nil {
+		return false, fmt.Errorf("reconcile fence update: %w", err)
+	}
+	fn, _ := fr.RowsAffected()
+	if fn == 0 {
+		return false, nil
+	}
+
+	jr, err := tx.ExecContext(ctx, `
+		UPDATE delivery_jobs SET status='FAILED', error_detail=$1, lease_until=0, updated_at=$2
+		WHERE id=$3 AND status='UNKNOWN'`, truncateDetail(reason), now, key.String())
+	if err != nil {
+		return false, fmt.Errorf("reconcile job update: %w", err)
+	}
+	jn, _ := jr.RowsAffected()
+	if jn == 0 {
+		// The job row moved while the fence stayed UNKNOWN — roll the fence
+		// back instead of committing an inconsistency.
+		return false, tx.Rollback()
+	}
+	if err := tx.Commit(); err != nil {
+		return false, fmt.Errorf("reconcile commit: %w", err)
+	}
+	return true, nil
+}
+
 // truncateDetail clips an error string to the column's practical length,
 // mirroring the Python implementation's own [:4096] bound.
 func truncateDetail(detail string) string {
