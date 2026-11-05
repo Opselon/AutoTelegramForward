@@ -1341,7 +1341,9 @@ export const fr: Catalog = {
   "ui_control_audit": "Piste d'audit (plus récent d'abord, bornée)",
   "ui_control_no_ops": "Aucune opération de contrôle pour l'instant.",
   "ui_control_unavailable": "La surface de contrôle du worker est indisponible dans ce build — pause/reprise indisponibles.",
-  "ui_control_worker_unreachable": "Worker injoignable — l'état de contrôle est inconnu, pas 'en cours'.",  "ui_ops_telemetry_proxy": "télémétrie ops",  "ui_control_error": "Erreur de contrôle",
+  "ui_control_worker_unreachable": "Worker injoignable — l'état de contrôle est inconnu, pas 'en cours'.",  "ui_ops_telemetry_proxy": "télémétrie ops",  "ui_control_error": "Erreur de contrôle",  "ui_task_features_unavailable": "Détail des fonctionnalités indisponible pour cette tâche",
+
+
 
 
 

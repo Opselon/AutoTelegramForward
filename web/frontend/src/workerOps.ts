@@ -164,7 +164,11 @@ export interface WorkerTaskRow {
   retries: number
   last_success_at: string | null
   last_error: string | null
-  features: WorkerTaskFeatures
+  /** features is OPTIONAL: the Go TaskRow does not always populate the
+   *  feature breakdown (an aggregated row may carry no config read), and a
+   *  missing field must degrade the column to "unavailable", never crash
+   *  the whole DevOps section. */
+  features?: WorkerTaskFeatures
   throughput_per_min: number
   latency_ms_avg: number
   worker_id: string

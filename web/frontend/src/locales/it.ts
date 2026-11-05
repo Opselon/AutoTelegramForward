@@ -1341,7 +1341,9 @@ export const it: Catalog = {
   "ui_control_audit": "Traccia di audit (prima i più recenti, limitata)",
   "ui_control_no_ops": "Nessuna operazione di controllo finora.",
   "ui_control_unavailable": "La superficie di controllo del worker non è disponibile in questa build — pausa/riprendi non disponibili.",
-  "ui_control_worker_unreachable": "Worker non raggiungibile — lo stato di controllo è sconosciuto, non 'in esecuzione'.",  "ui_ops_telemetry_proxy": "telemetria ops",  "ui_control_error": "Errore di controllo",
+  "ui_control_worker_unreachable": "Worker non raggiungibile — lo stato di controllo è sconosciuto, non 'in esecuzione'.",  "ui_ops_telemetry_proxy": "telemetria ops",  "ui_control_error": "Errore di controllo",  "ui_task_features_unavailable": "Dettaglio delle funzionalità non disponibile per questo task",
+
+
 
 
 

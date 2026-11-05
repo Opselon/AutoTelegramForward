@@ -1341,7 +1341,9 @@ export const es: Catalog = {
   "ui_control_audit": "Pista de auditoría (más reciente primero, acotada)",
   "ui_control_no_ops": "Aún no hay operaciones de control.",
   "ui_control_unavailable": "La superficie de control del worker no está disponible en este build — pausa/reanudación no disponibles.",
-  "ui_control_worker_unreachable": "Worker inalcanzable — el estado de control es desconocido, no 'en ejecución'.",  "ui_ops_telemetry_proxy": "telemetría de ops",  "ui_control_error": "Error de control",
+  "ui_control_worker_unreachable": "Worker inalcanzable — el estado de control es desconocido, no 'en ejecución'.",  "ui_ops_telemetry_proxy": "telemetría de ops",  "ui_control_error": "Error de control",  "ui_task_features_unavailable": "Desglose de funciones no disponible para esta tarea",
+
+
 
 
 

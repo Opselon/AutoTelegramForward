@@ -1341,7 +1341,9 @@ export const ru: Catalog = {
   "ui_control_audit": "Журнал аудита (сначала новые, ограничен)",
   "ui_control_no_ops": "Операций управления ещё не было.",
   "ui_control_unavailable": "Поверхность управления воркера недоступна в этой сборке — пауза/возобновление невозможны.",
-  "ui_control_worker_unreachable": "Воркер недоступен — состояние управления неизвестно, а не «работает».",  "ui_ops_telemetry_proxy": "телеметрия ops",  "ui_control_error": "Ошибка управления",
+  "ui_control_worker_unreachable": "Воркер недоступен — состояние управления неизвестно, а не «работает».",  "ui_ops_telemetry_proxy": "телеметрия ops",  "ui_control_error": "Ошибка управления",  "ui_task_features_unavailable": "Разбор функций недоступен для этой задачи",
+
+
 
 
 

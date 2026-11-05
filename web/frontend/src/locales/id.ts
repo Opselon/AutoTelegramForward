@@ -1341,7 +1341,9 @@ export const id: Catalog = {
   "ui_control_audit": "Jejak audit (terbaru lebih dulu, dibatasi)",
   "ui_control_no_ops": "Belum ada operasi kontrol.",
   "ui_control_unavailable": "Surface kontrol worker tidak tersedia di build ini — jeda/lanjut tidak tersedia.",
-  "ui_control_worker_unreachable": "Worker tidak terjangkau — status kontrol tidak diketahui, bukan 'berjalan'.",  "ui_ops_telemetry_proxy": "telemetri ops",  "ui_control_error": "Error kontrol",
+  "ui_control_worker_unreachable": "Worker tidak terjangkau — status kontrol tidak diketahui, bukan 'berjalan'.",  "ui_ops_telemetry_proxy": "telemetri ops",  "ui_control_error": "Error kontrol",  "ui_task_features_unavailable": "Rincian fitur tidak tersedia untuk task ini",
+
+
 
 
 
