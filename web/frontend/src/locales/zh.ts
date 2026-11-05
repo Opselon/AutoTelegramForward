@@ -1317,7 +1317,11 @@ export const zh: Catalog = {
   "ui_incident_affected": "Worker：{workers} · 规则：{rules} · 作业：{jobs}",
   "ui_incident_acked_by": "由 {who} 于 {at} 确认",
   "ui_incident_ack": "确认",
-  "ui_incident_ack_confirm": "确认此事件？在处于进行中状态期间保持已确认；恢复后会清除确认。",
+  "ui_incident_ack_confirm": "确认此事件？在处于进行中状态期间保持已确认；恢复后会清除确认。",  "ui_stale_data": "已过期（{age}秒）",
+  "ui_stale_data_hint": "如此旧的数据会被标记为过期，而不会显示为实时：上次轮询失败，这些是 worker 最近一次回答的数据。",
+  "ui_last_update_hint": "最近一次轮询成功；这是来自 worker 的实时数据。",
+
+
 
 
 

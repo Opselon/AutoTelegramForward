@@ -56,6 +56,13 @@ import {
 } from '../workerOps'
 
 const POLL_MS = 10_000
+// §11: cap the backoff and define staleness. MAX_POLL_MS is the longest the
+// panel waits while the worker is not answering (80s ≈ 2^3 doublings from
+// 10s). STALE_AFTER_MS is how old cached data may be before it is labelled
+// stale instead of current — generous, because a slow-but-working worker is
+// normal; data labelled stale must never merely be old-and-fine.
+const MAX_POLL_MS = 80_000
+const STALE_AFTER_MS = 45_000
 const ERROR_LIMIT = 100
 
 type Severity = 'all' | 'ERROR' | 'WARN'
@@ -247,6 +254,18 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
   const [expandedTask, setExpandedTask] = useState<string | null>(null)
   const [pollError, setPollError] = useState<string | null>(null)
   const gen = useRef(0)
+  // §11: lastUpdate is the freshness clock. A poll that fails must NOT
+  // reset it — the panel then paints the CACHED numbers alongside a stale
+  // marker, instead of letting old data read as current.
+  const [lastUpdate, setLastUpdate] = useState<number | null>(null)
+  const [stale, setStale] = useState(false)
+  // Backoff state: a fixed 10s poll while the worker is unreachable hammers
+  // an endpoint that is not answering. consecutiveFailures grows and the
+  // interval backs off to MAX_POLL_MS, collapsing back to POLL_MS the
+  // moment a poll succeeds.
+  const consecutiveFailures = useRef(0)
+  const [pollMs, setPollMs] = useState(POLL_MS)
+  const lastUpdateTick = useRef<number | null>(null)
 
   const refresh = useCallback(async () => {
     const g = ++gen.current
@@ -262,12 +281,24 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
       if (isWorkerUnreachable(st)) {
         setOffline(true)
         setInfo(null); setQueue(null); setTasks(null); setErrors(null)
+        // Unreachable: the panel shows the OFFLINE state, not a stale
+        // timestamp — there is no fresh data to timestamp.
+        lastUpdateTick.current = null
+        setLastUpdate(null)
+        setStale(false)
         return
       }
       setOffline(false)
       // /ops Returns the worker snapshot envelope; the info block may be
       // nested or flat depending on the worker's /ops shape.
       setInfo((st as any).worker ?? (st as any))
+      // Success: stamp freshness and collapse the backoff. A single good
+      // poll after 6 failures returns the panel to its normal cadence.
+      lastUpdateTick.current = Date.now()
+      setLastUpdate(lastUpdateTick.current)
+      setStale(false)
+      consecutiveFailures.current = 0
+      setPollMs(POLL_MS)
       if (!isWorkerUnreachable(q)) setQueue(q as WorkerQueue)
       if (isWorkerUnreachable(ts)) setTasks([])
       else setTasks((ts as any).tasks ?? [])
@@ -282,6 +313,18 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
       if (g !== gen.current) return
       setPollError(e?.message ?? 'fetch failed')
       setOffline(true)
+      // §11 backoff: this poll failed. Stop hammering a non-answering
+      // endpoint — double the interval up to MAX_POLL_MS, reset to
+      // POLL_MS the instant a poll succeeds again.
+      consecutiveFailures.current = Math.min(consecutiveFailures.current + 1, 8)
+      setPollMs(Math.min(POLL_MS * 2 ** consecutiveFailures.current, MAX_POLL_MS))
+      // Staleness: data that is older than STALE_AFTER must read as stale,
+      // never as current. Cached numbers stay visible (the operator sees
+      // the last known state) but are now labelled.
+      if (lastUpdateTick.current != null) {
+        const ageMs = Date.now() - lastUpdateTick.current
+        setStale(ageMs > STALE_AFTER_MS)
+      }
     } finally {
       if (g === gen.current) setLoading(false)
     }
@@ -289,9 +332,9 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
 
   useEffect(() => {
     void refresh()
-    const t = setInterval(refresh, POLL_MS)
+    const t = setInterval(refresh, pollMs)
     return () => clearInterval(t)
-  }, [refresh])
+  }, [refresh, pollMs])
 
   const comps = component === 'all' ? null : component
   const visibleErrors = (errors ?? []).filter(
@@ -373,6 +416,19 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
                 ? Math.round(info.heartbeat_age_seconds) + 's'
                 : '—'}
             </span>
+            {lastUpdate ? (
+              <span
+                className="ops-chip"
+                style={stale
+                  ? { background: 'var(--color-warning, #c9a227)', color: 'var(--color-button-fg)' }
+                  : { background: 'var(--color-info)', color: 'var(--color-button-fg)' }}
+                title={stale ? t('ui_stale_data_hint') : t('ui_last_update_hint')}
+              >
+                {stale
+                  ? t('ui_stale_data', { age: Math.round((Date.now() - lastUpdate) / 1000) })
+                  : `${t('ui_last_update')} ${new Date(lastUpdate).toLocaleTimeString()}`}
+              </span>
+            ) : null}
             <span className="ops-live ops-live--on" aria-label="live" />
           </span>
         </div>

@@ -1317,7 +1317,11 @@ export const pt: Catalog = {
   "ui_incident_affected": "Workers: {workers} · Regras: {rules} · Jobs: {jobs}",
   "ui_incident_acked_by": "Reconhecido por {who} em {at}",
   "ui_incident_ack": "Reconhecer",
-  "ui_incident_ack_confirm": "Reconhecer este incidente? Ele permanece reconhecido enquanto estiver aberto; uma recuperação limpa o reconhecimento.",
+  "ui_incident_ack_confirm": "Reconhecer este incidente? Ele permanece reconhecido enquanto estiver aberto; uma recuperação limpa o reconhecimento.",  "ui_stale_data": "Obsoleto ({age}s)",
+  "ui_stale_data_hint": "Dados tão antigos são marcados como obsoletos, não mostrados como ao vivo: a última pesquisa falhou e estes são os números mais recentes que o worker forneceu.",
+  "ui_last_update_hint": "A pesquisa mais recente foi bem-sucedida; estes são dados ao vivo do worker.",
+
+
 
 
 

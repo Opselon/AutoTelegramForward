@@ -1317,7 +1317,11 @@ export const en: Catalog = {
   "ui_incident_affected": "Workers: {workers} · Rules: {rules} · Jobs: {jobs}",
   "ui_incident_acked_by": "Acknowledged by {who} at {at}",
   "ui_incident_ack": "Acknowledge",
-  "ui_incident_ack_confirm": "Acknowledge this incident? It stays acknowledged while it remains open; a recovery clears the ack.",
+  "ui_incident_ack_confirm": "Acknowledge this incident? It stays acknowledged while it remains open; a recovery clears the ack.",  "ui_stale_data": "Stale ({age}s old)",
+  "ui_stale_data_hint": "Data this old is labelled stale, not shown as live: the last poll failed and these are the most recent numbers the worker answered with.",
+  "ui_last_update_hint": "The most recent poll succeeded; this is live data from the worker.",
+
+
 
 
 

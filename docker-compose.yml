@@ -272,6 +272,12 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.worker
+      # Same build-args publish.yml passes: the worker's /ops reports the
+      # product version and the commit it was built from. Without ATF_VERSION
+      # ldflags still builds — the binary simply answers "unset".
+      args:
+        ATF_VERSION: ${ATF_VERSION:-}
+        ATF_COMMIT_SHA: ${ATF_COMMIT_SHA:-}
     container_name: atf-worker
     logging: *default-logging
     restart: unless-stopped
