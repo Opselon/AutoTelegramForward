@@ -86,9 +86,14 @@ jobs:
             MOVING="${GITHUB_REF_NAME}"
           fi
           MOVING=$(echo "$MOVING" | tr '[:upper:]' '[:lower:]')
+          # The product version, from the single source of truth (VERSION at
+          # the repo root). The worker's /ops reports version: "unset" when
+          # this is empty — the ldflags injection exists, the value did not.
+          VERSION=$(printf '%s' "$(cat VERSION 2>/dev/null || true)" | tr -d '[:space:]')
           echo "owner=${OWNER}" >> "$GITHUB_OUTPUT"
           echo "short=${SHORT}" >> "$GITHUB_OUTPUT"
           echo "moving=${MOVING}" >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "### atf-${{ matrix.service }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- \`${REGISTRY}/${OWNER}/atf-${{ matrix.service }}:sha-${SHORT}\`" >> "$GITHUB_STEP_SUMMARY"
           echo "- \`${REGISTRY}/${OWNER}/atf-${{ matrix.service }}:${MOVING}\`" >> "$GITHUB_STEP_SUMMARY"
@@ -110,8 +115,12 @@ jobs:
           # API answers "unknown" to /api/version, so the host cannot prove
           # which commit is live. Dockerfiles that do not declare the arg
           # simply ignore it.
+          # ATF_VERSION carries the product version from the VERSION file so
+          # the worker's /ops reports a real version instead of "unset" —
+          # the ldflags injection existed, the value was never passed.
           build-args: |
             ATF_COMMIT_SHA=${{ github.sha }}
+            ATF_VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha,scope=ci-${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=ci-${{ matrix.service }}
           tags: |
