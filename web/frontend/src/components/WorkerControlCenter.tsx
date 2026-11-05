@@ -494,6 +494,21 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
               <Metric icon={<XCircle size={14} />} label={t('ui_failed')} value={String(queue.failed)} />
               <Metric icon={<XCircle size={14} />} label={t('ui_dead_letter')} value={String(queue.dead_letter)} />
               <Metric icon={<Gauge size={14} />} label={t('ui_jobs_per_second')} value={(queue.jobs_per_second ?? 0).toFixed(1)} />
+              <Metric
+                icon={<Gauge size={14} />}
+                label={t('ui_throughput_windows')}
+                value={queue.throughput_windows
+                  ? ['last_1m', 'last_5m', 'last_15m', 'last_1h']
+                      .map((k) => {
+                        const v = queue.throughput_windows![k]
+                        return `${k.replace('last_', '')}: ${v == null || v < 0 ? t('ui_insufficient_history') : v}`
+                      })
+                      .join(' · ')
+                  : '—'}
+                hint={queue.throughput_history_minutes != null && queue.throughput_history_minutes < 60
+                  ? t('ui_throughput_history_partial', { mins: queue.throughput_history_minutes })
+                  : t('ui_throughput_windows_hint')}
+              />
               <Metric icon={<Database size={14} />} label={t('ui_backpressure')} value={String(queue.capacity)} hint={t('ui_queue_capacity_ceiling')} />
             </div>
             <div style={{ marginTop: 10 }}>

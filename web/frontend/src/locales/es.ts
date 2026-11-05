@@ -1327,7 +1327,12 @@ export const es: Catalog = {
   "ui_task_sort_latency": "Latencia (más lenta)",
   "ui_task_sort_delivered": "Entregados (más)",
   "ui_task_attention": "Solo las que necesitan atención",
-  "ui_task_attention_hint": "Oculta tareas sin fallos y sin jobs pendientes — las sanas no responden a 'qué me necesita ahora'.",
+  "ui_task_attention_hint": "Oculta tareas sin fallos y sin jobs pendientes — las sanas no responden a 'qué me necesita ahora'.",  "ui_throughput_windows": "Ventanas de rendimiento",
+  "ui_throughput_windows_hint": "Mensajes entregados en cada ventana de agregación, del anel de buckets por minutos acotado del worker.",
+  "ui_insufficient_history": "historial insuficiente",
+  "ui_throughput_history_partial": "Solo {mins} min de historial hasta ahora; las ventanas más largas permanecen 'insuficientes' hasta acumular una hora.",
+
+
 
 
 

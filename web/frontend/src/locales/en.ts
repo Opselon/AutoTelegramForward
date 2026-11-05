@@ -1327,7 +1327,12 @@ export const en: Catalog = {
   "ui_task_sort_latency": "Latency (slowest)",
   "ui_task_sort_delivered": "Delivered (most)",
   "ui_task_attention": "Needs attention only",
-  "ui_task_attention_hint": "Hide tasks with zero failures and zero pending jobs — the healthy ones are not the answer to 'what needs me now'.",
+  "ui_task_attention_hint": "Hide tasks with zero failures and zero pending jobs — the healthy ones are not the answer to 'what needs me now'.",  "ui_throughput_windows": "Throughput windows",
+  "ui_throughput_windows_hint": "Delivered messages in each aggregation window, from the worker's bounded minute-bucket ring.",
+  "ui_insufficient_history": "not enough history",
+  "ui_throughput_history_partial": "Only {mins} min of history so far; longer windows stay 'insufficient' until an hour accumulates.",
+
+
 
 
 
