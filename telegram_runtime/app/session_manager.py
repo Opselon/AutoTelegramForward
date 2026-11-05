@@ -23,7 +23,7 @@ What lives here vs the Core:
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from telegram_runtime import errors
 
@@ -46,9 +46,15 @@ class SessionManager:
         A session that is *connecting* is NOT ready — the caller must defer,
         not fail. A time-limited (FloodWait-suspended) session is reported
         with its remaining window so the caller can pass it to Go verbatim.
+
+        An empty ``session_id`` asks whether the runtime can serve MTProto
+        work for **any** session: the Go Worker's connectivity probe has no
+        single session of its own (it delivers for all of them), so it probes
+        with an empty id and must not be answered "not ready" by a validation
+        error on a question the contract asks on purpose.
         """
         if not session_id:
-            return False, "no session id"
+            return self._any_ready()
         client = self._pool.get(session_id) if hasattr(self._pool, "get") else None
         if client is None:
             return False, "session_offline"
@@ -59,6 +65,38 @@ class SessionManager:
         if not is_connected:
             return False, "session_connecting"
         return True, "ready"
+
+    def _any_ready(self) -> tuple[bool, str]:
+        """Pool-wide readiness: ready when at least one session is connected."""
+        ids = self._session_ids()
+        if not ids:
+            return False, "no sessions"
+        ready = [sid for sid in ids if self._session_is_connected(sid)]
+        if not ready:
+            return False, "session_connecting"
+        return True, "ready"
+
+    def _session_ids(self) -> List[str]:
+        get_ids = getattr(self._pool, "list_sessions", None) or getattr(
+            self._pool, "session_ids", None
+        )
+        if callable(get_ids):
+            try:
+                return [str(s) for s in get_ids()]  # type: ignore[arg-type]
+            except Exception:
+                pass
+        sessions = getattr(self._pool, "sessions", None)
+        if isinstance(sessions, dict):
+            return [str(s) for s in sessions.keys()]
+        return []
+
+    def _session_is_connected(self, session_id: str) -> bool:
+        client = self._pool.get(session_id) if hasattr(self._pool, "get") else None
+        if client is None:
+            return False
+        if self._is_time_limited(session_id):
+            return False
+        return bool(getattr(client, "is_connected", False))
 
     def _is_time_limited(self, session_id: str) -> bool:
         check = getattr(self._pool, "is_time_limited", None)
