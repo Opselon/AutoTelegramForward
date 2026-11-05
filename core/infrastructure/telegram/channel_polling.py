@@ -482,7 +482,7 @@ class ChannelPollingService:
                     "chat_id": str(chat_id), "session_id": str(session_id),
                     "source_message_id": mid, "attempts": GAP_MAX_ATTEMPTS,
                     "raw_error": "ID_NOT_RETURNED",
-                    "error_detail": "GetChannelDifference returned no message at this id",
+                    "error_detail": "channels.GetMessages returned no message at this id",
                     "retryable": False,
                 })
             return 1
@@ -505,7 +505,7 @@ class ChannelPollingService:
                 # a paraphrase of it.
                 from .errors import extract as _extract_error
                 try:
-                    event = _extract_error(exc, method="updates.GetChannelDifference",
+                    event = _extract_error(exc, method="channels.GetMessages",
                                            operation="gap_recovery", chat_id=chat_id,
                                            session_id=session_id, attempt=attempts)
                     raw = str(getattr(event, "error_type", "") or "")
