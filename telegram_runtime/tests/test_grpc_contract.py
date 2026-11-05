@@ -112,3 +112,35 @@ def test_session_ids_never_carry_secrets() -> None:
         fields = {f.name for f in desc.fields}
         assert "session_id" in fields
         assert "session_string" not in fields
+
+
+def test_every_proto_rpc_is_implemented() -> None:
+    """Every rpc the .proto declares must be a real handler on the server.
+
+    **The production defect this pins.** ``SendMedia`` was declared in
+    ``worker/proto/telegram_gateway.proto`` but never overridden on the
+    Python servicer, so the gRPC base class raised NotImplementedError and
+    the worker read it as ``UNIMPLEMENTED / Method not implemented!`` on
+    every media job from a restricted channel — a permanent, unclassified
+    delivery failure for a path the contract advertises.
+
+    A stub is only reachable while nobody calls it, so this test walks the
+    proto's service block against the servicer's own methods and fails on
+    ANY missing handler.
+    """
+    m = re.search(r"service\s+TelegramGateway\s*\{(.*?)\n\}", PROTO, re.S)
+    assert m, "TelegramGateway service block not found in the proto"
+    declared = set(re.findall(r"rpc\s+([A-Za-z0-9_]+)\s*\(", m.group(1)))
+    assert declared, "no rpc methods parsed from the proto service block"
+
+    # The generated base class carries a callable NotImplementedError stub
+    # for EVERY method AND shares the servicer's class name, so neither
+    # callability nor qualname can detect a missing override. An override
+    # exists exactly when the method is in the concrete class's own __dict__.
+    concrete = runtime_server.TelegramGatewayServicer
+    missing = {name for name in declared if name not in concrete.__dict__}
+    assert not missing, (
+        f"rpc methods declared in the proto but not overridden by "
+        f"{concrete.__module__}.{concrete.__name__} "
+        f"(gRPC would answer UNIMPLEMENTED): {sorted(missing)}"
+    )
