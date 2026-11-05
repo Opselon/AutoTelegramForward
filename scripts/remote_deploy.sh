@@ -125,12 +125,12 @@ ATF_IMAGE_TAG="$ATF_IMAGE_TAG" ATF_GHCR_OWNER="$ATF_GHCR_OWNER" docker compose \
   --env-file "$ENV_FILE" \
   -f docker-compose.yml \
   -f docker-compose.ghcr.yml \
-  pull --quiet redis logger core api web
+  pull --quiet redis logger core api web worker
 
 # 6. Clean container teardown ("همیشه داکر قبلی رو بخوابونه جدید و تمیز بیاد")
 echo "== cleanly stopping and removing previous application containers =="
-docker stop -t 15 atf-web atf-api atf-core atf-logger 2>/dev/null || true
-docker rm -f atf-web atf-api atf-core atf-logger 2>/dev/null || true
+docker stop -t 15 atf-web atf-api atf-core atf-logger atf-worker 2>/dev/null || true
+docker rm -f atf-web atf-api atf-core atf-logger atf-worker 2>/dev/null || true
 
 # 7. Start fresh stack
 echo "== launching clean containers =="
@@ -139,11 +139,11 @@ ATF_IMAGE_TAG="$ATF_IMAGE_TAG" ATF_GHCR_OWNER="$ATF_GHCR_OWNER" docker compose \
   --env-file "$ENV_FILE" \
   -f docker-compose.yml \
   -f docker-compose.ghcr.yml \
-  up -d --remove-orphans redis logger core api web
+  up -d --remove-orphans redis logger core api web worker
 
 # 8. Verify container health
 echo "== verifying container health (timeout: ${HEALTH_TIMEOUT}s) =="
-SERVICES=(redis logger core api web)
+SERVICES=(redis logger core api web worker)
 deadline=$((SECONDS + HEALTH_TIMEOUT))
 while [ "$SECONDS" -lt "$deadline" ]; do
   all_ok=1
