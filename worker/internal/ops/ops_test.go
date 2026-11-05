@@ -881,3 +881,105 @@ func TestIncidentFingerprintIsolation(t *testing.T) {
 		t.Fatalf("incidents = %d, want 2 (per-task isolation)", len(got))
 	}
 }
+
+// TestThroughputWindows pins the §4 aggregation windows. Three properties
+// the console depends on:
+//
+//  1. Bounded: 60 int buckets for an HOUR of history regardless of message
+//     rate — a 100k-messages-a-minute worker stores the same 60 ints as an
+//     idle one.
+//  2. Window correctness: ticks land in the wall-clock minute they belong
+//     to, and the CURRENT (partially elapsed) minute is excluded from every
+//     window — including it would understate every rate.
+//  3. Honesty: a window older than the available history reports -1, so the
+//     console renders 'insufficient history' rather than a misleading zero.
+func TestThroughputWindows(t *testing.T) {
+	h := newThroughputHistory(0)
+	t0 := time.Unix(1_800_000_000, 0) // a clean minute boundary
+	var delivered int64
+
+	// tick: advance the clock by one minute and record a delivery count for
+	// that minute. Minute boundaries are exact by construction.
+	tick := func(perMinute int64, now time.Time) time.Time {
+		now = now.Add(time.Minute)
+		delivered += perMinute
+		h.observe(now, delivered)
+		return now
+	}
+
+	now := tick(10, t0) // minute 1 complete: 10 delivered
+	w := h.windows(now)
+	if w["last_1m"] != 10 {
+		t.Errorf("last_1m after one minute = %d, want 10", w["last_1m"])
+	}
+	for _, k := range []string{"last_5m", "last_15m", "last_1h"} {
+		if w[k] != -1 {
+			t.Errorf("%s with 1 minute of history = %d, want -1 (insufficient history)", k, w[k])
+		}
+	}
+
+	// Four more minutes of 10. All five minutes are complete by
+	// construction (each tick's delta spans the full 60s since the
+	// previous tick), so last_5m is the full 50.
+	for m := 0; m < 4; m++ {
+		now = tick(10, now)
+	}
+	w = h.windows(now)
+	if w["last_1m"] != 10 {
+		t.Errorf("last_1m = %d, want 10", w["last_1m"])
+	}
+	if w["last_5m"] != 50 {
+		t.Errorf("last_5m = %d, want 50 (five complete minutes x 10)", w["last_5m"])
+	}
+}
+
+// TestThroughputHistoryBoundedByConstruction: two hours of 100k/minute
+// still fits the fixed 60-bucket ring, and the 1h window is full.
+func TestThroughputHistoryBoundedByConstruction(t *testing.T) {
+	h := newThroughputHistory(0)
+	now := time.Unix(1_800_000_000, 0)
+	var delivered int64
+	for m := 0; m < 120; m++ {
+		now = now.Add(time.Minute)
+		delivered += 100_000
+		h.observe(now, delivered)
+	}
+	got := h.windows(now)
+	if got["last_1m"] != 100_000 {
+		t.Errorf("last_1m = %d, want 100000", got["last_1m"])
+	}
+	if got["last_1h"] != 60*100_000 {
+		t.Errorf("last_1h = %d, want %d (a full hour of 100k)", got["last_1h"], 60*100_000)
+	}
+	if len(h.buckets) != 60 {
+		t.Errorf("ring grew to %d buckets, want fixed 60", len(h.buckets))
+	}
+}
+
+// TestThroughputCounterRestart: a restart resets the delivered counter. The
+// pre-restart history stays valid; only the crossing delta is dropped (it is
+// meaningless), and subsequent ticks re-baseline and accumulate normally.
+func TestThroughputCounterRestart(t *testing.T) {
+	h := newThroughputHistory(0)
+	now := time.Unix(1_800_000_000, 0)
+	var delivered int64
+	// Six minutes of 10 = 60 delivered, so last_5m has real content.
+	for m := 0; m < 6; m++ {
+		now = now.Add(time.Minute)
+		delivered += 10
+		h.observe(now, delivered)
+	}
+	// Restart: counter resets to 0. The delta is negative → dropped, but
+	// the six minutes already observed stay in the ring.
+	h.observe(now.Add(time.Minute), 0)
+	w := h.windows(now.Add(time.Minute))
+	if w["last_5m"] != 50 {
+		t.Errorf("last_5m after restart = %d, want 50 (pre-restart history survives)", w["last_5m"])
+	}
+	// Post-restart ticks re-baseline and accumulate normally.
+	h.observe(now.Add(2*time.Minute), 5)
+	w = h.windows(now.Add(2 * time.Minute))
+	if w["last_1m"] != 5 {
+		t.Errorf("last_1m after restart = %d, want 5", w["last_1m"])
+	}
+}
