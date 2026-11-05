@@ -75,6 +75,34 @@ func (f *DeliveryFailure) IsForwardingRestricted() bool {
 	return f.Code == "FORWARDING_RESTRICTED"
 }
 
+// IsMediaRejectedByTarget reports whether the TARGET chat refused the media
+// payload itself — a per-message compatibility rejection, not a permission
+// problem. Telegram signals it as PHOTO_EXT_INVALID (and the neighbouring
+// MEDIA_INVALID / VIDEO_NOT_MODIFIED / PHOTO_INVALID_DIMENSIONS family):
+// the copy preserves a file reference the destination cannot accept, and
+// retrying the same copy can never fix it.
+//
+// The recovery is the SAME re-upload path forwarding-restriction uses:
+// downloading the file and uploading it fresh normalizes its extension and
+// dimensions, so a job that would otherwise die as a permanent failure
+// delivers. Both signals are "the copy cannot survive as-is".
+func (f *DeliveryFailure) IsMediaRejectedByTarget() bool {
+	switch f.ErrorType {
+	case "PHOTO_EXT_INVALID", "MEDIA_INVALID", "PHOTO_INVALID_DIMENSIONS",
+		"VIDEO_NOT_MODIFIED", "IMAGE_PROCESS_FAILED", "PHOTO_CONTENT_URL_EMPTY":
+		return true
+	}
+	return false
+}
+
+// NeedsReupload is the decision the copy sites consult: either the source
+// forbids copying, or the target rejected the copied media. One call site
+// instead of two keeps the two reasons for re-uploading from drifting
+// apart, and the task's fallback_enabled flag still gates both.
+func (f *DeliveryFailure) NeedsReupload() bool {
+	return f.IsForwardingRestricted() || f.IsMediaRejectedByTarget()
+}
+
 // MediaHandle is a staged media file inside the shared scratch volume.
 type MediaHandle struct {
 	Path     string

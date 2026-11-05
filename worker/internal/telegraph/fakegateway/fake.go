@@ -55,6 +55,13 @@ type Fake struct {
 	// touching a real restricted channel.
 	RestrictedSource bool
 
+	// CopyMediaRejected makes CopyMessage fail with a target-side media
+	// rejection (PHOTO_EXT_INVALID): the copy survives permission-wise but
+	// the destination refuses the media payload itself. The re-upload
+	// fallback is the only recovery — the production signal this knob
+	// exists to reproduce.
+	CopyMediaRejected bool
+
 	// CopyFailOnNth makes the n-th CopyMessage call (1-based) fail with a
 	// transient error — the "split album died on item 3" shape a resume test
 	// needs. 0 disables it.
@@ -196,6 +203,13 @@ func (f *Fake) CopyMessage(ctx context.Context, sessionID string, targetChatID, 
 			Code:      "FORWARDING_RESTRICTED",
 			ErrorType: "RESTRICTED",
 			Message:   "fake: source forbids copying protected content",
+		}
+	}
+	if f.CopyMediaRejected {
+		return 0, &telegraph.DeliveryFailure{
+			Code:      "TELEGRAM_PERMANENT_ERROR",
+			ErrorType: "PHOTO_EXT_INVALID",
+			Message:   "fake: target rejected the copied photo (extension invalid)",
 		}
 	}
 	if f.CopyFailsWith != nil {

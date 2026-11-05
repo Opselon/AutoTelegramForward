@@ -169,10 +169,10 @@ type Engine struct {
 	// Python pipeline's own vocabulary (ai_transforms_*,
 	// ai_fallback_*). Nil is "no recorder".
 	aiMetrics AIMetrics
-	log      Logger
-	metrics  Metrics
-	opts     Options
-	workerID string
+	log       Logger
+	metrics   Metrics
+	opts      Options
+	workerID  string
 
 	mu      sync.Mutex
 	rate    map[string][]time.Time // per-target send timestamps
@@ -471,7 +471,6 @@ func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
 		}
 	}
 
-
 	// 2d. Stage 4.5 (W3) — event-level dedup: REMOVED (production defect).
 	//
 	// The Python pipeline writes the processed_messages marker at ENQUEUE
@@ -751,7 +750,7 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.Forwa
 			if ferr == nil {
 				return id, nil
 			}
-			if !ferr.IsForwardingRestricted() || !p.FallbackEnabled() {
+			if !ferr.NeedsReupload() || !p.FallbackEnabled() {
 				return id, ferr
 			}
 			// Restricted from C with the fallback allowed: fall through to
@@ -778,7 +777,7 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.Forwa
 			if ferr == nil && len(ids) > 0 {
 				return firstNonZero(ids), nil
 			}
-			if ferr != nil && !ferr.IsForwardingRestricted() {
+			if ferr != nil && !ferr.NeedsReupload() {
 				return 0, ferr
 			}
 			// Restricted: fall through to copy when fallback is allowed.
@@ -850,7 +849,7 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.Forwa
 		if p.HasMedia() {
 			id, ferr := e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, "", p.TopicID(), j.Payload.DropSourceButtons())
 			e.metrics.ObserveRPC("copy_message", 0)
-			if ferr != nil && ferr.IsForwardingRestricted() && p.FallbackEnabled() {
+			if ferr != nil && ferr.NeedsReupload() && p.FallbackEnabled() {
 				return e.reuploadMedia(callCtx, j, src, srcMsg, "")
 			}
 			return id, ferr
@@ -862,7 +861,7 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.Forwa
 	if p.HasMedia() {
 		id, ferr := e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, caption, p.TopicID(), j.Payload.DropSourceButtons())
 		e.metrics.ObserveRPC("copy_message", 0)
-		if ferr != nil && ferr.IsForwardingRestricted() && p.FallbackEnabled() {
+		if ferr != nil && ferr.NeedsReupload() && p.FallbackEnabled() {
 			return e.reuploadMedia(callCtx, j, src, srcMsg, caption)
 		}
 		return id, ferr
@@ -887,7 +886,7 @@ func (e *Engine) brandingStage(ctx context.Context, sessionID string, target, cC
 		if ferr == nil && len(ids) > 0 {
 			return firstNonZero(ids), nil
 		}
-		if ferr != nil && !ferr.IsForwardingRestricted() {
+		if ferr != nil && !ferr.NeedsReupload() {
 			return 0, ferr
 		}
 		// restricted: fall through to a clean copy of C's post
@@ -901,7 +900,7 @@ func (e *Engine) brandingStage(ctx context.Context, sessionID string, target, cC
 		id, ferr := e.gateway.CopyMessage(ctx, sessionID, target, cChat, cID, caption, j.Payload.TopicID(), j.Payload.DropSourceButtons())
 		e.metrics.ObserveRPC("copy_message", 0)
 		if ferr != nil {
-			if ferr.IsForwardingRestricted() && j.Payload.FallbackEnabled() {
+			if ferr.NeedsReupload() && j.Payload.FallbackEnabled() {
 				id, ferr = e.reuploadMedia(ctx, j, cChat, cID, caption)
 				if ferr != nil {
 					return 0, ferr
@@ -937,7 +936,7 @@ func (e *Engine) dispatchAlbum(ctx context.Context, j *job.DeliveryJob, albumIDs
 	case "first":
 		id, ferr := e.gateway.CopyMessage(ctx, sessionID, target, src, albumIDs[0], caption, p.TopicID(), j.Payload.DropSourceButtons())
 		e.metrics.ObserveRPC("copy_message", 0)
-		if ferr != nil && ferr.IsForwardingRestricted() && p.FallbackEnabled() {
+		if ferr != nil && ferr.NeedsReupload() && p.FallbackEnabled() {
 			return e.reuploadMedia(ctx, j, src, albumIDs[0], caption)
 		}
 		return id, ferr
@@ -968,7 +967,7 @@ func (e *Engine) dispatchAlbum(ctx context.Context, j *job.DeliveryJob, albumIDs
 				// the retry resumes rather than duplicates: the items before
 				// this one are physically in the target now.
 				_ = e.store.RecordAlbumProgress(ctx, j.ID, newSent)
-				if ferr.IsForwardingRestricted() && p.FallbackEnabled() {
+				if ferr.NeedsReupload() && p.FallbackEnabled() {
 					id, ferr = e.reuploadMedia(ctx, j, src, itemID, caption)
 					if ferr != nil {
 						return 0, ferr
@@ -1001,12 +1000,12 @@ func (e *Engine) dispatchAlbum(ctx context.Context, j *job.DeliveryJob, albumIDs
 	if ferr == nil && len(ids) > 0 {
 		return firstNonZero(ids), nil
 	}
-	if ferr != nil && !ferr.IsForwardingRestricted() {
+	if ferr != nil && !ferr.NeedsReupload() {
 		// The group copy failed for a non-restriction reason: fall through to
 		// the per-item re-upload (the Python path does the same).
 		e.jobLogger(j).Warn("album group copy failed — falling back to re-upload", "error", ferr.Message)
 	}
-	if ferr != nil && ferr.IsForwardingRestricted() && !p.FallbackEnabled() {
+	if ferr != nil && ferr.NeedsReupload() && !p.FallbackEnabled() {
 		return 0, ferr
 	}
 	// Per-item re-upload fallback.

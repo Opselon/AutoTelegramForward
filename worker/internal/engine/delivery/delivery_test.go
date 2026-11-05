@@ -810,3 +810,73 @@ func TestTaskBlockLinksDropLeavesNoFenceClaim(t *testing.T) {
 		t.Errorf("a link-blocked drop left a fence row in %s state — the job is unresolved", outcome)
 	}
 }
+
+// TestMediaForwardTargetRejectsCopy: the production defect this test pins:
+// a target chat rejects the copied media (PHOTO_EXT_INVALID — the copy
+// itself is permitted, the payload is incompatible), and the job must fall
+// back to re-upload rather than die as a permanent failure.
+//
+// 12 real jobs on rule 40edad5a failed exactly this way: the fallback
+// trigger only ever asked IsForwardingRestricted(), so a media-rejection
+// error went straight to FAILED and the message was never delivered.
+// NeedsReupload covers both reasons for re-uploading.
+func TestMediaForwardTargetRejectsCopy(t *testing.T) {
+	h := newHarness(t)
+	j := &job.DeliveryJob{
+		ID: "r1:c:9:t", RuleID: "r1", SourceChatID: "c", SourceMessageID: 9,
+		TargetChatID: "t", Status: job.StatusPending, MaxAttempts: 5,
+		Payload: *jobPayload(map[string]any{
+			"text": "caption", "has_media": true, "media_type": "photo",
+			"fallback_enabled": true,
+		}),
+	}
+	h.enqueue(t, j)
+	h.gateway.Reset()
+	h.gateway.CopyMediaRejected = true
+
+	if err := h.engine.Process(context.Background(), j); err != nil {
+		t.Fatalf("process media-rejected: %v", err)
+	}
+	// The rejected copy must NOT fail the job: re-upload delivers it.
+	assertJobStatus(t, h.store, j.ID, string(job.StatusSent))
+	downs := 0
+	for _, c := range h.gateway.Recorded() {
+		if c.Op == "DownloadMedia" {
+			downs++
+		}
+	}
+	if downs == 0 {
+		t.Error("target media rejection with fallback_enabled did not stage a re-upload download — the job would have been marked FAILED without trying the recovery")
+	}
+}
+
+// TestMediaRejectedNoFallback: without the task's opt-in, a media-rejected
+// copy is a failure, not a silent re-upload. The operator chose no
+// fallback; honoring that is not optional.
+func TestMediaRejectedNoFallback(t *testing.T) {
+	h := newHarness(t)
+	j := &job.DeliveryJob{
+		ID: "r1:c:10:t", RuleID: "r1", SourceChatID: "c", SourceMessageID: 10,
+		TargetChatID: "t", Status: job.StatusPending, MaxAttempts: 5,
+		Payload: *jobPayload(map[string]any{
+			"text": "caption", "has_media": true, "media_type": "photo",
+			"fallback_enabled": false,
+		}),
+	}
+	h.enqueue(t, j)
+	h.gateway.Reset()
+	h.gateway.CopyMediaRejected = true
+
+	if err := h.engine.Process(context.Background(), j); err != nil {
+		t.Fatalf("process: %v", err)
+	}
+	downs := 0
+	for _, c := range h.gateway.Recorded() {
+		if c.Op == "DownloadMedia" {
+			downs++
+		}
+	}
+	if downs > 0 {
+		t.Errorf("re-upload ran with fallback_enabled=false — the operator's opt-out was not honored (%d downloads)", downs)
+	}
+}
