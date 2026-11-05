@@ -41,6 +41,7 @@ import { LoggingHealth } from '../components/LoggingHealth'
 import WorkerControlCenter from '../components/WorkerControlCenter'
 import WorkerLogCenter from '../components/WorkerLogCenter'
 import { IncidentCenter } from '../components/IncidentCenter'
+import { WorkerControls } from '../components/WorkerControls'
 
 export default function DevopsPanel({ d }: { d: DashboardCtx }) {
   const {
@@ -142,6 +143,13 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
         </section>
       ) : null}
 
+      {/* ---------------------------------------- Go Worker Controls (§10) -- */}
+      {currentUser?.is_admin ? (
+        <section className="glass-panel ops-section" style={{ '--ops-i': 1 } as React.CSSProperties}>
+          <WorkerControls lang={lang} />
+        </section>
+      ) : null}
+
       {/* ---------------------------------------------------------- Topology -- */}
       <section className="glass-panel ops-section" style={{ '--ops-i': 1 } as React.CSSProperties}>
         <div className="ops-head">
@@ -182,6 +190,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
             const nodes = [
               { key: 'web', title: t('ui_web_gateway'), sub: 'atf-web · :8088', color: 'var(--color-warning)' },
               { key: 'api', title: t('ui_rest_control_plane'), sub: 'atf-api · :8080', color: 'var(--color-accent-violet)' },
+              { key: 'worker', title: t('ui_go_worker'), sub: 'atf-worker · :8090', color: 'var(--color-accent-cyan)' },
               { key: 'core', title: t('ui_python_core_mtproto'), sub: 'atf-core · gRPC :50051', color: 'var(--color-info)' },
               { key: 'logger', title: t('ui_central_logger'), sub: 'atf-logger · gRPC :50052', color: 'var(--color-success)' },
             ]
@@ -199,6 +208,8 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                         {i === 1
                           ? t('ui_rest_proxy_jwt')
                           : i === 2
+                          ? t('ui_ops_telemetry_proxy')
+                          : i === 3
                           ? t('ui_grpc_control')
                           : t('ui_grpc_logs')}
                       </span>

@@ -244,6 +244,32 @@ export interface WorkerIncidentsBody {
 
 export type WorkerIncidentsResponse = WorkerIncidentsBody | WorkerUnreachable
 
+/** §10: one recorded control operation — the audit trail the contract
+ *  requires: who asked, when, and what the worker actually did about it. */
+export interface ControlOp {
+  Kind: string
+  RequestedBy: string
+  RequestedAt: string
+  AcceptedAt: string
+  CompletedAt: string
+  Status: string
+  Reason: string
+}
+
+export interface WorkerControlStatus {
+  available: boolean
+  paused?: boolean
+  pause?: {
+    requested_by: string
+    requested_at: string
+    in_flight_complete: boolean
+  } | null
+  ops?: ControlOp[]
+}
+
+export type WorkerControlStatusResponse = WorkerControlStatus | WorkerUnreachable
+export type WorkerControlOpResponse = { op: ControlOp; already_paused?: boolean; was_running?: boolean } | WorkerUnreachable
+
 export interface WorkerErrorQuery {
   severity?: string
   component?: string

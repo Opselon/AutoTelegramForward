@@ -1330,7 +1330,24 @@ export const it: Catalog = {
   "ui_task_attention_hint": "Nasconde task senza fallimenti e senza job in attesa — quelli sani non rispondono a 'cosa richiede la mia attenzione ora'.",  "ui_throughput_windows": "Finestre di throughput",
   "ui_throughput_windows_hint": "Messaggi consegnati in ogni finestra di aggregazione, dall'anello limitato di bucket al minuto del worker.",
   "ui_insufficient_history": "cronologia insufficiente",
-  "ui_throughput_history_partial": "Solo {mins} min di cronologia finora; le finestre più lunghe rimangono 'insufficienti' finché non si accumula un'ora.",
+  "ui_throughput_history_partial": "Solo {mins} min di cronologia finora; le finestre più lunghe rimangono 'insufficienti' finché non si accumula un'ora.",  "ui_worker_controls": "Controlli del worker",
+  "ui_control_running": "IN ESECUZIONE",
+  "ui_control_paused": "IN PAUSA",
+  "ui_control_pause": "Metti in pausa l'elaborazione",
+  "ui_control_resume": "Riprendi l'elaborazione",
+  "ui_control_pause_confirm": "Mettere in pausa l'elaborazione? Il worker resta vivo e sano; il loop di claim smette di prendere nuovi job e le consegne in corso vengono completate (non annullate).",
+  "ui_control_pause_hint": "La pausa impedisce al loop di claim di prendere nuovi job; il worker resta vivo e sano. Le consegne in corso vengono completate e non vengono mai annullate a metà.",
+  "ui_control_paused_by": "Messo in pausa da {who} alle {at}",
+  "ui_control_audit": "Traccia di audit (prima i più recenti, limitata)",
+  "ui_control_no_ops": "Nessuna operazione di controllo finora.",
+  "ui_control_unavailable": "La superficie di controllo del worker non è disponibile in questa build — pausa/riprendi non disponibili.",
+  "ui_control_worker_unreachable": "Worker non raggiungibile — lo stato di controllo è sconosciuto, non 'in esecuzione'.",  "ui_ops_telemetry_proxy": "telemetria ops",  "ui_control_error": "Errore di controllo",
+
+
+
+
+
+
 
 
 

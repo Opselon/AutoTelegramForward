@@ -1330,7 +1330,24 @@ export const zh: Catalog = {
   "ui_task_attention_hint": "隐藏没有失败且没有待处理作业的任务——健康的任务不是“现在什么需要我”的答案。",  "ui_throughput_windows": "吞吐量窗口",
   "ui_throughput_windows_hint": "每个聚合窗口内已投递的消息，来自 worker 的有界分钟桶环形结构。",
   "ui_insufficient_history": "历史数据不足",
-  "ui_throughput_history_partial": "目前仅有 {mins} 分钟历史；长窗口需积累一小时后才有数据。",
+  "ui_throughput_history_partial": "目前仅有 {mins} 分钟历史；长窗口需积累一小时后才有数据。",  "ui_worker_controls": "Worker 控制",
+  "ui_control_running": "运行中",
+  "ui_control_paused": "已暂停",
+  "ui_control_pause": "暂停处理",
+  "ui_control_resume": "恢复处理",
+  "ui_control_pause_confirm": "暂停处理？worker 保持存活和健康；领取循环停止获取新作业，进行中的投递会完成（不会取消）。",
+  "ui_control_pause_hint": "暂停会停止领取循环获取新作业；worker 保持存活和健康。进行中的投递会完成，绝不在作业中途取消。",
+  "ui_control_paused_by": "由 {who} 于 {at} 暂停",
+  "ui_control_audit": "审计记录（最新优先，有界）",
+  "ui_control_no_ops": "尚无控制操作。",
+  "ui_control_unavailable": "此构建中 worker 控制面不可用——无法暂停/恢复。",
+  "ui_control_worker_unreachable": "Worker 不可达——控制状态未知，而非“运行中”。",  "ui_ops_telemetry_proxy": "运维遥测",  "ui_control_error": "控制错误",
+
+
+
+
+
+
 
 
 

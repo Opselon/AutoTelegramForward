@@ -1330,7 +1330,24 @@ export const fr: Catalog = {
   "ui_task_attention_hint": "Masque les tâches sans échec et sans job en attente — les saines ne répondent pas à 'que dois-je traiter maintenant'.",  "ui_throughput_windows": "Fenêtres de débit",
   "ui_throughput_windows_hint": "Messages livrés dans chaque fenêtre d'agrégation, issu de l'anneau borné de seaux par minute du worker.",
   "ui_insufficient_history": "historique insuffisant",
-  "ui_throughput_history_partial": "Seulement {mins} min d'historique pour l'instant ; les fenêtres plus longues restent 'insuffisantes' jusqu'à ce qu'une heure s'accumule.",
+  "ui_throughput_history_partial": "Seulement {mins} min d'historique pour l'instant ; les fenêtres plus longues restent 'insuffisantes' jusqu'à ce qu'une heure s'accumule.",  "ui_worker_controls": "Contrôles du worker",
+  "ui_control_running": "EN COURS",
+  "ui_control_paused": "EN PAUSE",
+  "ui_control_pause": "Mettre en pause le traitement",
+  "ui_control_resume": "Reprendre le traitement",
+  "ui_control_pause_confirm": "Mettre en pause le traitement ? Le worker reste vivant et sain ; la boucle de claim cesse de prendre du nouveau travail et les livraisons en cours se terminent (elles ne sont pas annulées).",
+  "ui_control_pause_hint": "La pause empêche la boucle de claim de prendre du nouveau travail ; le worker reste vivant et sain. Les livraisons en cours se terminent et ne sont jamais annulées mid-job.",
+  "ui_control_paused_by": "Mis en pause par {who} à {at}",
+  "ui_control_audit": "Piste d'audit (plus récent d'abord, bornée)",
+  "ui_control_no_ops": "Aucune opération de contrôle pour l'instant.",
+  "ui_control_unavailable": "La surface de contrôle du worker est indisponible dans ce build — pause/reprise indisponibles.",
+  "ui_control_worker_unreachable": "Worker injoignable — l'état de contrôle est inconnu, pas 'en cours'.",  "ui_ops_telemetry_proxy": "télémétrie ops",  "ui_control_error": "Erreur de contrôle",
+
+
+
+
+
+
 
 
 

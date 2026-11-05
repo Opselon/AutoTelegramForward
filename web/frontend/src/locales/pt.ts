@@ -1330,7 +1330,24 @@ export const pt: Catalog = {
   "ui_task_attention_hint": "Oculta tarefas sem falhas e sem jobs pendentes — as saudáveis não respondem a 'o que precisa de mim agora'.",  "ui_throughput_windows": "Janelas de rendimento",
   "ui_throughput_windows_hint": "Mensagens entregues em cada janela de agregação, do anel de buckets por minuto limitado do worker.",
   "ui_insufficient_history": "histórico insuficiente",
-  "ui_throughput_history_partial": "Apenas {mins} min de histórico até agora; janelas mais longas permanecem 'insuficientes' até acumular uma hora.",
+  "ui_throughput_history_partial": "Apenas {mins} min de histórico até agora; janelas mais longas permanecem 'insuficientes' até acumular uma hora.",  "ui_worker_controls": "Controles do worker",
+  "ui_control_running": "EM EXECUÇÃO",
+  "ui_control_paused": "PAUSADO",
+  "ui_control_pause": "Pausar processamento",
+  "ui_control_resume": "Retomar processamento",
+  "ui_control_pause_confirm": "Pausar o processamento? O worker continua vivo e saudável; o loop de claim para de aceitar novos jobs e as entregas em andamento são concluídas (não canceladas).",
+  "ui_control_pause_hint": "A pausa faz o loop de claim parar de aceitar novos jobs; o worker continua vivo e saudável. Entregas em andamento são concluídas e nunca canceladas no meio.",
+  "ui_control_paused_by": "Pausado por {who} em {at}",
+  "ui_control_audit": "Trilha de auditoria (mais recente primeiro, limitada)",
+  "ui_control_no_ops": "Nenhuma operação de controle ainda.",
+  "ui_control_unavailable": "Surface de controle do worker indisponível nesta versão — pause/resume indisponível.",
+  "ui_control_worker_unreachable": "Worker inacessível — o estado de controle é desconhecido, não 'em execução'.",  "ui_ops_telemetry_proxy": "telemetria de ops",  "ui_control_error": "Erro de controle",
+
+
+
+
+
+
 
 
 

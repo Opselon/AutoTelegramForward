@@ -30,8 +30,10 @@ type ServiceProbe struct {
 // ProbeServices checks every service in the ATF chain concurrently with short
 // timeouts, through the process-wide cache (health_probe.go). Core proves the
 // gRPC channel AND the pipeline loop (GetSystemStats), logger proves the log
-// store answers, web is a proxy reachability probe of its own /healthz, and api
-// is this process.
+// store answers, web is a proxy reachability probe of its own /healthz, api
+// is this process, and worker probes the Go Worker's /ops surface — the same
+// endpoint the DevOps panel reads, so one check proves the process is up AND
+// its operational surface answers.
 //
 // The per-hop checks take a context bounded by the prober's per-check timeout,
 // so a hanging hop costs at most that timeout and never the whole response.
@@ -87,6 +89,33 @@ func (h *Handlers) liveChecks() []probeCheck {
 				return false, "gRPC: " + err.Error()
 			}
 			return true, fmt.Sprintf("events=%d", resp.Total)
+		}},
+		{name: "worker", fn: func(ctx context.Context) (bool, string) {
+			// The Go Worker is a first-class member of the chain: it owns
+			// delivery execution when ATF_WORKER_ENABLED. The probe asks
+			// /ops — the same endpoint the DevOps panel reads — so this
+			// one reachability check proves BOTH that the process is up
+			// and that its operational surface answers. The detail line
+			// carries the derived health state (online/degraded/offline)
+			// and version, so the topology reads like the other hops.
+			base := os.Getenv("ATF_WORKER_OPS_URL")
+			if base == "" {
+				base = "http://worker:8090"
+			}
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, base+"/ops", nil)
+			if err != nil {
+				return false, err.Error()
+			}
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				return false, "http: " + err.Error()
+			}
+			defer resp.Body.Close()
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+			if resp.StatusCode != http.StatusOK {
+				return false, "HTTP " + resp.Status
+			}
+			return true, base
 		}},
 		{name: "api", fn: func(context.Context) (bool, string) { return true, "this process" }},
 		{name: "web", fn: func(ctx context.Context) (bool, string) {

@@ -2483,6 +2483,103 @@ paths:
                   error: { type: string }
         "401": { $ref: '#/components/responses/Unauthorized' }
         "403": { $ref: '#/components/responses/Forbidden' }
+  /api/admin/worker/control/status:
+    get:
+      tags: [admin, worker]
+      summary: 'Worker control state — is processing paused, by whom, and the audit trail'
+      description: >
+        The §10 Worker Controls surface. A pause is a property of the LIVE
+        process: the worker is alive and healthy while paused, the claim loop
+        simply stops taking new work — this is deliberately not mixed into
+        the worker health state, which would make a healthy-but-paused worker
+        read as degraded. The audit trail records every pause/resume the
+        worker executed, with the honest reason when a request was a no-op
+        (already paused / already running).
+      operationId: getApiAdminWorkerControlStatus
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { type: object }
+        "503":
+          description: Worker unreachable; control state is unknown, not "running".
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  worker_reachable: { type: boolean }
+                  error: { type: string }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+  /api/admin/worker/control/pause:
+    post:
+      tags: [admin, worker]
+      summary: 'Request a processing pause'
+      description: >
+        POST-only: mutates live operational state. The worker records the
+        operation with a real asynchronous status the console paints with;
+        a request that finds the worker already PAUSED completes with an
+        honest "already paused" reason rather than a fabricated state
+        change. In-flight deliveries complete by design — a mid-job abort
+        could leave a half-sent album, which is the exact hazard the pause
+        must not create. The UI must require explicit confirmation before
+        calling this.
+      operationId: postApiAdminWorkerControlPause
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: The recorded operation with its real status.
+          content:
+            application/json:
+              schema: { type: object }
+        "405":
+          description: GET is not allowed; the Allow header names POST.
+        "503":
+          description: Worker unreachable — the pause request did not reach it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  worker_reachable: { type: boolean }
+                  error: { type: string }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+  /api/admin/worker/control/resume:
+    post:
+      tags: [admin, worker]
+      summary: 'Request a processing resume'
+      description: >
+        The mirror of pause, same POST-only contract. A resume while the
+        worker is already running completes with an honest "already running"
+        reason the console must not render as a state change.
+      operationId: postApiAdminWorkerControlResume
+      security: [{ bearerAuth: [] }]
+      x-atf-authorization: admin
+      responses:
+        "200":
+          description: The recorded operation with its real status.
+          content:
+            application/json:
+              schema: { type: object }
+        "405":
+          description: GET is not allowed; the Allow header names POST.
+        "503":
+          description: Worker unreachable — the resume request did not reach it.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  worker_reachable: { type: boolean }
+                  error: { type: string }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
   /api/admin/users:
     get:
       tags: [admin]

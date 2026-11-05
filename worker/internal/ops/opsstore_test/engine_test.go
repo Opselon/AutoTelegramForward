@@ -153,7 +153,7 @@ func TestOpsReportsEngineDeliveredCount(t *testing.T) {
 	if r, ok := h.store.(ops.TaskStoreReader); ok {
 		taskReader = r
 	}
-	srv := ops.NewServer(h.collector, queueReader, taskReader, nil, "sqlite", "w-test")
+	srv := ops.NewServer(h.collector, queueReader, taskReader, nil, "sqlite", "w-test", nil)
 	mux := http.NewServeMux()
 	srv.Attach(mux)
 	ts := httptest.NewServer(mux)

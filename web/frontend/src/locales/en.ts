@@ -1330,7 +1330,24 @@ export const en: Catalog = {
   "ui_task_attention_hint": "Hide tasks with zero failures and zero pending jobs — the healthy ones are not the answer to 'what needs me now'.",  "ui_throughput_windows": "Throughput windows",
   "ui_throughput_windows_hint": "Delivered messages in each aggregation window, from the worker's bounded minute-bucket ring.",
   "ui_insufficient_history": "not enough history",
-  "ui_throughput_history_partial": "Only {mins} min of history so far; longer windows stay 'insufficient' until an hour accumulates.",
+  "ui_throughput_history_partial": "Only {mins} min of history so far; longer windows stay 'insufficient' until an hour accumulates.",  "ui_worker_controls": "Worker Controls",
+  "ui_control_running": "RUNNING",
+  "ui_control_paused": "PAUSED",
+  "ui_control_pause": "Pause processing",
+  "ui_control_resume": "Resume processing",
+  "ui_control_pause_confirm": "Pause processing? The worker stays alive and healthy; the claim loop stops taking new work and in-flight deliveries complete (they are not cancelled).",
+  "ui_control_pause_hint": "Pause stops the claim loop from taking new work; the worker stays alive and healthy. In-flight deliveries complete and are never cancelled mid-job.",
+  "ui_control_paused_by": "Paused by {who} at {at}",
+  "ui_control_audit": "Audit trail (newest first, bounded)",
+  "ui_control_no_ops": "No control operations yet.",
+  "ui_control_unavailable": "Worker control surface unavailable on this build — pause/resume is not available.",
+  "ui_control_worker_unreachable": "Worker unreachable — control state is unknown, not 'running'.",  "ui_ops_telemetry_proxy": "ops telemetry",  "ui_control_error": "Control error",
+
+
+
+
+
+
 
 
 

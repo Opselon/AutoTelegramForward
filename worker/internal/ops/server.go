@@ -30,6 +30,10 @@ type Server struct {
 	rulesDB     *sql.DB
 	ruleBackend string
 	workerID    string
+	// controls is the §10 worker-control surface (pause/resume). May be nil
+	// when a Server is constructed without one — the routes then report the
+	// section unavailable rather than fabricating any control state.
+	controls *ControlPlane
 
 	// snapshotMu serializes only the DB reads inside a request, so two
 	// concurrent /ops polls cannot stack two identical GROUP BY queries on
@@ -43,7 +47,7 @@ type Server struct {
 // mark the DB-backed fields unreachable — honest on a worker whose store is
 // a test double). rulesDB is the forward_rules side of the per-task join;
 // nil skips the join and the task rows report queue aggregates only.
-func NewServer(c *Collector, queue QueueStoreReader, tasks TaskStoreReader, rulesDB *sql.DB, ruleBackend, workerID string) *Server {
+func NewServer(c *Collector, queue QueueStoreReader, tasks TaskStoreReader, rulesDB *sql.DB, ruleBackend, workerID string, controls *ControlPlane) *Server {
 	return &Server{
 		collector:   c,
 		queue:       queue,
@@ -51,6 +55,7 @@ func NewServer(c *Collector, queue QueueStoreReader, tasks TaskStoreReader, rule
 		rulesDB:     rulesDB,
 		ruleBackend: ruleBackend,
 		workerID:    workerID,
+		controls:    controls,
 	}
 }
 
@@ -72,6 +77,12 @@ func (s *Server) handleOpsRoute(w http.ResponseWriter, r *http.Request) {
 		s.handleIncidents(w, r)
 	case "incidents/ack":
 		s.handleIncidentAck(w, r)
+	case "control/status":
+		s.handleControlStatus(w, r)
+	case "control/pause":
+		s.handleControlPause(w, r)
+	case "control/resume":
+		s.handleControlResume(w, r)
 	case "tasks":
 		s.handleTasks(w, r)
 	case "errors":

@@ -210,3 +210,59 @@ func (h *Handlers) WorkerIncidentAck(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, status, body)
 }
+
+// WorkerControlStatus proxies GET /api/admin/worker/control/status — the
+// §10 Worker Controls page: is the worker paused, by whom, and the audit
+// trail of control operations the worker itself executed. The worker owns
+// the control state; the API only relays it.
+func (h *Handlers) WorkerControlStatus(w http.ResponseWriter, r *http.Request) {
+	body, status, err := fetchOps(r.Context(), "/ops/control/status", nil)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"worker_reachable": false,
+			"error":            "worker ops endpoint unreachable",
+		})
+		return
+	}
+	writeJSON(w, status, body)
+}
+
+// WorkerControlPause proxies POST /api/admin/worker/control/pause — request
+// a processing pause. POST-only: it mutates operational state, so a GET
+// prefetch or a browser navigation must never pause a production worker.
+// The UI must additionally require explicit confirmation.
+func (h *Handlers) WorkerControlPause(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"error": "POST required"})
+		return
+	}
+	body, status, err := fetchOps(r.Context(), "/ops/control/pause", nil)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"worker_reachable": false,
+			"error":            "worker ops endpoint unreachable",
+		})
+		return
+	}
+	writeJSON(w, status, body)
+}
+
+// WorkerControlResume proxies POST /api/admin/worker/control/resume — the
+// mirror of pause, same POST-only contract.
+func (h *Handlers) WorkerControlResume(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"error": "POST required"})
+		return
+	}
+	body, status, err := fetchOps(r.Context(), "/ops/control/resume", nil)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"worker_reachable": false,
+			"error":            "worker ops endpoint unreachable",
+		})
+		return
+	}
+	writeJSON(w, status, body)
+}

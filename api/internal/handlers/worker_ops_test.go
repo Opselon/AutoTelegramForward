@@ -202,3 +202,54 @@ func TestWorkerIncidentAck_MethodAndIDContract(t *testing.T) {
 		}
 	})
 }
+
+// The control routes (§10) are the most safety-sensitive in the proxy: a
+// pause stops a production worker. Pin that a GET never mutates state, that
+// an unreachable worker never reports a fabricated control state, and that
+// the pause/resume pair is only reachable through POST.
+
+func TestWorkerControlPauseResume_GETIs405(t *testing.T) {
+	for _, route := range []string{"/worker/control/pause", "/worker/control/resume"} {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, route, nil)
+		if route == "/worker/control/pause" {
+			(&Handlers{}).WorkerControlPause(rec, req)
+		} else {
+			(&Handlers{}).WorkerControlResume(rec, req)
+		}
+		if rec.Code != http.StatusMethodNotAllowed {
+			t.Fatalf("GET %s: got %d, want 405 (a prefetch must never stop the worker)", route, rec.Code)
+		}
+		if rec.Header().Get("Allow") != http.MethodPost {
+			t.Errorf("%s: Allow = %q, want POST", route, rec.Header().Get("Allow"))
+		}
+	}
+}
+
+func TestWorkerControl_UnreachableIs503(t *testing.T) {
+	withWorkerOps(t, func() {
+		for _, route := range []string{"/worker/control/status", "/worker/control/pause", "/worker/control/resume"} {
+			rec := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodPost, route, nil)
+			switch route {
+			case "/worker/control/status":
+				req = httptest.NewRequest(http.MethodGet, route, nil)
+				(&Handlers{}).WorkerControlStatus(rec, req)
+			case "/worker/control/pause":
+				(&Handlers{}).WorkerControlPause(rec, req)
+			case "/worker/control/resume":
+				(&Handlers{}).WorkerControlResume(rec, req)
+			}
+			if rec.Code != http.StatusServiceUnavailable {
+				t.Fatalf("%s: unreachable worker: got %d, want 503", route, rec.Code)
+			}
+			var body map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("%s: bad json: %v", route, err)
+			}
+			if body["worker_reachable"] != false {
+				t.Errorf("%s: worker_reachable = %v, want false (never fabricate control state)", route, body["worker_reachable"])
+			}
+		}
+	})
+}

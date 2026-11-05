@@ -65,7 +65,7 @@ func TestCollectorIsTheOneMetricsOwner(t *testing.T) {
 // increments, not a parallel one.
 func TestHTTPReportsSameDeliveredAsEngine(t *testing.T) {
 	c := testCollector()
-	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test", nil)
 	mux := http.NewServeMux()
 	srv.Attach(mux)
 
@@ -361,7 +361,7 @@ func TestSanitizeStripsSecretsAndContent(t *testing.T) {
 // that read like an empty, healthy queue.
 func TestQueueObjectShapeOnNilReader(t *testing.T) {
 	c := testCollector()
-	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test", nil)
 	mux := http.NewServeMux()
 	srv.Attach(mux)
 	ts := httptest.NewServer(mux)
@@ -403,7 +403,7 @@ func TestWorkerObjectShape(t *testing.T) {
 	c.RecordDB(true, time.Now())
 	c.RecordTelegram(true, time.Now())
 	c.RecordAI(false, time.Now())
-	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test", nil)
 	mux := http.NewServeMux()
 	srv.Attach(mux)
 	ts := httptest.NewServer(mux)
@@ -482,7 +482,7 @@ func TestLoadStatusDerivation(t *testing.T) {
 // handlers) share the object. Run with -race.
 func TestConcurrentRecordingIsRaceFree(t *testing.T) {
 	c := testCollector()
-	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test", nil)
 	mux := http.NewServeMux()
 	srv.Attach(mux)
 	ts := httptest.NewServer(mux)
@@ -602,7 +602,7 @@ func TestErrorsEndpointShape(t *testing.T) {
 		Severity: "WARN", Component: "worker.delivery",
 		Code: "400", RuleID: "ea565d5c", Message: "sanitized one-liner",
 	})
-	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test", nil)
 	mux := http.NewServeMux()
 	srv.Attach(mux)
 	ts := httptest.NewServer(mux)
@@ -645,7 +645,7 @@ func TestOpsExposesEveryProbeTimestamp(t *testing.T) {
 	c.RecordAI(true, time.Now())
 	c.RecordDB(true, time.Now())
 
-	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test", nil)
 	mux := http.NewServeMux()
 	srv.Attach(mux)
 	ts := httptest.NewServer(mux)
@@ -746,7 +746,7 @@ func TestDerivedHealthState(t *testing.T) {
 func TestOpsExposesHeartbeatAge(t *testing.T) {
 	c := testCollector()
 	c.SelfHeartbeat()
-	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test", nil)
 	mux := http.NewServeMux()
 	srv.Attach(mux)
 	ts := httptest.NewServer(mux)
@@ -1001,5 +1001,92 @@ func TestThroughputHistoryAgeIsObservedNotGap(t *testing.T) {
 	// three minutes of real history.
 	if age := h.historyAgeMinutes(now); age != 3 {
 		t.Errorf("historyAgeMinutes = %d, want 3 (minutes held, not the gap to the last tick)", age)
+	}
+}
+
+// TestControlPlaneLifecycle pins §10: safe operational actions from the Web.
+// The contract's explicit words: a worker must never falsely report an
+// operation simply because the UI accepted the request, and every control
+// must have a REAL status.
+func TestControlPlaneLifecycle(t *testing.T) {
+	c := NewControlPlane(16)
+
+	if c.IsPaused() {
+		t.Fatal("fresh control plane reports paused — a new worker always starts running")
+	}
+
+	// Pause: accepted, then completed, with the honest effect text.
+	op, already := c.Pause("operator@1.2.3.4", nil)
+	if already {
+		t.Error("first pause reports already-paused — it should be a state change")
+	}
+	if op.Status != "COMPLETED" {
+		t.Errorf("pause status = %q, want COMPLETED (the claim loop observes the gate within one poll interval)", op.Status)
+	}
+	if !c.IsPaused() {
+		t.Error("pause recorded but IsPaused() = false — the claim loop would still claim")
+	}
+	if op.Reason == "" {
+		t.Error("pause op carries no effect text — the console cannot say what the pause actually does")
+	}
+
+	// A second pause is NOT a state change: it completes with an honest
+	// "already paused" rather than a fabricated second pause.
+	op2, already2 := c.Pause("operator@1.2.3.4", nil)
+	if !already2 {
+		t.Error("second pause reports a state change — the contract forbids reporting what did not happen")
+	}
+	if op2.Reason != "already paused — no state change" {
+		t.Errorf("second pause reason = %q", op2.Reason)
+	}
+
+	// Pause context: who asked, when — the console must show WHY delivery
+	// stopped, not just that it did.
+	if p := c.PauseState(); p == nil || p.RequestedBy != "operator@1.2.3.4" {
+		t.Errorf("pause state = %+v, want the requester recorded for the audit", p)
+	}
+
+	// Resume: completed, and the gate opens.
+	op3, wasRunning := c.Resume("operator@1.2.3.4")
+	if wasRunning {
+		t.Error("resume reports was-running while paused — the pause was live")
+	}
+	if op3.Status != "COMPLETED" {
+		t.Errorf("resume status = %q", op3.Status)
+	}
+	if c.IsPaused() {
+		t.Error("resume recorded but IsPaused() = true — the claim loop would never claim again")
+	}
+
+	// Resume while running: honest "already running", not a change.
+	op4, wasRunning2 := c.Resume("operator@1.2.3.4")
+	if !wasRunning2 {
+		t.Error("second resume reports a state change — nothing changed")
+	}
+	if op4.Reason != "already running — no state change" {
+		t.Errorf("second resume reason = %q", op4.Reason)
+	}
+
+	// Audit trail: newest first, every operation recorded.
+	ops := c.Ops()
+	if len(ops) != 4 {
+		t.Fatalf("audit trail = %d ops, want 4 (every control recorded)", len(ops))
+	}
+	if ops[0].Kind != "resume" || ops[3].Kind != "pause" {
+		t.Errorf("trail not newest-first: %v", []string{ops[0].Kind, ops[3].Kind})
+	}
+}
+
+// TestControlPlaneAuditBounded: the trail cannot grow without bound — a
+// chatty admin or an automated loop must not be able to make /ops pay for
+// an unbounded audit read.
+func TestControlPlaneAuditBounded(t *testing.T) {
+	c := NewControlPlane(3)
+	for i := 0; i < 6; i++ {
+		_, _ = c.Pause("admin", nil)
+		_, _ = c.Resume("admin")
+	}
+	if got := len(c.Ops()); got != 3 {
+		t.Errorf("audit trail = %d ops, want capped at 3 (oldest evicted)", got)
 	}
 }

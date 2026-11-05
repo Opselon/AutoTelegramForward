@@ -1330,7 +1330,24 @@ export const uz: Catalog = {
   "ui_task_attention_hint": "Xatoligi va kutilayotgan ishi bo'lmagan vazifalarni yashirish — sog'lomlar 'hozir nima kerak' savoliga javob emas.",  "ui_throughput_windows": "O'tkazuv oynalari",
   "ui_throughput_windows_hint": "Har bir agregatsiya oynasida yetkazib berilgan xabarlar, workerning cheklangan daqiqali halqasidan.",
   "ui_insufficient_history": "tarix yetarli emas",
-  "ui_throughput_history_partial": "Hozircha faqat {mins} daqiqalik tarix bor; uzunroq oynalar bir soat to'planguncha 'yetarli emas' bo'lib qoladi.",
+  "ui_throughput_history_partial": "Hozircha faqat {mins} daqiqalik tarix bor; uzunroq oynalar bir soat to'planguncha 'yetarli emas' bo'lib qoladi.",  "ui_worker_controls": "Worker boshqaruvlari",
+  "ui_control_running": "ISHLAMOQDA",
+  "ui_control_paused": "TO'XTATILGAN",
+  "ui_control_pause": "Qayta ishlashni to'xtatish",
+  "ui_control_resume": "Qayta ishlashni davom ettirish",
+  "ui_control_pause_confirm": "Qayta ishlash to'xtatilsinmi? Worker tirik va sog'lom qoladi; claim loop yangi ishlarni olishni to'xtatadi va jarayondagi yetkazib berishlar yakunlanadi (bekor qilinmaydi).",
+  "ui_control_pause_hint": "To'xtatish claim loopga yangi ish olishni to'xtatadi; worker tirik va sog'lom qoladi. Jarayondagi yetkazib berishlar yakunlanadi va hech qachon yarim yo'lda bekor qilinmaydi.",
+  "ui_control_paused_by": "{who} tomonidan {at} da to'xtatilgan",
+  "ui_control_audit": "Audit izi (yangisi birinchi, cheklangan)",
+  "ui_control_no_ops": "Hali boshqaruv operatsiyasi yo'q.",
+  "ui_control_unavailable": "Ushbu build-da worker boshqaruv yuzasi mavjud emas — to'xtatish/davom ettirish mumkin emas.",
+  "ui_control_worker_unreachable": "Worker yetib bo'lmaydi — boshqaruv holati noma'lum, 'ishlamoqda' emas.",  "ui_ops_telemetry_proxy": "ops telemetriyasi",  "ui_control_error": "Boshqaruv xatosi",
+
+
+
+
+
+
 
 
 
