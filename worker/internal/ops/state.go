@@ -30,6 +30,44 @@ func StateName(s uint32) string {
 	return "starting"
 }
 
+// HeartbeatFreshnessBudget is how stale a worker's heartbeat may be before
+// the process is considered NOT alive: the self-heartbeat ticks every 15s,
+// so 45s is three missed ticks — enough to survive one slow poll or a
+// momentary scheduler stall without flapping, short enough that a dead
+// process shows offline within a minute.
+const HeartbeatFreshnessBudget = 45 * time.Second
+
+// derivedHealthState answers the console's "is the worker alive?" from the
+// two things that can actually prove it: heartbeat freshness and the
+// process's own execution state. It never reads a durable record — an old
+// database row must not keep a worker "online" forever — and it never
+// reports online for a process that cannot do its job (a degraded state or
+// a dead queue store reads degraded, not online).
+//
+// age < 0 means "no heartbeat yet" (the process just started), which is
+// starting, never offline: nothing has had a chance to go wrong.
+func derivedHealthState(c *Collector, age int64) string {
+	if age < 0 {
+		return "starting"
+	}
+	if time.Duration(age)*time.Second > HeartbeatFreshnessBudget {
+		return "offline"
+	}
+	switch c.State() {
+	case StateDegraded:
+		return "degraded"
+	case StateStopping:
+		return "stopping"
+	case StateReady:
+		if !c.DBConnected() {
+			return "degraded" // alive but cannot reach its delivery store
+		}
+		return "online"
+	default:
+		return "starting"
+	}
+}
+
 // runtimeStats reads the process's own runtime counters:
 //
 //   - goroutines: runtime.NumGoroutine. Reported as a DIAGNOSTIC, never as

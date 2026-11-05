@@ -632,3 +632,252 @@ func TestErrorsEndpointShape(t *testing.T) {
 		t.Fatalf("severity = %v, want WARN", row["severity"])
 	}
 }
+
+// TestOpsExposesEveryProbeTimestamp pins the parity the DevOps console
+// depends on: the worker tracks db/telegram/AI probe timestamps, and the
+// /ops snapshot must expose ALL THREE. ai_checked_at was missing even though
+// the collector stored it, so the UI could not tell "no AI call yet" from
+// "the provider is failing" — both render as ai_connected=false without a
+// timestamp to disambiguate.
+func TestOpsExposesEveryProbeTimestamp(t *testing.T) {
+	c := testCollector()
+	c.RecordTelegram(true, time.Now())
+	c.RecordAI(true, time.Now())
+	c.RecordDB(true, time.Now())
+
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	mux := http.NewServeMux()
+	srv.Attach(mux)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/ops")
+	if err != nil {
+		t.Fatalf("GET /ops: %v", err)
+	}
+	defer resp.Body.Close()
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode /ops: %v", err)
+	}
+	w, ok := body["worker"].(map[string]any)
+	if !ok {
+		t.Fatalf("decode /ops: worker block missing: %#v", body)
+	}
+	for _, key := range []string{"db_checked_at", "telegram_checked_at", "ai_checked_at"} {
+		if v, ok := w[key]; !ok || v == "" {
+			t.Errorf("/ops %s = %v (ok=%v), want an RFC3339 timestamp — every probe the collector tracks must be visible to the console", key, v, ok)
+		}
+	}
+	if v, _ := w["ai_connected"]; v != true {
+		t.Errorf("/ops ai_connected = %v, want true after RecordAI(true)", v)
+	}
+}
+
+// TestDerivedHealthState pins the console's "is the worker alive?" answer.
+// The requirement is explicit: a worker must not stay ONLINE forever because
+// an old record exists, "nobody is polling" must never read as "worker is
+// down", and alive-but-broken must read degraded, not online.
+func TestDerivedHealthState(t *testing.T) {
+	c := testCollector()
+	c.RecordDB(true, time.Now())
+
+	cases := []struct {
+		name  string
+		setup func()
+		age   int64
+		want  string
+	}{
+		{
+			name:  "no heartbeat yet is starting, never offline",
+			setup: func() {},
+			age:   -1,
+			want:  "starting",
+		},
+		{
+			name:  "fresh heartbeat + ready + db is online",
+			setup: func() { c.SetState(StateReady) },
+			age:   2,
+			want:  "online",
+		},
+		{
+			name: "stale heartbeat is offline regardless of state",
+			setup: func() {
+				c.SetState(StateReady)
+			},
+			age:  int64(HeartbeatFreshnessBudget/time.Second) + 10,
+			want: "offline",
+		},
+		{
+			name:  "degraded state is degraded even with fresh heartbeat",
+			setup: func() { c.SetState(StateDegraded) },
+			age:   1,
+			want:  "degraded",
+		},
+		{
+			name: "alive but db down is degraded, not online",
+			setup: func() {
+				c.SetState(StateReady)
+				c.RecordDB(false, time.Now())
+			},
+			age:  1,
+			want: "degraded",
+		},
+		{
+			name:  "stopping is stopping",
+			setup: func() { c.SetState(StateStopping) },
+			age:   1,
+			want:  "stopping",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.setup()
+			if got := derivedHealthState(c, tc.age); got != tc.want {
+				t.Errorf("derivedHealthState(age=%d) = %q, want %q", tc.age, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestOpsExposesHeartbeatAge asserts /ops serializes heartbeat_age_seconds
+// alongside last_heartbeat so the console can paint freshness without
+// parsing timestamps client-side.
+func TestOpsExposesHeartbeatAge(t *testing.T) {
+	c := testCollector()
+	c.SelfHeartbeat()
+	srv := NewServer(c, nil, nil, nil, "sqlite", "w-test")
+	mux := http.NewServeMux()
+	srv.Attach(mux)
+	ts := httptest.NewServer(mux)
+	defer ts.Close()
+
+	resp, err := http.Get(ts.URL + "/ops")
+	if err != nil {
+		t.Fatalf("GET /ops: %v", err)
+	}
+	defer resp.Body.Close()
+	var body map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		t.Fatalf("decode /ops: %v", err)
+	}
+	w, ok := body["worker"].(map[string]any)
+	if !ok {
+		t.Fatalf("decode /ops: worker block missing: %#v", body)
+	}
+	if _, ok := w["heartbeat_age_seconds"]; !ok {
+		t.Error("/ops worker.heartbeat_age_seconds missing — the console cannot derive freshness from last_heartbeat alone")
+	}
+	if _, ok := w["health_state"]; !ok {
+		t.Error("/ops worker.health_state missing — the console needs a derived liveness answer, not just the execution state")
+	}
+}
+
+// TestIncidentLifecycle pins the §9 lifecycle the error center depends on:
+// repeated entries collapse into ONE incident (not N rows), a quiet incident
+// recovers, a repeat after recovery marks it recurrent, and an ack is
+// recorded — and reports an error for an unknown id rather than pretending.
+func TestIncidentLifecycle(t *testing.T) {
+	recoverWindow = 50 * time.Millisecond
+	minOccForIncident = 2
+	defer func() {
+		recoverWindow = 10 * time.Minute
+		minOccForIncident = 3
+	}()
+
+	tr := newIncidentTracker(16)
+	item := ErrorItem{
+		Severity:  "ERROR",
+		Component: "worker.delivery",
+		Category:  "telegram",
+		Code:      "FLOOD_WAIT",
+		RuleID:    "r1",
+		WorkerID:  "w1",
+		JobID:     "j1",
+		Message:   "Telegram rate limit",
+	}
+	item.Count = 1
+
+	// Three observations of the same fingerprint → one incident, count 3.
+	for i := 0; i < 3; i++ {
+		item.Count = int64(i + 1)
+		item.JobID = fmt.Sprintf("j%d", i) // distinct jobs fold into RelatedJobs
+		tr.observeRing(item)
+	}
+	got := tr.incidents()
+	if len(got) != 1 {
+		t.Fatalf("incidents = %d, want 1 (repeats collapse into one incident)", len(got))
+	}
+	inc := got[0]
+	if inc.State != "open" {
+		t.Errorf("state = %q, want open", inc.State)
+	}
+	if inc.Count != 3 {
+		t.Errorf("count = %d, want 3", inc.Count)
+	}
+	if len(inc.RelatedJobs) != 3 {
+		t.Errorf("related jobs = %v, want 3 distinct", inc.RelatedJobs)
+	}
+	// FLOOD_WAIT must carry the telegram_flood_wait pattern with a hint,
+	// marked SUSPECTED — never a confirmed diagnosis.
+	if inc.Pattern == nil || inc.Pattern.Name != "telegram_flood_wait" || !inc.Pattern.Suspected {
+		t.Errorf("pattern = %+v, want suspected telegram_flood_wait", inc.Pattern)
+	}
+
+	// Quiet period past the window → recovered.
+	time.Sleep(80 * time.Millisecond)
+	tr.sweep()
+	got = tr.incidents()
+	if got[0].State != "recovered" {
+		t.Errorf("after quiet sweep: state = %q, want recovered", got[0].State)
+	}
+	if got[0].Recoveries != 1 {
+		t.Errorf("recoveries = %d, want 1", got[0].Recoveries)
+	}
+
+	// A repeat after recovery → recurrent (not a brand-new incident).
+	tr.observeRing(item)
+	got = tr.incidents()
+	if got[0].State != "recurrent" {
+		t.Errorf("after repeat: state = %q, want recurrent", got[0].State)
+	}
+
+	// Ack is recorded; acking an unknown id is an error, not a success.
+	if err := tr.ack(got[0].ID, "operator"); err != nil {
+		t.Fatalf("ack: %v", err)
+	}
+	got = tr.incidents()
+	if got[0].State != "acknowledged" || got[0].AckedBy != "operator" {
+		t.Errorf("after ack: state=%q by=%q, want acknowledged/operator", got[0].State, got[0].AckedBy)
+	}
+	if err := tr.ack("nope", "operator"); err == nil {
+		t.Error("ack(unknown) = nil, want an error — the console must never report success for a no-op ack")
+	}
+}
+
+// TestIncidentFingerprintIsolation: a rule-scoped error must NOT collapse
+// into the incident of another task's identical error code — an incident is
+// "this task's delivery failures", not "all delivery failures everywhere".
+func TestIncidentFingerprintIsolation(t *testing.T) {
+	tr := newIncidentTracker(16)
+	base := ErrorItem{
+		Severity:  "ERROR",
+		Component: "worker.delivery",
+		Category:  "telegram",
+		Code:      "NETWORK_TIMEOUT",
+		Message:   "timeout",
+	}
+	a := base
+	a.RuleID = "task-a"
+	a.Count = 5
+	tr.observeRing(a)
+	b := base
+	b.RuleID = "task-b"
+	b.Count = 5
+	tr.observeRing(b)
+
+	got := tr.incidents()
+	if len(got) != 2 {
+		t.Fatalf("incidents = %d, want 2 (per-task isolation)", len(got))
+	}
+}

@@ -383,11 +383,16 @@ func run() (runErr error) {
 				return
 			case <-ticker.C:
 				probeTelegram(ctx, collector, gateway, log)
+				// The worker's own liveness mark: /ops only advanced the
+				// heartbeat when someone looked, so a healthy worker with no
+				// observers read as offline. This store is what keeps
+				// last_heartbeat moving independently of any client, at one
+				// atomic per 15s — the opposite of a per-message write.
+				collector.SelfHeartbeat()
 				collector.SampleRates(time.Now())
 			}
 		}
 	}()
-
 
 	var schedWG sync.WaitGroup
 	schedWG.Add(1)

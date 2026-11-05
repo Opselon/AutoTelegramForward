@@ -44,6 +44,12 @@ export interface WorkerInfo {
   telegram_connected: boolean
   ai_connected: boolean
   last_heartbeat: string
+  /** Seconds since the last heartbeat (self or poll); -1 = never. */
+  heartbeat_age_seconds?: number
+  /** Derived liveness the console paints with, from heartbeat freshness +
+   * execution state — an old durable record can no longer keep a worker
+   * 'online' forever. */
+  health_state?: 'online' | 'offline' | 'degraded' | 'starting' | 'stopping' | 'unknown'
 }
 
 export interface LatencyPercentiles {
@@ -76,6 +82,22 @@ export interface WorkerQueue {
   oldest_pending_age_seconds: number
   backlog_trend: number[]
   load_status: LoadStatus
+  /** §5 diagnostics: is the queue broken, or just busy? Absent when the
+   *  store cannot compute the section (legacy backend) — never zeros. */
+  diagnostics?: QueueDiagnostics
+}
+
+export interface QueueDiagnostics {
+  stuck_claimed: number
+  stuck_pending: number
+  poison_jobs: number
+  retry_storm: number
+  oldest_pending_age_seconds: number
+  /** The thresholds the values above were computed with, so the console
+   *  never has to guess what 'stuck' meant for this snapshot. */
+  stuck_claimed_threshold_seconds: number
+  stuck_pending_threshold_seconds: number
+  retry_storm_window_seconds: number
 }
 
 export type StageHealth =
@@ -178,6 +200,45 @@ export interface WorkerTasksBody {
 }
 export type WorkerTasksResponse = WorkerTasksBody | WorkerUnreachable
 export type WorkerErrorsResponse = WorkerErrorsBody | WorkerUnreachable
+
+/** §9: one tracked incident — repeated failures of one fingerprint, with a
+ *  lifecycle, the workers/rules/jobs it touched, and a SUSPECTED pattern.
+ *  The pattern is labeled suspected, never confirmed: the hint says what to
+ *  CHECK, the error code only proves what FAILED. */
+export interface IncidentPattern {
+  name: string
+  suspected: boolean
+  hint: string
+}
+
+export interface WorkerIncident {
+  id: string
+  fingerprint: string
+  severity: string
+  category: string
+  code: string
+  component: string
+  retryable: boolean
+  message: string
+  count: number
+  recoveries: number
+  first_seen: string
+  last_seen: string
+  affected_workers: string[]
+  affected_rules: string[]
+  related_jobs: string[]
+  pattern?: IncidentPattern
+  state: 'open' | 'recovered' | 'recurrent' | 'acknowledged' | 'suppressed' | string
+  acked_by?: string
+  acked_at?: string
+}
+
+export interface WorkerIncidentsBody {
+  total: number
+  incidents: WorkerIncident[]
+}
+
+export type WorkerIncidentsResponse = WorkerIncidentsBody | WorkerUnreachable
 
 export interface WorkerErrorQuery {
   severity?: string

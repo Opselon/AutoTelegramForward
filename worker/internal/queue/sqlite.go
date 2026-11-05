@@ -57,6 +57,12 @@ type Store interface {
 	// tests take a Store without a second, narrower interface.
 	QueueStats(ctx context.Context) (*ops.QueueStats, error)
 
+	// QueueDiagnostics is the read-only §5 diagnostics read the ops surface
+	// serves on /ops/queue/diagnostics: stuck claims, starved pending rows,
+	// poison jobs, and the leading edge of a retry storm. now is unix
+	// seconds so both backends compute "stuck" against the same clock.
+	QueueDiagnostics(ctx context.Context, now int64) (*ops.QueueDiagnostics, error)
+
 	// TaskRows aggregates delivery_jobs by rule_id for /ops/tasks — the
 	// per-task operational view. Same rationale as QueueStats.
 	TaskRows(ctx context.Context, limit int) ([]*ops.TaskRow, error)
@@ -846,6 +852,31 @@ func (s *sqliteStore) QueueStats(ctx context.Context) (*ops.QueueStats, error) {
 		st.OldestPendingAgeSeconds = oldest.Float64
 	}
 	return &st, nil
+}
+
+// QueueDiagnostics is the §5 diagnostics read for the ops surface: the
+// signals that separate a busy queue from a broken one. One query over
+// delivery_jobs with bounded columns, no new tables, no per-message writes.
+// The thresholds come from ops.NewQueueDiagnostics via the struct fields.
+func (s *sqliteStore) QueueDiagnostics(ctx context.Context, now int64) (*ops.QueueDiagnostics, error) {
+	const q = `
+		SELECT
+			COALESCE(SUM(status = 'CLAIMED' AND lease_until <= ?), 0)        AS stuck_claimed,
+			COALESCE(SUM(status = 'PENDING' AND created_at <= ?), 0)         AS stuck_pending,
+			COALESCE(SUM(status = 'FAILED' AND attempts >= max_attempts
+			    AND (error_detail LIKE 'permanent:%' OR error_detail LIKE 'chat%restricted%')), 0) AS poison_jobs,
+			COALESCE(SUM(status = 'RETRY_WAIT' AND next_retry_at <= ? + ?), 0) AS retry_storm,
+			COALESCE(MAX(CASE WHEN status = 'PENDING' THEN ? - created_at ELSE 0 END), 0) AS oldest_pending_age
+		FROM delivery_jobs`
+	row := s.db.QueryRowContext(ctx, q, now, now-ops.StuckPendingThreshold,
+		now, ops.RetryStormWindow, now)
+	var d ops.QueueDiagnostics
+	var oldest float64
+	if err := row.Scan(&d.StuckClaimed, &d.StuckPending, &d.PoisonJobs, &d.RetryStorm, &oldest); err != nil {
+		return nil, fmt.Errorf("ops queue diagnostics: %w", err)
+	}
+	d.OldestPendingAgeSeconds = oldest
+	return &d, nil
 }
 
 // TaskRows aggregates delivery_jobs by rule_id into the per-task rows the

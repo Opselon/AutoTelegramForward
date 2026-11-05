@@ -15,11 +15,11 @@ import (
 // fed from the same slog records. Central logging is asynchronous and applies
 // its own bounded severity policy; a Logger outage never blocks Worker work.
 type fanoutHandler struct {
-	stdout slog.Handler
+	stdout  slog.Handler
 	central *observability.Client
-	module string
-	attrs []slog.Attr
-	groups []string
+	module  string
+	attrs   []slog.Attr
+	groups  []string
 }
 
 func (h *fanoutHandler) Enabled(ctx context.Context, level slog.Level) bool {

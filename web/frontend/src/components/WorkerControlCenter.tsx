@@ -102,6 +102,18 @@ const STATE_TONE: Record<string, string> = {
   stopping: 'var(--color-warning)',
 }
 
+// Derived liveness (heartbeat freshness + execution state): the console's
+// 'is the worker ALIVE?' answer, as opposed to state (what it is doing).
+// An old durable record can no longer keep a worker green forever.
+const LIVENESS_TONE: Record<string, string> = {
+  online: 'var(--color-success)',
+  offline: 'var(--color-danger)',
+  degraded: 'var(--color-warning)',
+  starting: 'var(--color-accent-violet)',
+  stopping: 'var(--color-warning)',
+  unknown: 'var(--color-text-muted)',
+}
+
 const LOAD_TONE: Record<LoadStatus, string> = {
   idle: 'var(--color-info)',
   normal: 'var(--color-success)',
@@ -341,9 +353,25 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
           <span className="ops-head__meta">
             <span
               className="ops-levelchip"
+              title={t('ui_worker_health_hint')}
+              style={{ background: LIVENESS_TONE[info?.health_state ?? 'unknown'], color: 'var(--color-button-fg)' }}
+            >
+              {(info?.health_state ?? 'unknown').toUpperCase()}
+            </span>
+            <span
+              className="ops-levelchip"
+              title={t('ui_worker_execution_state_hint')}
               style={{ background: STATE_TONE[info?.state ?? 'starting'], color: 'var(--color-button-fg)' }}
             >
               {info?.state?.toUpperCase() ?? '—'}
+            </span>
+            <span
+              className="ops-chip ops-chip--info"
+              title={t('ui_worker_heartbeat_hint')}
+            >
+              {t('ui_worker_heartbeat')}: {info?.heartbeat_age_seconds != null && info.heartbeat_age_seconds >= 0
+                ? Math.round(info.heartbeat_age_seconds) + 's'
+                : '—'}
             </span>
             <span className="ops-live ops-live--on" aria-label="live" />
           </span>
@@ -400,6 +428,23 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
                 <LatencyBars l={queue.queue_wait} unavailable={t('ui_latency_unavailable')} />
               </div>
             </div>
+            {queue.diagnostics ? (
+              <div style={{ marginTop: 10, padding: '8px 10px', border: '1px solid var(--color-border)', borderRadius: 8, background: 'var(--color-surface)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)', marginBottom: 6 }}>
+                  {t('ui_queue_diagnostics_hint', {
+                    claimed: queue.diagnostics.stuck_claimed_threshold_seconds,
+                    pending: queue.diagnostics.stuck_pending_threshold_seconds,
+                    storm: queue.diagnostics.retry_storm_window_seconds,
+                  })}
+                </div>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+                  <Metric icon={<AlertTriangle size={14} />} label={t('ui_diag_stuck_claimed')} value={String(queue.diagnostics.stuck_claimed)} />
+                  <Metric icon={<Timer size={14} />} label={t('ui_diag_stuck_pending')} value={String(queue.diagnostics.stuck_pending)} />
+                  <Metric icon={<XCircle size={14} />} label={t('ui_diag_poison_jobs')} value={String(queue.diagnostics.poison_jobs)} />
+                  <Metric icon={<Activity size={14} />} label={t('ui_diag_retry_storm')} value={String(queue.diagnostics.retry_storm)} />
+                </div>
+              </div>
+            ) : null}
           </>
         ) : (
           <EmptyState icon={<Layers size={22} />} title={t('ui_queue_snapshot_unavailable')} />

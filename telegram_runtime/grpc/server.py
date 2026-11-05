@@ -302,6 +302,25 @@ class TelegramGatewayServicer(pb_grpc.TelegramGatewayServicer):
             return pb.SendOutcome(error=self._err(f))
         return pb.SendOutcome(target_message_id=int(sent))
 
+    async def SendMedia(self, request, context):
+        # The re-upload half of the restricted-source fallback: the caller
+        # staged the file (PrepareMediaUpload) and hands the token back here.
+        # The worker's delivery engine chooses this path when native
+        # forward/copy is blocked, so an unimplemented handler degrades to a
+        # permanent 'Method not implemented' on every media job from a
+        # restricted channel — the worker must never hit a stub.
+        adapter, ferr = self._adapter(request.session_id)
+        if ferr is not None:
+            return pb.SendOutcome(error=self._err(ferr))
+        sent, f = await adapter.send_media(
+            request.target_chat_id, request.file_reference_token,
+            request.caption or None, request.media_type,
+            request.message_thread_id,
+        )
+        if f is not None:
+            return pb.SendOutcome(error=self._err(f))
+        return pb.SendOutcome(target_message_id=int(sent))
+
     # -- bot transport -------------------------------------------------------- #
 
     async def BotAvailability(self, request, context):

@@ -39,6 +39,8 @@ import type { DashboardCtx } from '../App'
 import { LogPolicyPanel } from '../components/LogPolicyPanel'
 import { LoggingHealth } from '../components/LoggingHealth'
 import WorkerControlCenter from '../components/WorkerControlCenter'
+import WorkerLogCenter from '../components/WorkerLogCenter'
+import { IncidentCenter } from '../components/IncidentCenter'
 
 export default function DevopsPanel({ d }: { d: DashboardCtx }) {
   const {
@@ -123,6 +125,20 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
       {currentUser?.is_admin ? (
         <section className="glass-panel ops-section" style={{ '--ops-i': 0 } as React.CSSProperties}>
           <WorkerControlCenter lang={lang} />
+        </section>
+      ) : null}
+
+      {/* -------------------------------------------- Go Worker Log Center -- */}
+      {currentUser?.is_admin ? (
+        <section className="glass-panel ops-section" style={{ '--ops-i': 1 } as React.CSSProperties}>
+          <WorkerLogCenter lang={lang} />
+        </section>
+      ) : null}
+
+      {/* ----------------------------------------- Go Worker Incidents (§9) -- */}
+      {currentUser?.is_admin ? (
+        <section className="glass-panel ops-section" style={{ '--ops-i': 1 } as React.CSSProperties}>
+          <IncidentCenter lang={lang} />
         </section>
       ) : null}
 

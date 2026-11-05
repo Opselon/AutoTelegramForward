@@ -24,6 +24,9 @@ import (
 	"strings"
 	"time"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
@@ -126,10 +129,43 @@ func (j job) meta() *pb.RequestMeta {
 // transportFailure is the failure returned for a gRPC-level error: the
 // runtime was unreachable or the deadline ran out, so the outcome on
 // Telegram's side is unknown — never "not sent".
+//
+// The single NETWORK_TIMEOUT mapping used to catch every gRPC status,
+// which mislabeled permanent server-side defects (UNIMPLEMENTED, permission
+// denials) as transient network timeouts. That mattered operationally: the
+// /ops error ring reported "NETWORK_TIMEOUT/UNAVAILABLE" while the runtime
+// was actually answering UNIMPLEMENTED on a method it never implemented —
+// the diagnostic pointed at the network layer and away from the real defect.
+// Unimplemented is now the INTERNAL_ERROR/UNIMPLEMENTED it is. Retryability
+// still follows the shared taxonomy (INTERNAL_ERROR is transient by
+// contract on both sides), so a permanent server defect is retried with
+// bounded backoff rather than forever.
 func transportFailure(err error) *telegraph.DeliveryFailure {
+	code := "NETWORK_TIMEOUT"
+	errorType := "UNAVAILABLE"
+	if st, ok := status.FromError(err); ok {
+		switch st.Code() {
+		case codes.DeadlineExceeded:
+			// The call exceeded its own deadline: unknown outcome on the wire.
+		case codes.Unavailable, codes.Canceled:
+			// Runtime unreachable, or the caller canceled: retryable.
+		case codes.Unimplemented:
+			code = "INTERNAL_ERROR"
+			errorType = "UNIMPLEMENTED"
+		case codes.PermissionDenied:
+			code = "AUTHENTICATION_ERROR"
+			errorType = "PERMISSION_DENIED"
+		case codes.ResourceExhausted:
+			code = "RATE_LIMITED"
+			errorType = "RESOURCE_EXHAUSTED"
+		default:
+			code = "INTERNAL_ERROR"
+			errorType = "INTERNAL"
+		}
+	}
 	return &telegraph.DeliveryFailure{
-		Code:      "NETWORK_TIMEOUT",
-		ErrorType: "UNAVAILABLE",
+		Code:      code,
+		ErrorType: errorType,
 		Message:   err.Error(),
 	}
 }

@@ -71,7 +71,8 @@ type Collector struct {
 	stageLock sync.RWMutex
 
 	// --- error ring -------------------------------------------------------- //
-	errors *errorRing
+	errors    *errorRing
+	incidents *incidentTracker
 
 	// --- CPU: process time-on-CPU, baselined at construction so the
 	// reported figure is the average since start (see cpuPercent).
@@ -151,12 +152,18 @@ func NewCollector(cfg Config) *Collector {
 		wait:           newLatencyRing(latencyCapacity),
 		stages:         map[string]*stageStats{},
 		errors:         newErrorRing(errorRingCapacity),
+		incidents:      newIncidentTracker(256),
 		cpuStart:       time.Now(),
 		jobsRate:       newRateSampler(rateWindow),
 		backlogRate:    newRateSampler(rateWindow),
 		tasks:          map[string]*taskStats{},
 		taskTTL:        10 * time.Minute,
 	}
+	// Wire the ring into the incident tracker: every deduped ring event
+	// becomes an observation the tracker aggregates into an incident. One
+	// closure per process — the incident surface costs nothing per
+	// successful message and no DB write per failure.
+	c.errors.onRecord = c.incidents.observeRing
 	// Baseline CPU now so cpuPercent averages over the process lifetime
 	// rather than from the first /ops read onward.
 	c.cpuUser, c.cpuSys = c.cpuStats()
@@ -271,6 +278,23 @@ func (c *Collector) AIConnected() bool { return c.aiConnected.Load() }
 // "stale panel data" is distinguishable from "worker alive but nobody is
 // looking".
 func (c *Collector) Heartbeat() { c.lastHeartbeat.Store(time.Now().Unix()) }
+
+// HeartbeatAge is how long ago the last heartbeat (self or poll) landed.
+// /ops serializes it as heartbeat_age_seconds so the console can render
+// freshness without time-math on a string timestamp.
+func (c *Collector) HeartbeatAge() int64 {
+	hb := c.lastHeartbeat.Load()
+	if hb <= 0 {
+		return -1 // never: distinguish from a fresh heartbeat
+	}
+	return time.Now().Unix() - hb
+}
+
+// SelfHeartbeat is the worker's OWN liveness mark, independent of anyone
+// polling /ops. Without it last_heartbeat only advanced when a client
+// looked, so a healthy-but-unobserved worker read as offline. The run loop
+// ticks this on a fixed cadence; it costs one atomic store, no DB write.
+func (c *Collector) SelfHeartbeat() { c.lastHeartbeat.Store(time.Now().Unix()) }
 
 // RecordPendingDepth feeds the backlog sampler from the depth the claim
 // loop already measured — no extra DB read, no per-heartbeat write.

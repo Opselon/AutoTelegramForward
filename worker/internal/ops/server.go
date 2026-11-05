@@ -66,6 +66,12 @@ func (s *Server) handleOpsRoute(w http.ResponseWriter, r *http.Request) {
 	switch strings.TrimPrefix(r.URL.Path, "/ops/") {
 	case "queue":
 		s.handleQueue(w, r)
+	case "queue/diagnostics":
+		s.handleQueueDiagnostics(w, r)
+	case "incidents":
+		s.handleIncidents(w, r)
+	case "incidents/ack":
+		s.handleIncidentAck(w, r)
 	case "tasks":
 		s.handleTasks(w, r)
 	case "errors":
@@ -109,6 +115,83 @@ func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSONCode(w, http.StatusOK, q)
+}
+
+// handleQueueDiagnostics serves the §5 diagnostics: the signals that
+// separate a busy queue from a broken one (stuck claims, starved pending,
+// poison jobs, an imminent retry storm). The section is absent when the
+// store does not implement QueueDiagnostician — an older backend — rather
+// than fabricating zeros.
+func (s *Server) handleQueueDiagnostics(w http.ResponseWriter, r *http.Request) {
+	diag, err := NewQueueDiagnostics(r.Context(), s.queue, time.Now().Unix())
+	if err != nil {
+		writeJSONCode(w, http.StatusServiceUnavailable, map[string]any{
+			"error":        sanitize(err.Error()),
+			"db_connected": s.collector.DBConnected(),
+		})
+		return
+	}
+	if diag == nil {
+		writeJSONCode(w, http.StatusOK, map[string]any{
+			"diagnostics": nil,
+			"available":   false,
+		})
+		return
+	}
+	writeJSONCode(w, http.StatusOK, map[string]any{
+		"diagnostics": diag,
+		"available":   true,
+	})
+}
+
+// handleIncidents serves the §9 error-intelligence view: repeated errors
+// grouped into incidents with a lifecycle (open / recovered / recurrent /
+// acknowledged / suppressed), affected workers/rules/jobs, and a SUSPECTED
+// pattern with an actionable hint when one matched.
+//
+// State transitions happen on observation and on sweep: the sweep is what
+// ages an incident into "recovered" when nobody is reporting new
+// occurrences, so the console cannot show a problem as live forever just
+// because it once was.
+func (s *Server) handleIncidents(w http.ResponseWriter, r *http.Request) {
+	s.collector.incidents.sweep()
+	state := r.URL.Query().Get("state")
+	list := s.collector.incidents.incidents()
+	if state != "" {
+		filtered := make([]*Incident, 0, len(list))
+		for _, inc := range list {
+			if inc.State == state {
+				filtered = append(filtered, inc)
+			}
+		}
+		list = filtered
+	}
+	writeJSONCode(w, http.StatusOK, map[string]any{
+		"total":     len(list),
+		"incidents": list,
+	})
+}
+
+// handleIncidentAck acknowledges an incident by its stable ID. POST-only,
+// admin-gated by the same auth that fronts the whole ops surface (the API
+// proxy), with the acker recorded for the audit trail. An ack for an unknown
+// ID is an error, never a silent success.
+func (s *Server) handleIncidentAck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeJSONCode(w, http.StatusMethodNotAllowed, map[string]any{"error": "POST required"})
+		return
+	}
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeJSONCode(w, http.StatusBadRequest, map[string]any{"error": "incident id required"})
+		return
+	}
+	if err := s.collector.incidents.ack(id, r.RemoteAddr); err != nil {
+		writeJSONCode(w, http.StatusNotFound, map[string]any{"error": sanitize(err.Error())})
+		return
+	}
+	writeJSONCode(w, http.StatusOK, map[string]any{"acknowledged": id})
 }
 
 // handleTasks serves the per-task operational rows.
@@ -178,12 +261,30 @@ func (s *Server) workerSnapshot() map[string]any {
 	if ts := c.tgCheckedAt.Load(); ts > 0 {
 		out["telegram_checked_at"] = time.Unix(ts, 0).UTC().Format(time.RFC3339)
 	}
+	// ai_checked_at is the difference between "no provider configured" and
+	// "the provider is failing": ai_connected alone cannot tell them apart,
+	// and the contract's probe semantics (the LAST provider outcome) leave
+	// the flag false until the first call — a timestamp of zero means "no
+	// call yet", never "provider down".
 	if ts := c.aiCheckedAt.Load(); ts > 0 {
 		out["ai_checked_at"] = time.Unix(ts, 0).UTC().Format(time.RFC3339)
 	}
 	if hb := c.lastHeartbeat.Load(); hb > 0 {
 		out["last_heartbeat"] = time.Unix(hb, 0).UTC().Format(time.RFC3339)
+		out["heartbeat_age_seconds"] = c.HeartbeatAge()
 	}
+	// health_state is the DERIVED liveness answer the console paints with:
+	//   online  — heartbeat fresh (worker is alive and observable)
+	//   offline — heartbeat older than the freshness budget (process dead
+	//             or wedged; nothing else can say this — an old DB record
+	//             must not keep a worker "online" forever)
+	//   degraded — the process reports it is alive but its own state is
+	//             degraded, or its DB/Telegram probes are down
+	//   starting / stopping / unknown — the execution state when it is not
+	//             yet ready or already shutting down.
+	// A worker that nobody polls still heartbeats on its own tick, so
+	// "nobody is looking" never collides with "worker is down".
+	out["health_state"] = derivedHealthState(c, c.HeartbeatAge())
 	return out
 }
 
@@ -222,6 +323,13 @@ func (s *Server) queueSnapshot(ctx context.Context) (map[string]any, error) {
 	}
 	if stats.OldestPendingAgeSeconds > 0 {
 		out["oldest_pending_age_seconds"] = round3(stats.OldestPendingAgeSeconds)
+	}
+	// The §5 diagnostics ride the same snapshot so one /ops/queue poll gets
+	// the status counts AND the "busy vs broken" signals in a single
+	// request. Unavailable (legacy store) is reported by absence, never by
+	// fabricated zeros.
+	if diag, derr := NewQueueDiagnostics(ctx, s.queue, time.Now().Unix()); derr == nil && diag != nil {
+		out["diagnostics"] = diag
 	}
 	// The durable count is authoritative whenever the DB is reachable;
 	// reconcile in ONE direction (durable ≥ memory) so a restart cannot
