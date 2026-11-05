@@ -253,3 +253,41 @@ func TestWorkerControl_UnreachableIs503(t *testing.T) {
 		}
 	})
 }
+
+// TestOpsProxyForwardsTheCallersMethod: the §10 controls and the incident
+// ack are POST-only on the worker — its OWN 405 guard is the last line of
+// defense against a prefetch pausing production. The proxy must forward the
+// caller's method; hardcoding GET made every pause/resume/ack die as 405
+// after passing every API-edge check, which is exactly the silently-broken
+// control the contract forbids.
+//
+// Passive assert against a stand-in worker: a method-aware proxy answers a
+// POST with the stand-in's POST result rather than a GET's.
+func TestOpsProxyForwardsTheCallersMethod(t *testing.T) {
+	// A stand-in worker that records the method it actually received.
+	got := make(chan string, 1)
+	standIn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got <- r.Method
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	}))
+	defer standIn.Close()
+
+	prev := os.Getenv("ATF_WORKER_OPS_URL")
+	os.Setenv("ATF_WORKER_OPS_URL", standIn.URL)
+	defer os.Setenv("ATF_WORKER_OPS_URL", prev)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/worker/control/pause", nil)
+	(&Handlers{}).WorkerControlPause(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("POST pause proxied as %s: got %d, want the stand-in's 200", <-got, rec.Code)
+	}
+	select {
+	case method := <-got:
+		if method != http.MethodPost {
+			t.Errorf("proxy forwarded method %q for a POST control call — the worker's own 405 guard would reject it", method)
+		}
+	default:
+		t.Error("the stand-in worker never received the call")
+	}
+}

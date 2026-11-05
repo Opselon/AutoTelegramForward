@@ -40,13 +40,24 @@ func workerOpsBase() string {
 // and the HTTP status the worker returned. A network failure is distinct
 // from a worker-side 5xx so the handler can tell "unreachable" from "sick".
 func fetchOps(ctx context.Context, path string, query url.Values) (map[string]any, int, error) {
+	return fetchOpsMethod(ctx, http.MethodGet, path, query)
+}
+
+// fetchOpsMethod is the method-aware proxy. The §10 control routes
+// (pause/resume) and the incident ack are POST-only on the worker: the
+// proxy must forward the caller's method, not hardcode GET — otherwise a
+// pause that mutates operational state arrives at the worker as a GET and
+// the worker's own 405 guard correctly rejects it. The method is taken
+// from the CALLER, never from a query string: no client can upgrade its
+// own privileges by appending method=post.
+func fetchOpsMethod(ctx context.Context, method string, path string, query url.Values) (map[string]any, int, error) {
 	u := workerOpsBase() + path
 	if len(query) > 0 {
 		u += "?" + query.Encode()
 	}
 	ctx, cancel := context.WithTimeout(ctx, opsTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, method, u, nil)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -200,7 +211,7 @@ func (h *Handlers) WorkerIncidentAck(w http.ResponseWriter, r *http.Request) {
 	}
 	q := url.Values{}
 	q.Set("id", id)
-	body, status, err := fetchOps(r.Context(), "/ops/incidents/ack", q)
+	body, status, err := fetchOpsMethod(r.Context(), r.Method, "/ops/incidents/ack", q)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"worker_reachable": false,
@@ -237,7 +248,7 @@ func (h *Handlers) WorkerControlPause(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"error": "POST required"})
 		return
 	}
-	body, status, err := fetchOps(r.Context(), "/ops/control/pause", nil)
+	body, status, err := fetchOpsMethod(r.Context(), r.Method, "/ops/control/pause", nil)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"worker_reachable": false,
@@ -256,7 +267,7 @@ func (h *Handlers) WorkerControlResume(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"error": "POST required"})
 		return
 	}
-	body, status, err := fetchOps(r.Context(), "/ops/control/resume", nil)
+	body, status, err := fetchOpsMethod(r.Context(), r.Method, "/ops/control/resume", nil)
 	if err != nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"worker_reachable": false,
