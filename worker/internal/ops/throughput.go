@@ -161,5 +161,10 @@ func (h *throughputHistory) historyAgeMinutes(now time.Time) int64 {
 	if h.lastTick.IsZero() {
 		return 0
 	}
-	return now.Unix()/60 - h.lastTick.Unix()/60
+	// The honest answer is minutesObserved — how many minutes of history
+	// the ring actually holds. A worker that has been ticking for 3 minutes
+	// has 3 minutes of history even though the last tick was seconds ago:
+	// the gap to "now" (0 while ticks flow) would report zero history
+	// forever, and the console would hide windows it can actually answer.
+	return int64(h.minutesObserved)
 }
