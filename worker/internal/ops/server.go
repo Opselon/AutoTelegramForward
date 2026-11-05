@@ -411,6 +411,17 @@ func (s *Server) taskRows(ctx context.Context) ([]map[string]any, error) {
 			if info.updated > 0 {
 				row["config_updated_at"] = RFC3339(info.updated)
 			}
+			// §6: the feature flags the task runs under, read off the same
+			// forward_rules row the join already fetched. Emitted as a
+			// features object so the console's badges (F/R/AI/C/N) render
+			// data instead of "unavailable".
+			row["features"] = map[string]any{
+				"filter":      info.filterOn,
+				"replacement": info.replacement,
+				"ai":          info.aiOn,
+				"cleaner":     info.cleanerOn,
+				"fen":         info.forwardN,
+			}
 		} else {
 			// Jobs exist but no forward_rules row: the rule was deleted
 			// while its jobs sat in the queue. enabled=false so the panel

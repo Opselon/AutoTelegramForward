@@ -3,6 +3,7 @@ package ops
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -83,6 +84,16 @@ type joinRuleInfo struct {
 	enabled bool
 	updated int64
 	hasRow  bool
+
+	// features: the §6 per-task feature flags, read off the forward_rules
+	// columns the task actually runs under. They feed the panel's F/R/AI/C/N
+	// badges and the expanded detail row, so the operator can see at a
+	// glance which stage a failing task has enabled.
+	filterOn    bool
+	replacement bool
+	aiOn        bool
+	cleanerOn   bool
+	forwardN    int64
 }
 
 // placeholder returns the backend's positional placeholder for index n
@@ -114,7 +125,9 @@ func ReadRulesForTasks(ctx context.Context, db *sql.DB, backend string, ruleIDs 
 		marks[i] = placeholder(backend, i+1)
 	}
 	query := fmt.Sprintf(`
-		SELECT id, is_active, source_chat_id, target_chat_id, updated_at
+		SELECT id, is_active, source_chat_id, target_chat_id, updated_at,
+		       filter_rule_id, ai_config_id, replacements, header, custom_header,
+		       header_enabled, metadata
 		FROM forward_rules
 		WHERE id IN (%s)`, strings.Join(marks, ","))
 	args := make([]any, 0, len(ruleIDs))
@@ -128,22 +141,59 @@ func ReadRulesForTasks(ctx context.Context, db *sql.DB, backend string, ruleIDs 
 	defer rows.Close()
 	for rows.Next() {
 		var (
-			id       string
-			isActive bool
-			source   sql.NullString
-			target   sql.NullString
-			updated  sql.NullInt64
+			id         string
+			isActive   bool
+			source     sql.NullString
+			target     sql.NullString
+			updated    sql.NullInt64
+			filterID   sql.NullString
+			aiConfigID sql.NullString
+			replBlob   sql.NullString
+			hdrText    sql.NullString
+			customHdr  sql.NullString
+			hdrEnabled sql.NullBool
+			metadata   sql.NullString
 		)
-		if err := rows.Scan(&id, &isActive, &source, &target, &updated); err != nil {
+		// 12 columns selected, 12 destinations: a mismatch fails the join
+		// for every row (which the join-features test would catch).
+		if err := rows.Scan(&id, &isActive, &source, &target, &updated,
+			&filterID, &aiConfigID, &replBlob, &hdrText, &customHdr, &hdrEnabled, &metadata); err != nil {
 			return nil, fmt.Errorf("ops task join scan: %w", err)
 		}
+		// metadata carries forward_every_n (the FEN cadence) as it does on
+		// the Python side (entities.py reads forward_every_n out of the
+		// blob). Anything else unparseable degrades to "no FEN", never
+		// fails the join.
+		var n int64
+		if metadata.Valid {
+			var obj map[string]any
+			if jerr := json.Unmarshal([]byte(metadata.String), &obj); jerr == nil {
+				if v, ok := obj["forward_every_n"]; ok {
+					if fv, fok := v.(float64); fok {
+						n = int64(fv)
+					}
+				}
+			}
+		}
+		// A feature counts as ON the same way the Python pipeline decides:
+		// filter/ai are ON when a rule/config is attached (non-empty id),
+		// replacement when replacements JSON carries at least one entry,
+		// cleaner/header when the column carries a non-empty template and
+		// (for header) the explicit enabled flag is set.
+		replacements := strings.TrimSpace(replBlob.String)
+		hasRepl := replacements != "" && replacements != "{}" && replacements != "[]"
 		out[id] = &joinRuleInfo{
-			id:      id,
-			source:  source.String,
-			target:  target.String,
-			enabled: isActive,
-			updated: updated.Int64,
-			hasRow:  true,
+			id:          id,
+			source:      source.String,
+			target:      target.String,
+			enabled:     isActive,
+			updated:     updated.Int64,
+			hasRow:      true,
+			filterOn:    filterID.Valid && filterID.String != "",
+			replacement: hasRepl,
+			aiOn:        aiConfigID.Valid && aiConfigID.String != "",
+			cleanerOn:   hdrEnabled.Valid && hdrEnabled.Bool && customHdr.String != "",
+			forwardN:    n,
 		}
 	}
 	return out, rows.Err()
