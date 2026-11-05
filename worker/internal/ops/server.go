@@ -68,6 +68,10 @@ func (s *Server) handleOpsRoute(w http.ResponseWriter, r *http.Request) {
 		s.handleQueue(w, r)
 	case "queue/diagnostics":
 		s.handleQueueDiagnostics(w, r)
+	case "incidents":
+		s.handleIncidents(w, r)
+	case "incidents/ack":
+		s.handleIncidentAck(w, r)
 	case "tasks":
 		s.handleTasks(w, r)
 	case "errors":
@@ -138,6 +142,56 @@ func (s *Server) handleQueueDiagnostics(w http.ResponseWriter, r *http.Request) 
 		"diagnostics": diag,
 		"available":   true,
 	})
+}
+
+// handleIncidents serves the §9 error-intelligence view: repeated errors
+// grouped into incidents with a lifecycle (open / recovered / recurrent /
+// acknowledged / suppressed), affected workers/rules/jobs, and a SUSPECTED
+// pattern with an actionable hint when one matched.
+//
+// State transitions happen on observation and on sweep: the sweep is what
+// ages an incident into "recovered" when nobody is reporting new
+// occurrences, so the console cannot show a problem as live forever just
+// because it once was.
+func (s *Server) handleIncidents(w http.ResponseWriter, r *http.Request) {
+	s.collector.incidents.sweep()
+	state := r.URL.Query().Get("state")
+	list := s.collector.incidents.incidents()
+	if state != "" {
+		filtered := make([]*Incident, 0, len(list))
+		for _, inc := range list {
+			if inc.State == state {
+				filtered = append(filtered, inc)
+			}
+		}
+		list = filtered
+	}
+	writeJSONCode(w, http.StatusOK, map[string]any{
+		"total":     len(list),
+		"incidents": list,
+	})
+}
+
+// handleIncidentAck acknowledges an incident by its stable ID. POST-only,
+// admin-gated by the same auth that fronts the whole ops surface (the API
+// proxy), with the acker recorded for the audit trail. An ack for an unknown
+// ID is an error, never a silent success.
+func (s *Server) handleIncidentAck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeJSONCode(w, http.StatusMethodNotAllowed, map[string]any{"error": "POST required"})
+		return
+	}
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeJSONCode(w, http.StatusBadRequest, map[string]any{"error": "incident id required"})
+		return
+	}
+	if err := s.collector.incidents.ack(id, r.RemoteAddr); err != nil {
+		writeJSONCode(w, http.StatusNotFound, map[string]any{"error": sanitize(err.Error())})
+		return
+	}
+	writeJSONCode(w, http.StatusOK, map[string]any{"acknowledged": id})
 }
 
 // handleTasks serves the per-task operational rows.

@@ -71,7 +71,8 @@ type Collector struct {
 	stageLock sync.RWMutex
 
 	// --- error ring -------------------------------------------------------- //
-	errors *errorRing
+	errors    *errorRing
+	incidents *incidentTracker
 
 	// --- CPU: process time-on-CPU, baselined at construction so the
 	// reported figure is the average since start (see cpuPercent).
@@ -151,12 +152,18 @@ func NewCollector(cfg Config) *Collector {
 		wait:           newLatencyRing(latencyCapacity),
 		stages:         map[string]*stageStats{},
 		errors:         newErrorRing(errorRingCapacity),
+		incidents:      newIncidentTracker(256),
 		cpuStart:       time.Now(),
 		jobsRate:       newRateSampler(rateWindow),
 		backlogRate:    newRateSampler(rateWindow),
 		tasks:          map[string]*taskStats{},
 		taskTTL:        10 * time.Minute,
 	}
+	// Wire the ring into the incident tracker: every deduped ring event
+	// becomes an observation the tracker aggregates into an incident. One
+	// closure per process — the incident surface costs nothing per
+	// successful message and no DB write per failure.
+	c.errors.onRecord = c.incidents.observeRing
 	// Baseline CPU now so cpuPercent averages over the process lifetime
 	// rather than from the first /ops read onward.
 	c.cpuUser, c.cpuSys = c.cpuStats()

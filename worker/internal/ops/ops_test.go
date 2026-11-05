@@ -772,3 +772,112 @@ func TestOpsExposesHeartbeatAge(t *testing.T) {
 		t.Error("/ops worker.health_state missing — the console needs a derived liveness answer, not just the execution state")
 	}
 }
+
+// TestIncidentLifecycle pins the §9 lifecycle the error center depends on:
+// repeated entries collapse into ONE incident (not N rows), a quiet incident
+// recovers, a repeat after recovery marks it recurrent, and an ack is
+// recorded — and reports an error for an unknown id rather than pretending.
+func TestIncidentLifecycle(t *testing.T) {
+	recoverWindow = 50 * time.Millisecond
+	minOccForIncident = 2
+	defer func() {
+		recoverWindow = 10 * time.Minute
+		minOccForIncident = 3
+	}()
+
+	tr := newIncidentTracker(16)
+	item := ErrorItem{
+		Severity:  "ERROR",
+		Component: "worker.delivery",
+		Category:  "telegram",
+		Code:      "FLOOD_WAIT",
+		RuleID:    "r1",
+		WorkerID:  "w1",
+		JobID:     "j1",
+		Message:   "Telegram rate limit",
+	}
+	item.Count = 1
+
+	// Three observations of the same fingerprint → one incident, count 3.
+	for i := 0; i < 3; i++ {
+		item.Count = int64(i + 1)
+		item.JobID = fmt.Sprintf("j%d", i) // distinct jobs fold into RelatedJobs
+		tr.observeRing(item)
+	}
+	got := tr.incidents()
+	if len(got) != 1 {
+		t.Fatalf("incidents = %d, want 1 (repeats collapse into one incident)", len(got))
+	}
+	inc := got[0]
+	if inc.State != "open" {
+		t.Errorf("state = %q, want open", inc.State)
+	}
+	if inc.Count != 3 {
+		t.Errorf("count = %d, want 3", inc.Count)
+	}
+	if len(inc.RelatedJobs) != 3 {
+		t.Errorf("related jobs = %v, want 3 distinct", inc.RelatedJobs)
+	}
+	// FLOOD_WAIT must carry the telegram_flood_wait pattern with a hint,
+	// marked SUSPECTED — never a confirmed diagnosis.
+	if inc.Pattern == nil || inc.Pattern.Name != "telegram_flood_wait" || !inc.Pattern.Suspected {
+		t.Errorf("pattern = %+v, want suspected telegram_flood_wait", inc.Pattern)
+	}
+
+	// Quiet period past the window → recovered.
+	time.Sleep(80 * time.Millisecond)
+	tr.sweep()
+	got = tr.incidents()
+	if got[0].State != "recovered" {
+		t.Errorf("after quiet sweep: state = %q, want recovered", got[0].State)
+	}
+	if got[0].Recoveries != 1 {
+		t.Errorf("recoveries = %d, want 1", got[0].Recoveries)
+	}
+
+	// A repeat after recovery → recurrent (not a brand-new incident).
+	tr.observeRing(item)
+	got = tr.incidents()
+	if got[0].State != "recurrent" {
+		t.Errorf("after repeat: state = %q, want recurrent", got[0].State)
+	}
+
+	// Ack is recorded; acking an unknown id is an error, not a success.
+	if err := tr.ack(got[0].ID, "operator"); err != nil {
+		t.Fatalf("ack: %v", err)
+	}
+	got = tr.incidents()
+	if got[0].State != "acknowledged" || got[0].AckedBy != "operator" {
+		t.Errorf("after ack: state=%q by=%q, want acknowledged/operator", got[0].State, got[0].AckedBy)
+	}
+	if err := tr.ack("nope", "operator"); err == nil {
+		t.Error("ack(unknown) = nil, want an error — the console must never report success for a no-op ack")
+	}
+}
+
+// TestIncidentFingerprintIsolation: a rule-scoped error must NOT collapse
+// into the incident of another task's identical error code — an incident is
+// "this task's delivery failures", not "all delivery failures everywhere".
+func TestIncidentFingerprintIsolation(t *testing.T) {
+	tr := newIncidentTracker(16)
+	base := ErrorItem{
+		Severity:  "ERROR",
+		Component: "worker.delivery",
+		Category:  "telegram",
+		Code:      "NETWORK_TIMEOUT",
+		Message:   "timeout",
+	}
+	a := base
+	a.RuleID = "task-a"
+	a.Count = 5
+	tr.observeRing(a)
+	b := base
+	b.RuleID = "task-b"
+	b.Count = 5
+	tr.observeRing(b)
+
+	got := tr.incidents()
+	if len(got) != 2 {
+		t.Fatalf("incidents = %d, want 2 (per-task isolation)", len(got))
+	}
+}

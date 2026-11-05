@@ -52,6 +52,10 @@ type errorRing struct {
 	capacity int
 	entries  []*ErrorItem
 	index    map[string]*ErrorItem
+
+	// onRecord, when set, mirrors each dedup event into the incident
+	// tracker. nil in tests that only want the ring.
+	onRecord func(it ErrorItem)
 }
 
 // newErrorRing builds a ring with the contract's 512-entry bound.
@@ -73,6 +77,19 @@ func newErrorRing(capacity int) *errorRing {
 // are ids-and-codes shaped; sanitize() is still applied so a future caller
 // passing a longer string cannot leak content or a secret into the surface.
 func (r *errorRing) Record(it ErrorItem) {
+	r.mu.Lock()
+	r.recordLocked(it)
+	r.mu.Unlock()
+	// Fold the dedup event into the incident tracker: the ring knows the
+	// CURRENT occurrence count, which is what turns a repeated log line
+	// into a live incident with a history.
+	if r.onRecord != nil {
+		r.onRecord(it)
+	}
+}
+
+// recordLocked is the dedup/evict path; callers hold r.mu.
+func (r *errorRing) recordLocked(it ErrorItem) {
 	if it.Component == "" && it.Category == "" {
 		return
 	}
@@ -86,8 +103,6 @@ func (r *errorRing) Record(it ErrorItem) {
 	key := dedupKey(it.Component, it.Code, it.RuleID)
 	it.dedupKey = key
 
-	r.mu.Lock()
-	defer r.mu.Unlock()
 	if existing, ok := r.index[key]; ok {
 		existing.Count++
 		existing.Ts = it.Ts
