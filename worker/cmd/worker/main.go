@@ -361,8 +361,14 @@ func run() (runErr error) {
 		opsSrv.Attach(mux)
 	}
 	go func() {
-		if err := healthSrv.Start(); err != nil && !errors.Is(err, net.ErrClosed) {
-			log.Warn("health server stopped", "error", err)
+		if err := healthSrv.Start(); err != nil {
+			if errors.Is(err, http.ErrServerClosed) || errors.Is(err, net.ErrClosed) {
+				// Shutdown closing the listener is the normal lifecycle, not
+				// a degradation — 18 production WARNs came from this line.
+				log.Info("health server stopped (shutdown)")
+			} else {
+				log.Warn("health server stopped unexpectedly", "error", err)
+			}
 		}
 	}()
 

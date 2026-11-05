@@ -214,11 +214,20 @@ class DeliveryReconciler:
         job was deleted while its mapping survived (or vice versa): the copy
         may or may not be in the destination, and nothing currently drives
         it to a conclusion.
+
+        Retention asymmetry is NOT a mismatch: terminal delivery jobs purge
+        after 7 days while mappings keep 30, so a mapping older than the
+        job-retention window whose job is gone is an expected outcome of
+        cleanup, not an anomaly — flagging it every sweep produced 58
+        identical production warnings for rows nothing can act on. Only
+        mappings inside the job-retention window are findings.
         """
         scope, params = await self._scope(owner_user_id)
         db = self._db()
         if db is None:
             return []
+        job_retention_seconds = 60 * 60 * 24 * 7  # mirrors the delivery_jobs cleanup window
+        cutoff = int(time.time()) - job_retention_seconds
         rows = await self._query(
             db,
             "SELECT m.rule_id, m.source_chat_id, m.source_message_id, m.target_chat_id, "
@@ -227,8 +236,8 @@ class DeliveryReconciler:
             "ON j.rule_id = m.rule_id AND j.source_chat_id = m.source_chat_id "
             "AND j.source_message_id = m.source_message_id "
             "AND j.target_chat_id = m.target_chat_id "
-            "WHERE j.id IS NULL" + scope.replace("rule_id", "m.rule_id"),
-            params,
+            "WHERE j.id IS NULL AND m.updated_at >= ?" + scope.replace("rule_id", "m.rule_id"),
+            (cutoff,) + tuple(params),
         )
         findings = []
         for r in rows or ():

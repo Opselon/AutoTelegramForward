@@ -165,6 +165,19 @@ async def test_an_orphan_mapping_is_flagged(db, queue, mmap, rules, attempts, ga
     assert o["error_category"] == "orphan_mapping"
 
 
+async def test_an_aged_orphan_mapping_is_retention_not_anomaly(db, queue, mmap, rules, attempts, gaps):
+    """Terminal jobs purge after 7 days while mappings keep 30: an old
+    mapping whose job is gone is cleanup's expected outcome, not a state
+    mismatch — flagging it every sweep produced 58 identical production
+    warnings for rows nothing can act on. Only in-window orphans count."""
+    await rules.add(make_rule())
+    _mapping(db)
+    aged = int(time.time()) - 60 * 60 * 24 * 8  # one day past the job-retention window
+    db.execute("UPDATE message_map SET updated_at=? WHERE rule_id='rule-1'", (aged,))
+    r = await _reconciler(queue, mmap, rules, attempts, gaps).reconcile()
+    assert r["checks"]["orphan_mappings"] == [], "a retention-aged mapping is not an anomaly"
+
+
 async def test_a_sent_job_with_its_mapping_is_not_an_orphan(db, queue, mmap, rules, attempts, gaps):
     """The join is on the full deliverable key, so a matching job clears it."""
     await rules.add(make_rule())

@@ -89,3 +89,24 @@ Duplicate-delivery risk per group: (a) zero — Telegram rejected every attempt 
 5. Single-engine features (delay / sync_replies / sync_edits/deletes) strangler-fig completion.
 6. Readiness depth (fence/runtime probes), `/metrics` exposition, scheduler metrics stub, unauthenticated :8090 controls (runbook-mitigated) — observability follow-ups, ledgered in the audit.
 7. Website npm audit (1 high, 1 moderate) — website workstream.
+
+## 7. Production log audit — WARN/ERROR inventory (2026-11-05, deduplicated)
+
+Sources: the **live** Rust logger store (`atf_logs_rust.db`, 5260 rows — the legacy `logger.db` beside it has been dead since Oct 16 and holds only stale API/probe rows) plus `diagnostic_events` in `atf.db` (695 rows). 5955 WARN/ERROR rows → **80 distinct signatures** (`atf-warn-error-dedup.csv`, count/severity/service/normalized-signature/first/last-seen/sample).
+
+| Cluster | Volume | Verdict | Action in this PR |
+|---|---|---|---|
+| Gap recovery fails with `PERSISTENT_TIMESTAMP_EMPTY` | 450 WARN + 463 exhausted-gap ERRORs + 691 gap-creation WARNs (the backlog behind them) | **Defect (L-A, P1)**: single-id recovery built `GetChannelDifference` from `GetFullChannel`'s pts — flood-limited (275 waits), and on failure pts silently defaulted to 0, which Telegram rejects. Every recovery attempt of a perfectly recoverable post burned the budget | Recovery now uses `channels.GetMessages` (no pts, no full-channel round-trip, `MessageEmpty` handled as the deleted-post answer). Regression test pins the RPC contract: GetMessages used, GetFullChannel/GetChannelDifference never called during recovery |
+| Exhausted gap recorded 3× per gap (POLL GAP line + EVT + diagnostic row) | 473+463+463 rows | **Defect (L-C, P2)**: same fact, three stores, zero added fields | The structured event is the single authoritative record; the duplicate `logger.error` removed |
+| `/api/worker/*` 404 ×337 (today) + `/api/admin/worker/control/status` 404 / `pause` 405 | 344 | **Stale deployment (L-B, P2)**: the 401-vs-404 asymmetry proves the deployed API image predates #335/#336 — the route exists on master (401 for unauth) but not in the running binary. The `/api/worker/*` calls come from a client bundle older than #335 | No code change (correct since #335); **deploy blocker** — merging this PR refreshes all images |
+| Orphan-mapping reconcile warnings | 58 WARN, recurring daily | **Defect (L-F, P3)**: terminal jobs purge at 7 d, mappings keep 30 d — retention asymmetry flagged as a state mismatch forever | The reconciler now only flags in-window orphans; aged ones are documented cleanup outcomes. Test pins both sides |
+| `health server stopped` WARN | 18 | **Level defect (L-E, P3)**: listener close on shutdown is the normal lifecycle | INFO on `ErrServerClosed`, WARN only on a real failure |
+| `AI transform failed` + fallback | 8+8 | Fallback policy working as designed (provider 401/limits); observable, not silent | None — by design |
+| Security probes (`/api/.env*`, `/api/fs/read`, `/api/uploads/../../.env`, `proc/self/environ`, graphql, `/d/*`) | ~120 | External scanning Nov 1–3; **every attempt answered Unauthorized** — auth held | None; recorded for the security review |
+| `Waiting N seconds (channels.GetFullChannel)` | 275 | External Telegram flood-limit; honored. Collapses with the L-A fix (recovery no longer calls it) | None |
+| `[POLL GAP]` repeat detections | ~120 | Already correct: only NEW gaps warn; repeats log INFO | None |
+| `claim failed — retrying`, `log client cannot reach logger`, `auto-reply consumer failed to start` (×1) | 7 | Transient conditions, retried/recovered; visible by design | None |
+| `rule no longer exists`, `already has a confirmed send`, `event already processed` | 49 | Fence/idempotency working as designed | None |
+| Legacy `logger.db` store (198 rows, dead since Oct 16) + old probe/acceptance rows | 198 | Stale store kept beside the live one; probe rows are past test residue | Cleanup of the legacy file/rows is approval-gated (production data) |
+
+Net expected after deploy: the two dominant error masses (463 exhausted + 450 recovery failures) collapse to near-zero — recovery succeeds instead of burning budgets — and the log volume drops accordingly.
