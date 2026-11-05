@@ -152,3 +152,61 @@ func (h *Handlers) WorkerErrors(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, status, body)
 }
+
+// WorkerIncidents proxies GET /api/admin/worker/incidents — the worker's
+// error-intelligence view: repeated failures grouped into incidents with a
+// lifecycle (open/recovered/recurrent/acknowledged/suppressed), affected
+// workers/rules/jobs, and a SUSPECTED pattern with an actionable hint.
+// The worker owns the aggregation; the API only passes the state filter
+// through after validating it against the lifecycle vocabulary.
+func (h *Handlers) WorkerIncidents(w http.ResponseWriter, r *http.Request) {
+	q := url.Values{}
+	if st := r.URL.Query().Get("state"); st != "" {
+		switch st {
+		case "open", "recovered", "recurrent", "acknowledged", "suppressed":
+			q.Set("state", st)
+		default:
+			writeJSON(w, http.StatusBadRequest, map[string]any{
+				"error": "invalid state filter",
+			})
+			return
+		}
+	}
+	body, status, err := fetchOps(r.Context(), "/ops/incidents", q)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"worker_reachable": false,
+			"error":            "worker ops endpoint unreachable",
+		})
+		return
+	}
+	writeJSON(w, status, body)
+}
+
+// WorkerIncidentAck proxies POST /api/admin/worker/incidents/ack — an
+// operator acknowledging an incident by its stable id. POST-only: the ack
+// mutates operational state, so a GET prefetch or a browser navigational
+// request can never ackidentally acknowledge anything.
+func (h *Handlers) WorkerIncidentAck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"error": "POST required"})
+		return
+	}
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "incident id required"})
+		return
+	}
+	q := url.Values{}
+	q.Set("id", id)
+	body, status, err := fetchOps(r.Context(), "/ops/incidents/ack", q)
+	if err != nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
+			"worker_reachable": false,
+			"error":            "worker ops endpoint unreachable",
+		})
+		return
+	}
+	writeJSON(w, status, body)
+}

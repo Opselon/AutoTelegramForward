@@ -135,3 +135,70 @@ func TestWorkerErrors_RejectsNonNumericSince(t *testing.T) {
 		t.Fatalf("malformed params are dropped, not fatal: got %d", rec.Code)
 	}
 }
+
+// The incidents routes add a FILTERED proxy (state must be one of the
+// lifecycle states) and a POST-only ack. Pin both contracts: an invalid
+// state is rejected before the worker is even asked, a GET ack is 405, a
+// missing id is 400, and an unreachable worker is 503 with
+// worker_reachable:false — never a fabricated incident list.
+
+func TestWorkerIncidents_RejectInvalidStateFilter(t *testing.T) {
+	withWorkerOps(t, func() {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/worker/incidents?state=definitely-not-a-lifecycle", nil)
+		(&Handlers{}).WorkerIncidents(rec, req)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("invalid state filter: got %d, want 400 (reject before asking the worker)", rec.Code)
+		}
+	})
+}
+
+func TestWorkerIncidents_UnreachableIs503(t *testing.T) {
+	withWorkerOps(t, func() {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodGet, "/worker/incidents", nil)
+		(&Handlers{}).WorkerIncidents(rec, req)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("unreachable worker: got %d, want 503", rec.Code)
+		}
+		var body map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+			t.Fatalf("bad json: %v", err)
+		}
+		if body["worker_reachable"] != false {
+			t.Errorf("worker_reachable = %v, want false (never fabricate incidents)", body["worker_reachable"])
+		}
+	})
+}
+
+func TestWorkerIncidentAck_MethodAndIDContract(t *testing.T) {
+	// GET is 405 with the Allow header naming POST: a prefetch or a
+	// browser navigation must never ackincident anything.
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/worker/incidents/ack?id=abc", nil)
+	(&Handlers{}).WorkerIncidentAck(rec, req)
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("GET ack: got %d, want 405", rec.Code)
+	}
+	if rec.Header().Get("Allow") != http.MethodPost {
+		t.Errorf("Allow = %q, want POST", rec.Header().Get("Allow"))
+	}
+
+	// Missing id is 400, not a proxy call with an empty id.
+	rec = httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/worker/incidents/ack", nil)
+	(&Handlers{}).WorkerIncidentAck(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("POST ack without id: got %d, want 400", rec.Code)
+	}
+
+	// Valid id + unreachable worker = 503, never a fake success.
+	withWorkerOps(t, func() {
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/worker/incidents/ack?id=abc", nil)
+		(&Handlers{}).WorkerIncidentAck(rec, req)
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Fatalf("ack with unreachable worker: got %d, want 503", rec.Code)
+		}
+	})
+}

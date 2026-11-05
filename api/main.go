@@ -295,6 +295,11 @@ func main() {
 	adminMux.HandleFunc("GET /worker/queue", h.WorkerQueue)
 	adminMux.HandleFunc("GET /worker/tasks", h.WorkerTasks)
 	adminMux.HandleFunc("GET /worker/errors", h.WorkerErrors)
+	// Incidents: repeated failures grouped into a tracked lifecycle
+	// (open/recovered/recurrent/acknowledged/suppressed) with a suspected
+	// pattern + hint. Ack is POST-only — it mutates operational state.
+	adminMux.HandleFunc("GET /worker/incidents", h.WorkerIncidents)
+	adminMux.HandleFunc("POST /worker/incidents/ack", h.WorkerIncidentAck)
 	adminMux.HandleFunc("GET /users", h.AdminListUsers)
 	adminMux.HandleFunc("POST /users/{id}/status", h.AdminSetUserStatus)
 	adminMux.HandleFunc("POST /broadcast", h.AdminBroadcast)
