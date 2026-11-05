@@ -1327,7 +1327,12 @@ export const id: Catalog = {
   "ui_task_sort_latency": "Latensi (paling lambat)",
   "ui_task_sort_delivered": "Terkirim (terbanyak)",
   "ui_task_attention": "Hanya yang butuh perhatian",
-  "ui_task_attention_hint": "Sembunyikan task tanpa kegagalan dan tanpa job tertunda — yang sehat tidak menjawab 'apa yang butuh saya sekarang'.",
+  "ui_task_attention_hint": "Sembunyikan task tanpa kegagalan dan tanpa job tertunda — yang sehat tidak menjawab 'apa yang butuh saya sekarang'.",  "ui_throughput_windows": "Jendela throughput",
+  "ui_throughput_windows_hint": "Pesan terkirim di setiap jendela agregasi, dari ring bucket menit yang dibatasi milik worker.",
+  "ui_insufficient_history": "riwayat tidak cukup",
+  "ui_throughput_history_partial": "Baru {mins} menit riwayat; jendela yang lebih lama tetap 'tidak cukup' hingga satu jam terkumpul.",
+
+
 
 
 

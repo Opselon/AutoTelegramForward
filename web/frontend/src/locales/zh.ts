@@ -1327,7 +1327,12 @@ export const zh: Catalog = {
   "ui_task_sort_latency": "延迟（最慢）",
   "ui_task_sort_delivered": "已投递（最多）",
   "ui_task_attention": "仅显示需关注",
-  "ui_task_attention_hint": "隐藏没有失败且没有待处理作业的任务——健康的任务不是“现在什么需要我”的答案。",
+  "ui_task_attention_hint": "隐藏没有失败且没有待处理作业的任务——健康的任务不是“现在什么需要我”的答案。",  "ui_throughput_windows": "吞吐量窗口",
+  "ui_throughput_windows_hint": "每个聚合窗口内已投递的消息，来自 worker 的有界分钟桶环形结构。",
+  "ui_insufficient_history": "历史数据不足",
+  "ui_throughput_history_partial": "目前仅有 {mins} 分钟历史；长窗口需积累一小时后才有数据。",
+
+
 
 
 

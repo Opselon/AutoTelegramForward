@@ -1327,7 +1327,12 @@ export const uz: Catalog = {
   "ui_task_sort_latency": "Kechikish (eng sekin)",
   "ui_task_sort_delivered": "Yetkazib berilgan (eng ko'p)",
   "ui_task_attention": "Faqat e'tibor talab qiladiganlar",
-  "ui_task_attention_hint": "Xatoligi va kutilayotgan ishi bo'lmagan vazifalarni yashirish — sog'lomlar 'hozir nima kerak' savoliga javob emas.",
+  "ui_task_attention_hint": "Xatoligi va kutilayotgan ishi bo'lmagan vazifalarni yashirish — sog'lomlar 'hozir nima kerak' savoliga javob emas.",  "ui_throughput_windows": "O'tkazuv oynalari",
+  "ui_throughput_windows_hint": "Har bir agregatsiya oynasida yetkazib berilgan xabarlar, workerning cheklangan daqiqali halqasidan.",
+  "ui_insufficient_history": "tarix yetarli emas",
+  "ui_throughput_history_partial": "Hozircha faqat {mins} daqiqalik tarix bor; uzunroq oynalar bir soat to'planguncha 'yetarli emas' bo'lib qoladi.",
+
+
 
 
 

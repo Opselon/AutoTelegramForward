@@ -85,6 +85,10 @@ export interface WorkerQueue {
   /** §5 diagnostics: is the queue broken, or just busy? Absent when the
    *  store cannot compute the section (legacy backend) — never zeros. */
   diagnostics?: QueueDiagnostics
+  /** §4 aggregation windows: delivered count per window. -1 = not enough
+   *  history yet — render as 'insufficient history', never as zero. */
+  throughput_windows?: Record<string, number>
+  throughput_history_minutes?: number
 }
 
 export interface QueueDiagnostics {

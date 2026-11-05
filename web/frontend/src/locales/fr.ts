@@ -1327,7 +1327,12 @@ export const fr: Catalog = {
   "ui_task_sort_latency": "Latence (la plus lente)",
   "ui_task_sort_delivered": "Livrés (le plus)",
   "ui_task_attention": "Uniquement celles nécessitant attention",
-  "ui_task_attention_hint": "Masque les tâches sans échec et sans job en attente — les saines ne répondent pas à 'que dois-je traiter maintenant'.",
+  "ui_task_attention_hint": "Masque les tâches sans échec et sans job en attente — les saines ne répondent pas à 'que dois-je traiter maintenant'.",  "ui_throughput_windows": "Fenêtres de débit",
+  "ui_throughput_windows_hint": "Messages livrés dans chaque fenêtre d'agrégation, issu de l'anneau borné de seaux par minute du worker.",
+  "ui_insufficient_history": "historique insuffisant",
+  "ui_throughput_history_partial": "Seulement {mins} min d'historique pour l'instant ; les fenêtres plus longues restent 'insuffisantes' jusqu'à ce qu'une heure s'accumule.",
+
+
 
 
 
