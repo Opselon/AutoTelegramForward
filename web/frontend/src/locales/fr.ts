@@ -1319,7 +1319,17 @@ export const fr: Catalog = {
   "ui_incident_ack": "Acquitter",
   "ui_incident_ack_confirm": "Acquitter cet incident ? Il reste acquitté tant qu'il est ouvert ; une récupération l'efface.",  "ui_stale_data": "Obsolète ({age}s)",
   "ui_stale_data_hint": "Les données aussi anciennes sont marquées comme obsolètes, jamais comme 'en direct' : le dernier sondage a échoué et ce sont les derniers chiffres renvoyés par le worker.",
-  "ui_last_update_hint": "Le dernier sondage a réussi ; ce sont des données en direct du worker.",
+  "ui_last_update_hint": "Le dernier sondage a réussi ; ce sont des données en direct du worker.",  "ui_task_sort": "Trier par",
+  "ui_task_sort_hint": "Quelle tâche répond à votre question : la plus chargée (débit), celle qui échoue le plus, au backlog le plus profond, la plus lente ou ayant le plus de livraisons.",
+  "ui_task_sort_throughput": "Débit (plus chargée)",
+  "ui_task_sort_failed": "Échecs (le plus)",
+  "ui_task_sort_pending": "Backlog (le plus profond)",
+  "ui_task_sort_latency": "Latence (la plus lente)",
+  "ui_task_sort_delivered": "Livrés (le plus)",
+  "ui_task_attention": "Uniquement celles nécessitant attention",
+  "ui_task_attention_hint": "Masque les tâches sans échec et sans job en attente — les saines ne répondent pas à 'que dois-je traiter maintenant'.",
+
+
 
 
 

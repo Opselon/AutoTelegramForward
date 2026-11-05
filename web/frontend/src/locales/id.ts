@@ -1319,7 +1319,17 @@ export const id: Catalog = {
   "ui_incident_ack": "Akui",
   "ui_incident_ack_confirm": "Akui insiden ini? Tetap diakui selama masih terbuka; pemulihan menghapus pengakuan.",  "ui_stale_data": "Stale ({age}s)",
   "ui_stale_data_hint": "Data yang sudah lama diberi label stale, bukan ditampilkan sebagai live: poll terakhir gagal dan ini adalah angka terbaru yang dijawab worker.",
-  "ui_last_update_hint": "Poll terbaru berhasil; ini adalah data langsung dari worker.",
+  "ui_last_update_hint": "Poll terbaru berhasil; ini adalah data langsung dari worker.",  "ui_task_sort": "Urutkan berdasarkan",
+  "ui_task_sort_hint": "Tugas mana yang menjawab pertanyaan Anda: paling sibuk (throughput), paling banyak gagal, antrian terdalam, paling lambat, atau paling banyak terkirim.",
+  "ui_task_sort_throughput": "Throughput (paling sibuk)",
+  "ui_task_sort_failed": "Kegagalan (terbanyak)",
+  "ui_task_sort_pending": "Antrian (terbanyak)",
+  "ui_task_sort_latency": "Latensi (paling lambat)",
+  "ui_task_sort_delivered": "Terkirim (terbanyak)",
+  "ui_task_attention": "Hanya yang butuh perhatian",
+  "ui_task_attention_hint": "Sembunyikan task tanpa kegagalan dan tanpa job tertunda — yang sehat tidak menjawab 'apa yang butuh saya sekarang'.",
+
+
 
 
 
