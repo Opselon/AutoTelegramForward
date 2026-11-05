@@ -66,6 +66,8 @@ func (s *Server) handleOpsRoute(w http.ResponseWriter, r *http.Request) {
 	switch strings.TrimPrefix(r.URL.Path, "/ops/") {
 	case "queue":
 		s.handleQueue(w, r)
+	case "queue/diagnostics":
+		s.handleQueueDiagnostics(w, r)
 	case "tasks":
 		s.handleTasks(w, r)
 	case "errors":
@@ -109,6 +111,33 @@ func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSONCode(w, http.StatusOK, q)
+}
+
+// handleQueueDiagnostics serves the §5 diagnostics: the signals that
+// separate a busy queue from a broken one (stuck claims, starved pending,
+// poison jobs, an imminent retry storm). The section is absent when the
+// store does not implement QueueDiagnostician — an older backend — rather
+// than fabricating zeros.
+func (s *Server) handleQueueDiagnostics(w http.ResponseWriter, r *http.Request) {
+	diag, err := NewQueueDiagnostics(r.Context(), s.queue, time.Now().Unix())
+	if err != nil {
+		writeJSONCode(w, http.StatusServiceUnavailable, map[string]any{
+			"error":        sanitize(err.Error()),
+			"db_connected": s.collector.DBConnected(),
+		})
+		return
+	}
+	if diag == nil {
+		writeJSONCode(w, http.StatusOK, map[string]any{
+			"diagnostics": nil,
+			"available":   false,
+		})
+		return
+	}
+	writeJSONCode(w, http.StatusOK, map[string]any{
+		"diagnostics": diag,
+		"available":   true,
+	})
 }
 
 // handleTasks serves the per-task operational rows.
@@ -240,6 +269,13 @@ func (s *Server) queueSnapshot(ctx context.Context) (map[string]any, error) {
 	}
 	if stats.OldestPendingAgeSeconds > 0 {
 		out["oldest_pending_age_seconds"] = round3(stats.OldestPendingAgeSeconds)
+	}
+	// The §5 diagnostics ride the same snapshot so one /ops/queue poll gets
+	// the status counts AND the "busy vs broken" signals in a single
+	// request. Unavailable (legacy store) is reported by absence, never by
+	// fabricated zeros.
+	if diag, derr := NewQueueDiagnostics(ctx, s.queue, time.Now().Unix()); derr == nil && diag != nil {
+		out["diagnostics"] = diag
 	}
 	// The durable count is authoritative whenever the DB is reachable;
 	// reconcile in ONE direction (durable ≥ memory) so a restart cannot

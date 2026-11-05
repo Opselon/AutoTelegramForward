@@ -813,6 +813,35 @@ func (s *pgStore) QueueStats(ctx context.Context) (*ops.QueueStats, error) {
 	return &st, nil
 }
 
+// QueueDiagnostics is the §5 diagnostics read for the ops surface, the
+// Postgres twin of sqliteStore.QueueDiagnostics: same five signals, one
+// bounded query over delivery_jobs. Thresholds are the shared ops constants
+// so both backends report "stuck" identically.
+//
+// Postgres does not have SQLite's boolean-sum coercion: FILTER (WHERE ...) is
+// the idiomatic equivalent and keeps the plan to a single sequential scan of
+// the status partial index.
+func (s *pgStore) QueueDiagnostics(ctx context.Context, now int64) (*ops.QueueDiagnostics, error) {
+	const q = `
+		SELECT
+			COUNT(*) FILTER (WHERE status = 'CLAIMED' AND lease_until <= $1)                    AS stuck_claimed,
+			COUNT(*) FILTER (WHERE status = 'PENDING' AND created_at <= $2)                     AS stuck_pending,
+			COUNT(*) FILTER (WHERE status = 'FAILED' AND attempts >= max_attempts
+			    AND (error_detail LIKE 'permanent:%' OR error_detail LIKE 'chat%restricted%')) AS poison_jobs,
+			COUNT(*) FILTER (WHERE status = 'RETRY_WAIT' AND next_retry_at <= $3 + $4)          AS retry_storm,
+			COALESCE(MAX(CASE WHEN status = 'PENDING' THEN $5 - created_at ELSE 0 END), 0)      AS oldest_pending_age
+		FROM delivery_jobs`
+	row := s.db.QueryRowContext(ctx, q, now, now-ops.StuckPendingThreshold,
+		now, ops.RetryStormWindow, now)
+	var d ops.QueueDiagnostics
+	var oldest float64
+	if err := row.Scan(&d.StuckClaimed, &d.StuckPending, &d.PoisonJobs, &d.RetryStorm, &oldest); err != nil {
+		return nil, fmt.Errorf("ops queue diagnostics: %w", err)
+	}
+	d.OldestPendingAgeSeconds = oldest
+	return &d, nil
+}
+
 // TaskRows aggregates delivery_jobs by rule_id into the /ops/tasks rows.
 func (s *pgStore) TaskRows(ctx context.Context, limit int) ([]*ops.TaskRow, error) {
 	if limit <= 0 {
