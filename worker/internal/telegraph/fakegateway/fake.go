@@ -37,11 +37,18 @@ type Fake struct {
 	Calls []Call
 
 	// Scripted behaviours. nil means "no scripted failure for this op".
-	ForwardFailsWith        *telegraph.DeliveryFailure
-	CopyFailsWith           *telegraph.DeliveryFailure
-	SendFailsWith           *telegraph.DeliveryFailure
-	CopyMediaGroupFailsWith *telegraph.DeliveryFailure
-	DownloadFailsWith       *telegraph.DeliveryFailure
+	ForwardFailsWith          *telegraph.DeliveryFailure
+	CopyFailsWith             *telegraph.DeliveryFailure
+	SendFailsWith             *telegraph.DeliveryFailure
+	CopyMediaGroupFailsWith   *telegraph.DeliveryFailure
+	DownloadFailsWith         *telegraph.DeliveryFailure
+	GetFileExtensionFailsWith *telegraph.DeliveryFailure
+
+	// ExtensionOverride, when set, is what GetFileExtension answers instead
+	// of the default ".bin". Tests use it to pin the staging-name contract
+	// for both "the runtime knows the extension" and "the runtime cannot
+	// tell" (the empty string) — including hostile-looking values.
+	ExtensionOverride *string
 
 	// failOnce[targetChat] = true makes the next send to that target fail
 	// once with a transient error, then clear. E2E retry-path scenarios use
@@ -138,9 +145,17 @@ func (f *Fake) GetAlbumMessageIds(ctx context.Context, sessionID string, chatID,
 	return []int64{messageID}, nil
 }
 
-// GetFileExtension returns a plausible extension for the media kind.
+// GetFileExtension returns the scripted extension (".bin" when nothing is
+// scripted — a plausible answer for an unknown document kind), or the
+// scripted failure.
 func (f *Fake) GetFileExtension(ctx context.Context, sessionID string, chatID, messageID int64) (string, *telegraph.DeliveryFailure) {
 	f.record(Call{Op: "GetFileExtension", SessionID: sessionID, ChatID: chatID, MessageID: messageID})
+	if f.GetFileExtensionFailsWith != nil {
+		return "", f.GetFileExtensionFailsWith
+	}
+	if f.ExtensionOverride != nil {
+		return *f.ExtensionOverride, nil
+	}
 	return ".bin", nil
 }
 

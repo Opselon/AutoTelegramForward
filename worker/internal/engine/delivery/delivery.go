@@ -1028,12 +1028,20 @@ func (e *Engine) dispatchAlbum(ctx context.Context, j *job.DeliveryJob, albumIDs
 //
 // Media never enters either process's memory in full: the runtime writes to
 // the shared scratch path, and the upload is staged from that path.
+//
+// The staged name MUST carry the source media's extension. Telegram's
+// messages.SendMedia infers the MIME type from the staged file's name —
+// a bare "job-<id>-media" has none, and the upload dies with
+// PHOTO_EXT_INVALID before it can ever succeed (12 production jobs on rule
+// 40edad5a failed exactly that way: the copy was correctly rejected, the
+// re-upload ran, and the extension-less staging file killed it).
 func (e *Engine) reuploadMedia(ctx context.Context, j *job.DeliveryJob, srcChat, srcMsg int64, caption string) (int64, *telegraph.DeliveryFailure) {
 	p := &j.Payload
 	sessionID := p.SessionID()
+	ext := e.stagedExtension(ctx, sessionID, j, srcChat, srcMsg)
 	dest := telegraph.MediaHandle{
-		Path:     e.scratchPath(j),
-		FileName: fmt.Sprintf("job-%s-media", j.ID),
+		Path:     e.scratchPath(j) + ext,
+		FileName: fmt.Sprintf("job-%s-media%s", j.ID, ext),
 	}
 	if _, ferr := e.gateway.DownloadMedia(ctx, sessionID, srcChat, srcMsg, dest); ferr != nil {
 		return 0, ferr
@@ -1054,6 +1062,62 @@ func (e *Engine) reuploadMedia(ctx context.Context, j *job.DeliveryJob, srcChat,
 	id, sferr := e.gateway.SendMedia(ctx, sessionID, intChat(j.TargetChatID), token, caption, p.MediaType(), p.TopicID())
 	e.metrics.ObserveRPC("send_media", 0)
 	return id, sferr
+}
+
+// stagedExtension resolves the extension the re-upload must be staged under.
+// The runtime reports the source media's real one (the original file_name's
+// suffix, .jpg for photos); when it cannot answer — source gone since the
+// copy was refused, or a kind with no inferable name — fall back to the
+// ingest classification's canonical extension. Documents and unknown kinds
+// stay extension-less on purpose: send_document accepts them, and guessing
+// would mislabel real files.
+func (e *Engine) stagedExtension(ctx context.Context, sessionID string, j *job.DeliveryJob, srcChat, srcMsg int64) string {
+	if ext, ferr := e.gateway.GetFileExtension(ctx, sessionID, srcChat, srcMsg); ferr == nil {
+		if norm := normalizeExtension(ext); norm != "" {
+			return norm
+		}
+	}
+	return defaultExtension(j.Payload.MediaType())
+}
+
+// normalizeExtension sanitizes a runtime-reported extension into something
+// safe to append to a staging path: lowercase, dot-prefixed, short, plain
+// [a-z0-9] only. A malformed or hostile file_name suffix must never become
+// a path surprise; unusable values normalize to "".
+func normalizeExtension(ext string) string {
+	ext = strings.ToLower(strings.TrimSpace(ext))
+	ext = strings.TrimPrefix(ext, ".")
+	if ext == "" || len(ext) > 15 {
+		return ""
+	}
+	for _, r := range ext {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return ""
+		}
+	}
+	return "." + ext
+}
+
+// defaultExtension maps the ingest-side media classification onto the
+// canonical extension Telegram expects for that kind. Only used when the
+// runtime cannot report the real one. The mapping mirrors send_media's
+// dispatch: the kind decides the send call, the send call's validation
+// decides which extensions it accepts.
+func defaultExtension(mediaType string) string {
+	switch strings.ToLower(strings.TrimSpace(mediaType)) {
+	case "photo":
+		return ".jpg"
+	case "video", "round_video", "animation", "video_note":
+		return ".mp4"
+	case "voice":
+		return ".ogg"
+	case "audio":
+		return ".mp3"
+	case "sticker":
+		return ".webp"
+	default:
+		return ""
+	}
 }
 
 // scratchPath is the unique per-job path in the shared media scratch volume.
