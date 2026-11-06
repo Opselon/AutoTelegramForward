@@ -9,6 +9,18 @@
 import type { Catalog } from './types'
 
 export const pt: Catalog = {
+  "ui_link_rewrite_map_placeholder": "dominioantigo.com dominionovo.com\nhttps://antigo.t.me/x https://novo.t.me/y\n* https://t.me/eu",
+  "ui_mention_rewrite_map_placeholder": "@lojaantiga @lojanova\n* @principal",
+  "ui_channel_only_hop": "Apenas conteúdo de canais faz o salto",
+  "ui_channel_only_hop_hint": "Mensagens de usuários normais são encaminhadas diretamente com o próprio nome; o conteúdo de canais é marcado via C.",
+  "ui_link_rewrite_map_hint": "Um par por linha: antigo novo — ou * https://t.me/eu para reescrever todos os links.",
+  "ui_link_rewrite_map_label": "Mapa de reescrita de links",
+  "ui_mention_rewrite_map_hint": "Um par por linha: @lojaantiga @lojanova — ou * @principal para reescrever todos os @ID.",
+  "ui_mention_rewrite_map_label": "Mapa de reescrita de @menções",
+  "ui_only_if_the_message_comes_from_a_channel": "e somente se vier de um canal",
+  "ui_replace_any_link_found": "Substituir qualquer link encontrado",
+  "ui_replace_any_link_found_hint": "Reescreve cada link do texto pelo mapa de links abaixo.",
+  "ui_replace_links_mentions_section": "Substituir links e @menções",
   "ui_0s_instant": "0 s (instantâneo)",
   "ui_1_back_up_this_server": "1. Fazer cópia de segurança deste servidor",
   "ui_2_restore_on_this_server": "2. Restaurar neste servidor",

@@ -9,6 +9,18 @@
 import type { Catalog } from './types'
 
 export const fr: Catalog = {
+  "ui_link_rewrite_map_placeholder": "vieuxdomaine.com nouveaudomaine.com\nhttps://vieux.t.me/x https://nouveau.t.me/y\n* https://t.me/moi",
+  "ui_mention_rewrite_map_placeholder": "@vieuxboutique @nouveauboutique\n* @principal",
+  "ui_channel_only_hop": "Seul le contenu de canaux prend le saut",
+  "ui_channel_only_hop_hint": "Les messages des utilisateurs ordinaires sont transférés directement avec leur propre nom ; le contenu de canaux est marqué via C.",
+  "ui_link_rewrite_map_hint": "Une paire par ligne : ancien nouveau — ou * https://t.me/moi pour réécrire tous les liens.",
+  "ui_link_rewrite_map_label": "Table de réécriture des liens",
+  "ui_mention_rewrite_map_hint": "Une paire par ligne : @vieuxboutique @nouveauboutique — ou * @principal pour réécrire tous les @ID.",
+  "ui_mention_rewrite_map_label": "Table de réécriture des @mentions",
+  "ui_only_if_the_message_comes_from_a_channel": "et seulement s'il vient d'un canal",
+  "ui_replace_any_link_found": "Remplacer tout lien trouvé",
+  "ui_replace_any_link_found_hint": "Réécrit chaque lien du texte selon la table de liens ci-dessous.",
+  "ui_replace_links_mentions_section": "Remplacer liens et @mentions",
   "ui_0s_instant": "0 s (instantané)",
   "ui_1_back_up_this_server": "1. Sauvegarder ce serveur",
   "ui_2_restore_on_this_server": "2. Restaurer sur ce serveur",

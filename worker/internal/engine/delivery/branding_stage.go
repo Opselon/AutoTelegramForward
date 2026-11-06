@@ -109,10 +109,14 @@ func botMediaRefused(ferr *telegraph.DeliveryFailure, fallbackEnabled bool) bool
 // branding config changed while the job sat in the queue behaves the way the
 // live rule says, not the way the enqueue-time snapshot froze.
 func brandingView(j *job.DeliveryJob) branding.MessageView {
-	view := branding.MessageView{Text: j.Payload.Text()}
+	view := branding.MessageView{
+		Text:     j.Payload.Text(),
+		ChatType: stringField(j.Payload.Raw(), "chat_type"),
+	}
 	if origin := j.Payload.Raw()["forward_origin"]; origin != nil {
 		if m, ok := origin.(map[string]any); ok {
 			view.ForwardOrigin = &branding.ForwardOrigin{
+				Type:             stringField(m, "type"),
 				FromChatID:       stringField(m, "from_chat_id"),
 				FromChatUsername: stringField(m, "from_chat_username"),
 				FromChatTitle:    stringField(m, "from_chat_title"),

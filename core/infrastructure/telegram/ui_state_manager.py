@@ -93,6 +93,12 @@ UI_STEPS = frozenset({
     "user_set_first_name",
     # replace-rule manager (/replace): search, field prompts and the test sample
     "replace_search", "replace_field_input", "replace_test_sample",
+    # per-task link & @mention replace maps (the smart menu's editor)
+    "rmap_links_input", "rmap_mentions_input",
+    # global prompt-template manager (AI -> Prompts): create wizard, test
+    # sample and the four single-field edit arms
+    "prompt_new_name", "prompt_new_sys", "prompt_new_user", "prompt_test_sample",
+    "prompt_edit_name", "prompt_edit_sys", "prompt_edit_user", "prompt_edit_desc",
     # multi-source/target picker (/sel): the ids and search prompts. Declared
     # here, or the fail-closed step gate would downgrade them to "" on persist
     # and the next message would answer "use the menu" mid-flow.

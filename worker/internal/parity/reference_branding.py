@@ -262,6 +262,94 @@ def case_require_forward_satisfied() -> dict:
     return {"name": "require_forward_satisfied", "take_hop": take, "reason": reason}
 
 
+def case_require_channel_user_message() -> dict:
+    # require_channel is the "users keep their own name" gate: a message a
+    # person wrote in a group fails the gate and is delivered directly.
+    rule = _rule(
+        intermediate_channel_id="-100999",
+        use_intermediate=True,
+        metadata={"branding_hop": {
+            "triggers_enabled": True, "require_channel": True,
+        }},
+    )
+    payload = _payload(text="hello", chat_type="supergroup")
+    take, reason = branding.should_hop(payload, rule)
+    return {"name": "require_channel_user_message", "take_hop": take, "reason": reason}
+
+
+def case_require_channel_native_post() -> dict:
+    # A native channel post in A has no forward origin, but the source chat
+    # IS a channel: the gate passes and the hop runs.
+    rule = _rule(
+        intermediate_channel_id="-100999",
+        use_intermediate=True,
+        metadata={"branding_hop": {
+            "triggers_enabled": True, "require_channel": True,
+        }},
+    )
+    payload = _payload(text="hello", chat_type="channel")
+    take, reason = branding.should_hop(payload, rule)
+    return {"name": "require_channel_native_post", "take_hop": take, "reason": reason}
+
+
+def case_require_channel_forwarded_from_channel() -> dict:
+    # A forward whose origin is a channel passes the gate whatever the source
+    # chat type is.
+    rule = _rule(
+        intermediate_channel_id="-100999",
+        use_intermediate=True,
+        metadata={"branding_hop": {
+            "triggers_enabled": True, "require_channel": True,
+        }},
+    )
+    payload = _payload(
+        text="hello", chat_type="supergroup",
+        forward_origin={"type": "channel", "from_chat_id": "-100555",
+                        "from_chat_title": "Five", "from_chat_username": ""},
+    )
+    take, reason = branding.should_hop(payload, rule)
+    return {"name": "require_channel_forwarded_from_channel", "take_hop": take, "reason": reason}
+
+
+def case_require_channel_forwarded_from_user() -> dict:
+    # A forward from a person is not channel content: the gate refuses it so
+    # the direct delivery keeps the personal "Forwarded from" header.
+    rule = _rule(
+        intermediate_channel_id="-100999",
+        use_intermediate=True,
+        metadata={"branding_hop": {
+            "triggers_enabled": True, "require_channel": True,
+        }},
+    )
+    payload = _payload(
+        text="hello", chat_type="supergroup",
+        forward_origin={"type": "user", "from_chat_id": "12345",
+                        "from_chat_title": "", "from_chat_username": "someuser"},
+    )
+    take, reason = branding.should_hop(payload, rule)
+    return {"name": "require_channel_forwarded_from_user", "take_hop": take, "reason": reason}
+
+
+def case_require_channel_pyrogram_origin_type() -> dict:
+    # The pyrogram 2.0 adapter spells the origin kind as the class name
+    # ("MessageForwardOriginChannel"); the channel test is a substring, so
+    # that spelling passes the gate too.
+    rule = _rule(
+        intermediate_channel_id="-100999",
+        use_intermediate=True,
+        metadata={"branding_hop": {
+            "triggers_enabled": True, "require_channel": True,
+        }},
+    )
+    payload = _payload(
+        text="hello", chat_type="supergroup",
+        forward_origin={"type": "MessageForwardOriginChannel", "from_chat_id": "-100555",
+                        "from_chat_title": "Five", "from_chat_username": ""},
+    )
+    take, reason = branding.should_hop(payload, rule)
+    return {"name": "require_channel_pyrogram_origin_type", "take_hop": take, "reason": reason}
+
+
 def case_match_all_satisfied() -> dict:
     rule = _rule(
         intermediate_channel_id="-100999",
@@ -416,6 +504,11 @@ CASES = [
     case_origin_missing,
     case_require_forward_gate,
     case_require_forward_satisfied,
+    case_require_channel_user_message,
+    case_require_channel_native_post,
+    case_require_channel_forwarded_from_channel,
+    case_require_channel_forwarded_from_user,
+    case_require_channel_pyrogram_origin_type,
     case_match_all_satisfied,
     case_match_all_one_missing,
     case_match_any_one_of_two,
@@ -452,6 +545,17 @@ FIXTURE_INPUTS = {
     "require_forward_gate": {"text": "hello"},
     "require_forward_satisfied": {"text": "hello", "forward_origin": {
         "from_chat_id": "-100555", "from_chat_title": "Five", "from_chat_username": ""}},
+    "require_channel_user_message": {"text": "hello", "chat_type": "supergroup"},
+    "require_channel_native_post": {"text": "hello", "chat_type": "channel"},
+    "require_channel_forwarded_from_channel": {"text": "hello", "chat_type": "supergroup",
+        "forward_origin": {"type": "channel", "from_chat_id": "-100555",
+                           "from_chat_title": "Five", "from_chat_username": ""}},
+    "require_channel_forwarded_from_user": {"text": "hello", "chat_type": "supergroup",
+        "forward_origin": {"type": "user", "from_chat_id": "12345",
+                           "from_chat_title": "", "from_chat_username": "someuser"}},
+    "require_channel_pyrogram_origin_type": {"text": "hello", "chat_type": "supergroup",
+        "forward_origin": {"type": "MessageForwardOriginChannel", "from_chat_id": "-100555",
+                           "from_chat_title": "Five", "from_chat_username": ""}},
     "match_all_satisfied": {"text": "hello", "forward_origin": {
         "from_chat_id": "-100555", "from_chat_title": "Five", "from_chat_username": ""}},
     "match_all_one_missing": {"text": "hello", "forward_origin": {
@@ -496,6 +600,16 @@ FIXTURE_RULES = {
                              "branding_hop": {"triggers_enabled": True, "keywords": ["hello"], "require_forward": True}},
     "require_forward_satisfied": {"intermediate_channel_id": "-100999", "use_intermediate": True,
                                   "branding_hop": {"triggers_enabled": True, "keywords": ["hello"], "require_forward": True}},
+    "require_channel_user_message": {"intermediate_channel_id": "-100999", "use_intermediate": True,
+                                     "branding_hop": {"triggers_enabled": True, "require_channel": True}},
+    "require_channel_native_post": {"intermediate_channel_id": "-100999", "use_intermediate": True,
+                                    "branding_hop": {"triggers_enabled": True, "require_channel": True}},
+    "require_channel_forwarded_from_channel": {"intermediate_channel_id": "-100999", "use_intermediate": True,
+                                               "branding_hop": {"triggers_enabled": True, "require_channel": True}},
+    "require_channel_forwarded_from_user": {"intermediate_channel_id": "-100999", "use_intermediate": True,
+                                            "branding_hop": {"triggers_enabled": True, "require_channel": True}},
+    "require_channel_pyrogram_origin_type": {"intermediate_channel_id": "-100999", "use_intermediate": True,
+                                             "branding_hop": {"triggers_enabled": True, "require_channel": True}},
     "match_all_satisfied": {"intermediate_channel_id": "-100999", "use_intermediate": True,
                             "branding_hop": {"triggers_enabled": True, "keywords": ["hello"],
                                              "origin_ids": ["-100555"], "match_mode": "all"}},

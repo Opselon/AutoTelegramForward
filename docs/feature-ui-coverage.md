@@ -23,6 +23,13 @@ Read these carefully before fixing anything:
   **vocabulary misses, not user-facing gaps** — the setting is there, under its registry row.
 - **F14 (rename) is a real gap** on web and mobile: there is no rename affordance in either client, so a task can
   only be renamed from the bot. That is the one feature-parity defect worth a ticket.
+- **X13–X16 (branding channel gate, link/@ replace maps, prompt library)** were added with
+  dedicated surfaces on all three clients: the bot's smart-menu gate toggle and `rmap:` panel
+  (`replace_maps_bot_ui.py`) plus the global prompt manager (`prompt_bot_ui.py`), the dashboard's
+  branding checkbox and replace-map textareas in `RuleModal`, and the mobile prompt section with the
+  registry-driven settings sheet. All new copy is catalogued in the ten locales on every surface
+  (bot translations.json, web `locales/*.ts`, mobile `app_*.dart`), and the audit's bot corpus now
+  includes the two new bot modules.
 - **F15 (draft)** is bot-only by design today: drafts are a per-conversation FSM concept on the bot side; the
   dashboard has no draft workflow. Keeping it bot-only is acceptable until drafts become a server-side object.
 

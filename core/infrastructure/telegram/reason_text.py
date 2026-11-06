@@ -50,6 +50,7 @@ PLAIN: Dict[str, str] = {
     "intermediate_target_is_origin": "ui_reason_intermediate_target_is_origin",
     "branding_always": "ui_reason_branding_always",
     "branding_requires_forward_origin": "ui_reason_branding_requires_forward_origin",
+    "branding_requires_channel_origin": "ui_reason_branding_requires_channel_origin",
     "branding_no_triggers_configured": "ui_reason_branding_no_triggers_configured",
     "UNKNOWN_ORIGIN": "ui_reason_unknown_origin",
 }

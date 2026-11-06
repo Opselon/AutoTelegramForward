@@ -349,6 +349,23 @@ class PromptService:
         """Activates a specific version."""
         return await self.prompt_repo.activate_version(template_id, version)
 
+    async def set_enabled(self, template_id: str, enabled: bool) -> PromptTemplate:
+        """Enable or disable a template without touching its version history.
+
+        Disabling is a delivery-policy switch, not a content change: the
+        pipeline stops consulting the template (the task falls back to its AI
+        config's own prompt) but the library row, its versions and its
+        assignment on tasks stay exactly as they are, so re-enabling restores
+        the previous behavior with nothing re-entered.
+        """
+        template = await self.prompt_repo.get_template(template_id)
+        if not template:
+            raise ValueError(f"Prompt template '{template_id}' not found.")
+        template.enabled = bool(enabled)
+        template.updated_at = int(time.time())
+        await self.prompt_repo.update_template(template)
+        return template
+
     async def get_template(self, template_id: str) -> Optional[PromptTemplate]:
         return await self.prompt_repo.get_template(template_id)
 

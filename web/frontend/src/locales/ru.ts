@@ -9,6 +9,18 @@
 import type { Catalog } from './types'
 
 export const ru: Catalog = {
+  "ui_link_rewrite_map_placeholder": "staryidomen.com novyidomen.com\nhttps://staryi.t.me/x https://novyi.t.me/y\n* https://t.me/ja",
+  "ui_mention_rewrite_map_placeholder": "@staryimagazin @novyimagazin\n* @glavnyi",
+  "ui_channel_only_hop": "Переход только для контента каналов",
+  "ui_channel_only_hop_hint": "Сообщения обычных пользователей пересылаются напрямую с их именем; контент каналов брендируется через C.",
+  "ui_link_rewrite_map_hint": "Одна пара в строке: старый новый — или * https://t.me/ja, чтобы перезаписать все ссылки.",
+  "ui_link_rewrite_map_label": "Таблица перезаписи ссылок",
+  "ui_mention_rewrite_map_hint": "Одна пара в строке: @staryimagazin @novyimagazin — или * @glavnyi, чтобы перезаписать все @упоминания.",
+  "ui_mention_rewrite_map_label": "Таблица перезаписи @упоминаний",
+  "ui_only_if_the_message_comes_from_a_channel": "и только если он из канала",
+  "ui_replace_any_link_found": "Заменять любую найденную ссылку",
+  "ui_replace_any_link_found_hint": "Переписывает каждую ссылку в тексте по таблице ссылок ниже.",
+  "ui_replace_links_mentions_section": "Замена ссылок и @упоминаний",
   "ui_0s_instant": "0 с (сразу)",
   "ui_1_back_up_this_server": "1. Сделайте резервную копию этого сервера",
   "ui_2_restore_on_this_server": "2. Восстановите на этом сервере",

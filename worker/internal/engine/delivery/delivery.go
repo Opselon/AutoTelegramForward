@@ -264,10 +264,10 @@ func (e *Engine) failureToRing(ferr *telegraph.DeliveryFailure, j *job.DeliveryJ
 		return
 	}
 	e.ops.RecordError("worker.delivery", "ERROR", ferr.Message, map[string]string{
-		"code":          ferr.Code,
-		"error_type":    ferr.ErrorType,
-		"rule_id":       j.RuleID,
-		"job_id":        j.ID,
+		"code":           ferr.Code,
+		"error_type":     ferr.ErrorType,
+		"rule_id":        j.RuleID,
+		"job_id":         j.ID,
 		"correlation_id": j.Payload.CorrelationID(),
 	})
 }
@@ -756,6 +756,14 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.Forwa
 			if ferr == nil {
 				return id, nil
 			}
+			// The branded route failing is its own Log Center event code, so
+			// "stage 2 of the hop is broken for this task" is one filter
+			// instead of a needle inside every delivery failure (the Rust
+			// store and the ops ring both index it).
+			e.jobLogger(j).Error("branding stage 2 failed",
+				"event_code", "BRANDING_STAGE2_FAILED",
+				"code", ferr.Code, "error_type", ferr.ErrorType,
+				"brand_channel", cChat, "target", target)
 			if !ferr.NeedsReupload() || !p.FallbackEnabled() {
 				return id, ferr
 			}
@@ -1466,13 +1474,19 @@ func (e *Engine) ensureBrandingStage1(ctx context.Context, j *job.DeliveryJob, r
 		// is what creates duplicate branding messages.
 		if ferr.IsAmbiguous() {
 			logger.Error("ambiguous stage 1 outcome — marking UNKNOWN for reconciliation",
+				"event_code", "BRANDING_STAGE1_FAILED",
 				"code", ferr.Code, "error_type", ferr.ErrorType)
 			_ = e.store.MarkUnknown(ctx, j.ID, "Uncertain branding stage 1: "+ferr.Message)
 			e.metrics.Outcome("unknown")
 			return fmt.Errorf("uncertain branding stage 1: %s", ferr.Message)
 		}
 		// Permanent or transient: handleFailure handles the retry/fail
-		// lifecycle cleanly.
+		// lifecycle cleanly. The dedicated event code keeps "the branded
+		// route is broken" one Log Center filter away from the generic
+		// delivery failures.
+		logger.Error("branding stage 1 failed",
+			"event_code", "BRANDING_STAGE1_FAILED",
+			"code", ferr.Code, "error_type", ferr.ErrorType)
 		key := job.AttemptKey{
 			RuleID: j.RuleID, SourceChatID: j.SourceChatID,
 			SourceMessageID: j.SourceMessageID, TargetChatID: j.TargetChatID,

@@ -424,6 +424,8 @@ from core.infrastructure.telegram.handlers.forward_select import ForwardSelectHa
 from core.infrastructure.telegram.handlers.discovery import DiscoveryHandlers
 from core.infrastructure.telegram.handlers.forwarding import ForwardingHandlers
 from core.infrastructure.telegram.replace_bot_ui import ReplaceBotMixin
+from core.infrastructure.telegram.replace_maps_bot_ui import ReplaceMapsBotMixin
+from core.infrastructure.telegram.prompt_bot_ui import PromptBotMixin
 from core.infrastructure.telegram.command_router import TextCommandMixin
 from core.application.command_registry import ARBITRATED_COMMANDS
 from core.infrastructure.telegram import fsm_arbiter
@@ -442,7 +444,8 @@ from core.domain.text_replace import (
 )
 
 
-class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHandlers,
+class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, ReplaceMapsBotMixin,
+               PromptBotMixin, DiscoveryHandlers,
                ForwardingHandlers, ForwardManageHandlers, ForwardSelectHandlers):
     """Renders and routes the entire button-based control panel.
 
@@ -4157,6 +4160,8 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         words_display = _brand_display(brand_words)
         gate_label = self._t("ui_smart_btn_brand_gate_on" if brand_cfg.get("require_forward")
                              else "ui_smart_btn_brand_gate_off", lang=lang)
+        chan_label = self._t("ui_smart_btn_brand_chan_on" if brand_cfg.get("require_channel")
+                             else "ui_smart_btn_brand_chan_off", lang=lang)
         force_label = self._t("ui_smart_btn_brand_force_on" if brand_cfg.get("force_forward")
                               else "ui_smart_btn_brand_force_off", lang=lang)
 
@@ -4168,6 +4173,8 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             self._t("ui_smart_mid_channel", lang=lang, mid=mid_display),
             self._t("ui_smart_brand_block", lang=lang),
             self._t("ui_smart_brand_state", lang=lang, state=brand_state),
+            self._t("ui_smart_brand_channel", lang=lang,
+                    state=self._t("ui_brand_on" if brand_cfg.get("require_channel") else "ui_brand_off", lang=lang)),
             self._t("ui_smart_brand_origins", lang=lang, origins=origins_display),
             self._t("ui_smart_brand_words", lang=lang, words=words_display),
             # The description says which logic is in force; the raw `ANY`/`ALL`
@@ -4200,8 +4207,10 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             ],
             [
                 (gate_label, f"rsmbr:{rule.id}"),
+                (chan_label, f"rsmrc:{rule.id}"),
                 (force_label, f"rsmbf:{rule.id}"),
             ],
+            [(self._t("ui_smart_btn_replace_maps", lang=lang), f"rmap:open:{rule.id}")],
             [
                 (self._t("ui_smart_btn_header", lang=lang), f"rsmh:{rule.id}"),
                 (self._t("ui_smart_btn_del_header", lang=lang), f"rsmhd:{rule.id}"),
@@ -4465,6 +4474,9 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         # bot so a phone-only user has the full surface, not a status line.
         rows.append([(self._t("ui_btn_ar_assistant"), "ar:menu")])
         rows.append([(self._btn("ui_ai_add"), CB["ai_add"])])
+        # The prompt library: one list where every template can be renamed,
+        # reworded, tested, disabled or deleted (prompt_bot_ui.py).
+        rows.append([(self._btn("ui_btn_prompts"), CB["p_list"])])
         rows.append([(self._btn("ui_back"), CB["main"])])
         return self._kbd(rows)
 
@@ -4701,6 +4713,10 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
         self.register_autoreply_handlers()
         # The unified /replace manager: list, detail, create/edit, tasks, test.
         self.register_replace_handlers()
+        # The per-task link & @mention replace-map editor (smart menu entry).
+        self.register_replace_maps_handlers()
+        # The global prompt-template manager (AI -> Prompts).
+        self.register_prompt_handlers()
 
         # v29 text-command surface: the commands the registry says no earlier
         # handler owns. Mounted at group -2 so a command always reaches the
@@ -8683,7 +8699,8 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             if prompt_id and self._prompts:
                 try:
                     tpl = await self._prompts.get_template(prompt_id)
-                    lines.append(f"📝 {self._t('ui_ai_prompt_label')}: `{tpl.name}` (v{tpl.current_version})" if tpl else f"📝 {self._t('ui_ai_prompt_label')}: `{prompt_id[:8]}`")
+                    off_tag = "" if (tpl is None or bool(getattr(tpl, "enabled", True))) else f" — {self._t('ui_ai_prompt_off_tag')}"
+                    lines.append(f"📝 {self._t('ui_ai_prompt_label')}: `{tpl.name}` (v{tpl.current_version}{off_tag})" if tpl else f"📝 {self._t('ui_ai_prompt_label')}: `{prompt_id[:8]}`")
                 except Exception:
                     lines.append(f"📝 {self._t('ui_ai_prompt_label')}: `{prompt_id[:8]}`")
             else:
@@ -8908,7 +8925,12 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
                 templates = await self._prompts.list_templates_by_owner(uid) if hasattr(self._prompts, "list_templates_by_owner") else await self._prompts.list_templates()
                 for t in templates:
                     mark = "✅" if t.id == current else ("⭐" if t.is_system else "👤")
-                    rows.append([(f"{mark} {t.name} (v{t.current_version})", f"r_aipset:{t.id}")])
+                    # A disabled template is selectable but will not steer
+                    # deliveries — the badge says so before the operator
+                    # wonders why the rewrite "does nothing".
+                    off = "" if bool(getattr(t, "enabled", True)) else f" {self._t('ui_ai_prompt_off_tag')}"
+                    rows.append([(f"{mark} {t.name} (v{t.current_version}){off}", f"r_aipset:{t.id}")])
+            rows.append([(self._t("ui_ai_btn_open_prompts"), CB["p_list"])])
             rows.append([(self._t("ui_back"), f"r_ai:{rule_id}")])
             await self._safe_edit(cq, self._t("ui_ai_pick_prompt_title"), reply_markup=self._kbd(rows))
             await cq.answer()
@@ -9729,6 +9751,35 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             await self._save_owned_rule(rule, uid)
             await cq.answer(self._t("ui_brand_force_saved", lang=self._resolve_lang(uid),
                                     state=self._t("ui_brand_on" if cfg["force_forward"] else "ui_brand_off")))
+            text, kbd = self._render_smart_menu(rule)
+            await self._safe_edit(cq, text, reply_markup=kbd)
+
+        @b.on_callback_query(filters.regex(r"^rsmrc:(.+)$"))
+        @self._localized_handler
+        async def _cb_smart_brand_channel_toggle(_, cq: CallbackQuery):
+            """The "channel-only hop" gate: normal users keep their own name.
+
+            On: only channel-originated messages (a channel post in A, or a
+            forward whose origin is a channel) take the branded hop; a
+            message written by a person is delivered directly, so B still
+            shows "Forwarded from <that person>". Off: every matched message
+            takes the hop.
+            """
+            uid = cq.from_user.id if cq.from_user else 0
+            raw = cq.data.decode("utf-8") if isinstance(cq.data, (bytes, bytearray)) else str(cq.data or "")
+            rule_id = raw.split(":", 1)[1]
+            rule = await self._owned_rule(rule_id, uid)
+            if not rule:
+                return await cq.answer(self._t("ui_rule_not_found"), show_alert=True)
+            cfg = branding_policy.read_config(rule)
+            enable = not bool(cfg.get("require_channel"))
+            branding_policy.write_config(rule, {"require_channel": enable})
+            await self._save_owned_rule(rule, uid)
+            await cq.answer(self._t(
+                "ui_brand_channel_saved",
+                lang=self._resolve_lang(uid),
+                state=self._t("ui_brand_on" if enable else "ui_brand_off"),
+            ))
             text, kbd = self._render_smart_menu(rule)
             await self._safe_edit(cq, text, reply_markup=kbd)
 
@@ -11016,7 +11067,8 @@ class ProBotUI(TextCommandMixin, AutoReplyBotMixin, ReplaceBotMixin, DiscoveryHa
             if prompt_id and self._prompts:
                 try:
                     tpl = await self._prompts.get_template(prompt_id)
-                    lines.append(f"📝 {self._t('ui_ai_prompt_label')}: `{tpl.name}` (v{tpl.current_version})" if tpl else f"📝 {self._t('ui_ai_prompt_label')}: `{prompt_id[:8]}`")
+                    off_tag = "" if (tpl is None or bool(getattr(tpl, "enabled", True))) else f" — {self._t('ui_ai_prompt_off_tag')}"
+                    lines.append(f"📝 {self._t('ui_ai_prompt_label')}: `{tpl.name}` (v{tpl.current_version}{off_tag})" if tpl else f"📝 {self._t('ui_ai_prompt_label')}: `{prompt_id[:8]}`")
                 except Exception:
                     lines.append(f"📝 {self._t('ui_ai_prompt_label')}: `{prompt_id[:8]}`")
             else:

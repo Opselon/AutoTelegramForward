@@ -3304,14 +3304,15 @@ class SqlitePromptRepository(IPromptRepository):
         self._db.execute(
             """
             INSERT INTO prompt_templates (id, name, description, system_prompt, user_prompt_template,
-                target_language, current_version, is_system, created_at, updated_at, owner_user_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                target_language, current_version, is_system, created_at, updated_at, owner_user_id, enabled)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 template.id, template.name, template.description, template.system_prompt,
                 template.user_prompt_template, template.target_language, template.current_version,
                 int(template.is_system), template.created_at, template.updated_at,
                 int(getattr(template, "owner_user_id", 0) or 0),
+                int(bool(getattr(template, "enabled", True))),
             ),
         )
         return template
@@ -3322,7 +3323,7 @@ class SqlitePromptRepository(IPromptRepository):
             """
             UPDATE prompt_templates
             SET name=?, description=?, system_prompt=?, user_prompt_template=?,
-                target_language=?, current_version=?, is_system=?, updated_at=?, owner_user_id=?
+                target_language=?, current_version=?, is_system=?, updated_at=?, owner_user_id=?, enabled=?
             WHERE id=?
             """,
             (
@@ -3330,6 +3331,7 @@ class SqlitePromptRepository(IPromptRepository):
                 template.user_prompt_template, template.target_language,
                 template.current_version, int(template.is_system),
                 template.updated_at, int(getattr(template, "owner_user_id", 0) or 0),
+                int(bool(getattr(template, "enabled", True))),
                 template.id,
             ),
         )
@@ -3361,6 +3363,8 @@ class SqlitePromptRepository(IPromptRepository):
             target_language=r["target_language"], current_version=int(r["current_version"]),
             is_system=bool(r["is_system"]), created_at=r["created_at"], updated_at=r["updated_at"],
             owner_user_id=int(r["owner_user_id"]) if "owner_user_id" in r.keys() else 0,
+            # Rows written before the enable switch existed read as enabled.
+            enabled=bool(r["enabled"]) if "enabled" in r.keys() else True,
         )
 
     async def delete_template(self, template_id: str) -> bool:

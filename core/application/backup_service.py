@@ -299,6 +299,9 @@ class BackupService:
             "current_version": t.current_version,
             "is_system": t.is_system,
             "owner_user_id": int(getattr(t, "owner_user_id", 0) or 0),
+            # The library enable/disable switch rides the backup so a restore
+            # brings back the same active set of prompts.
+            "enabled": bool(getattr(t, "enabled", True)),
         }
 
     # ------------------------------------------------------------------ import
@@ -521,6 +524,7 @@ class BackupService:
                         if target_owner_user_id is not None
                         else raw.get("owner_user_id") or 0
                     ),
+                    enabled=bool(raw.get("enabled", True)),
                 )
                 await self._prompts.add_template(t)
                 p_stats["imported"] += 1

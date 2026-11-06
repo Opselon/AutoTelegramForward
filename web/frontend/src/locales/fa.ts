@@ -9,6 +9,18 @@
 import type { Catalog } from './types'
 
 export const fa: Catalog = {
+  "ui_link_rewrite_map_placeholder": "damane-ghadim.com damane-jadid.com\nhttps://ghadim.t.me/x https://jadid.t.me/y\n* https://t.me/man",
+  "ui_mention_rewrite_map_placeholder": "@maghaze-ghadim @maghaze-jadid\n* @asli",
+  "ui_channel_only_hop": "فقط محتوای کانال‌ها پرش را انجام می‌دهند",
+  "ui_channel_only_hop_hint": "پیام‌های کاربران عادی مستقیماً با نام خودشان فوروارد می‌شوند؛ محتوای کانال‌ها از طریق C برند می‌شود.",
+  "ui_link_rewrite_map_hint": "هر جفت در یک خط: قدیم جدید — یا * https://t.me/man برای بازنویسی همه لینک‌ها.",
+  "ui_link_rewrite_map_label": "نقشه بازنویسی لینک",
+  "ui_mention_rewrite_map_hint": "هر جفت در یک خط: @maghaze-ghadim @maghaze-jadid — یا * @asli برای بازنویسی همه @آیدی‌ها.",
+  "ui_mention_rewrite_map_label": "نقشه بازنویسی @منشن",
+  "ui_only_if_the_message_comes_from_a_channel": "و فقط اگر از یک کانال بیاید",
+  "ui_replace_any_link_found": "جایگزینی هر لینک پیدا شده",
+  "ui_replace_any_link_found_hint": "هر لینک موجود در متن را بر اساس نقشه لینک زیر بازنویسی می‌کند.",
+  "ui_replace_links_mentions_section": "جایگزینی لینک‌ها و @منشن‌ها",
   "ui_0s_instant": "۰ ثانیه (فوری)",
   "ui_1_back_up_this_server": "۱. گرفتن بکاپ از این سرور",
   "ui_2_restore_on_this_server": "۲. بازیابی در این سرور",

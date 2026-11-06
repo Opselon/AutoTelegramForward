@@ -9,6 +9,18 @@
 import type { Catalog } from './types'
 
 export const es: Catalog = {
+  "ui_link_rewrite_map_placeholder": "dominioviejo.com dominionuevo.com\nhttps://viejo.t.me/x https://nuevo.t.me/y\n* https://t.me/yo",
+  "ui_mention_rewrite_map_placeholder": "@tiendavieja @tiendanueva\n* @principal",
+  "ui_channel_only_hop": "Solo el contenido de canales da el salto",
+  "ui_channel_only_hop_hint": "Los mensajes de usuarios normales se reenvían directamente con su propio nombre; el contenido de canales se marca mediante C.",
+  "ui_link_rewrite_map_hint": "Un par por línea: viejo nuevo — o * https://t.me/yo para reescribir todos los enlaces.",
+  "ui_link_rewrite_map_label": "Mapa de reescritura de enlaces",
+  "ui_mention_rewrite_map_hint": "Un par por línea: @tiendavieja @tiendanueva — o * @principal para reescribir todos los @ID.",
+  "ui_mention_rewrite_map_label": "Mapa de reescritura de @menciones",
+  "ui_only_if_the_message_comes_from_a_channel": "y solo si viene de un canal",
+  "ui_replace_any_link_found": "Reemplazar cualquier enlace encontrado",
+  "ui_replace_any_link_found_hint": "Reescribe cada enlace del texto según el mapa de enlaces de abajo.",
+  "ui_replace_links_mentions_section": "Reemplazar enlaces y @menciones",
   "ui_0s_instant": "0 s (instantáneo)",
   "ui_1_back_up_this_server": "1. Haz una copia de seguridad de este servidor",
   "ui_2_restore_on_this_server": "2. Restaura en este servidor",

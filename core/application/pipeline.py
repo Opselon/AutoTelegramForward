@@ -517,6 +517,16 @@ class DurableMessagePipeline:
                 "[PIPELINE:BRANDING] [%s] Rule %s hop failed (%s) — delivering directly",
                 ctx.correlation_id[:8], rule.id[:8], exc,
             )
+            # Structured error trail: the branded hop is a delivery-stage side
+            # effect, so its failure is an audit event with its own reason code
+            # (the Rust log store and the Log Center filter on it) — not just a
+            # stdout line the operator has to grep for.
+            await self._audit(
+                ctx, "forward.branding_failed", "FAILED", severity="ERROR",
+                reason_code="BRANDING_HOP_FAILED", rule_id=rule.id,
+                message_id=str(getattr(ctx.payload, "message_id", "") or ""),
+                result_summary=f"branding hop failed: {type(exc).__name__}",
+            )
             return None
         if plan:
             logger.info(
@@ -529,6 +539,12 @@ class DurableMessagePipeline:
             logger.warning(
                 "[PIPELINE:BRANDING] [%s] Rule %s msg %s: nothing posted into C — delivering directly",
                 ctx.correlation_id[:8], rule.id[:8], getattr(ctx.payload, "message_id", "?"),
+            )
+            await self._audit(
+                ctx, "forward.branding_failed", "FAILED", severity="ERROR",
+                reason_code="BRANDING_HOP_EMPTY", rule_id=rule.id,
+                message_id=str(getattr(ctx.payload, "message_id", "") or ""),
+                result_summary="branding hop posted nothing into C",
             )
         return plan
 
@@ -1526,7 +1542,17 @@ class DurableMessagePipeline:
                 )
 
         # Link Management Engine (Entity-aware, domain allowlist/blocklist, SSRF protected)
+        # "Replace any link found": with `link_replace_enabled` on and a
+        # rewrite map configured, a task with no stricter policy upgrades to
+        # REWRITE_LINKS so the engine rewrites the links the map names (a `*`
+        # key rewrites every link) instead of leaving them untouched.
         link_policy = getattr(rule, "link_policy", "PRESERVE_ALL")
+        if (
+            bool(getattr(rule, "link_replace_enabled", False))
+            and (getattr(rule, "link_rewrite_map", None) or {})
+            and str(link_policy or "").strip().upper() in ("", "PRESERVE_ALL")
+        ):
+            link_policy = "REWRITE_LINKS"
         if (link_policy and link_policy != "PRESERVE_ALL") or getattr(rule, "remove_links", False):
             clean_text, updated_ents, links_mod = LinkManagementEngine.apply_to_payload(
                 payload, rule, text=text
@@ -1633,6 +1659,22 @@ class DurableMessagePipeline:
         # task's own header).
         if getattr(rule, "replacements", None):
             text = self._filter_engine.replace_text(text, rule.replacements)
+
+        # "@mention rewrites" run in the same final pass: a map-driven replace
+        # of @handles (`@oldshop -> @newshop`, or a `*` catch-all), so a
+        # rewrite cannot reintroduce a handle the task asked to replace.
+        mention_map = getattr(rule, "mention_rewrite_map", None) or {}
+        if mention_map:
+            from ..domain.text_replace import apply_mention_rewrites
+
+            rewritten = apply_mention_rewrites(text, mention_map)
+            if rewritten != text:
+                logger.info(
+                    "[PIPELINE:REPLACE] [%s] Rule %s rewrote @mentions of msg %s (len %d -> %d)",
+                    ctx.correlation_id[:8], rule.id[:8], payload.message_id,
+                    len(text), len(rewritten),
+                )
+                text = rewritten
 
         # Header & Footer
         header = getattr(rule, "header", "") or getattr(rule, "header_text", "")
@@ -1742,6 +1784,24 @@ class DurableMessagePipeline:
         if isinstance(rule.metadata, dict) and rule.metadata.get("prompt_id"):
             prompt_id = str(rule.metadata.get("prompt_id"))
 
+        if self._prompt_service and prompt_id:
+            # A template switched off in the prompt manager stays in the
+            # library but stops steering deliveries: the task is rewritten
+            # with its AI config's own prompt, exactly as if none were set.
+            # Preview and the tester keep working on disabled templates —
+            # that is how an operator checks a prompt before re-enabling it.
+            try:
+                template = await self._prompt_service.get_template(prompt_id)
+            except Exception:
+                template = None
+            if template is not None and not bool(getattr(template, "enabled", True)):
+                logger.info(
+                    "[PIPELINE:AI_REWRITE:PROMPT_OFF] [%s] Rule %s prompt '%s' is disabled — "
+                    "using the AI config's own prompt",
+                    ctx.correlation_id[:8], rule.id[:8], prompt_id,
+                )
+                prompt_id = ""
+                prompt_ver = 0
         if self._prompt_service and prompt_id:
             try:
                 preview = await self._prompt_service.preview_prompt(

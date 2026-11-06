@@ -280,6 +280,109 @@
   },
   {
     "message": {
+      "chat_type": "supergroup",
+      "text": "hello"
+    },
+    "name": "require_channel_user_message",
+    "reason": "branding_requires_channel_origin",
+    "rule": {
+      "branding_hop": {
+        "require_channel": true,
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": false
+  },
+  {
+    "message": {
+      "chat_type": "channel",
+      "text": "hello"
+    },
+    "name": "require_channel_native_post",
+    "reason": "branding_no_triggers_configured",
+    "rule": {
+      "branding_hop": {
+        "require_channel": true,
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "chat_type": "supergroup",
+      "forward_origin": {
+        "from_chat_id": "-100555",
+        "from_chat_title": "Five",
+        "from_chat_username": "",
+        "type": "channel"
+      },
+      "text": "hello"
+    },
+    "name": "require_channel_forwarded_from_channel",
+    "reason": "branding_no_triggers_configured",
+    "rule": {
+      "branding_hop": {
+        "require_channel": true,
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
+      "chat_type": "supergroup",
+      "forward_origin": {
+        "from_chat_id": "12345",
+        "from_chat_title": "",
+        "from_chat_username": "someuser",
+        "type": "user"
+      },
+      "text": "hello"
+    },
+    "name": "require_channel_forwarded_from_user",
+    "reason": "branding_requires_channel_origin",
+    "rule": {
+      "branding_hop": {
+        "require_channel": true,
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": false
+  },
+  {
+    "message": {
+      "chat_type": "supergroup",
+      "forward_origin": {
+        "from_chat_id": "-100555",
+        "from_chat_title": "Five",
+        "from_chat_username": "",
+        "type": "MessageForwardOriginChannel"
+      },
+      "text": "hello"
+    },
+    "name": "require_channel_pyrogram_origin_type",
+    "reason": "branding_no_triggers_configured",
+    "rule": {
+      "branding_hop": {
+        "require_channel": true,
+        "triggers_enabled": true
+      },
+      "intermediate_channel_id": "-100999",
+      "use_intermediate": true
+    },
+    "take_hop": true
+  },
+  {
+    "message": {
       "forward_origin": {
         "from_chat_id": "-100555",
         "from_chat_title": "Five",

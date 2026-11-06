@@ -206,7 +206,8 @@ CREATE TABLE IF NOT EXISTS prompt_templates (
     is_system BOOLEAN NOT NULL DEFAULT FALSE,
     created_at BIGINT NOT NULL,
     updated_at BIGINT NOT NULL,
-    owner_user_id BIGINT NOT NULL DEFAULT 0
+    owner_user_id BIGINT NOT NULL DEFAULT 0,
+    enabled BOOLEAN NOT NULL DEFAULT TRUE
 );
 CREATE INDEX IF NOT EXISTS idx_pg_prompt_templates_lang ON prompt_templates (target_language);
 CREATE INDEX IF NOT EXISTS idx_pg_prompt_templates_owner ON prompt_templates (owner_user_id);

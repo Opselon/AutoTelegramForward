@@ -1347,6 +1347,22 @@ class ForwardRule:
         self._set_branding_key("require_forward", bool(val))
 
     @property
+    def branding_require_channel(self) -> bool:
+        """Gate: refuse the hop unless the message originates from a channel.
+
+        This is the switch that makes the flow "normal users are forwarded
+        directly with their own name, channel content goes through C": a
+        user's own post fails the gate and keeps its personal "Forwarded
+        from <user>" header on a direct delivery, while a channel post (or a
+        channel forward) earns the branded A -> C -> B route.
+        """
+        return bool(self._branding_key("require_channel"))
+
+    @branding_require_channel.setter
+    def branding_require_channel(self, val: Any) -> None:
+        self._set_branding_key("require_channel", bool(val))
+
+    @property
     def branding_force_forward(self) -> bool:
         """Stage 2 sends a native forward of C — the only way B can show C."""
         return bool(self._branding_key("force_forward"))
@@ -1674,6 +1690,41 @@ class ForwardRule:
         if not isinstance(self.metadata, dict):
             self.metadata = {}
         self.metadata["smart_ai_rewrite"] = bool(val)
+
+    # --- Replace engine: link & mention rewrite maps -----------------------
+    # "Replace any link found" and "replace any @ID" are the two map-driven
+    # replacement switches. The maps ride the rule's metadata blob so they
+    # need no schema migration, and the registry exposes them (with the
+    # column-backed `link_rewrite_map`) so the bot, dashboard, mobile client
+    # and the REST settings surface all edit the same values.
+    @property
+    def link_replace_enabled(self) -> bool:
+        """Rewrite every link the text carries through ``link_rewrite_map``."""
+        return bool(self.metadata.get("link_replace_enabled", False)) if isinstance(self.metadata, dict) else False
+
+    @link_replace_enabled.setter
+    def link_replace_enabled(self, val: bool) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["link_replace_enabled"] = bool(val)
+
+    @property
+    def mention_rewrite_map(self) -> Dict[str, str]:
+        """@username -> @username pairs applied to the message text.
+
+        A ``*`` key replaces every mention with its value; otherwise only the
+        exact (case-insensitive) handles listed are rewritten.
+        """
+        if not isinstance(self.metadata, dict):
+            return {}
+        raw = self.metadata.get("mention_rewrite_map", {})
+        return dict(raw) if isinstance(raw, dict) else {}
+
+    @mention_rewrite_map.setter
+    def mention_rewrite_map(self, val: Any) -> None:
+        if not isinstance(self.metadata, dict):
+            self.metadata = {}
+        self.metadata["mention_rewrite_map"] = dict(val or {})
 
     @property
     def ai_rewrite_active(self) -> bool:
@@ -2465,6 +2516,10 @@ class PromptTemplate:
     updated_at: int = field(default_factory=_now)
     # v12: user prompts are per-tenant; system prompts (is_system) stay shared.
     owner_user_id: int = 0
+    # A disabled template stays in the library (editable, testable) but the
+    # delivery pipeline skips it: a task pointing at it is rewritten with the
+    # AI config's own prompt instead, exactly as if no template were set.
+    enabled: bool = True
 
 
 @dataclass

@@ -90,10 +90,12 @@ func TestBrandingFixturesAreComplete(t *testing.T) {
 // brandingMessage rebuilds the message-side input from the fixture's blob.
 func brandingMessage(raw map[string]any) branding.MessageView {
 	view := branding.MessageView{
-		Text: strField(raw, "text"),
+		Text:     strField(raw, "text"),
+		ChatType: strField(raw, "chat_type"),
 	}
 	if origin, ok := raw["forward_origin"].(map[string]any); ok {
 		view.ForwardOrigin = &branding.ForwardOrigin{
+			Type:             strField(origin, "type"),
 			FromChatID:       strField(origin, "from_chat_id"),
 			FromChatUsername: strField(origin, "from_chat_username"),
 			FromChatTitle:    strField(origin, "from_chat_title"),

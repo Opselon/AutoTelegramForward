@@ -108,6 +108,27 @@ SETTING_SPECS: Dict[str, SettingSpec] = {
                            "(`i` ignore case, `c` case-sensitive, `w` whole word)."
                        )),
     "link_replacement": _s(kind="str", default="", group="cleanup"),
+    # --- Replace engine: links & @mentions ---------------------------------
+    # The toggle arms the map below it: with `link_replace_enabled` on, every
+    # link the text carries is rewritten through `link_rewrite_map` (a `*`
+    # key rewrites every link to one target, a domain key rewrites that
+    # domain, a key containing "/" rewrites the URLs it prefixes).
+    "link_replace_enabled": _s(
+        kind="bool", default=False, group="cleanup",
+        help="Rewrite every link found in the text through the link rewrite map."),
+    # Column-backed like allowed_media_types: the Link Management Engine reads
+    # the real forward_rules column, and backups/the REST contract already
+    # carry it. Registered so the API settings surface and the generic
+    # settings UIs can edit the map without a bespoke route.
+    "link_rewrite_map": _s(
+        kind="dict", default={}, group="cleanup",
+        help='Link rewrite pairs: {"*": "https://t.me/me"} rewrites every link,'
+             ' "olddomain.com": "newdomain.com" rewrites one domain,'
+             ' "https://old.t.me/x": "https://new.t.me/y" rewrites a full URL.'),
+    "mention_rewrite_map": _s(
+        kind="dict", default={}, group="cleanup",
+        help='@mention rewrite pairs: {"@oldshop": "@newshop"} rewrites one'
+             ' handle (case-insensitive), "*": "@main" rewrites every @ID.'),
     "clean_usernames": _s(kind="bool", default=False, group="cleanup"),
     "clean_hashtags": _s(kind="bool", default=False, group="cleanup"),
     "clean_phones": _s(kind="bool", default=False, group="cleanup"),
@@ -303,6 +324,9 @@ SETTING_SPECS: Dict[str, SettingSpec] = {
     "branding_require_forward": _s(
         kind="bool", default=False, group="branding",
         help="Refuse the hop unless the message is itself a forward."),
+    "branding_require_channel": _s(
+        kind="bool", default=False, group="branding",
+        help="Refuse the hop unless the message comes from a channel — normal users are then forwarded directly with their own name."),
     "branding_force_forward": _s(
         kind="bool", default=True, group="branding",
         help="Send the final step as a native forward of C, so B's header names C."),

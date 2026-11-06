@@ -9,6 +9,18 @@
 import type { Catalog } from './types'
 
 export const zh: Catalog = {
+  "ui_link_rewrite_map_placeholder": "旧域名.com 新域名.com\nhttps://old.t.me/x https://new.t.me/y\n* https://t.me/me",
+  "ui_mention_rewrite_map_placeholder": "@旧店铺 @新店铺\n* @主页",
+  "ui_channel_only_hop": "仅频道内容执行跳转",
+  "ui_channel_only_hop_hint": "普通用户写的消息将以自己的名字直接转发；频道内容通过 C 完成品牌化。",
+  "ui_link_rewrite_map_hint": "每行一对：旧 新 — 或 * https://t.me/me 改写所有链接。",
+  "ui_link_rewrite_map_label": "链接改写映射表",
+  "ui_mention_rewrite_map_hint": "每行一对：@旧店铺 @新店铺 — 或 * @主页 改写所有 @ID。",
+  "ui_mention_rewrite_map_label": "@提及改写映射表",
+  "ui_only_if_the_message_comes_from_a_channel": "且仅当来自频道时",
+  "ui_replace_any_link_found": "替换找到的任何链接",
+  "ui_replace_any_link_found_hint": "按下方链接映射表改写文本中的每个链接。",
+  "ui_replace_links_mentions_section": "替换链接与 @提及",
   "ui_0s_instant": "0 秒（立即）",
   "ui_1_back_up_this_server": "1. 备份此服务器",
   "ui_2_restore_on_this_server": "2. 在此服务器上恢复",

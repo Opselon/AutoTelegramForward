@@ -156,7 +156,7 @@ class TestBrandingSettings:
         assert keys == {
             "branding_triggers_enabled", "branding_origin_titles", "branding_origin_ids",
             "branding_keywords", "branding_match_mode", "branding_require_forward",
-            "branding_force_forward",
+            "branding_require_channel", "branding_force_forward",
         }
         published = {s["key"] for s in schema()["settings"]}
         assert keys <= published

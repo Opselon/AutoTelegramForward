@@ -198,6 +198,17 @@ AutoTelegramForward v2.3 is engineered with strict, fail-closed microservice bou
 
 ## 🚀 What is New in v2.x
 
+- 📡 **Branding Hop with a Channel-Only Gate (A → C → B)**:
+  Route channel content through your own branding channel so the target's header names it — while messages written by normal users are forwarded directly with their own name (`branding_require_channel`). Configurable from the bot's smart menu, the dashboard's rule editor and the mobile client; the trigger policy (origins, keywords, match mode, forward/channel gates) is one shared decision across the Python engine, the Go worker and the preview, pinned by cross-engine parity fixtures.
+- 🔁 **Replace Any Link Found**:
+  `link_replace_enabled` + a rewrite map with three key shapes: `*` rewrites every link to one target, a domain key rewrites one domain, a URL-prefix key rewrites the deep links it starts with. Applied entity-aware by the link engine in both engines.
+- ❕ **Replace Any @ID**:
+  `mention_rewrite_map` rewrites handles (`@oldshop → @newshop`, or `* → @main` for every mention) in the final replacement pass — after the AI stage, so a rewrite cannot resurrect a replaced handle. Dedicated editor panel in the bot (smart menu → 🔁 Link & @replace maps), registry rows on the dashboard and the mobile settings sheet.
+- 🧠 **Prompt Library Management (bot + dashboard + mobile)**:
+  The global prompt manager (`AI → 🧠 Prompts`) closes the bot's missing surface: list, create, rename, edit the system prompt / user template / description, test against a real provider, and **enable/disable** — a disabled template stays in the library while deliveries fall back to the task's AI-config prompt (`[PIPELINE:AI_REWRITE:PROMPT_OFF]`). The mobile client gains the same library (CRUD + test) over the shared `/api/prompts` contract.
+- 🚨 **Branding Failure Trail**:
+  Hop failures now carry their own event codes (`BRANDING_HOP_FAILED`, `BRANDING_STAGE1_FAILED`, `BRANDING_STAGE2_FAILED`) into the Rust log store and the Log Center, so "the branded route is broken for this task" is one filter instead of a needle in every delivery failure.
+
 - 🧹 **Advanced Content Cleaner & Sanitizer**:
   Strip links, `@mentions`, `#hashtags`, emojis, and custom regex patterns per rule, with preview and dynamic toggle.
 - 🧬 **Message Deduplication Engine**:
