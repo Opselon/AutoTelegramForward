@@ -30,6 +30,7 @@ from ...domain.services import AdvancedSettingsEngine, CaptionManagementEngine, 
 from ...domain.value_objects import ContentMode, ForwardMode
 from .album_aggregator import AlbumAggregator
 from .client_pool import ClientPool, payload_from_pyrogram
+from .pyrogram_compat import thread_kwargs as pyrogram_thread_kwargs
 from .errors import is_restricted_source_error, is_timeout_error, tg_detail, tg_error, wait_seconds
 from .media_reference import (
     extract_media_reference as _extract_media_reference,
@@ -782,9 +783,13 @@ class MessageDispatcher:
         # addresses a real thread; 0/None means "no topic configured" and must
         # not be passed (Telegram would reject a zero thread id).
         topic_id = int(getattr(rule, "topic_id", None) or 0)
-        thread_kwargs: dict = {}
-        if topic_id > 0:
-            thread_kwargs["message_thread_id"] = topic_id
+        # Same documented-surface guard as the durable queue: the pinned
+        # pyrogram predates message_thread_id on these methods.
+        thread_kwargs: dict = pyrogram_thread_kwargs(
+            client,
+            ["forward_messages", "copy_message", "send_message"],
+            topic_id,
+        )
 
         # If the branding hop ran, stage 2 starts from C — never from A.
         if intermediate_msg_id and branding.enabled(rule):

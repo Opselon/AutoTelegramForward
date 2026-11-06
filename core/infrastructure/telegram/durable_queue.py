@@ -39,6 +39,7 @@ from .diagnostics_contract import (
 )
 from .failure_policy import classify_failure, error_code, rate_limit_seconds
 from .bot_transport import BotRouteAdapter, BotTransportCache, BotTransportUnsupported
+from core.infrastructure.telegram.pyrogram_compat import thread_kwargs as pyrogram_thread_kwargs
 from .media_reference import extract_media_reference, send_media_reference
 
 logger = logging.getLogger("atf.durable_queue")
@@ -2108,9 +2109,17 @@ class DurableQueueManager:
         # the message silently lands in the wrong place. Only a positive id is
         # meaningful: 0/None means "no topic configured".
         topic_id = int(data.get("topic_id", 0) or 0)
-        thread_kwargs: Dict[str, Any] = {}
-        if topic_id > 0:
-            thread_kwargs["message_thread_id"] = topic_id
+        # Topic targeting rides the documented surface: the pinned pyrogram
+        # 2.0.106 predates message_thread_id on forward/copy/send, so the
+        # kwarg is threaded only when this session's client accepts it —
+        # every spread below lands in the chat's General topic otherwise,
+        # instead of failing the whole delivery with a TypeError.
+        thread_kwargs: Dict[str, Any] = pyrogram_thread_kwargs(
+            client,
+            ["forward_messages", "copy_message", "copy_media_group",
+             "send_message", "send_media_group"],
+            topic_id,
+        )
 
         # --- Branding hop (A -> C -> B) --------------------------------------
         # The message was already copied into our channel C on the dispatch path
