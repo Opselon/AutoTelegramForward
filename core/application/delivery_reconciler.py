@@ -32,6 +32,7 @@ all consume them without a new schema.
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Any, Dict, List, Optional
 
@@ -353,7 +354,15 @@ class DeliveryReconciler:
         A send that timed out is marked UNKNOWN because neither success nor
         failure is known. Staying UNKNOWN forever is the one state with no
         recovery path of its own, so it must be visible to an operator.
+
+        When the Go Worker owns delivery (ATF_WORKER_ENABLED=1) this check
+        stands down: the worker's own reconciler is the single authority
+        over UNKNOWN fences/jobs, and re-flagging the same rows here every
+        sweep is a second voice over state it does not own — production ran
+        two competing reconcilers, one deciding and one repeating.
         """
+        if str(os.environ.get("ATF_WORKER_ENABLED", "0")).strip().lower() in ("1", "true", "yes", "on"):
+            return []
         scope, params = await self._scope(owner_user_id)
         db = self._db()
         if db is None:

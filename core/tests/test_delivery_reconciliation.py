@@ -248,6 +248,24 @@ async def test_an_unresolved_unknown_delivery_is_flagged(db, queue, mmap, rules,
     assert "timed out" in unknown[0]["error_detail"], unknown[0]["error_detail"]
 
 
+async def test_unknown_deliveries_stand_down_when_go_worker_owns_delivery(
+    db, queue, mmap, rules, attempts, gaps, monkeypatch
+):
+    """ATF_WORKER_ENABLED=1: the Go Worker's reconciler owns UNKNOWN state.
+
+    Flagging Go-owned rows here every sweep made Python a second, repeating
+    voice over state it does not resolve (production warned about the same 3
+    rows every sweep while the Go reconciler legitimately kept them UNKNOWN).
+    """
+    await rules.add(make_rule())
+    _job(db, status="UNKNOWN", error_detail="timed out")
+    monkeypatch.setenv("ATF_WORKER_ENABLED", "1")
+    r = await _reconciler(queue, mmap, rules, attempts, gaps).reconcile()
+    assert r["checks"]["unknown_deliveries"] == [], r["checks"]["unknown_deliveries"]
+    # The other checks keep working — only the Go-owned one stands down.
+    assert "orphan_mappings" in r["checks"]
+
+
 # --------------------------------------------------------------------------- #
 # Repeated failures per destination / per source
 # --------------------------------------------------------------------------- #
