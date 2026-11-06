@@ -28,6 +28,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -62,7 +63,8 @@ type Logger interface {
 
 // Metrics is the operational counter surface the worker publishes.
 type Metrics interface {
-	// Outcome bumps a delivery outcome counter (sent|retried|failed|unknown).
+	// Outcome bumps a delivery outcome counter
+	// (sent|retried|failed|rejected|unknown|panicked).
 	Outcome(kind string)
 	// ObserveRPC records a Telegram RPC latency observation.
 	ObserveRPC(operation string, seconds float64)
@@ -286,7 +288,42 @@ func (e *Engine) SetDecisionRecorder(recorder cleaning.DecisionRecorder) {
 // UNKNOWN) and an error only when the engine itself could not make progress
 // (store unavailable). A defer/retry is a terminal-for-now state, not an
 // error.
-func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) error {
+func (e *Engine) Process(ctx context.Context, j *job.DeliveryJob) (err error) {
+	// Poison-pill containment. A panic inside one job's processing used to
+	// take the whole worker process down; with the job row still CLAIMED,
+	// the restart re-claimed the SAME job and panicked again — a crash loop
+	// one bad payload could sustain forever, stalling the queue behind it.
+	//
+	// The recovery keeps the worker alive and hands the job back to the
+	// retry budget (MarkRetry), so a deterministically panicking payload
+	// dead-letters through the normal attempt budget instead of looping.
+	// The fence is deliberately NOT touched: how far a panicked Process got
+	// is unknown — if the send had already been confirmed,
+	// FenceRecordSent/MarkSent happened before the panic and the re-claim
+	// closes the job as FenceAlreadySent without a second send; if it had
+	// not, the lease ages out to UNKNOWN and the reconciler owns it, the
+	// same lifecycle as any other ambiguous outcome.
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		e.log.Error("panic while processing job — contained; the job returns to the retry budget",
+			"job_id", j.ID,
+			"rule_id", j.RuleID,
+			"panic", fmt.Sprintf("%v", r),
+			"stack", string(debug.Stack()),
+			"event_code", "JOB_PANIC_CONTAINED",
+		)
+		e.metrics.Outcome("panicked")
+		if rerr := e.store.MarkRetry(ctx, j.ID,
+			fmt.Sprintf("panic while processing: %v", r), backoffFor(j.Attempts)); rerr != nil {
+			e.log.Warn("panic containment could not re-queue the job",
+				"job_id", j.ID, "error", rerr)
+		}
+		err = fmt.Errorf("panic while processing job: %v", r)
+	}()
+
 	// jobStart bounds the /ops end-to-end latency: claim → terminal
 	// outcome. Every exit path below reports through it, so the ring sees
 	// the defers and the drops too, not only the happy path — the panel's
@@ -1268,18 +1305,31 @@ func (e *Engine) handleFailure(ctx context.Context, j *job.DeliveryJob, logger L
 	return nil
 }
 
-// backoffFor is the exponential backoff schedule. Capped: an unbounded
-// exponential is an uncontrolled retry storm wearing a different hat.
+// backoffFor is the exponential backoff schedule: 2^attempts seconds,
+// floored at 1s and capped at 5 minutes — an unbounded exponential is an
+// uncontrolled retry storm wearing a different hat.
+//
+// The doubling loop replaces a direct 2^n multiply: 2^63 seconds already
+// overflows an int64 nanosecond count, and an overflowed duration wraps to
+// a near-zero value — a job with a high attempt count would retry in a
+// tight loop instead of waiting out the cap (found by the backoff table
+// test, which saw backoffFor(99) == 1s).
 func backoffFor(attempts int) time.Duration {
-	delay := time.Duration(math.Pow(2, float64(attempts))) * time.Second
-	if delay > 5*time.Minute {
-		delay = 5 * time.Minute
+	delay := time.Second
+	for i := 0; i < attempts; i++ {
+		delay *= 2
+		if delay >= maxBackoff {
+			return maxBackoff
+		}
 	}
 	if delay < time.Second {
 		delay = time.Second
 	}
 	return delay
 }
+
+// maxBackoff caps the exponential schedule.
+const maxBackoff = 5 * time.Minute
 
 // --- per-target rate limiting --------------------------------------------- //
 

@@ -49,6 +49,7 @@ type Collector struct {
 	failed    atomic.Int64
 	rejected  atomic.Int64
 	unknown   atomic.Int64
+	panicked  atomic.Int64
 
 	// ACTIVE: in-flight deliveries. utilization = active / numWorkers. NOT
 	// goroutines: 34 idle goroutines on a worker delivering nothing is
@@ -327,6 +328,11 @@ func (c *Collector) Outcome(kind string) {
 		c.rejected.Add(1)
 	case "unknown":
 		c.unknown.Add(1)
+	case "panicked":
+		// A recovered panic in the delivery path. Never folded into
+		// "failed": a crash-class defect inside one job is the one signal
+		// an operator must not be able to mistake for a Telegram refusal.
+		c.panicked.Add(1)
 	}
 }
 
@@ -347,6 +353,11 @@ func (c *Collector) Rejected() int64 { return c.rejected.Load() }
 
 // Unknown returns the ambiguous-outcome counter.
 func (c *Collector) Unknown() int64 { return c.unknown.Load() }
+
+// Panicked returns the recovered-panic counter: jobs whose processing
+// panicked and were handed back to the retry budget instead of taking the
+// whole worker down.
+func (c *Collector) Panicked() int64 { return c.panicked.Load() }
 
 // SetDelivered reconciles the in-memory counter with the durable count.
 // The queue read is authoritative whenever the DB is reachable, and
@@ -427,6 +438,7 @@ func (c *Collector) Snapshot() map[string]any {
 		"failed":         c.Failed(),
 		"rejected":       c.Rejected(),
 		"unknown":        c.Unknown(),
+		"panicked":       c.Panicked(),
 	}
 }
 
