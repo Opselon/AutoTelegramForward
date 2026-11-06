@@ -204,5 +204,45 @@ for (const lang of LANGS) {
   ok(`${lang} catalog carries the shell keys`, missing.length === 0, missing.join(', '))
 }
 
+/* ---- 13. the mobile app-shell layer (2026-11): phone ergonomics ----
+   The dashboard is a phone-first surface (browser + Telegram Mini App), so
+   the same CI gate pins the layer that makes it behave like one: real modal
+   chrome at every width (the overlay used to be `position: static` above
+   640px — the dialog rendered in page flow), bottom sheets with a drag
+   handle, a bottom tab bar with a reserved height, and touch-first
+   interaction defaults. */
+ok('bottom-nav height token exists', /--nav-h:\s*64px/.test(layer))
+ok('touch-target token exists', /--tap-min:\s*44px/.test(layer))
+ok('safe-area tokens are declared', /--safe-t:/.test(layer) && /--safe-b:/.test(layer))
+ok('body opts out of pull-to-refresh', layer.includes('overscroll-behavior-y: none'))
+ok('controls opt out of the double-tap-zoom wait', layer.includes('touch-action: manipulation'))
+ok('the WebKit tap highlight is suppressed', layer.includes('-webkit-tap-highlight-color: transparent'))
+
+// The modal overlay must be real chrome at EVERY width: an overlay rule
+// carrying position+z-index+scrim has to exist in the layer (the <=640px
+// media alone is not enough — that is exactly the bug this pins shut).
+const overlayRules = [...layer.matchAll(/\.modal-overlay\s*\{[^}]*\}/g)].map((m) => m[0])
+ok(
+  'modal overlay is fixed, labelled chrome at every width',
+  overlayRules.some((rule) => rule.includes('position: fixed') && rule.includes('z-index: var(--z-modal)') && rule.includes('background: var(--color-scrim)')),
+)
+const sheetRules = [...layer.matchAll(/\.modal-sheet\s*\{[^}]*\}/g)].map((m) => m[0])
+ok(
+  'modal sheet is a flex column with a height cap',
+  sheetRules.some((rule) => rule.includes('flex-direction: column') && rule.includes('max-block-size')),
+)
+ok('the phone bottom sheet has a drag handle', layer.includes('.modal-sheet::before'))
+ok('toasts clear the bottom tab bar on phones', layer.includes('inset-block-end: calc(var(--nav-h)'))
+ok('the sticky header owns the top safe-area inset', layer.includes('padding-block-start: max(var(--space-3), var(--safe-t))'))
+ok('the drawer closes from inside itself (.drawer-head)', layer.includes('.drawer-head'))
+
+/* The document itself: zoom stays available, the Android keyboard resizes
+   the viewport (bottom sheets reflow above it), and the notch is framed. */
+const html = read('index.html')
+ok(
+  'viewport meta keeps zoom, frames the notch, resizes for the keyboard',
+  html.includes('viewport-fit=cover') && html.includes('interactive-widget=resizes-content') && !html.includes('user-scalable=no'),
+)
+
 assert.equal(process.exitCode ?? 0, 0, 'contract violations above')
 console.log(`\n${checks} checks: ${process.exitCode ? 'FAILED' : 'all passed'}`)

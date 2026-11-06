@@ -34,7 +34,9 @@ import { makeT, type UiLang } from '../locales/engine'
 export function SystemPanel({ lang }: { lang: UiLang }) {
   const t = makeT(lang)
   const [report, setReport] = useState<SetupReport | null>(null)
-  const [loading, setLoading] = useState(false)
+  // True from the first paint: the panel always probes on mount, so the hero
+  // must never flash a hard "NOT READY" verdict before the first response.
+  const [loading, setLoading] = useState(true)
   const [unsupported, setUnsupported] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -62,6 +64,10 @@ export function SystemPanel({ lang }: { lang: UiLang }) {
   }, [load])
 
   const ready = report?.ready ?? false
+  // Before the first probe resolves there is no verdict to render: the hero
+  // stays on its neutral (non-alarm) styling and the verdict line reads the
+  // catalog's "checking…" instead of "NOT READY" + zeroed stats.
+  const probing = loading && report === null
   const services = report?.services ?? []
   const online = services.filter((s) => s.online).length
   const contract = report?.checks ?? []
@@ -76,11 +82,11 @@ export function SystemPanel({ lang }: { lang: UiLang }) {
 
   return (
     <section className="syspanel" aria-live="polite">
-      <div className={`syspanel-hero syspanel-hero--${ready ? 'ready' : 'notready'}`}>
+      <div className={`syspanel-hero${probing ? '' : ` syspanel-hero--${ready ? 'ready' : 'notready'}`}`}>
         <div className="syspanel-hero-main">
           <div className="syspanel-hero-title">
-            {ready ? <ShieldCheck size={18} /> : <AlertTriangle size={18} />}
-            <span>{ready ? t('ui_ready') : t('ui_not_ready')}</span>
+            {probing ? null : ready ? <ShieldCheck size={18} /> : <AlertTriangle size={18} />}
+            <span>{probing ? t('ui_checking') : ready ? t('ui_ready') : t('ui_not_ready')}</span>
             {report && (
               <span className="syspanel-verdict">
                 {report.deployment || 'unknown'}

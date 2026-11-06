@@ -16,14 +16,19 @@ export function ClientSettings({ lang }: Props) {
   const [apiHash, setApiHash] = useState('')
   const [saving, setSaving] = useState(false)
   const [statusMsg, setStatusMsg] = useState<{ text: string; ok: boolean } | null>(null)
+  // A failed settings load must not leave the skeleton rows up forever: the
+  // quota card then shows the panel's error-note markup instead.
+  const [loadFailed, setLoadFailed] = useState(false)
 
   const loadSettings = async () => {
     try {
       const data = await api.clientGetSettings()
       setSettings(data)
+      setLoadFailed(false)
       if (data?.api_id) setApiId(String(data.api_id))
     } catch (e: any) {
       console.error(e)
+      setLoadFailed(true)
     }
   }
 
@@ -149,6 +154,23 @@ export function ClientSettings({ lang }: Props) {
               </span>
             </div>
           </div>
+          ) : loadFailed ? (
+            <div
+              style={{
+                padding: 10,
+                borderRadius: 8,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                fontSize: '0.84rem',
+                background: 'var(--color-danger-soft)',
+                border: '1px solid color-mix(in oklab, var(--color-danger) 30%, transparent)',
+                color: 'var(--color-danger)',
+              }}
+            >
+              <AlertCircle size={16} />
+              <span>{t('ui_error_loading_dashboard_data')}</span>
+            </div>
           ) : (
             <SkeletonRows lang={lang} />
           )}

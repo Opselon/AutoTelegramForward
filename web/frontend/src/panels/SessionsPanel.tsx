@@ -2,7 +2,7 @@
  * MTProto sessions: connect, inspect, terminate.
  */
 import { Layers, Users, X } from 'lucide-react'
-import { EmptyState, PageHeader, StatusIndicator } from '../components/ui/Primitives'
+import { EmptyState, PageHeader, SkeletonRows, StatusIndicator } from '../components/ui/Primitives'
 import type { DashboardCtx } from '../App'
 
 export default function SessionsPanel({ d }: { d: DashboardCtx }) {
@@ -23,7 +23,11 @@ export default function SessionsPanel({ d }: { d: DashboardCtx }) {
                 <div className="sessions-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
                   {(Array.isArray(sessions) ? sessions : []).length === 0 && (
                     <div style={{ gridColumn: '1 / -1' }}>
-                      <EmptyState title={t('ui_empty_title')} description={t('ui_empty_body')} />
+                      {d.loading ? (
+                        <SkeletonRows rows={4} lang={d.lang} />
+                      ) : (
+                        <EmptyState title={t('ui_empty_title')} description={t('ui_empty_body')} />
+                      )}
                     </div>
                   )}
                   {(Array.isArray(sessions) ? sessions : []).map((sess) => (
@@ -68,7 +72,7 @@ export default function SessionsPanel({ d }: { d: DashboardCtx }) {
                         </div>
                         <div>
                           <span style={{ color: 'var(--color-text-muted)' }}>{t('ui_proxy')}</span>
-                          <span>{sess.proxy || (t('ui_direct_no_proxy'))}</span>
+                          <span style={{ overflowWrap: 'anywhere' }}>{sess.proxy || (t('ui_direct_no_proxy'))}</span>
                         </div>
                       </div>
 

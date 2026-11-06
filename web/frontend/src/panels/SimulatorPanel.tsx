@@ -29,6 +29,8 @@ export default function SimulatorPanel({ d }: { d: DashboardCtx }) {
     t,
     handleRunSimulation,
   } = d
+  const ruleList = Array.isArray(rules) ? rules : []
+  const noRules = ruleList.length === 0
   return (
     <>
               <div className="grid-collapse-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: 24 }}>
@@ -51,7 +53,12 @@ export default function SimulatorPanel({ d }: { d: DashboardCtx }) {
                       onChange={(e) => setSimSelectedRuleId(e.target.value)}
                       className="input-field"
                     >
-                      {(Array.isArray(rules) ? rules : []).map((r) => (
+                      {noRules && (
+                        <option value="" disabled>
+                          {t('ui_empty_title')}
+                        </option>
+                      )}
+                      {ruleList.map((r) => (
                         <option key={r.id} value={r.id}>
                           {r.source_chat_name || r.source_chat_id} ➔ {r.target_chat_name || r.target_chat_id} (
                           {r.use_intermediate ? t('ui_vip_hop_via_c') : r.forward_mode})
@@ -139,7 +146,7 @@ export default function SimulatorPanel({ d }: { d: DashboardCtx }) {
 
                   <button
                     onClick={handleRunSimulation}
-                    disabled={simulating}
+                    disabled={noRules || simulating}
                     className="btn btn-vip"
                     style={{ width: '100%', padding: '12px' }}
                   >

@@ -9,6 +9,7 @@ import { Fragment, useState } from 'react'
 import { CheckCircle2, Crown, FlaskConical, HeartPulse, Loader2, LogOut, PenLine, Play, Save, Star, Trash2, User, XCircle } from 'lucide-react'
 import { api } from '../api'
 import { clearSession } from '../session'
+import { ConfirmDialog } from './ConfirmDialog'
 import { describeKeyCheck } from '../providerKey'
 import { SUPPORTED_LANGS, makeT, type UiLang } from '../locales/engine'
 import type { AIConfig, CheckProviderKeyResponse, PromptTemplate, TestPromptResponse } from '../types'
@@ -142,7 +143,7 @@ export function ProviderKeyCheck({
         onClick={run}
         disabled={busy}
         className="btn btn-secondary"
-        style={{ alignSelf: 'flex-start', padding: compact ? '4px 8px' : '6px 10px', fontSize: '0.78rem' }}
+        style={{ alignSelf: 'flex-start', padding: compact ? '4px 8px' : '6px 10px', minHeight: 44, fontSize: '0.78rem' }}
       >
         <HeartPulse size={14} />
         <span>
@@ -186,6 +187,9 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
   const [testResult, setTestResult] = useState<TestPromptResponse | null>(null)
   const [testing, setTesting] = useState(false)
   const [saving, setSaving] = useState(false)
+  // Deleting a prompt is destructive: the trash button only arms the shared
+  // alertdialog; the actual DELETE happens on confirm.
+  const [confirmDelete, setConfirmDelete] = useState<PromptTemplate | null>(null)
 
   const openEditor = (p: PromptTemplate | null) => {
     setSelected(p)
@@ -281,10 +285,23 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
       {/* Prompt list */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12, marginBottom: 20 }}>
         {(Array.isArray(prompts) ? prompts : []).map((p) => (
-          <div key={p.id} style={{
-            background: 'var(--color-surface-2)', border: selected?.id === p.id ? '1px solid var(--color-accent-violet)' : '1px solid var(--color-border)',
-            borderRadius: 10, padding: 14, cursor: 'pointer',
-          }} onClick={() => openEditor(p)}>
+          <div
+            key={p.id}
+            role="button"
+            tabIndex={0}
+            aria-label={p.name}
+            style={{
+              background: 'var(--color-surface-2)', border: selected?.id === p.id ? '1px solid var(--color-accent-violet)' : '1px solid var(--color-border)',
+              borderRadius: 10, padding: 14, cursor: 'pointer',
+            }}
+            onClick={() => openEditor(p)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                openEditor(p)
+              }
+            }}
+          >
             <div style={{ fontWeight: 700, fontSize: 'var(--type-sm)', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 5 }}>
               <span style={{ display: 'inline-flex', color: p.is_system ? 'var(--color-warning)' : 'var(--color-text-muted)' }} aria-hidden="true">
                 {p.is_system ? <Star size={12} /> : <User size={12} />}
@@ -296,8 +313,10 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
             </div>
             {!p.is_system && (
               <button
-                onClick={(e) => { e.stopPropagation(); handleDelete(p.id) }}
-                className="btn btn-danger icon-btn" style={{ padding: 4, marginTop: 8, float: 'right' }}
+                onClick={(e) => { e.stopPropagation(); setConfirmDelete(p) }}
+                className="btn btn-danger icon-btn"
+                aria-label={t('ui_delete')}
+                style={{ padding: 4, marginTop: 8, float: 'right', minHeight: 44, minWidth: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                 title={t('ui_delete')}
               >
                 <Trash2 size={13} aria-hidden="true" />
@@ -419,6 +438,21 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDelete !== null}
+        lang={lang}
+        title={t('ui_delete')}
+        body={confirmDelete?.name}
+        confirmLabel={t('ui_delete')}
+        cancelLabel={t('ui_cancel')}
+        onConfirm={() => {
+          const target = confirmDelete
+          setConfirmDelete(null)
+          if (target) void handleDelete(target.id)
+        }}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   )
 }

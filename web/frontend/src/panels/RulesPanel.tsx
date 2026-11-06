@@ -143,8 +143,10 @@ const RuleCard = memo(function RuleCard({
               P:{rule.priority}
             </span>
           </div>
-          <div
+          <button
+            type="button"
             title={rule.id}
+            aria-label={t('ui_copy_row')}
             onClick={() => navigator.clipboard?.writeText(rule.id).catch(() => {})}
             style={{
               fontSize: 'var(--type-xs)',
@@ -152,13 +154,18 @@ const RuleCard = memo(function RuleCard({
               cursor: 'pointer',
               display: 'inline-flex',
               alignItems: 'center',
+              justifyContent: 'center',
               gap: 4,
-              padding: '1px 4px',
-              borderRadius: 4,
+              minHeight: 44,
+              minWidth: 44,
+              background: 'transparent',
+              border: 'none',
+              padding: 'var(--space-2)',
+              borderRadius: 'var(--radius-sm)',
             }}
           >
             <Copy size={10} /> <span className="font-mono-ltr">{rule.id.substring(0, 8)}…</span>
-          </div>
+          </button>
         </div>
 
         <div className="rule-card-actions" style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>

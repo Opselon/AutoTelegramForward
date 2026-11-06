@@ -5,7 +5,7 @@
 import { PromptEditorPanel, ProviderKeyCheck } from '../components/ShellWidgets'
 import { api } from '../api'
 import { Edit3, Plus, Trash2 } from 'lucide-react'
-import { EmptyState, PageHeader } from '../components/ui/Primitives'
+import { EmptyState, PageHeader, SkeletonRows } from '../components/ui/Primitives'
 import type { DashboardCtx } from '../App'
 
 export default function AiPanel({ d }: { d: DashboardCtx }) {
@@ -20,6 +20,7 @@ export default function AiPanel({ d }: { d: DashboardCtx }) {
     showToast,
     handleDeleteAI,
   } = d
+  const stillLoading = d.loading && (Array.isArray(aiConfigs) ? aiConfigs : []).length === 0
   return (
     <>
               <div>
@@ -51,7 +52,11 @@ export default function AiPanel({ d }: { d: DashboardCtx }) {
                 <div className="grid-collapse-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
                   {(Array.isArray(aiConfigs) ? aiConfigs : []).length === 0 && (
                     <div style={{ gridColumn: '1 / -1' }}>
-                      <EmptyState title={t('ui_empty_title')} description={t('ui_empty_body')} />
+                      {stillLoading ? (
+                        <SkeletonRows rows={4} lang={lang} />
+                      ) : (
+                        <EmptyState title={t('ui_empty_title')} description={t('ui_empty_body')} />
+                      )}
                     </div>
                   )}
                   {(Array.isArray(aiConfigs) ? aiConfigs : []).map((ai) => (

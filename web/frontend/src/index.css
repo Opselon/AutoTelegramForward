@@ -5025,6 +5025,13 @@ input[type='radio']:disabled {
   padding: var(--space-3);
   cursor: pointer;
   min-inline-size: 0;
+  /* The cards are real <button>s now (they were clickable divs — no keyboard,
+     no tap semantics): drop the UA button chrome so they render exactly as
+     before, and keep long labels from clipping at the start edge in RTL. */
+  color: var(--color-text);
+  font-family: inherit;
+  font-size: inherit;
+  text-align: start;
 }
 
 .tom-opt--addon {
@@ -5926,4 +5933,456 @@ body {
   gap: 2px;
   min-inline-size: 0;
   flex: 1;
+}
+
+/* ==================================================================== */
+/* MOBILE APP SHELL v3 (2026-11): phone ergonomics, end to end.          */
+/*                                                                      */
+/* The layer that makes the dashboard feel like a phone app instead of  */
+/* a shrunk desktop: real modal chrome at every width (the overlay used */
+/* to be `position: static` above 640px — the sheet rendered in page    */
+/* flow), bottom sheets with drag handles and safe-area padding, a      */
+/* taller bottom tab bar with an active indicator, toasts that clear    */
+/* the bar, and touch-first feedback. Same contract as everything       */
+/* above: tokens only, logical properties, no hex, reduced-motion.      */
+/*                                                                      */
+/*   tokens      :root (--nav-h --tap-min --radius-xl --safe-*)          */
+/*   touch       tap-highlight, touch-action, overscroll, selection      */
+/*   modals      .modal-overlay .modal-sheet .modal-sheet-body (+ .tom)  */
+/*   bottom nav  .mobile-nav__item active pill + pressed state           */
+/*   drawer      .drawer-head, safe-area padding                         */
+/*   touch sizes .ops-chip .tom-* .filter-media-chip at <= 640px         */
+/* ==================================================================== */
+
+:root {
+  /* Bottom tab bar content height (56px item + 2 x 4px padding). The shell
+     reserves this plus the safe area so fixed bars never cover content. */
+  --nav-h: 64px;
+  /* Touch target floor; mirrors the 44px contract in a reusable token. */
+  --tap-min: 44px;
+  /* Bottom-sheet top corners read larger than a card. */
+  --radius-xl: 24px;
+  --safe-t: max(0px, env(safe-area-inset-top));
+  --safe-b: max(0px, env(safe-area-inset-bottom));
+  --safe-l: max(0px, env(safe-area-inset-left));
+  --safe-r: max(0px, env(safe-area-inset-right));
+  --overlay-blur: 14px;
+}
+
+/* ------------------------------------------------------------ touch ---- */
+
+/* WebKit paints a grey flash on every tap; the pressed states below are
+   the feedback, so the native highlight goes. */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* A pull-to-refresh at the top of a dashboard reloads the whole SPA and
+   drops scroll position; the shell has its own Refresh control. */
+body {
+  overscroll-behavior-y: none;
+}
+
+/* Kill the 300ms double-tap-zoom wait on controls (and double-tap zoom on
+   them, which mistyped as a "tap twice to toggle" bug on phones). */
+button,
+[role='button'],
+a[href],
+input,
+select,
+textarea,
+label,
+summary {
+  touch-action: manipulation;
+}
+
+/* Chrome (nav, tab bars, chips) must not text-select on long-press; inputs
+   keep their selection. */
+button,
+[role='button'],
+.nav-item,
+.mobile-nav__item,
+.segmented__option,
+.auth-seg__btn,
+.tom-tabbar__btn,
+.ops-chip,
+.badge {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+::selection {
+  background: var(--color-primary-soft);
+}
+
+/* ------------------------------------------------------- safe areas ---- */
+
+/* The sticky header owns the top inset so its glass background extends
+   under the notch/status bar instead of letting content scroll through
+   it. Desktop safe areas resolve to 0 and this is a no-op there. */
+.app-header {
+  padding-block-start: max(var(--space-3), var(--safe-t));
+}
+
+@media (max-width: 640px) {
+  .header-container {
+    padding-block-start: max(14px, var(--safe-t)) !important;
+  }
+}
+
+/* ------------------------------------------------------ modals (base) ---
+   One real modal chrome at every width. Before this layer the layout lived
+   only inside the <= 640px sheet: above 640px `.modal-overlay` was a static
+   div — the dialog rendered in page flow at the bottom of the dashboard
+   (confirmed in a browser) and could not be centred, dimmed or escaped. */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-modal);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  padding-inline: max(var(--space-4), var(--safe-l)) max(var(--space-4), var(--safe-r));
+  background: var(--color-scrim);
+  backdrop-filter: blur(var(--overlay-blur));
+  -webkit-backdrop-filter: blur(var(--overlay-blur));
+  /* A drag inside the dialog must not scroll the page behind it. */
+  overscroll-behavior: contain;
+}
+
+.modal-sheet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  inline-size: 100%;
+  max-block-size: min(88dvh, 100%);
+  min-block-size: 0;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+/* The header row stays pinned while the body scrolls under it. */
+.modal-sheet .modal-head {
+  flex-shrink: 0;
+  margin-block-end: 0;
+  padding: var(--space-4) var(--space-4) var(--space-3);
+  border-block-end: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.modal-sheet-body {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  overflow-y: auto;
+  padding: var(--space-4);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+.modal-sheet-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4) max(var(--space-4), var(--safe-b));
+  border-block-start: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.modal-sheet-actions .btn {
+  flex: 1;
+}
+
+/* Long sheets on a phone become bottom sheets: full-width, thumb-height
+   handle, safe-area footer. The legacy <= 640px block still contributes the
+   `!important` basics; these rules add what it never had (dvh instead of
+   vh so the sheet never hides under a mobile URL bar, the handle, the
+   safe-area footer). */
+@media (max-width: 640px) {
+  .modal-sheet {
+    /* The legacy phone block still declares `padding: 18px 14px 14px
+       !important` on the sheet itself; head/body/actions own their own
+       padding now, so the sheet shell goes to zero or every edge doubles. */
+    padding: 0 !important;
+    max-block-size: min(92dvh, 100%) !important;
+  }
+
+  .modal-sheet::before {
+    content: '';
+    position: absolute;
+    inset-block-start: 8px;
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+    inline-size: 44px;
+    block-size: 4px;
+    border-radius: var(--radius-full);
+    background: var(--color-border-strong);
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .modal-sheet .modal-head {
+    padding-block-start: var(--space-5);
+    padding-block-end: max(var(--space-3), var(--safe-b));
+  }
+
+  .modal-sheet-actions {
+    padding-block-end: max(var(--space-3), var(--safe-b));
+  }
+}
+
+/* ---- Task Overview modal (.tom): the same bottom-sheet treatment. Its
+   scrim was centered-only, so a 60-section sheet floated mid-air on a
+   phone with its footer out of thumb reach. */
+@media (max-width: 640px) {
+  .tom-scrim {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .tom-shell {
+    position: relative;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    max-block-size: 92dvh;
+    border-start-start-radius: var(--radius-xl);
+    border-start-end-radius: var(--radius-xl);
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  .tom-shell::before {
+    content: '';
+    position: absolute;
+    inset-block-start: 8px;
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+    inline-size: 44px;
+    block-size: 4px;
+    border-radius: var(--radius-full);
+    background: var(--color-border-strong);
+    z-index: 1;
+    pointer-events: none;
+  }
+
+  .tom-header {
+    padding-block-start: var(--space-5);
+  }
+
+  .tom-body {
+    padding-block-end: max(var(--space-4), var(--safe-b));
+  }
+}
+
+/* The 641–1023px band (large phones in landscape, small tablets) keeps a
+   centred dialog but previously inherited no max height at all: a tall
+   editor overflowed the viewport with its footer unreachable. The base
+   rule above already fixes it; this widens the phone radius slightly. */
+@media (min-width: 641px) and (max-width: 1023px) {
+  .modal-sheet,
+  .tom-shell {
+    border-radius: var(--radius-lg);
+  }
+}
+
+/* ------------------------------------------------------- bottom nav ---- */
+
+/* Thumb-height items with a gradient active bar and a pressed dip. The
+   bar keeps icon + label at every width (nav-label-icon contract). */
+@media (max-width: 1023px) {
+  .mobile-nav {
+    padding-block: var(--space-1) max(var(--space-1), var(--safe-b));
+    padding-inline: max(var(--space-2), var(--safe-l)) max(var(--space-2), var(--safe-r));
+  }
+
+  .app-main {
+    padding-block-end: calc(var(--nav-h) + var(--space-4) + var(--safe-b));
+  }
+
+  .mobile-nav__item {
+    position: relative;
+    min-block-size: 56px;
+    gap: var(--space-1);
+    padding: var(--space-1);
+    border-radius: var(--radius-md);
+    transition:
+      color var(--motion-fast) var(--ease-out),
+      background-color var(--motion-fast) var(--ease-out),
+      transform var(--motion-fast) var(--ease-out);
+  }
+
+  /* The active destination reads before the label does: a brand-gradient
+     bar on the top edge plus the accent colour. */
+  .mobile-nav__item::after {
+    content: '';
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 22%;
+    block-size: 3px;
+    border-radius: var(--radius-full);
+    background: transparent;
+    transition: background-color var(--motion-fast) var(--ease-out);
+  }
+
+  .mobile-nav__item.is-active {
+    color: var(--color-primary-strong);
+  }
+
+  .mobile-nav__item.is-active::after {
+    background: var(--gradient-brand);
+  }
+
+  .mobile-nav__item:active {
+    transform: scale(0.94);
+  }
+
+  /* Toasts must clear the bar (they used to land behind it). */
+  .toast-region {
+    inset-block-end: calc(var(--nav-h) + var(--safe-b) + var(--space-4));
+    inline-size: min(94vw, 480px);
+  }
+}
+
+/* ------------------------------------------------------------ drawer ---- */
+
+@media (max-width: 1023px) {
+  .app-sidebar {
+    padding-block-end: calc(var(--space-4) + var(--safe-b));
+    padding-inline-start: max(var(--space-3), var(--safe-l));
+    padding-inline-end: max(var(--space-3), var(--safe-r));
+  }
+}
+
+/* Drawer header (title + close): a phone affordance so the drawer closes
+   from inside itself instead of only via the header trigger or the scrim.
+   Wide screens keep the docked rail without it. */
+.drawer-head {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .drawer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-2) var(--space-3);
+    margin-block-end: var(--space-2);
+    border-block-end: 1px solid var(--color-border);
+  }
+
+  .drawer-head__title {
+    margin: 0;
+    font-size: var(--type-base);
+    font-weight: 700;
+    color: var(--color-text);
+  }
+}
+
+/* ------------------------------------------------- touch-size lifts ---- */
+/* Small chrome that the 44px global floor never reached because it is
+   styled per-class. On touch these become real targets; on desktop they
+   keep their compact look. */
+@media (max-width: 640px) {
+  .ops-chip,
+  .ops-levelchip,
+  .filter-media-chip,
+  .tom-pill,
+  .tom-feat,
+  .tom-chipbtn,
+  .tom-opt,
+  .tom-preset {
+    min-block-size: var(--tap-min);
+  }
+
+  .tom-iconbtn {
+    inline-size: var(--tap-min);
+    block-size: var(--tap-min);
+  }
+
+  /* Tiny in-chip close buttons: keep the 18px visual, grow the hit box. */
+  .tom-chip__x::after {
+    content: '';
+    position: absolute;
+    inset: -13px;
+  }
+
+  .alert-banner__close,
+  .search-input__clear {
+    inline-size: var(--tap-min);
+    block-size: var(--tap-min);
+  }
+
+  /* Segmented options: the control is a thumb chooser on phones. */
+  .segmented__option {
+    min-block-size: var(--tap-min);
+  }
+}
+
+.segmented__option {
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.segmented__option:active {
+  transform: scale(0.96);
+}
+
+/* Press feedback for rule cards on touch (the micro-polish layer covers
+   buttons; these are the big tappable list cards). */
+@media (hover: none) {
+  .rule-card:active {
+    transform: scale(0.995);
+  }
+}
+
+/* -------------------------------------------------- short landscape ---- */
+/* A phone rotated sideways has ~330px of height under the browser chrome:
+   hide the tagline, compact the header, slim the tab bar, and let sheets
+   use almost the whole height. */
+@media (max-height: 480px) and (orientation: landscape) {
+  .header-subtitle {
+    display: none;
+  }
+
+  .header-container {
+    padding-block: var(--space-2) !important;
+    margin-block-end: var(--space-2) !important;
+  }
+
+  .mobile-nav {
+    padding-block: 2px max(2px, var(--safe-b));
+  }
+
+  .mobile-nav__item {
+    min-block-size: 48px;
+  }
+
+  .app-main {
+    padding-block-end: calc(52px + var(--safe-b));
+  }
+
+  .modal-sheet,
+  .tom-shell {
+    max-block-size: 94dvh;
+  }
+}
+
+/* --------------------------------------------------- graceful degrade -- */
+/* Older Android WebViews without backdrop-filter: a near-opaque surface
+   instead of a translucent one, so text never sits on unreadable glass. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .app-header,
+  .mobile-nav {
+    background: color-mix(in srgb, var(--color-bg) 97%, transparent);
+  }
+
+  .modal-overlay,
+  .tom-scrim,
+  .nav-scrim {
+    background: color-mix(in srgb, var(--color-bg) 90%, transparent);
+  }
 }

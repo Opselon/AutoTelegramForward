@@ -20,6 +20,29 @@ const FOCUSABLE =
     round section): enter 200ms, exit subtler and shorter. */
 const EXIT_MS = 170
 
+/**
+ * Every open overlay registers its element here; Escape (and only Escape)
+ * pops the topmost one. RuleModal opens the ChatPicker inside itself, so
+ * two shells are live at once — without the stack the shell's capture-phase
+ * handler fired first and closed the *whole editor*, throwing away the
+ * operator's draft, when the user only meant to dismiss the picker.
+ */
+const overlayStack: HTMLElement[] = []
+
+function pushOverlay(el: HTMLElement): void {
+  const i = overlayStack.indexOf(el)
+  if (i === -1) overlayStack.push(el)
+}
+
+function popOverlay(el: HTMLElement): void {
+  const i = overlayStack.indexOf(el)
+  if (i >= 0) overlayStack.splice(i, 1)
+}
+
+export function isTopOverlay(el: HTMLElement | null): boolean {
+  return !!el && overlayStack[overlayStack.length - 1] === el
+}
+
 export function ModalShell({
   open,
   lang,
@@ -29,6 +52,7 @@ export function ModalShell({
   children,
   width,
   variant = 'dialog',
+  footer,
 }: {
   open: boolean
   lang: UiLang
@@ -42,6 +66,9 @@ export function ModalShell({
   /** `dialog` renders a labelled banner row with a close button; `alert` is the
       smaller confirm surface (role="alertdialog") without its own close X. */
   variant?: 'dialog' | 'alert'
+  /** Optional action bar rendered *outside* the scrollable body, so Save/Cancel
+      stay reachable on a phone no matter how long the form grows. */
+  footer?: ReactNode
 }) {
   const t = makeT(lang)
   const isRtl = isRtlLang(lang)
@@ -106,13 +133,21 @@ export function ModalShell({
 
   useEffect(() => {
     if (!open) return
+    const el = sheetRef.current
+    if (el) pushOverlay(el)
     const onKey = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        // Only the topmost overlay answers: a picker stacked over this
+        // sheet closes the picker, not the sheet under it.
+        if (!isTopOverlay(sheetRef.current)) return
         event.stopPropagation()
         requestClose()
         return
       }
       if (event.key !== 'Tab') return
+      // While a higher overlay is open, IT owns the keyboard: this shell
+      // must not yank focus back into itself from the nested surface.
+      if (!isTopOverlay(sheetRef.current)) return
       const focusables = sheetRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE)
       if (!focusables || focusables.length === 0) return
       const first = focusables[0]
@@ -127,7 +162,10 @@ export function ModalShell({
       }
     }
     document.addEventListener('keydown', onKey, true)
-    return () => document.removeEventListener('keydown', onKey, true)
+    return () => {
+      document.removeEventListener('keydown', onKey, true)
+      if (el) popOverlay(el)
+    }
   }, [open, requestClose])
 
   // The page behind a modal must not scroll under a touch drag.
@@ -174,6 +212,7 @@ export function ModalShell({
           )}
         </header>
         <div className="modal-sheet-body">{children}</div>
+        {footer ? <footer className="modal-sheet-actions">{footer}</footer> : null}
       </div>
     </div>
   )

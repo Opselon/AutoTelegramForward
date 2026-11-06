@@ -13,7 +13,7 @@ import { memo, useCallback, useState, type ReactNode } from 'react'
 import { Edit3, Plus, Trash2 } from 'lucide-react'
 import { api } from '../api'
 import { ConfirmDialog } from '../components/ConfirmDialog'
-import { Badge, Button, EmptyState, PageHeader } from '../components/ui/Primitives'
+import { Badge, Button, EmptyState, PageHeader, SkeletonRows } from '../components/ui/Primitives'
 import type { DashboardCtx } from '../App'
 import type { FilterRule } from '../types'
 
@@ -22,7 +22,7 @@ function FilterRow({ label, children }: { label: string; children: ReactNode }) 
   return (
     <div>
       <span className="filter-card__row-label">{label}</span>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>{children}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, overflowWrap: 'anywhere' }}>{children}</div>
     </div>
   )
 }
@@ -73,7 +73,7 @@ const FilterCard = memo(function FilterCard({
             onClick={() => onToggle(filter)}
             disabled={toggling}
             className="btn btn-secondary btn--sm"
-            style={{ minHeight: 36, minWidth: 36, padding: '0 10px' }}
+            style={{ padding: '0 10px' }}
             aria-pressed={enabled}
             title={enabled ? t('ui_filter_list_disable') : t('ui_filter_list_enable')}
           >
@@ -82,7 +82,7 @@ const FilterCard = memo(function FilterCard({
           <button
             onClick={() => onEdit(filter)}
             className="btn btn-secondary icon-btn"
-            style={{ padding: '6px', minHeight: 36, minWidth: 36 }}
+            style={{ padding: '6px' }}
             aria-label={t('ui_edit')}
             title={t('ui_edit')}
           >
@@ -91,7 +91,7 @@ const FilterCard = memo(function FilterCard({
           <button
             onClick={() => onDelete(filter)}
             className="btn btn-danger icon-btn"
-            style={{ padding: '6px', minHeight: 36, minWidth: 36 }}
+            style={{ padding: '6px' }}
             aria-label={t('ui_delete')}
             title={t('ui_delete')}
           >
@@ -224,16 +224,20 @@ export default function FiltersPanel({ d }: { d: DashboardCtx }) {
                 <div className="grid-collapse-1" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: 20 }}>
                   {(Array.isArray(filterRules) ? filterRules : []).length === 0 && (
                     <div style={{ gridColumn: '1 / -1' }}>
-                      <EmptyState
-                        title={t('ui_empty_title')}
-                        description={t('ui_empty_body')}
-                        action={
-                          <Button variant="primary" onClick={() => openFilterModal(null)}>
-                            <Plus size={16} aria-hidden="true" />
-                            <span>{t('ui_create_first_filter')}</span>
-                          </Button>
-                        }
-                      />
+                      {d.loading ? (
+                        <SkeletonRows rows={4} lang={lang} />
+                      ) : (
+                        <EmptyState
+                          title={t('ui_empty_title')}
+                          description={t('ui_empty_body')}
+                          action={
+                            <Button variant="primary" onClick={() => openFilterModal(null)}>
+                              <Plus size={16} aria-hidden="true" />
+                              <span>{t('ui_create_first_filter')}</span>
+                            </Button>
+                          }
+                        />
+                      )}
                     </div>
                   )}
                   {(Array.isArray(filterRules) ? filterRules : []).map((f) => (

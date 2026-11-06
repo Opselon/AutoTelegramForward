@@ -18,6 +18,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Pause, Play, Activity, AlertTriangle, Loader2 } from 'lucide-react'
 import { api } from '../api'
+import { ConfirmDialog } from './ConfirmDialog'
 import { isWorkerUnreachable, type ControlOp } from '../workerOps'
 import { makeT, type UiLang } from '../locales/engine'
 
@@ -40,6 +41,9 @@ export function WorkerControls({ lang }: { lang: UiLang }) {
   const [unreachable, setUnreachable] = useState(false)
   const [busy, setBusy] = useState<'pause' | 'resume' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Pause is disruptive: it gates through the shared alertdialog instead of a
+  // blocking window.confirm, like every other confirm in the dashboard.
+  const [confirmPause, setConfirmPause] = useState(false)
 
   const refresh = useCallback(async () => {
     try {
@@ -95,7 +99,7 @@ export function WorkerControls({ lang }: { lang: UiLang }) {
             <span
               className="ops-levelchip"
               style={{
-                background: paused ? 'var(--color-warning, #c9a227)' : 'var(--color-success)',
+                background: paused ? 'var(--color-warning)' : 'var(--color-success)',
                 color: 'var(--color-button-fg)',
               }}
             >
@@ -120,7 +124,7 @@ export function WorkerControls({ lang }: { lang: UiLang }) {
             {paused ? (
               <button
                 type="button"
-                className="ops-filter"
+                className="btn btn--ghost btn--sm"
                 onClick={() => void act('resume')}
                 disabled={busy !== null}
               >
@@ -130,10 +134,8 @@ export function WorkerControls({ lang }: { lang: UiLang }) {
             ) : (
               <button
                 type="button"
-                className="ops-filter"
-                onClick={() => {
-                  if (window.confirm(t('ui_control_pause_confirm'))) void act('pause')
-                }}
+                className="btn btn--ghost btn--sm"
+                onClick={() => setConfirmPause(true)}
                 disabled={busy !== null}
               >
                 {busy === 'pause' ? <Loader2 size={13} className="spin" aria-hidden="true" /> : <Pause size={13} aria-hidden="true" />}
@@ -171,7 +173,7 @@ export function WorkerControls({ lang }: { lang: UiLang }) {
                     <span
                       className="ops-levelchip"
                       style={{
-                        background: op.Status === 'COMPLETED' ? 'var(--color-success)' : 'var(--color-warning, #c9a227)',
+                        background: op.Status === 'COMPLETED' ? 'var(--color-success)' : 'var(--color-warning)',
                         color: 'var(--color-button-fg)',
                       }}
                     >
@@ -193,6 +195,19 @@ export function WorkerControls({ lang }: { lang: UiLang }) {
           </div>
         </>
       )}
+
+      <ConfirmDialog
+        open={confirmPause}
+        lang={lang}
+        title={t('ui_control_pause_confirm')}
+        confirmLabel={t('ui_yes')}
+        cancelLabel={t('ui_cancel')}
+        onConfirm={() => {
+          setConfirmPause(false)
+          void act('pause')
+        }}
+        onCancel={() => setConfirmPause(false)}
+      />
     </div>
   )
 }

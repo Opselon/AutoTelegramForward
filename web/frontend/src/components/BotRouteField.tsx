@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AlertCircle, Check, KeyRound, Loader2, Trash2 } from 'lucide-react'
 import { api } from '../api'
+import { ConfirmDialog } from './ConfirmDialog'
 import type { BotTokenInfo } from '../types'
 import { makeT, type UiLang } from '../locales/engine'
 
@@ -51,6 +52,9 @@ export function BotRouteField({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  // Removing a bot deletes its token for good: the trash button only arms the
+  // shared alertdialog, the DELETE fires on confirm.
+  const [pendingRemove, setPendingRemove] = useState<BotTokenInfo | null>(null)
 
   const selected = bots.find((b) => b.id === value)
 
@@ -96,6 +100,7 @@ export function BotRouteField({
 
   const rowStyle: React.CSSProperties = {
     display: 'flex',
+    flexWrap: 'wrap',
     gap: '6px',
     alignItems: 'center',
     marginTop: '8px',
@@ -109,7 +114,8 @@ export function BotRouteField({
     border: '1px solid var(--color-border-strong)',
     borderRadius: '8px',
     padding: '7px 10px',
-    fontSize: '11px',
+    minHeight: 44,
+    fontSize: 'var(--type-xs)',
     fontWeight: 600,
     cursor: busy ? 'wait' : 'pointer',
     whiteSpace: 'nowrap',
@@ -136,10 +142,11 @@ export function BotRouteField({
         {selected && (
           <button
             type="button"
+            aria-label={t('ui_remove_this_bot_from_the_account')}
             title={t('ui_remove_this_bot_from_the_account')}
-            onClick={() => void remove(selected.id)}
+            onClick={() => setPendingRemove(selected)}
             disabled={busy}
-            style={{ ...smallButton, color: 'var(--color-danger-text)' }}
+            style={{ ...smallButton, color: 'var(--color-danger-text)', minWidth: 44, display: 'inline-flex', justifyContent: 'center' }}
           >
             <Trash2 size={12} />
           </button>
@@ -165,7 +172,7 @@ export function BotRouteField({
           </div>
           <div style={rowStyle}>
             <input
-              style={{ ...inputStyle, maxWidth: '34%' }}
+              style={{ ...inputStyle, flex: '1 1 100%' }}
               placeholder={t('ui_label_optional')}
               value={label}
               onChange={(e) => setLabel(e.target.value)}
@@ -219,7 +226,7 @@ export function BotRouteField({
             gap: '6px',
             alignItems: 'center',
             color: 'var(--color-danger-text)',
-            fontSize: '11px',
+            fontSize: 'var(--type-xs)',
             marginTop: '6px',
           }}
         >
@@ -228,13 +235,27 @@ export function BotRouteField({
         </div>
       )}
       {notice && !error && (
-        <div style={{ fontSize: '11px', color: 'var(--color-success)', marginTop: '6px' }}>{notice}</div>
+        <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-success)', marginTop: '6px' }}>{notice}</div>
       )}
       {botRoute && !bots.length && !open && (
         <div style={{ ...hintStyle, color: 'var(--color-warning)' }}>
           {t('ui_this_task_is_set_to_deliver_as_a_bot_but_none_is_attached_attach')}
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingRemove !== null}
+        lang={lang}
+        title={t('ui_remove_this_bot_from_the_account')}
+        confirmLabel={t('ui_yes')}
+        cancelLabel={t('ui_cancel')}
+        onConfirm={() => {
+          const bot = pendingRemove
+          setPendingRemove(null)
+          if (bot) void remove(bot.id)
+        }}
+        onCancel={() => setPendingRemove(null)}
+      />
     </div>
   )
 }

@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
-import { RefreshCw, Plus, X, Ban, RotateCw, Loader2 } from 'lucide-react'
+import { RefreshCw, Plus, Ban, RotateCw, Loader2 } from 'lucide-react'
 import { api } from '../api'
 import { PageHeader } from './ui/Primitives'
+import { ModalShell } from './ui/Modal'
 import type { UserTask, TaskKind } from '../types'
 import { makeT, type UiLang } from '../locales/engine'
 
@@ -232,50 +233,44 @@ function CreateTaskModal({ lang, onClose, onCreated }: { lang: UiLang; onClose: 
   }
 
   return (
-    <div
-      className="modal-overlay"
-      onClick={onClose}
-      style={{
-        position: 'fixed', inset: 0, zIndex: 'var(--z-modal)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'var(--color-scrim)', padding: 16,
-      }}
-    >
-      <div
-        className="glass-panel modal-sheet"
-        onClick={(e) => e.stopPropagation()}
-        style={{ padding: 20, width: '100%', maxWidth: 420, direction: 'ltr' }}
-      >
-        <header className="modal-head">
-          <h3 className="modal-title">{t('ui_new_background_job')}</h3>
-          <button className="btn btn--ghost btn--icon" onClick={onClose}><X size={15} /></button>
-        </header>
-
-        <div className="modal-sheet-body" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {KIND_OPTIONS.map((o) => (
-            <label key={o.value} className="p-row" style={{ alignItems: 'flex-start', cursor: 'pointer' }}>
-              <input type="radio" checked={kind === o.value} onChange={() => { setKind(o.value); setField0('') }} />
-              <div>
-                <div style={{ fontSize: '0.9rem' }}>{t(o.labelKey)}</div>
-                <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>{t(o.hintKey)}</div>
-              </div>
-            </label>
-          ))}
-          {opt.fields > 0 && (
-            <div className="field">
-              <input className="input-field" value={field0} onChange={(e) => setField0(e.target.value)}
-                placeholder={t(opt.hintKey)} />
-            </div>
-          )}
-          {err && <div className="p-note p-note--danger">{err}</div>}
-          <div className="p-row" style={{ justifyContent: 'flex-end' }}>
-            <button className="btn btn--primary" onClick={submit} disabled={submitting}>
-              {submitting ? <Loader2 size={14} /> : <Plus size={14} />}
-              <span>{t('ui_submit')}</span>
-            </button>
-          </div>
+    // The panel mounts this modal only while it is open, so `open` is always
+    // true here — the shell owns Escape, focus-in, Tab trapping and the body
+    // scroll lock, and its built-in close button already carries an
+    // aria-label.
+    <ModalShell
+      open
+      lang={lang}
+      titleId="create-task-modal-title"
+      title={t('ui_new_background_job')}
+      onClose={onClose}
+      width={560}
+      footer={
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button className="btn btn--primary btn--sm" onClick={submit} disabled={submitting}>
+            {submitting ? <Loader2 size={14} /> : <Plus size={14} />}
+            <span>{t('ui_submit')}</span>
+          </button>
         </div>
+      }
+    >
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {KIND_OPTIONS.map((o) => (
+          <label key={o.value} className="p-row" style={{ alignItems: 'flex-start', cursor: 'pointer' }}>
+            <input type="radio" checked={kind === o.value} onChange={() => { setKind(o.value); setField0('') }} />
+            <div>
+              <div style={{ fontSize: '0.9rem' }}>{t(o.labelKey)}</div>
+              <div style={{ fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)' }}>{t(o.hintKey)}</div>
+            </div>
+          </label>
+        ))}
+        {opt.fields > 0 && (
+          <div className="field">
+            <input className="input-field" value={field0} onChange={(e) => setField0(e.target.value)}
+              placeholder={t(opt.hintKey)} />
+          </div>
+        )}
+        {err && <div className="p-note p-note--danger">{err}</div>}
       </div>
-    </div>
+    </ModalShell>
   )
 }

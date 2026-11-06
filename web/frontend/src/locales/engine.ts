@@ -163,8 +163,22 @@ export function t(
  * every call site handed over both strings, so a third language meant editing
  * all 458 of them. A catalog key is language-neutral, so the call sites do not
  * change when a language is added.
+ *
+ * One closure per language code, cached: `t` resolves through the registry at
+ * call time, so a cached binding reads a mid-session catalog reload exactly
+ * like a fresh one — the language only changes when `code` does. Identity
+ * stability matters because components bind `makeT(lang)` in render and list
+ * `t` in effect/callback deps; a fresh closure per render re-ran those effects
+ * on every pass (an infinite fetch loop the console only whispered about).
  */
+const translateCache = new Map<string, Translate>()
+
 export function makeT(lang: string | null | undefined): Translate {
   const code = normalizeLang(lang)
-  return (key: string, params?: Record<string, string | number>) => t(key, params, code)
+  let bound = translateCache.get(code)
+  if (!bound) {
+    bound = (key: string, params?: Record<string, string | number>) => t(key, params, code)
+    translateCache.set(code, bound)
+  }
+  return bound
 }
