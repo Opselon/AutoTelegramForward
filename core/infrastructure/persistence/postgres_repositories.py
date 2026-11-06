@@ -85,6 +85,21 @@ def _safe_dict(val: Any, default: dict) -> dict:
     return default
 
 
+def _replay_job_kind(payload_json: str) -> str:
+    """Derive the delivery_jobs.job_kind a dead-letter replay must rebuild.
+
+    The business key on delivery_jobs includes job_kind, so the replay has to
+    restore the SAME deliverable it dead-lettered: a keyword_reply entry must
+    not come back as kind=forward (it would also let the kind-less lookup
+    reset a forward sibling that shares rule/source/message/target).
+    """
+    try:
+        raw = json.loads(payload_json) if isinstance(payload_json, str) else (payload_json or {})
+    except Exception:
+        raw = {}
+    return "keyword_reply" if isinstance(raw, dict) and raw.get("is_reply") else "forward"
+
+
 def _format_sql(query: str, db: Any) -> str:
     is_asyncpg = "asyncpg" in type(db).__module__ or hasattr(db, "_protocol")
     if is_asyncpg and "%s" in query:
@@ -1323,14 +1338,21 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
         # delivery_jobs is UNIQUE(rule_id, source_chat_id, source_message_id,
         # target_chat_id), so a replay wakes the one delivery up instead of
         # adding a second: that is what makes it unable to double-post.
+        # The delivery_jobs business key includes job_kind: a replay must
+        # wake its OWN deliverable, never reset a keyword_reply sibling that
+        # happens to share (rule, source, message, target).
+        payload = entry.get("payload_json") or "{}"
+        if isinstance(payload, (dict, list)):
+            payload = json.dumps(payload)
+        replay_kind = _replay_job_kind(payload)
         original = None
         if job_id:
             original = await self._fetch_one("SELECT * FROM delivery_jobs WHERE id=%s", (job_id,))
         if original is None:
             original = await self._fetch_one(
                 "SELECT * FROM delivery_jobs WHERE rule_id=%s AND source_chat_id=%s"
-                " AND source_message_id=%s AND target_chat_id=%s",
-                (rule_id, src_chat, src_msg, tgt_chat),
+                " AND source_message_id=%s AND target_chat_id=%s AND job_kind=%s",
+                (rule_id, src_chat, src_msg, tgt_chat, replay_kind),
             )
 
         now = int(time.time())
@@ -1352,20 +1374,24 @@ class PostgresDeliveryQueueRepository(IDeliveryQueueRepository):
                 )
             else:
                 max_attempts = max(1, int(entry.get("attempts") or 0) or DeliveryJob().max_attempts)
-                payload = entry.get("payload_json") or "{}"
-                if isinstance(payload, (dict, list)):
-                    payload = json.dumps(payload)
+                # The business key is UNIQUE(rule_id, source_chat_id,
+                # source_message_id, target_chat_id, job_kind): the conflict
+                # target and the inserted row must carry job_kind, otherwise
+                # PostgreSQL rejects the whole INSERT with "no unique or
+                # exclusion constraint matching the ON CONFLICT specification"
+                # and every replay of a purged row fails (and a keyword_reply
+                # entry would silently rebuild itself as kind=forward).
                 await _execute_db(
                     self._db,
                     "INSERT INTO delivery_jobs ("
                     " id, rule_id, source_chat_id, source_message_id, target_chat_id,"
-                    " payload_json, status, attempts, max_attempts, next_retry_at,"
+                    " job_kind, payload_json, status, attempts, max_attempts, next_retry_at,"
                     " lease_until, worker_id, error_detail, created_at, updated_at"
-                    ") VALUES (%s, %s, %s, %s, %s, %s, 'PENDING', 0, %s, 0, 0, '', '', %s, %s)"
-                    " ON CONFLICT (rule_id, source_chat_id, source_message_id, target_chat_id) DO NOTHING",
+                    ") VALUES (%s, %s, %s, %s, %s, %s, %s, 'PENDING', 0, %s, 0, 0, '', '', %s, %s)"
+                    " ON CONFLICT (rule_id, source_chat_id, source_message_id, target_chat_id, job_kind) DO NOTHING",
                     (
                         job_id or f"replay_{entry_id}", rule_id, src_chat, src_msg, tgt_chat,
-                        payload, max(1, max_attempts), now, now,
+                        replay_kind, payload, max(1, max_attempts), now, now,
                     ),
                 )
                 # Restore the placeholder mapping row the enqueue path

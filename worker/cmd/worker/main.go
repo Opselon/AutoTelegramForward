@@ -592,6 +592,11 @@ func runLoop(ctx context.Context, log *slog.Logger, engine *delivery.Engine, sto
 		defer sweepWG.Done()
 		ticker := time.NewTicker(15 * time.Second)
 		defer ticker.Stop()
+		// Terminal fences age out on the same 7-day window the job rows
+		// they guarded use; the hourly gate keeps the DELETE off the hot
+		// path. UNKNOWN fences are never swept — they are evidence.
+		const fenceRetention = 7 * 24 * time.Hour
+		var lastFencePurge time.Time
 		for {
 			select {
 			case <-ctx.Done():
@@ -604,6 +609,18 @@ func runLoop(ctx context.Context, log *slog.Logger, engine *delivery.Engine, sto
 				}
 				if n > 0 {
 					log.Warn("fence sweep moved expired claims to UNKNOWN", "count", n)
+				}
+				if time.Since(lastFencePurge) < time.Hour {
+					continue
+				}
+				lastFencePurge = time.Now()
+				purged, err := store.PurgeAgedFences(ctx, time.Now().Add(-fenceRetention), 500)
+				if err != nil {
+					log.Warn("fence retention purge failed", "error", err)
+					continue
+				}
+				if purged > 0 {
+					log.Info("fence retention purged terminal rows", "count", purged)
 				}
 			}
 		}

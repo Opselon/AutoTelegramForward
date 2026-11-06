@@ -19,6 +19,7 @@
 package fakegateway
 
 import (
+	"os"
 	"context"
 	"fmt"
 	"sync"
@@ -42,7 +43,13 @@ type Fake struct {
 	SendFailsWith             *telegraph.DeliveryFailure
 	CopyMediaGroupFailsWith   *telegraph.DeliveryFailure
 	DownloadFailsWith         *telegraph.DeliveryFailure
+	SendMediaFailsWith        *telegraph.DeliveryFailure
 	GetFileExtensionFailsWith *telegraph.DeliveryFailure
+
+	// DownloadWritesFile makes DownloadMedia actually create the
+	// destination file, so tests can pin the staged-file lifecycle (the
+	// worker must clean the scratch file up whichever way the send ends).
+	DownloadWritesFile bool
 
 	// ExtensionOverride, when set, is what GetFileExtension answers instead
 	// of the default ".bin". Tests use it to pin the staging-name contract
@@ -165,6 +172,11 @@ func (f *Fake) DownloadMedia(ctx context.Context, sessionID string, chatID, mess
 	if f.DownloadFailsWith != nil {
 		return 0, f.DownloadFailsWith
 	}
+	if f.DownloadWritesFile {
+		if err := os.WriteFile(dest.Path, []byte("staged-bytes"), 0o600); err != nil {
+			return 0, &telegraph.DeliveryFailure{Code: "MEDIA_DOWNLOAD_FAILED", Message: err.Error()}
+		}
+	}
 	return 1024, nil
 }
 
@@ -258,6 +270,9 @@ func (f *Fake) CopyMediaGroup(ctx context.Context, sessionID string, targetChatI
 // SendMedia uploads a staged file as new media.
 func (f *Fake) SendMedia(ctx context.Context, sessionID string, targetChatID int64, token, caption, mediaType string, threadID int64) (int64, *telegraph.DeliveryFailure) {
 	f.record(Call{Op: "SendMedia", SessionID: sessionID, TargetID: targetChatID, Caption: caption, MediaPath: token, ThreadID: threadID})
+	if f.SendMediaFailsWith != nil {
+		return 0, f.SendMediaFailsWith
+	}
 	if f.SendFailsWith != nil {
 		return 0, f.SendFailsWith
 	}

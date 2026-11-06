@@ -233,20 +233,27 @@ func TestDecideGates(t *testing.T) {
 		t.Errorf("gate 6 command failed: %v %s", allowed, reason)
 	}
 
-	// Gate 7: inactive day
+	// Gate 7: inactive day. IsActiveDay reads the account-offset day (the
+	// default offset is 0 → UTC): derive the "different day" from the same
+	// clock the model reads, or the gate flips depending on the machine's
+	// local timezone.
+	utcNow := now.UTC()
 	sDay := DefaultSettings(1)
 	sDay.Enabled = true
-	sDay.ActiveDays = []int{((int(now.Weekday()) + 6) % 7 + 1) % 7} // explicitly different day
+	sDay.ActiveDays = []int{((int(utcNow.Weekday()) + 6) % 7 + 1) % 7} // explicitly different day
 	allowed, reason, _ = Decide(sDay, nil, nil, &IncomingMessage{Text: "hi", ChatType: "private"}, 0, 0, 0, now)
 	if allowed || reason != "inactive_day" {
 		t.Errorf("gate 7 inactive_day failed: %v %s", allowed, reason)
 	}
 
-	// Gate 8: quiet hours
+	// Gate 8: quiet hours. IsQuietNow reads the hour through the account's
+	// timezone offset (0 by default → UTC), not the machine's local zone:
+	// write the window in that same clock or the test only passes on UTC
+	// hosts.
 	sQuiet := DefaultSettings(1)
 	sQuiet.Enabled = true
-	sQuiet.QuietHoursStart = now.Hour()
-	sQuiet.QuietHoursEnd = (now.Hour() + 2) % 24
+	sQuiet.QuietHoursStart = utcNow.Hour()
+	sQuiet.QuietHoursEnd = (utcNow.Hour() + 2) % 24
 	allowed, reason, _ = Decide(sQuiet, nil, nil, &IncomingMessage{Text: "hi", ChatType: "private"}, 0, 0, 0, now)
 	if allowed || reason != "quiet_hours" {
 		t.Errorf("gate 8 quiet_hours failed: %v %s", allowed, reason)

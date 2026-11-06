@@ -147,6 +147,13 @@ func TestProvablyUnexecutedTable(t *testing.T) {
 		{"rpc error: code = Unimplemented desc = unknown method SendMedia", true},
 		{"rpc error: code = DeadlineExceeded", false},
 		{"rpc error: code = Unavailable desc = connection error", false},
+		// Dial-phase Unavailable proves no stream existed: nothing reached a
+		// handler, so no Telegram operation can have been attempted.
+		{"rpc error: code = Unavailable desc = connection error: desc = \"transport: Error while dialing: dial tcp 10.0.0.5:50053: connect: connection rejection\"", true},
+		// A bare Unavailable says nothing about WHERE the transport died: a
+		// runtime killed mid-upload reports the same code after Telegram
+		// accepted the send. Classifying it would duplicate the delivery.
+		{"rpc error: code = Unavailable desc = transport is closing", false},
 		{"Uncertain outcome: transport dropped mid-send", false},
 		{"", false},
 	}

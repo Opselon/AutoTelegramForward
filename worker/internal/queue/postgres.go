@@ -639,62 +639,88 @@ func (s *pgStore) FenceClaim(ctx context.Context, key job.AttemptKey, workerID s
 		return "", nil, fmt.Errorf("fence begin: %w", err)
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `
-		INSERT INTO delivery_attempts (
-			id, rule_id, source_chat_id, source_message_id, target_chat_id,
-			job_kind, status, worker_id, lease_until, attempts,
-			last_error, created_at, updated_at
-		) VALUES ($1,$2,$3,$4,$5,$6,'CLAIMED',$7,$8,0,'',$9,$10)
-		ON CONFLICT (id) DO UPDATE SET
-			status = 'CLAIMED',
-			worker_id = EXCLUDED.worker_id,
-			lease_until = EXCLUDED.lease_until,
-			attempts = delivery_attempts.attempts + 1,
-			last_error = '',
-			updated_at = EXCLUDED.updated_at
-		WHERE delivery_attempts.status = 'FAILED'`,
-		key.String(), key.RuleID, key.SourceChatID, key.SourceMessageID,
-		key.TargetChatID, key.JobKind, workerID, leaseUntil, now, now); err != nil {
-		return "", nil, fmt.Errorf("fence upsert: %w", err)
-	}
+	// Read (and lock) the current state BEFORE any write: a re-claim upsert
+	// stamps the caller's worker id, so a post-upsert read cannot tell a
+	// legitimate FAILED re-claim apart from a live same-worker claim — and
+	// that distinction IS the idempotency contract (a dispatch that outlives
+	// its lease must never be handed to a second claim, or the job is sent
+	// twice).
 	row := tx.QueryRowContext(ctx, `
 		SELECT status, worker_id, lease_until, target_message_id, last_error, attempts
-		FROM delivery_attempts WHERE id=$1`, key.String())
+		FROM delivery_attempts WHERE id=$1 FOR UPDATE`, key.String())
 	var (
-		a        job.DeliveryAttempt
-		targetID sql.NullInt64
+		preStatus string
+		preWorker string
+		preLease  float64
+		targetID  sql.NullInt64
+		preErr    string
+		preTries  int
 	)
-	if err := row.Scan(&a.Status, &a.WorkerID, &a.LeaseUntil, &targetID, &a.LastError, &a.Attempts); err != nil {
-		if err == sql.ErrNoRows {
-			// The upsert succeeded but the row cannot be read: treat it as
-			// unavailable rather than guessing — refuse to dispatch unprotected.
-			return "", nil, fmt.Errorf("fence row vanished after upsert for %s", key.String())
-		}
+	err = row.Scan(&preStatus, &preWorker, &preLease, &targetID, &preErr, &preTries)
+	if err != nil && err != sql.ErrNoRows {
 		return "", nil, fmt.Errorf("fence read: %w", err)
 	}
-	if err := tx.Commit(); err != nil {
-		return "", nil, fmt.Errorf("fence commit: %w", err)
+
+	var outcome job.FenceOutcome
+	a := job.DeliveryAttempt{}
+	switch {
+	case err == sql.ErrNoRows:
+		// First ever claim for this logical send.
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO delivery_attempts (
+				id, rule_id, source_chat_id, source_message_id, target_chat_id,
+				job_kind, status, worker_id, lease_until, attempts,
+				last_error, created_at, updated_at
+			) VALUES ($1,$2,$3,$4,$5,$6,'CLAIMED',$7,$8,0,'',$9,$10)`,
+			key.String(), key.RuleID, key.SourceChatID, key.SourceMessageID,
+			key.TargetChatID, key.JobKind, workerID, leaseUntil, now, now); err != nil {
+			return "", nil, fmt.Errorf("fence insert: %w", err)
+		}
+		outcome = job.FenceDispatch
+		a.Status, a.WorkerID, a.LeaseUntil, a.Attempts = "CLAIMED", workerID, leaseUntil, 0
+	case preStatus == "SENT":
+		outcome = job.FenceAlreadySent
+		a.Status, a.WorkerID, a.LeaseUntil, a.LastError, a.Attempts =
+			preStatus, preWorker, preLease, preErr, preTries
+	case preStatus == "UNKNOWN":
+		// An earlier send's outcome was never recorded. Never dispatch
+		// blindly — the reconciler / an operator decides.
+		outcome = job.FenceUnknown
+		a.Status, a.WorkerID, a.LeaseUntil, a.LastError, a.Attempts =
+			preStatus, preWorker, preLease, preErr, preTries
+	case preStatus == "CLAIMED" || preStatus == "SENDING":
+		// CLAIMED/SENDING rows are never stolen, live or expired, same
+		// worker or not: every goroutine in this process shares one worker
+		// id, so a same-worker claim means the original dispatch is still
+		// running. Expiry is the stale sweep's + reconciler's decision, not
+		// a dispatch opportunity.
+		if preLease > 0 && preLease >= float64(now) {
+			outcome = job.FenceInFlight
+		} else {
+			outcome = job.FenceStale
+		}
+		a.Status, a.WorkerID, a.LeaseUntil, a.LastError, a.Attempts =
+			preStatus, preWorker, preLease, preErr, preTries
+	default:
+		// FAILED (the replay path): the caller re-claims it.
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE delivery_attempts
+			SET status='CLAIMED', worker_id=$1, lease_until=$2, attempts=attempts+1,
+			    last_error='', updated_at=$3
+			WHERE id=$4 AND status='FAILED'`,
+			workerID, leaseUntil, now, key.String()); err != nil {
+			return "", nil, fmt.Errorf("fence reclaim: %w", err)
+		}
+		outcome = job.FenceDispatch
+		a.Status, a.WorkerID, a.LeaseUntil, a.Attempts = "CLAIMED", workerID, leaseUntil, preTries+1
 	}
 	if targetID.Valid {
 		a.TargetMessageID = targetID.Int64
 	}
-
-	switch a.Status {
-	case "SENT":
-		return job.FenceAlreadySent, &a, nil
-	case "UNKNOWN":
-		return job.FenceUnknown, &a, nil
-	case "FAILED":
-		// The UPSERT re-claimed it for this caller.
-		return job.FenceDispatch, &a, nil
+	if err := tx.Commit(); err != nil {
+		return "", nil, fmt.Errorf("fence commit: %w", err)
 	}
-	if a.WorkerID == workerID {
-		return job.FenceDispatch, &a, nil
-	}
-	if a.LeaseUntil > 0 && a.LeaseUntil >= float64(now) {
-		return job.FenceInFlight, &a, nil
-	}
-	return job.FenceStale, &a, nil
+	return outcome, &a, nil
 }
 
 // FenceRecordSent stamps a confirmed Telegram result. It is written BEFORE
@@ -732,6 +758,23 @@ func (s *pgStore) FenceExpireStale(ctx context.Context, now float64) (int, error
 		    lease_until=0, updated_at=$1
 		WHERE status IN ('CLAIMED','SENDING') AND lease_until > 0 AND lease_until < $2`,
 		int64(now), now)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
+// PurgeAgedFences deletes terminal fences older than the retention window —
+// bounded, blind to UNKNOWN rows (unresolved evidence is never deleted by a
+// sweep), and semantically identical to the SQLite implementation.
+func (s *pgStore) PurgeAgedFences(ctx context.Context, olderThan time.Time, limit int) (int, error) {
+	res, err := s.db.ExecContext(ctx, `
+		DELETE FROM delivery_attempts WHERE id IN (
+			SELECT id FROM delivery_attempts
+			WHERE status IN ('SENT','FAILED') AND updated_at < $1
+			LIMIT $2
+		)`, olderThan.Unix(), limit)
 	if err != nil {
 		return 0, err
 	}
