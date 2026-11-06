@@ -31,7 +31,8 @@ class AppMessagesIt {
     'prm_test_no_config': 'Nessuna configurazione IA attivata — aggiungine una in questa schermata prima.',
     'prm_invalid_name': 'Il nome deve essere di 1–80 caratteri.',
     'prm_invalid_system': 'Il prompt di sistema non può essere vuoto.',
-    'prm_invalid_user': 'Il template utente deve contenere il segnaposto {text}.',
+    'prm_invalid_user':
+        'Il template utente deve contenere il segnaposto {text}.',
     'prm_field_name': 'Nome',
     'prm_field_description': 'Descrizione (facoltativa)',
     'prm_field_system': 'Prompt di sistema',

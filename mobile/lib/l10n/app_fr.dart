@@ -31,7 +31,8 @@ class AppMessagesFr {
     'prm_test_no_config': 'Aucune configuration IA activée — ajoutez-en une sur cet écran d\\\'abord.',
     'prm_invalid_name': 'Le nom doit contenir de 1 à 80 caractères.',
     'prm_invalid_system': 'Le prompt système ne peut pas être vide.',
-    'prm_invalid_user': 'Le modèle utilisateur doit contenir le marqueur {text}.',
+    'prm_invalid_user':
+        'Le modèle utilisateur doit contenir le marqueur {text}.',
     'prm_field_name': 'Nom',
     'prm_field_description': 'Description (facultatif)',
     'prm_field_system': 'Prompt système',

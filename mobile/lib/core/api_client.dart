@@ -1197,18 +1197,17 @@ class ApiClient {
 
   Future<PromptTemplate> createPromptTemplate(PromptTemplate template) =>
       _request(
-    method: 'POST',
-    path: '/api/prompts',
-    body: template.toCreateJson(),
-    fromJson: PromptTemplate.fromJson,
-    retryable: false,
-  );
+        method: 'POST',
+        path: '/api/prompts',
+        body: template.toCreateJson(),
+        fromJson: PromptTemplate.fromJson,
+        retryable: false,
+      );
 
   Future<PromptTemplate> updatePromptTemplate(
     String id,
     PromptTemplate template,
-  ) =>
-      _request(
+  ) => _request(
     method: 'PUT',
     path: '/api/prompts/${Uri.encodeComponent(id)}',
     body: template.toUpdateJson(),
@@ -1227,8 +1226,7 @@ class ApiClient {
     required String promptId,
     required String aiConfigId,
     required String sampleText,
-  }) =>
-      _request(
+  }) => _request(
     method: 'POST',
     path: '/api/prompts/test',
     body: <String, dynamic>{

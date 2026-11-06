@@ -108,9 +108,8 @@ class _PromptTemplatesSectionState extends State<PromptTemplatesSection> {
       );
     } on ApiException catch (exc) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(exc.error.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(exc.error.message)));
     } catch (exc) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -151,14 +150,12 @@ class _PromptTemplatesSectionState extends State<PromptTemplatesSection> {
       await client.deletePromptTemplate(template.id);
       await _load();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.get('prm_deleted'))),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(t.get('prm_deleted'))));
     } on ApiException catch (exc) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(exc.error.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(exc.error.message)));
     } catch (exc) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -186,9 +183,8 @@ class _PromptTemplatesSectionState extends State<PromptTemplatesSection> {
     }
     if (!mounted) return;
     if (configId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(t.get('prm_test_no_config'))),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(t.get('prm_test_no_config'))));
       return;
     }
     final controller = TextEditingController(
@@ -201,9 +197,7 @@ class _PromptTemplatesSectionState extends State<PromptTemplatesSection> {
         content: TextField(
           controller: controller,
           maxLines: 4,
-          decoration: InputDecoration(
-            hintText: t.get('prm_test_sample_hint'),
-          ),
+          decoration: InputDecoration(hintText: t.get('prm_test_sample_hint')),
         ),
         actions: [
           TextButton(
@@ -211,8 +205,7 @@ class _PromptTemplatesSectionState extends State<PromptTemplatesSection> {
             child: Text(t.get('action_close')),
           ),
           ElevatedButton(
-            onPressed: () =>
-                Navigator.pop(ctx, controller.text.trim()),
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
             child: Text(t.get('prm_test_action')),
           ),
         ],
@@ -220,9 +213,8 @@ class _PromptTemplatesSectionState extends State<PromptTemplatesSection> {
     );
     if (sample == null || sample.isEmpty || !mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(t.get('prm_test_running'))),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(t.get('prm_test_running'))));
     try {
       final result = await client.testPromptTemplate(
         promptId: template.id,
@@ -253,9 +245,8 @@ class _PromptTemplatesSectionState extends State<PromptTemplatesSection> {
       );
     } on ApiException catch (exc) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(exc.error.message)),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(exc.error.message)));
     } catch (exc) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -350,15 +341,13 @@ class _PromptTemplatesSectionState extends State<PromptTemplatesSection> {
                     if (!tpl.isSystem)
                       IconButton(
                         tooltip: t.get('action_delete'),
-                        icon: Icon(
-                          Icons.delete_outline,
-                          color: colors.danger,
-                        ),
+                        icon: Icon(Icons.delete_outline, color: colors.danger),
                         onPressed: () => _delete(tpl),
                       ),
                   ],
                 ),
-                onTap: () => tpl.isSystem ? _showSystemInfo(tpl) : _openEditor(tpl),
+                onTap: () =>
+                    tpl.isSystem ? _showSystemInfo(tpl) : _openEditor(tpl),
               ),
             ),
         ],
@@ -451,9 +440,7 @@ class _PromptEditorDialogState extends State<_PromptEditorDialog> {
             children: [
               TextField(
                 controller: _name,
-                decoration: InputDecoration(
-                  labelText: t.get('prm_field_name'),
-                ),
+                decoration: InputDecoration(labelText: t.get('prm_field_name')),
               ),
               const SizedBox(height: AppSpacing.md),
               TextField(

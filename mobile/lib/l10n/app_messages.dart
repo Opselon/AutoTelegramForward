@@ -40,10 +40,12 @@ class AppMessagesEn {
     'prm_test_sample_hint': 'Sample message to rewrite',
     'prm_test_result_title': 'Rewrite result',
     'prm_test_failed_title': 'Test failed',
-    'prm_test_no_config': 'No enabled AI config — add one on this screen first.',
+    'prm_test_no_config':
+        'No enabled AI config — add one on this screen first.',
     'prm_invalid_name': 'The name must be 1–80 characters.',
     'prm_invalid_system': 'The system prompt cannot be empty.',
-    'prm_invalid_user': 'The user template must contain the {text} placeholder.',
+    'prm_invalid_user':
+        'The user template must contain the {text} placeholder.',
     'prm_field_name': 'Name',
     'prm_field_description': 'Description (optional)',
     'prm_field_system': 'System prompt',

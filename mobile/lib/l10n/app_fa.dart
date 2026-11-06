@@ -28,7 +28,8 @@ class AppMessagesFa {
     'prm_test_sample_hint': 'پیام نمونه برای بازنویسی',
     'prm_test_result_title': 'نتیجه بازنویسی',
     'prm_test_failed_title': 'آزمایش شکست خورد',
-    'prm_test_no_config': 'پیکربندی هوش مصنوعی فعالی نیست — ابتدا در همین صفحه اضافه کنید.',
+    'prm_test_no_config':
+        'پیکربندی هوش مصنوعی فعالی نیست — ابتدا در همین صفحه اضافه کنید.',
     'prm_invalid_name': 'نام باید ۱ تا ۸۰ نویسه باشد.',
     'prm_invalid_system': 'پرامپت سیستم نمی‌تواند خالی باشد.',
     'prm_invalid_user': 'قالب کاربر باید شامل جای‌نگهدار {text} باشد.',

@@ -28,15 +28,18 @@ class AppMessagesUz {
     'prm_test_sample_hint': 'Qayta yozish uchun namuna xabar',
     'prm_test_result_title': 'Qayta yozish natijasi',
     'prm_test_failed_title': 'Sinov muvaffaqiyatsiz',
-    'prm_test_no_config': 'Faol AI konfiguratsiya yo‘q — avval shu ekranda qo‘shing.',
+    'prm_test_no_config':
+        'Faol AI konfiguratsiya yo‘q — avval shu ekranda qo‘shing.',
     'prm_invalid_name': 'Nom 1–80 belgidan iborat bo‘lishi kerak.',
     'prm_invalid_system': 'Tizim prompti bo‘sh bo‘lmasligi kerak.',
-    'prm_invalid_user': 'Foydalanuvchi shablonida {text} joylovchisi bo‘lishi kerak.',
+    'prm_invalid_user':
+        'Foydalanuvchi shablonida {text} joylovchisi bo‘lishi kerak.',
     'prm_field_name': 'Nomi',
     'prm_field_description': 'Tavsif (ixtiyoriy)',
     'prm_field_system': 'Tizim prompti',
     'prm_field_user': 'Foydalanuvchi shabloni ({text})',
-    'rule_setting_link_replace_enabled': 'Topilgan har qanday havolani almashtirish',
+    'rule_setting_link_replace_enabled':
+        'Topilgan har qanday havolani almashtirish',
     'rule_setting_link_rewrite_map': 'Havolalarni qayta yozish jadvali',
     'rule_setting_mention_rewrite_map': '@Eslatmalarni qayta yozish jadvali',
     'rule_setting_branding_require_channel': 'Faqat kanallar o‘tishi',

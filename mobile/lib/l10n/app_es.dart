@@ -31,12 +31,14 @@ class AppMessagesEs {
     'prm_test_no_config': 'No hay configuración IA activada — añade una en esta pantalla primero.',
     'prm_invalid_name': 'El nombre debe tener 1–80 caracteres.',
     'prm_invalid_system': 'El prompt del sistema no puede estar vacío.',
-    'prm_invalid_user': 'La plantilla de usuario debe contener el marcador {text}.',
+    'prm_invalid_user':
+        'La plantilla de usuario debe contener el marcador {text}.',
     'prm_field_name': 'Nombre',
     'prm_field_description': 'Descripción (opcional)',
     'prm_field_system': 'Prompt del sistema',
     'prm_field_user': 'Plantilla de usuario ({text})',
-    'rule_setting_link_replace_enabled': 'Reemplazar cualquier enlace encontrado',
+    'rule_setting_link_replace_enabled':
+        'Reemplazar cualquier enlace encontrado',
     'rule_setting_link_rewrite_map': 'Mapa de reescritura de enlaces',
     'rule_setting_mention_rewrite_map': 'Mapa de reescritura de @menciones',
     'rule_setting_branding_require_channel': 'Salto solo de canales',

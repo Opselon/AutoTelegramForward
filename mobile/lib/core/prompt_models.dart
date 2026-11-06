@@ -38,8 +38,7 @@ class PromptTemplate {
       name: json['name'] as String? ?? '',
       description: json['description'] as String? ?? '',
       systemPrompt: json['system_prompt'] as String? ?? '',
-      userPromptTemplate:
-          json['user_prompt_template'] as String? ?? '{text}',
+      userPromptTemplate: json['user_prompt_template'] as String? ?? '{text}',
       targetLanguage: json['target_language'] as String? ?? 'en',
       currentVersion: (json['current_version'] as num?)?.toInt() ?? 1,
       isSystem: json['is_system'] as bool? ?? false,
@@ -49,29 +48,29 @@ class PromptTemplate {
   /// The write shape: `template` + `expected_version` (the OCC guard the
   /// server checks against `current_version` when updating).
   Map<String, dynamic> toCreateJson() => {
-        'template': {
-          'name': name,
-          'description': description,
-          'system_prompt': systemPrompt,
-          'user_prompt_template': userPromptTemplate,
-          'target_language': targetLanguage,
-          'is_system': false,
-        },
-        'expected_version': 0,
-      };
+    'template': {
+      'name': name,
+      'description': description,
+      'system_prompt': systemPrompt,
+      'user_prompt_template': userPromptTemplate,
+      'target_language': targetLanguage,
+      'is_system': false,
+    },
+    'expected_version': 0,
+  };
 
   Map<String, dynamic> toUpdateJson() => {
-        'template': {
-          'id': id,
-          'name': name,
-          'description': description,
-          'system_prompt': systemPrompt,
-          'user_prompt_template': userPromptTemplate,
-          'target_language': targetLanguage,
-          'is_system': isSystem,
-        },
-        'expected_version': currentVersion,
-      };
+    'template': {
+      'id': id,
+      'name': name,
+      'description': description,
+      'system_prompt': systemPrompt,
+      'user_prompt_template': userPromptTemplate,
+      'target_language': targetLanguage,
+      'is_system': isSystem,
+    },
+    'expected_version': currentVersion,
+  };
 
   PromptTemplate copyWith({
     String? id,

@@ -28,7 +28,8 @@ class AppMessagesId {
     'prm_test_sample_hint': 'Pesan contoh untuk ditulis ulang',
     'prm_test_result_title': 'Hasil penulisan ulang',
     'prm_test_failed_title': 'Uji gagal',
-    'prm_test_no_config': 'Tidak ada konfigurasi AI aktif — tambahkan dulu di layar ini.',
+    'prm_test_no_config':
+        'Tidak ada konfigurasi AI aktif — tambahkan dulu di layar ini.',
     'prm_invalid_name': 'Nama harus 1–80 karakter.',
     'prm_invalid_system': 'Prompt sistem tidak boleh kosong.',
     'prm_invalid_user': 'Template pengguna harus memuat placeholder {text}.',
