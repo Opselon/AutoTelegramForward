@@ -141,6 +141,21 @@ def _safe_list(raw, default=None):
         return default or []
 
 
+def _replay_job_kind(payload_json: str) -> str:
+    """Derive the delivery_jobs.job_kind a dead-letter replay must rebuild.
+
+    The business key on delivery_jobs includes job_kind, so the replay has to
+    restore the SAME deliverable it dead-lettered: a keyword_reply entry must
+    not come back as kind=forward (it would also let the kind-less lookup
+    reset a forward sibling that shares rule/source/message/target).
+    """
+    try:
+        raw = json.loads(payload_json) if isinstance(payload_json, str) else (payload_json or {})
+    except Exception:
+        raw = {}
+    return "keyword_reply" if isinstance(raw, dict) and raw.get("is_reply") else "forward"
+
+
 def _rule_meta_json(rule) -> str:
     """Serialise rule metadata, mirroring name/description into it.
 
@@ -2407,14 +2422,18 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
         # deliberate dedup, not an accident. So a replay can never be a second
         # row — it either wakes the existing one up or is refused. That
         # constraint is also why a replay cannot double-post.
+        # The delivery_jobs business key includes job_kind: a replay must
+        # wake its OWN deliverable, never reset a keyword_reply sibling that
+        # happens to share (rule, source, message, target).
+        replay_kind = _replay_job_kind(payload)
         original = None
         if job_id:
             original = self._db.query_one("SELECT * FROM delivery_jobs WHERE id=?", (job_id,))
         if original is None:
             original = self._db.query_one(
                 "SELECT * FROM delivery_jobs WHERE rule_id=? AND source_chat_id=?"
-                " AND source_message_id=? AND target_chat_id=?",
-                (rule_id, src_chat, src_msg, tgt_chat),
+                " AND source_message_id=? AND target_chat_id=? AND job_kind=?",
+                (rule_id, src_chat, src_msg, tgt_chat, replay_kind),
             )
 
         now = _now()
@@ -2482,14 +2501,15 @@ class SqliteDeliveryQueueRepository(IDeliveryQueueRepository):
                     """
                     INSERT OR IGNORE INTO delivery_jobs (
                         id, rule_id, source_chat_id, source_message_id, target_chat_id,
-                        payload_json, status, attempts, max_attempts, next_retry_at,
+                        job_kind, payload_json, status, attempts, max_attempts, next_retry_at,
                         lease_until, worker_id, error_detail, created_at, updated_at,
                         intermediate_chat_id, intermediate_message_id, delivery_stage
-                    ) VALUES (?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, 0, 0, '', '', ?, ?, NULL, NULL, 'DIRECT')
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING', 0, ?, 0, 0, '', '', ?, ?, NULL, NULL, 'DIRECT')
                     """,
                     (
                         job.id, job.rule_id, str(job.source_chat_id), int(job.source_message_id),
-                        str(job.target_chat_id), SqliteDatabase.dumps(job.payload_data),
+                        str(job.target_chat_id), replay_kind,
+                        SqliteDatabase.dumps(job.payload_data),
                         int(job.max_attempts), int(job.created_at), int(job.updated_at),
                     ),
                 )
