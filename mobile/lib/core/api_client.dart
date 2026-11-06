@@ -26,6 +26,7 @@ import 'auto_reply_models.dart';
 import 'replace_models.dart';
 import 'env.dart';
 import 'models.dart';
+import 'prompt_models.dart';
 import 'storage.dart';
 
 /// Thrown by [ApiClient] when a call fails. Always carries a stable [kind].
@@ -1179,6 +1180,62 @@ class ApiClient {
     path: '/api/ai-configs/$id',
     body: config.toJson(),
     fromJson: AiConfig.fromJson,
+    retryable: false,
+  );
+
+  // ------------------------------------------------------------------
+  // AI rewrite prompt templates (the shared /api/prompts contract — the
+  // same library the dashboard and the Telegram bot manage).
+  // ------------------------------------------------------------------
+
+  Future<List<PromptTemplate>> listPromptTemplates() => _requestList(
+    method: 'GET',
+    path: '/api/prompts',
+    fromJson: PromptTemplate.fromJson,
+    listKey: 'templates',
+  );
+
+  Future<PromptTemplate> createPromptTemplate(PromptTemplate template) =>
+      _request(
+        method: 'POST',
+        path: '/api/prompts',
+        body: template.toCreateJson(),
+        fromJson: PromptTemplate.fromJson,
+        retryable: false,
+      );
+
+  Future<PromptTemplate> updatePromptTemplate(
+    String id,
+    PromptTemplate template,
+  ) => _request(
+    method: 'PUT',
+    path: '/api/prompts/${Uri.encodeComponent(id)}',
+    body: template.toUpdateJson(),
+    fromJson: PromptTemplate.fromJson,
+    retryable: false,
+  );
+
+  Future<void> deletePromptTemplate(String id) => _request(
+    method: 'DELETE',
+    path: '/api/prompts/${Uri.encodeComponent(id)}',
+    fromJson: (json) => <String, dynamic>{},
+    retryable: false,
+  );
+
+  Future<PromptTestResult> testPromptTemplate({
+    required String promptId,
+    required String aiConfigId,
+    required String sampleText,
+  }) => _request(
+    method: 'POST',
+    path: '/api/prompts/test',
+    body: <String, dynamic>{
+      'prompt_id': promptId,
+      'ai_config_id': aiConfigId,
+      'sample_text': sampleText,
+      'version': 0,
+    },
+    fromJson: PromptTestResult.fromJson,
     retryable: false,
   );
 

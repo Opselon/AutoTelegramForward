@@ -26,6 +26,12 @@
 //     unconditional ("branding_always")
 //   - require_forward is a GATE, not a check: it refuses a message that is
 //     not itself a forward, whatever match_mode says
+//   - require_channel is the same kind of gate for the sender side: only a
+//     channel-originated message earns the hop (a native channel post in A,
+//     or a forward whose origin is a channel). A message written by a normal
+//     user fails the gate and is delivered directly, which is what keeps the
+//     user's own name in B's "Forwarded from" header while channel content
+//     gets branded. The two gates compose.
 //   - origin ids match the forward-origin chat id or its @username;
 //     origin titles match the forward-origin channel title, case-insensitively
 //     in BOTH directions (the Python reference tests `wanted in title or
@@ -66,6 +72,7 @@ type Config struct {
 	Keywords        []string
 	MatchMode       MatchMode
 	RequireForward  bool
+	RequireChannel  bool
 	ForceForward    bool
 }
 
@@ -100,6 +107,8 @@ func ReadConfig(metadata map[string]any) Config {
 				cfg.TriggersEnabled = asBool(value)
 			case "require_forward":
 				cfg.RequireForward = asBool(value)
+			case "require_channel":
+				cfg.RequireChannel = asBool(value)
 			case "force_forward":
 				cfg.ForceForward = asBool(value)
 			case "origin_ids":
@@ -126,21 +135,48 @@ type Decision struct {
 }
 
 // MessageView is the message-side input the decision reads: the text (the
-// effective text the transforms produced) and the forward-origin channel.
-//
-// It deliberately mirrors the Python payload attributes should_hop consults:
-// effective_text, text, raw_text, caption (in that preference order) and
-// forward_origin's from_chat_id / from_chat_username / from_chat_title.
+// effective text the transforms produced), the forward-origin channel, and
+// the source chat's type. The first two mirror the Python payload attributes
+// should_hop consults (effective_text, text, raw_text, caption — in that
+// preference order — and forward_origin's from_chat_id /
+// from_chat_username / from_chat_title); ChatType mirrors
+// MessagePayload.chat_type and is what the require_channel gate reads.
 type MessageView struct {
 	Text          string
 	ForwardOrigin *ForwardOrigin
+	// ChatType is the source chat's type ("channel" | "supergroup" |
+	// "group" | "private"). Empty means unknown: the require_channel gate
+	// then falls back to the forward origin alone, exactly as the Python
+	// reference does for a payload that carries no chat_type.
+	ChatType string
 }
 
 // ForwardOrigin is the "Forwarded from <channel>" header of a message.
 type ForwardOrigin struct {
+	// Type is the origin kind the Python adapter records — "channel",
+	// "user", "hidden_user" (or the pyrogram class name, e.g.
+	// "MessageForwardOriginChannel"). The require_channel gate matches on a
+	// substring, never an equality, because the two client paths spell the
+	// channel kind differently.
+	Type             string
 	FromChatID       string
 	FromChatUsername string
 	FromChatTitle    string
+}
+
+// IsChannelOrigin is Python branding.is_channel_origin: true when the
+// message *comes from a channel* — either it was forwarded from a channel
+// (the origin kind carries "channel") or the source chat A is itself a
+// channel (a native channel post, so the sender is the channel rather than
+// a person). A message written by a normal user answers false, which is the
+// point: the require_channel gate lets user messages keep their own
+// "Forwarded from <user>" header on a direct delivery while channel content
+// takes the branded hop.
+func IsChannelOrigin(msg MessageView) bool {
+	if msg.ForwardOrigin != nil && strings.Contains(strings.ToLower(msg.ForwardOrigin.Type), "channel") {
+		return true
+	}
+	return strings.ToLower(strings.TrimSpace(msg.ChatType)) == "channel"
 }
 
 // RuleView is the task-side input: the branding channel, the enable flag(s)
@@ -217,6 +253,9 @@ func ShouldHop(msg MessageView, r RuleView, vip VIPOutcome, vipConfigured bool) 
 	// says.
 	if cfg.RequireForward && msg.ForwardOrigin == nil {
 		return Decision{false, "branding_requires_forward_origin"}
+	}
+	if cfg.RequireChannel && !IsChannelOrigin(msg) {
+		return Decision{false, "branding_requires_channel_origin"}
 	}
 
 	var conditions, matched []string

@@ -11,13 +11,13 @@
 // be reordered:
 //
 //  1. cleaner (CleanerRule.clean)      — custom words, urls, mentions,
-//                                        hashtags, emoji, phones, blank lines
+//     hashtags, emoji, phones, blank lines
 //  2. link management                  — the task link policy, entity-aware
 //  3. remove_emojis flag               — the task-level flag (distinct from
-//                                        the cleaner's own switch)
+//     the cleaner's own switch)
 //  4. empty_after_clean decision
 //  5. content policy rewrite           — remove_links / strip_words /
-//                                        replacements on the cleaned text
+//     replacements on the cleaned text
 //
 // Why a separate package from transform: the Python audit (F-08) proved that
 // a Go transform package that compiles but is never called by production is
@@ -50,7 +50,7 @@ const maxMatchLen = 8192
 type Config struct {
 	// RuleID / OwnerUserID are attribution for the decision log, never
 	// message content.
-	RuleID     string
+	RuleID      string
 	OwnerUserID int64
 
 	// TargetChatID is the chat this delivery is bound for. The transform
@@ -67,11 +67,20 @@ type Config struct {
 	LinkPolicy string
 	// RemoveLinks is the legacy task-level "Links: remove" toggle. Python
 	// resolves it into REMOVE_ALL_URLS when no explicit policy is set.
-	RemoveLinks bool
+	RemoveLinks     bool
 	LinkReplacement string
 	DomainAllowlist []string
 	DomainBlocklist []string
 	LinkRewriteMap  map[string]string
+	// LinkReplaceEnabled is the "replace any link found" switch: with it on
+	// and a rewrite map configured, a task with no stricter policy upgrades
+	// to REWRITE_LINKS so the map is applied (mirrors Python's
+	// pipeline._apply_transforms policy upgrade).
+	LinkReplaceEnabled bool
+	// MentionRewriteMap carries the "@old -> @new" pairs (or a "*" catch-all)
+	// applied in the final replacement pass (pipeline.py's
+	// apply_mention_rewrites call). Nil/empty means the stage is off.
+	MentionRewriteMap map[string]string
 
 	// RemoveEmojis is the task-level emoji flag (pipeline.py:1461). It is
 	// deliberately separate from Cleaner.RemoveEmojis: the Python pipeline
@@ -177,7 +186,6 @@ type AIRewriter func(ctx context.Context, text string) (string, error)
 // QUARANTINE (hold) from DROP (discard) at its own layer.
 type AIFallbackPolicy func(ctx context.Context, original string, classification string, message string) (string, bool)
 
-
 // LinkButton is one rendered link button of the link_buttons add-on.
 type LinkButton struct {
 	Text string
@@ -195,18 +203,18 @@ type AffiliateKit struct {
 // decision (allow/deny) half of the policy is evaluated at ingest; this is
 // what rewrites the text that survives.
 type ContentPolicy struct {
-	RemoveLinks  bool
-	StripWords   []string
-	Replacements [][2]string
+	RemoveLinks   bool
+	StripWords    []string
+	Replacements  [][2]string
 	CaseSensitive bool
 }
 
 // ReplacementEntry is one find/replace entry (text_replace apply_replacements).
 // FindPattern is the source text or regex; order and priority are the caller's.
 type ReplacementEntry struct {
-	Find      string
-	Replace   string
-	IsRegex   bool
+	Find       string
+	Replace    string
+	IsRegex    bool
 	IgnoreCase bool
 	WholeWord  bool
 }

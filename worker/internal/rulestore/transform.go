@@ -46,6 +46,15 @@ func transformConfigFromMetadata(meta map[string]any, metadataJSON string) clean
 	cfg.DomainAllowlist = stringListField(meta, "domain_allowlist")
 	cfg.DomainBlocklist = stringListField(meta, "domain_blocklist")
 	cfg.LinkRewriteMap = mapField(meta, "link_rewrite_map")
+	// "Replace any link found": the toggle upgrades a task with no stricter
+	// link policy to REWRITE_LINKS so the map below is actually applied —
+	// the same upgrade Python's pipeline performs before calling the link
+	// engine (pipeline.py, _apply_transforms).
+	cfg.LinkReplaceEnabled = metaBool(meta, "link_replace_enabled", false)
+	// "Replace any @ID": handle -> handle (or catch-all) pairs applied in the
+	// final replacement pass, after the AI stage, exactly where Python runs
+	// apply_mention_rewrites.
+	cfg.MentionRewriteMap = mapField(meta, "mention_rewrite_map")
 	cfg.RemoveEmojis = metaBool(meta, "remove_emojis", false)
 
 	policyBlob, _ := meta["content_policy"].(map[string]any)
@@ -189,8 +198,8 @@ func buildCleanerRule(cfg map[string]any, meta map[string]any) *cleaning.Cleaner
 // narrowed to the rewrite fields _apply_transforms' transform() applies.
 func buildContentPolicy(blob map[string]any) *cleaning.ContentPolicy {
 	policy := &cleaning.ContentPolicy{
-		RemoveLinks:  metaBool(blob, "remove_links", false),
-		StripWords:   stringListField(blob, "strip_words"),
+		RemoveLinks:   metaBool(blob, "remove_links", false),
+		StripWords:    stringListField(blob, "strip_words"),
 		CaseSensitive: metaBool(blob, "case_sensitive", false),
 	}
 	if raw, ok := blob["replacements"].(map[string]any); ok {

@@ -9,6 +9,18 @@
 import type { Catalog } from './types'
 
 export const uz: Catalog = {
+  "ui_link_rewrite_map_placeholder": "eski-domen.com yangi-domen.com\nhttps://eski.t.me/x https://yangi.t.me/y\n* https://t.me/men",
+  "ui_mention_rewrite_map_placeholder": "@eski-dokon @yangi-dokon\n* @asosiy",
+  "ui_channel_only_hop": "Faqat kanal kontenti o‘tadi",
+  "ui_channel_only_hop_hint": "Oddiy foydalanuvchilar xablari o‘z nomi bilan to‘g‘ridan-to‘g‘ri yuboriladi; kanal kontenti C orqali brendlanadi.",
+  "ui_link_rewrite_map_hint": "Har bir juftlik alohida qatorda: eski yangi — yoki * https://t.me/men hamma havolani qayta yozish uchun.",
+  "ui_link_rewrite_map_label": "Havolalarni qayta yozish jadvali",
+  "ui_mention_rewrite_map_hint": "Har bir juftlik alohida qatorda: @eski-dokon @yangi-dokon — yoki * @asosiy hamma @ID ni qayta yozish uchun.",
+  "ui_mention_rewrite_map_label": "@Eslatmalarni qayta yozish jadvali",
+  "ui_only_if_the_message_comes_from_a_channel": "va faqat kanaldan kelgan bo‘lsa",
+  "ui_replace_any_link_found": "Topilgan har qanday havolani almashtirish",
+  "ui_replace_any_link_found_hint": "Matndagi har bir havolani pastdagi havola jadvali bo‘yicha qayta yozadi.",
+  "ui_replace_links_mentions_section": "Havola va @eslatmalarni almashtirish",
   "ui_0s_instant": "0 s (darhol)",
   "ui_1_back_up_this_server": "1. Ushbu serverni zaxiralang",
   "ui_2_restore_on_this_server": "2. Ushbu serverda tiklang",

@@ -23,7 +23,7 @@ func (l *testLogger) Info(msg string, args ...any)  { l.lines = append(l.lines, 
 func (l *testLogger) Warn(msg string, args ...any)  { l.lines = append(l.lines, "WARN "+msg) }
 func (l *testLogger) Error(msg string, args ...any) { l.lines = append(l.lines, "ERROR "+msg) }
 
-type testMetrics struct{ sent, retried, failed, rejected, unknown int }
+type testMetrics struct{ sent, retried, failed, rejected, unknown, panicked int }
 
 func (m *testMetrics) Outcome(kind string) {
 	switch kind {
@@ -37,6 +37,8 @@ func (m *testMetrics) Outcome(kind string) {
 		m.rejected++
 	case "unknown":
 		m.unknown++
+	case "panicked":
+		m.panicked++
 	}
 }
 func (m *testMetrics) ObserveRPC(string, float64) {}

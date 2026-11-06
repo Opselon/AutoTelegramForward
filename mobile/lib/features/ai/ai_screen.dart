@@ -20,6 +20,7 @@ import '../../widgets/app_ui.dart';
 import '../../widgets/loading_list.dart';
 import '../auto_reply/auto_reply_screen.dart';
 import 'ai_config_editor_dialog.dart';
+import 'prompt_templates_section.dart';
 
 class AiScreen extends StatefulWidget {
   const AiScreen({super.key});
@@ -364,6 +365,10 @@ class _AiScreenState extends State<AiScreen> {
                   ),
                 );
               }),
+            const SizedBox(height: 16),
+            // The prompt library: the same templates the dashboard's prompt
+            // editor and the bot's prompt manager maintain.
+            PromptTemplatesSection(key: const ValueKey<String>('ai_prompts')),
           ],
         ),
       ),

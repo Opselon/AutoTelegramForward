@@ -23,6 +23,7 @@ import os
 from typing import Any, List, Optional, Tuple
 
 from telegram_runtime import errors
+from core.infrastructure.telegram.pyrogram_compat import thread_kwargs as _thread_kwargs
 
 logger = logging.getLogger("atf.telegram_runtime.pyrogram")
 
@@ -77,17 +78,20 @@ class PyrogramAdapter:
             group = getattr(msg, "media_group_id", None)
             if not group:
                 return [int(message_id)], None
-            chat = _chat(chat_id)
-            # A bounded window around the known member: albums never exceed
-            # 10 items, so ±20 is far more than enough and stays cheap.
-            messages = await self._client.get_messages(chat_id=chat, limit=40)
-            ids = [
-                m.id for m in (messages or [])
-                if getattr(m, "media_group_id", None) == group
-            ]
+            # The documented one-to-one method for exactly this question:
+            # pyrogram.methods.messages.GetMediaGroup.get_media_group returns
+            # every member of the album the message belongs to (it walks the
+            # chat history around the message internally). The hand-rolled
+            # history window previously used get_messages(limit=...), which
+            # is not a parameter the pinned pyrogram 2.0.106 accepts — the
+            # call failed on every album and the worker degraded to single
+            # copies.
+            members = await self._client.get_media_group(
+                chat_id=_chat(chat_id), message_id=int(message_id))
+            ids = [int(m.id) for m in (members or [])]
             if not ids:
                 ids = [int(message_id)]
-            return sorted(set(int(i) for i in ids)), None
+            return sorted(set(ids)), None
         except Exception as exc:
             return [], errors.normalize(exc, operation="get_album_message_ids")
 
@@ -116,9 +120,10 @@ class PyrogramAdapter:
         message_thread_id: int = 0,
     ) -> Tuple[List[int], Optional[errors.TelegramOperationError]]:
         """Native Telegram forward (original author header preserved)."""
-        kwargs: dict = {}
-        if message_thread_id and message_thread_id > 0:
-            kwargs["message_thread_id"] = int(message_thread_id)
+        # Topic targeting rides the documented surface: pyrogram 2.0.106's
+        # forward_messages predates message_thread_id, so the kwarg is only threaded
+        # when the installed client accepts it (forks do; the pin does not).
+        kwargs: dict = _thread_kwargs(self._client, "forward_messages", message_thread_id)
         try:
             res = await self._client.forward_messages(
                 chat_id=_chat(target_chat_id),
@@ -144,9 +149,10 @@ class PyrogramAdapter:
         (finding F-16). An explicit ``None`` is what suppresses it — the
         sentinel pyrogram's ``message.copy`` checks for.
         """
-        kwargs: dict = {}
-        if message_thread_id and message_thread_id > 0:
-            kwargs["message_thread_id"] = int(message_thread_id)
+        # Topic targeting rides the documented surface: pyrogram 2.0.106's
+        # copy_message predates message_thread_id, so the kwarg is only threaded
+        # when the installed client accepts it (forks do; the pin does not).
+        kwargs: dict = _thread_kwargs(self._client, "copy_message", message_thread_id)
         # An empty string means "no caption" (MEDIA_ONLY); None means "keep
         # whatever the source carries" — the two are different instructions.
         if caption is not None:
@@ -186,9 +192,10 @@ class PyrogramAdapter:
         self, target_chat_id: Any, from_chat_id: Any, message_id: int,
         caption: Optional[str] = None, message_thread_id: int = 0,
     ) -> Tuple[List[int], Optional[errors.TelegramOperationError]]:
-        kwargs: dict = {}
-        if message_thread_id and message_thread_id > 0:
-            kwargs["message_thread_id"] = int(message_thread_id)
+        # Topic targeting rides the documented surface: pyrogram 2.0.106's
+        # copy_media_group predates message_thread_id, so the kwarg is only threaded
+        # when the installed client accepts it (forks do; the pin does not).
+        kwargs: dict = _thread_kwargs(self._client, "copy_media_group", message_thread_id)
         if caption is not None:
             kwargs["captions"] = caption
         try:
@@ -206,9 +213,10 @@ class PyrogramAdapter:
         self, target_chat_id: Any, text: str, message_thread_id: int = 0,
     ) -> Tuple[int, Optional[errors.TelegramOperationError]]:
         """Send plain (already-transformed) text."""
-        kwargs: dict = {}
-        if message_thread_id and message_thread_id > 0:
-            kwargs["message_thread_id"] = int(message_thread_id)
+        # Topic targeting rides the documented surface: pyrogram 2.0.106's
+        # send_message predates message_thread_id, so the kwarg is only threaded
+        # when the installed client accepts it (forks do; the pin does not).
+        kwargs: dict = _thread_kwargs(self._client, "send_message", message_thread_id)
         try:
             res = await self._client.send_message(
                 chat_id=_chat(target_chat_id), text=text or "...", **kwargs,
@@ -309,9 +317,16 @@ class PyrogramAdapter:
         if not token or not os.path.exists(token):
             return 0, errors.failed(errors.MEDIA_UPLOAD_FAILED, "staged media vanished before upload")
         target = _chat(target_chat_id)
-        kwargs: dict = {}
-        if message_thread_id and message_thread_id > 0:
-            kwargs["message_thread_id"] = int(message_thread_id)
+        # Topic targeting rides the documented surface: pyrogram 2.0.106's
+        # send_* family predates message_thread_id, and this one kwarg dict is
+        # spread over several send methods below — include it only when EVERY
+        # method they may reach accepts it (forks do; the pin does not).
+        kwargs: dict = _thread_kwargs(
+            self._client,
+            ["send_photo", "send_video", "send_voice", "send_audio",
+             "send_animation", "send_sticker", "send_document"],
+            message_thread_id,
+        )
         kind = str(media_type or "").lower()
         try:
             if kind == "photo":

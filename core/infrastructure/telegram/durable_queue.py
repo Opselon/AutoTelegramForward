@@ -39,6 +39,7 @@ from .diagnostics_contract import (
 )
 from .failure_policy import classify_failure, error_code, rate_limit_seconds
 from .bot_transport import BotRouteAdapter, BotTransportCache, BotTransportUnsupported
+from core.infrastructure.telegram.pyrogram_compat import thread_kwargs as pyrogram_thread_kwargs
 from .media_reference import extract_media_reference, send_media_reference
 
 logger = logging.getLogger("atf.durable_queue")
@@ -436,6 +437,11 @@ class DurableQueueManager:
             # owner sees immediately — so they ride the snapshot too.
             "sender_name": str(getattr(payload, "sender_name", "") or ""),
             "forward_origin": dict(getattr(payload, "forward_origin", None) or {}) or None,
+            # The source chat's type ("channel" | "supergroup" | "group" |
+            # "private"). The Worker re-decides the branding hop at claim time
+            # from the same inputs Python used, and the require_channel gate
+            # needs this to recognise a native channel post.
+            "chat_type": str(getattr(payload, "chat_type", "") or ""),
             # --- Branding hop (A -> C -> B) ----------------------------------
             # Already performed on the dispatch path; the worker only repeats it
             # so B receives a forward of C instead of the original source.
@@ -1463,12 +1469,17 @@ class DurableQueueManager:
             if isinstance(exc, DeliveryBlockedError):
                 self.stats["failed"] += 1
                 _bump_target("failed")
+                # A job that died inside the branding hop gets its own event
+                # code, so "the branded route is broken for this task" is one
+                # Log Center filter instead of a needle in every DELIVERY_BLOCKED.
+                stage = str(getattr(job, "delivery_stage", "") or "")
+                event_code = "BRANDING_STAGE2_FAILED" if stage == "BRANDED" else "DELIVERY_BLOCKED"
                 logger.error(
                     "[PIPELINE:DELIVERY_BLOCKED] [%s] No permitted delivery method succeeded for %s "
                     "(rule=%s, src=%s:%s): %s. Marking job FAILED (task stays active; message is replayable).",
                     worker_id, target, job.rule_id[:8], job.source_chat_id,
                     job.source_message_id, err_msg or exc,
-                    extra={"event_code": "DELIVERY_BLOCKED"},
+                    extra={"event_code": event_code},
                 )
                 if self._log_client is not None:
                     try:
@@ -1480,7 +1491,9 @@ class DurableQueueManager:
                                 "source_chat_id": job.source_chat_id,
                                 "source_message_id": job.source_message_id,
                                 "target": target,
-                                "event_code": "DELIVERY_BLOCKED",
+                                "event_code": event_code,
+                                "delivery_stage": stage,
+                                "intermediate_chat_id": str(getattr(job, "intermediate_chat_id", "") or ""),
                                 "owner_user_id": owner_id,
                             },
                         )
@@ -2096,9 +2109,17 @@ class DurableQueueManager:
         # the message silently lands in the wrong place. Only a positive id is
         # meaningful: 0/None means "no topic configured".
         topic_id = int(data.get("topic_id", 0) or 0)
-        thread_kwargs: Dict[str, Any] = {}
-        if topic_id > 0:
-            thread_kwargs["message_thread_id"] = topic_id
+        # Topic targeting rides the documented surface: the pinned pyrogram
+        # 2.0.106 predates message_thread_id on forward/copy/send, so the
+        # kwarg is threaded only when this session's client accepts it —
+        # every spread below lands in the chat's General topic otherwise,
+        # instead of failing the whole delivery with a TypeError.
+        thread_kwargs: Dict[str, Any] = pyrogram_thread_kwargs(
+            client,
+            ["forward_messages", "copy_message", "copy_media_group",
+             "send_message", "send_media_group"],
+            topic_id,
+        )
 
         # --- Branding hop (A -> C -> B) --------------------------------------
         # The message was already copied into our channel C on the dispatch path

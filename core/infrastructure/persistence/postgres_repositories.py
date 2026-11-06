@@ -1905,7 +1905,8 @@ class PostgresPromptRepository(IPromptRepository):
         is_system BOOLEAN NOT NULL DEFAULT FALSE,
         created_at BIGINT NOT NULL,
         updated_at BIGINT NOT NULL,
-        owner_user_id BIGINT NOT NULL DEFAULT 0
+        owner_user_id BIGINT NOT NULL DEFAULT 0,
+        enabled BOOLEAN NOT NULL DEFAULT TRUE
     );
     CREATE INDEX IF NOT EXISTS idx_pg_prompt_name ON prompt_templates (name);
 
@@ -1946,20 +1947,22 @@ class PostgresPromptRepository(IPromptRepository):
     ADDITIVE_COLUMNS = """
     ALTER TABLE prompt_templates ADD COLUMN IF NOT EXISTS owner_user_id BIGINT NOT NULL DEFAULT 0;
     CREATE INDEX IF NOT EXISTS idx_pg_prompt_templates_owner ON prompt_templates (owner_user_id);
+    ALTER TABLE prompt_templates ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT TRUE;
     """
 
     async def add_template(self, template: PromptTemplate) -> PromptTemplate:
         query = """
         INSERT INTO prompt_templates (
             id, name, description, system_prompt, user_prompt_template,
-            target_language, current_version, is_system, created_at, updated_at, owner_user_id
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            target_language, current_version, is_system, created_at, updated_at, owner_user_id, enabled
+        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         params = (
             template.id, template.name, template.description, template.system_prompt,
             template.user_prompt_template, template.target_language, template.current_version,
             bool(template.is_system), int(template.created_at), int(template.updated_at),
             int(getattr(template, "owner_user_id", 0) or 0),
+            bool(getattr(template, "enabled", True)),
         )
         await _execute_db(self._db, query, params)
         return template
@@ -1970,7 +1973,7 @@ class PostgresPromptRepository(IPromptRepository):
         UPDATE prompt_templates
         SET name = %s, description = %s, system_prompt = %s, user_prompt_template = %s,
             target_language = %s, current_version = %s, is_system = %s, updated_at = %s,
-            owner_user_id = %s
+            owner_user_id = %s, enabled = %s
         WHERE id = %s
         """
         params = (
@@ -1978,6 +1981,7 @@ class PostgresPromptRepository(IPromptRepository):
             template.user_prompt_template, template.target_language,
             template.current_version, bool(template.is_system),
             template.updated_at, int(getattr(template, "owner_user_id", 0) or 0),
+            bool(getattr(template, "enabled", True)),
             template.id,
         )
         await _execute_db(self._db, query, params)
@@ -2012,6 +2016,8 @@ class PostgresPromptRepository(IPromptRepository):
             target_language=d.get("target_language", "en"), current_version=int(d["current_version"]),
             is_system=bool(d["is_system"]), created_at=int(d["created_at"]), updated_at=int(d["updated_at"]),
             owner_user_id=int(d.get("owner_user_id") or 0),
+            # Rows written before the enable switch existed read as enabled.
+            enabled=bool(d.get("enabled", True)),
         )
 
     async def delete_template(self, template_id: str) -> bool:

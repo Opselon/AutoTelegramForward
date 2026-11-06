@@ -437,6 +437,79 @@ def apply_replacements(text: str, replacements: Any) -> str:
     return out
 
 
+# --------------------------------------------------------------------------- #
+# @mention rewrites ("replace any ID that starts with @")
+# --------------------------------------------------------------------------- #
+
+#: A Telegram handle: "@" + 4..32 username characters, not glued to a word or
+#: a longer mention (an email address or a double-@@ never matches). This is
+#: the same username alphabet the cleaner's mention stripper uses.
+MENTION_RE = re.compile(r"(?<![\w@])@([A-Za-z0-9_]{4,32})(?![\w@])")
+
+#: The catch-all key: a map that carries it rewrites every mention the text
+#: carries, not only the listed handles.
+MENTION_MATCH_ALL = "*"
+
+MAX_MENTION_PAIRS = 100
+
+
+def normalize_mention_map(raw: Any) -> Dict[str, str]:
+    """Normalise a stored mention map to ``{"@handle": "@handle-or-text"}``.
+
+    Keys are case-folded to their canonical "@lower" spelling so a stored
+    ``@Shop`` matches a message that says ``@shop``. Keys and values are
+    accepted with or without the leading "@", so a user who types
+    ``oldshop newshop`` and one who types ``@oldshop @newshop`` mean the same
+    pair. Unusable rows (empty, wrong type, over the bound) are dropped, never
+    fatal — a bad pair must not block the message it was meant to edit.
+    """
+    if not isinstance(raw, Mapping):
+        return {}
+    out: Dict[str, str] = {}
+    for key, value in raw.items():
+        if not isinstance(value, str):
+            continue
+        k = str(key).strip()
+        v = value.strip()
+        if not k or not v:
+            continue
+        if len(out) >= MAX_MENTION_PAIRS:
+            break
+        if k != MENTION_MATCH_ALL:
+            k = "@" + k.lstrip("@").lower()
+        out[k] = v
+    return out
+
+
+def apply_mention_rewrites(text: str, mention_map: Any) -> str:
+    """Rewrite @handles per ``mention_map``.
+
+    Exact (case-insensitive) handles win over the ``*`` catch-all, so a task
+    that maps ``@oldshop -> @newshop`` and ``* -> @main`` still rewrites the
+    old shop specifically and every other mention to the main handle. The
+    catch-all alone rewrites every mention. Runs in one ``re.sub`` pass so
+    the output of one pair can never be re-matched by another.
+    """
+    if not text:
+        return text
+    mapping = normalize_mention_map(mention_map)
+    if not mapping:
+        return text
+    exact = {k: v for k, v in mapping.items() if k != MENTION_MATCH_ALL}
+    catch_all = mapping.get(MENTION_MATCH_ALL)
+
+    def _sub(match: "re.Match[str]") -> str:
+        handle = match.group(0)
+        replacement = exact.get("@" + match.group(1).lower())
+        if replacement is None:
+            replacement = catch_all
+        if replacement is None:
+            return handle
+        return replacement if replacement.startswith("@") else "@" + replacement.lstrip("@")
+
+    return MENTION_RE.sub(_sub, text)
+
+
 def stored_entries(replacements: Any, task_id: str = "") -> List[Tuple[str, ReplaceEntry]]:
     """``(rule_id, entry)`` for every stored pair, in map order.
 

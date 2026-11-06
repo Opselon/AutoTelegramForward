@@ -22,14 +22,14 @@ type LinkManagementEngine struct{}
 // are the persistence contract — the rule row stores exactly these, so a Go
 // constant set that changed them would break every stored task.
 const (
-	LinkPolicyPreserveAll       = "PRESERVE_ALL"
-	LinkPolicyRemoveAllURLs     = "REMOVE_ALL_URLS"
-	LinkPolicyRemoveExternal    = "REMOVE_EXTERNAL_URLS"
-	LinkPolicyRemoveSelected    = "REMOVE_SELECTED_DOMAINS"
-	LinkPolicyAllowlistOnly     = "ALLOWLIST_ONLY"
-	LinkPolicyRewriteLinks      = "REWRITE_LINKS"
-	LinkPolicyRemoveButtonURLs  = "REMOVE_BUTTON_URLS"
-	LinkPolicyCustom            = "CUSTOM_LINK_POLICY"
+	LinkPolicyPreserveAll      = "PRESERVE_ALL"
+	LinkPolicyRemoveAllURLs    = "REMOVE_ALL_URLS"
+	LinkPolicyRemoveExternal   = "REMOVE_EXTERNAL_URLS"
+	LinkPolicyRemoveSelected   = "REMOVE_SELECTED_DOMAINS"
+	LinkPolicyAllowlistOnly    = "ALLOWLIST_ONLY"
+	LinkPolicyRewriteLinks     = "REWRITE_LINKS"
+	LinkPolicyRemoveButtonURLs = "REMOVE_BUTTON_URLS"
+	LinkPolicyCustom           = "CUSTOM_LINK_POLICY"
 )
 
 // tgDomains is LinkManagementEngine.TG_DOMAINS (services.py:763): the
@@ -149,10 +149,10 @@ func (LinkManagementEngine) ApplyToBody(text string, entities []Entity, cfg Link
 
 // LinkConfig is the link half of the task configuration.
 type LinkConfig struct {
-	Policy       string
-	Allowlist    []string
-	Blocklist    []string
-	RewriteMap   map[string]string
+	Policy     string
+	Allowlist  []string
+	Blocklist  []string
+	RewriteMap map[string]string
 }
 
 // ResolvePolicy is Python LinkManagementEngine.resolve_policy: a stored value
@@ -204,13 +204,38 @@ func tgDomainList() []string {
 
 // rewriteURL is the Python _rewrite_url: the first rewrite entry whose
 // domain (or parent domain) matches supplies the substitution.
+//
+// Two key shapes go beyond a plain domain, mirroring the Python engine:
+//
+//   - "*" is the catch-all ("replace any link found"): every URL that no
+//     explicit key claimed is rewritten to its value;
+//   - a key carrying "/" is a URL-prefix match: the URLs it starts with are
+//     rewritten to the value (scheme-relative), so a task can redirect one
+//     deep link instead of a whole domain.
 func rewriteURL(rawURL string, rewriteMap map[string]string) string {
+	star, hasStar := rewriteMap["*"]
 	dom := ExtractDomain(rawURL)
+	lowered := strings.ToLower(rawURL)
 	for old, replacement := range rewriteMap {
 		cleanOld := strings.ToLower(strings.TrimSpace(old))
+		if cleanOld == "" || cleanOld == "*" {
+			continue
+		}
+		if strings.Contains(cleanOld, "/") {
+			if strings.HasPrefix(lowered, cleanOld) {
+				return replacement + rawURL[len(cleanOld):]
+			}
+			continue
+		}
 		if dom == cleanOld || strings.HasSuffix(dom, "."+cleanOld) {
 			return strings.Replace(rawURL, old, replacement, 1)
 		}
+	}
+	if hasStar {
+		// Python answers `star if star is not None else u`: an empty star
+		// value is a deliberate rewrite to "" (an effective strip), not a
+		// "no match".
+		return star
 	}
 	return rawURL
 }

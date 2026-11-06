@@ -131,19 +131,22 @@ func withItemStr() specOpt {
 // disagree with the first.
 var SETTING_SPECS = map[string]SettingSpec{
 	// ---- content cleanup -------------------------------------------------
-	"header":             newSpec(KindStr, "", true),
-	"footer":             newSpec(KindStr, "", true),
-	"replacements":       newSpec(KindDict, map[string]any{}, true),
-	"link_replacement":   newSpec(KindStr, "", true),
-	"clean_usernames":    newSpec(KindBool, false, true),
-	"clean_hashtags":     newSpec(KindBool, false, true),
-	"clean_phones":       newSpec(KindBool, false, true),
-	"clean_buttons":      newSpec(KindBool, false, true),
-	"clean_empty_lines":  newSpec(KindBool, false, true),
-	"clean_custom_words": newSpec(KindList, []any{}, true, withItemStr()),
-	"remove_emojis":      newSpec(KindBool, false, true),
-	"cleaner_enabled":    newSpec(KindBool, false, true),
-	"cleaner_config":     newSpec(KindDict, map[string]any{}, true),
+	"header":               newSpec(KindStr, "", true),
+	"footer":               newSpec(KindStr, "", true),
+	"replacements":         newSpec(KindDict, map[string]any{}, true),
+	"link_replacement":     newSpec(KindStr, "", true),
+	"link_replace_enabled": newSpec(KindBool, false, true),
+	"link_rewrite_map":     newSpec(KindDict, map[string]any{}, true),
+	"mention_rewrite_map":  newSpec(KindDict, map[string]any{}, true),
+	"clean_usernames":      newSpec(KindBool, false, true),
+	"clean_hashtags":       newSpec(KindBool, false, true),
+	"clean_phones":         newSpec(KindBool, false, true),
+	"clean_buttons":        newSpec(KindBool, false, true),
+	"clean_empty_lines":    newSpec(KindBool, false, true),
+	"clean_custom_words":   newSpec(KindList, []any{}, true, withItemStr()),
+	"remove_emojis":        newSpec(KindBool, false, true),
+	"cleaner_enabled":      newSpec(KindBool, false, true),
+	"cleaner_config":       newSpec(KindDict, map[string]any{}, true),
 
 	// ---- media filtering -------------------------------------------------
 	"block_text":          newSpec(KindBool, false, true),
@@ -228,6 +231,7 @@ var SETTING_SPECS = map[string]SettingSpec{
 	"branding_keywords":         newSpec(KindList, []any{}, true, withItemStr()),
 	"branding_match_mode":       newSpec(KindStr, "any", true, withChoices("any", "all")),
 	"branding_require_forward":  newSpec(KindBool, false, true),
+	"branding_require_channel":  newSpec(KindBool, false, true),
 	"branding_force_forward":    newSpec(KindBool, true, true),
 }
 

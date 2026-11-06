@@ -884,11 +884,24 @@ class LinkManagementEngine:
 
         def _rewrite_url(u: str) -> str:
             dom = cls.extract_domain(u)
+            # The catch-all key rewrites every link to one target — the
+            # "replace any link found" switch. Explicit keys win over it, so a
+            # task that maps one domain specifically still maps that domain.
+            star = rewrite_map.get("*")
+            lowered = u.lower()
             for old_d, new_d in rewrite_map.items():
-                clean_old = old_d.lower().strip()
+                clean_old = str(old_d).lower().strip()
+                if not clean_old or clean_old == "*":
+                    continue
+                if "/" in clean_old:
+                    # A key that carries a path is a URL-prefix match: it
+                    # rewrites the URLs it starts with instead of a domain.
+                    if lowered.startswith(clean_old):
+                        return new_d + u[len(clean_old):]
+                    continue
                 if dom == clean_old or dom.endswith("." + clean_old):
                     return u.replace(old_d, new_d)
-            return u
+            return star if star is not None else u
 
         # Handle text_link entities: if URL should be stripped, remove URL metadata
         # (retaining anchor text without breaking formatting).

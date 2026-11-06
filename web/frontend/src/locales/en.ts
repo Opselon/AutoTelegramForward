@@ -9,6 +9,18 @@
 import type { Catalog } from './types'
 
 export const en: Catalog = {
+  "ui_link_rewrite_map_placeholder": "olddomain.com newdomain.com\nhttps://old.t.me/x https://new.t.me/y\n* https://t.me/me",
+  "ui_mention_rewrite_map_placeholder": "@oldshop @newshop\n* @main",
+  "ui_channel_only_hop": "Only channel content takes the hop",
+  "ui_channel_only_hop_hint": "Messages written by normal users are forwarded directly with their own name; channel content is branded via C.",
+  "ui_link_rewrite_map_hint": "One pair per line: old new — or * https://t.me/me to rewrite every link.",
+  "ui_link_rewrite_map_label": "Link rewrite map",
+  "ui_mention_rewrite_map_hint": "One pair per line: @oldshop @newshop — or * @main to rewrite every @ID.",
+  "ui_mention_rewrite_map_label": "@mention rewrite map",
+  "ui_only_if_the_message_comes_from_a_channel": "and only if it comes from a channel",
+  "ui_replace_any_link_found": "Replace any link found",
+  "ui_replace_any_link_found_hint": "Rewrites every link the text carries through the link map below.",
+  "ui_replace_links_mentions_section": "Replace links & @mentions",
   "ui_0s_instant": "0s (Instant)",
   "ui_1_back_up_this_server": "1. Back up this server",
   "ui_2_restore_on_this_server": "2. Restore on this server",

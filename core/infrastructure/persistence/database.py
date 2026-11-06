@@ -312,7 +312,10 @@ MIGRATIONS = {
         current_version INTEGER NOT NULL DEFAULT 1,
         is_system INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL
+        updated_at INTEGER NOT NULL,
+        -- library enable/disable switch (see _ADDITIVE_COLUMNS; the guarded
+        -- ALTER also adds it to tables created before the switch existed)
+        enabled INTEGER NOT NULL DEFAULT 1
     );
     CREATE INDEX IF NOT EXISTS idx_prompt_name ON prompt_templates(name);
 
@@ -1166,6 +1169,10 @@ _ADDITIVE_COLUMNS = (
     # through a backup export, and overwrite another tenant's prompt templates.
     ("api_credentials", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_api_credentials_owner"),
     ("prompt_templates", "owner_user_id", "INTEGER NOT NULL DEFAULT 0", "idx_prompt_templates_owner"),
+    # The prompt library's enable/disable switch ("on" for every row written
+    # before the switch existed). A disabled template stays in the library but
+    # the delivery pipeline skips it in favour of the task's AI config prompt.
+    ("prompt_templates", "enabled", "INTEGER NOT NULL DEFAULT 1", None),
     ("users", "status", "TEXT NOT NULL DEFAULT 'active'", "idx_users_status"),
     # v19: a bot token belongs to the tenant that pasted it. Without an owner
     # every owner's route screen listed every other owner's bots, and any

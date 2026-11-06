@@ -15,14 +15,14 @@ import (
 // THE ORDER IS THE CONTRACT (processing-pipeline.md). Do not reorder:
 //
 //  1. cleaner                     — removal-only, before every other transform
-//                                   so nothing downstream can resurrect
-//                                   removed content
+//     so nothing downstream can resurrect
+//     removed content
 //  2. link management             — the task link policy (entity-aware), or
-//                                   the legacy link_replacement rewrite
-//                                   (durable path: no remove_links+replacement
-//                                   combination — F-04)
+//     the legacy link_replacement rewrite
+//     (durable path: no remove_links+replacement
+//     combination — F-04)
 //  3. remove_emojis flag          — the task-level flag, distinct from the
-//                                   cleaner's own emoji switch
+//     cleaner's own emoji switch
 //  4. empty_after_clean gate      — the ONLY transform-internal drop
 //  5. content policy rewrite      — remove_links / strip_words / replacements
 //  6. replacements                — the task's replace entries
@@ -146,7 +146,15 @@ func (p *Pipeline) applyText(ctx context.Context, raw string, cfg Config, entiti
 	// the legacy remove_links toggle, or the link_replacement rewrite —
 	// never a combination (F-04: remove_links wins and the replacement is
 	// silently ignored on the durable path).
+	//
+	// "Replace any link found": with the toggle on and a rewrite map
+	// configured, a task with no stricter policy upgrades to REWRITE_LINKS —
+	// the same upgrade Python's pipeline applies before it calls the link
+	// engine, so both engines rewrite the same links.
 	policy := ResolvePolicy(cfg.LinkPolicy, cfg.RemoveLinks)
+	if policy == LinkPolicyPreserveAll && cfg.LinkReplaceEnabled && len(cfg.LinkRewriteMap) > 0 {
+		policy = LinkPolicyRewriteLinks
+	}
 	if policy != LinkPolicyPreserveAll {
 		outcome := p.links.ApplyToBody(text, ents, LinkConfig{
 			Policy:     policy,
@@ -259,6 +267,18 @@ func (p *Pipeline) applyText(ctx context.Context, raw string, cfg Config, entiti
 		if next != text {
 			text = next
 			notes = append(notes, "replacements")
+		}
+	}
+
+	// 6b. The "@mention rewrites" pass — the same final pass Python runs
+	// apply_mention_rewrites in (pipeline.py, after rule.replacements): a
+	// map-driven replace of @handles, so a rewrite cannot reintroduce a
+	// handle the task asked to replace.
+	if len(cfg.MentionRewriteMap) > 0 {
+		next := ApplyMentionRewrites(text, cfg.MentionRewriteMap)
+		if next != text {
+			text = next
+			notes = append(notes, "mention_rewrites")
 		}
 	}
 

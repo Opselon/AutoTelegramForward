@@ -118,6 +118,10 @@ export function RuleModal({
     origin_titles: '',
     keywords: '',
   })
+  // The replace-map textareas keep exactly what was typed (one "old new" pair
+  // per line) and parse into the maps on every keystroke — same draft pattern
+  // as the branding lists above.
+  const [mapDrafts, setMapDrafts] = useState<{ link: string; mention: string }>({ link: '', mention: '' })
   const [saving, setSaving] = useState(false)
 
   // (Re-)initialize the whole draft every time the modal opens: editing loads
@@ -140,6 +144,7 @@ export function RuleModal({
       setMeta({})
     }
     setBrandingDrafts({ origin_ids: '', origin_titles: '', keywords: '' })
+    setMapDrafts({ link: '', mention: '' })
   }, [open, rule])
 
   const brandingHop = useMemo(() => readBrandingHop(meta), [meta])
@@ -155,6 +160,44 @@ export function RuleModal({
   const onBrandingListInput = (key: BrandingDraftKey, raw: string) => {
     setBrandingDrafts((prev) => ({ ...prev, [key]: raw }))
     patchBrandingHop({ [key]: brandingTextToList(raw) } as Partial<BrandingHopConfig>)
+  }
+
+  // ---- replace maps: the textareas are the truth -------------------------
+  // One pair per line, "old new" (or "old=new"). Parsed with the same
+  // line semantics the bot panel and the engine's normalizer accept; the
+  // link map is a first-class rule field, the mention map rides metadata.
+  const mapTextToEntries = (raw: string): Array<[string, string]> => {
+    const out: Array<[string, string]> = []
+    for (const line of String(raw || '').split(/\n/)) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed === '-') continue
+      const sep = trimmed.includes('=') ? '=' : /\t| {2,}| /.exec(trimmed)?.[0] || ' '
+      const idx = trimmed.indexOf(sep)
+      if (idx <= 0) continue
+      const key = trimmed.slice(0, idx).trim().replace(/`/g, '')
+      const value = trimmed.slice(idx + sep.length).trim().replace(/`/g, '')
+      if (key && value) out.push([key, value])
+    }
+    return out
+  }
+  const mapDraft = (kind: 'link' | 'mention') => {
+    if (mapDrafts[kind] !== undefined) return mapDrafts[kind]
+    if (kind === 'link') {
+      const map = (form.link_rewrite_map || {}) as Record<string, string>
+      return Object.entries(map).map(([k, v]) => `${k} ${v}`).join('\n')
+    }
+    const map = (meta.mention_rewrite_map || {}) as Record<string, string>
+    return Object.entries(map).map(([k, v]) => `${k} ${v}`).join('\n')
+  }
+  const onMapInput = (kind: 'link' | 'mention', raw: string) => {
+    setMapDrafts((prev) => ({ ...prev, [kind]: raw }))
+    const entries = mapTextToEntries(raw)
+    const record = Object.fromEntries(entries)
+    if (kind === 'link') {
+      setForm((prev) => ({ ...prev, link_rewrite_map: record }))
+    } else {
+      setMeta((prev) => ({ ...prev, mention_rewrite_map: record }))
+    }
   }
 
   // ---- endpoints: the lists are the truth, the scalars mirror the first chip
@@ -527,14 +570,27 @@ export function RuleModal({
                           <option value="all">{t('ui_all_every_matching_group_must_match')}</option>
                         </select>
                       </div>
-                      <label className="field__label" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', alignSelf: 'end', paddingBottom: 8 }}>
-                        <input
-                          type="checkbox"
-                          checked={brandingHop.require_forward}
-                          onChange={(e) => patchBrandingHop({ require_forward: e.target.checked })}
-                        />
-                        <span>{t('ui_refuse_messages_that_are_not_forwards')}</span>
-                      </label>
+                      <div style={{ display: 'grid', gap: 8, alignSelf: 'end', paddingBottom: 8 }}>
+                        <label className="field__label" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={brandingHop.require_forward}
+                            onChange={(e) => patchBrandingHop({ require_forward: e.target.checked })}
+                          />
+                          <span>{t('ui_refuse_messages_that_are_not_forwards')}</span>
+                        </label>
+                        <label className="field__label" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+                          <input
+                            type="checkbox"
+                            checked={brandingHop.require_channel}
+                            onChange={(e) => patchBrandingHop({ require_channel: e.target.checked })}
+                          />
+                          <span>{t('ui_channel_only_hop')}</span>
+                        </label>
+                        {brandingHop.require_channel && (
+                          <p className="field__hint">{t('ui_channel_only_hop_hint')}</p>
+                        )}
+                      </div>
                     </div>
                   </>
                 )}
@@ -561,6 +617,57 @@ export function RuleModal({
               </div>
             </>
           )}
+        </section>
+
+        {/* ------------------------------- replace links & @mentions maps */}
+        <section
+          className="rule-section"
+          style={{ borderColor: 'color-mix(in oklab, var(--color-info) 30%, transparent)' }}
+        >
+          <div className="rule-section__title" style={{ color: 'var(--color-info)' }}>
+            {t('ui_replace_links_mentions_section')}
+          </div>
+
+          <label className="field__label" style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginTop: 8 }}>
+            <input
+              type="checkbox"
+              checked={meta.link_replace_enabled === true}
+              onChange={(e) => setMeta((prev) => ({ ...prev, link_replace_enabled: e.target.checked }))}
+            />
+            <span>{t('ui_replace_any_link_found')}</span>
+          </label>
+          <p className="field__hint">{t('ui_replace_any_link_found_hint')}</p>
+
+          <div className="rule-modal-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 }}>
+            <div className="field">
+              <label className="field__label" htmlFor="link-map-input">
+                {t('ui_link_rewrite_map_label')}
+              </label>
+              <textarea
+                id="link-map-input"
+                className="input-field"
+                rows={4}
+                value={mapDraft('link')}
+                onChange={(e) => onMapInput('link', e.target.value)}
+                placeholder={t('ui_link_rewrite_map_placeholder')}
+              />
+              <p className="field__hint">{t('ui_link_rewrite_map_hint')}</p>
+            </div>
+            <div className="field">
+              <label className="field__label" htmlFor="mention-map-input">
+                {t('ui_mention_rewrite_map_label')}
+              </label>
+              <textarea
+                id="mention-map-input"
+                className="input-field"
+                rows={4}
+                value={mapDraft('mention')}
+                onChange={(e) => onMapInput('mention', e.target.value)}
+                placeholder={t('ui_mention_rewrite_map_placeholder')}
+              />
+              <p className="field__hint">{t('ui_mention_rewrite_map_hint')}</p>
+            </div>
+          </div>
         </section>
 
         {/* ------------------------------------------- custom header/footer */}

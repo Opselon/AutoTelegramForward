@@ -28,6 +28,8 @@ MATRIX = ROOT / "docs" / "feature-coverage-matrix.md"
 SURFACES = {
     "bot": [ROOT / "core" / "infrastructure" / "telegram" / "pro_bot_ui.py",
             ROOT / "core" / "infrastructure" / "telegram" / "ui_state.py",
+            ROOT / "core" / "infrastructure" / "telegram" / "prompt_bot_ui.py",
+            ROOT / "core" / "infrastructure" / "telegram" / "replace_maps_bot_ui.py",
             ROOT / "core" / "infrastructure" / "telegram" / "bot_ui"],
     "web": [ROOT / "web" / "frontend" / "src"],
     "mobile": [ROOT / "mobile" / "lib"],
@@ -77,6 +79,10 @@ TERMS: dict[str, list[str]] = {
     "X10": ["log", "logs", "audit"],
     "X11": ["admin"],
     "X12": ["dashboard"],
+    "X13": ["branding", "require_channel", "requireChannel", "branding_hop", "brandingHop"],
+    "X14": ["link_rewrite_map", "linkRewriteMap", "link_replace_enabled", "linkReplaceEnabled"],
+    "X15": ["mention_rewrite_map", "mentionRewriteMap", "mention rewrite"],
+    "X16": ["prompt_template", "promptTemplate", "prompt_templates", "PromptEditor", "prompt manager"],
 }
 
 ID_RE = re.compile(r"^\|\s*((?:F|X)\d{2})\s*\|([^|]*)\|")

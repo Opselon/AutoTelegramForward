@@ -23,6 +23,7 @@ export interface BrandingHopConfig {
   keywords: string[]
   match_mode: 'any' | 'all'
   require_forward: boolean
+  require_channel: boolean
   force_forward: boolean
 }
 
@@ -33,6 +34,7 @@ export const BRANDING_HOP_DEFAULTS: BrandingHopConfig = {
   keywords: [],
   match_mode: 'any',
   require_forward: false,
+  require_channel: false,
   force_forward: true,
 }
 
@@ -62,6 +64,7 @@ export function readBrandingHop(meta: Record<string, any> | null | undefined): B
     keywords: brandingList(blob.keywords),
     match_mode: String(blob.match_mode || '').toLowerCase() === 'all' ? 'all' : 'any',
     require_forward: blob.require_forward === true,
+    require_channel: blob.require_channel === true,
     force_forward: blob.force_forward === undefined ? BRANDING_HOP_DEFAULTS.force_forward : blob.force_forward === true,
   }
 }
@@ -90,6 +93,9 @@ export function brandingHopSummary(lang: UiLang, hop: BrandingHopConfig, route: 
   const gate = hop.triggers_enabled && hop.require_forward
     ? t('ui_only_if_the_message_is_itself_a_forward')
     : ''
+  const channelGate = hop.triggers_enabled && hop.require_channel
+    ? t('ui_only_if_the_message_comes_from_a_channel')
+    : ''
   if (!hop.triggers_enabled) {
     return t('ui_hop_summary_every_message', { route, delivery })
   }
@@ -102,7 +108,7 @@ export function brandingHopSummary(lang: UiLang, hop: BrandingHopConfig, route: 
     parts.push(t('ui_containing_keywords', { keywords: hop.keywords.join(' / ') }))
   }
   if (!parts.length) {
-    return t('ui_hop_summary_every_message_gate', { route, delivery, gate })
+    return t('ui_hop_summary_every_message_gate', { route, delivery, gate: [gate, channelGate].filter(Boolean).join(' ') })
   }
   const joiner = hop.match_mode === 'all' ? t('ui_and') : t('ui_or')
   return t('ui_hop_summary_only_matching', {
@@ -110,6 +116,6 @@ export function brandingHopSummary(lang: UiLang, hop: BrandingHopConfig, route: 
     scope: t('ui_only_messages'),
     parts: parts.join(joiner),
     delivery,
-    gate,
+    gate: [gate, channelGate].filter(Boolean).join(' '),
   })
 }

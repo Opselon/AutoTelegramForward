@@ -26,6 +26,13 @@ Trigger semantics (all optional; *no* configured trigger means "always hop"):
 * ``match_mode`` picks ``any`` (at least one group matches) or ``all``.
 * ``require_forward`` is a *gate*, not a check: it refuses a message that is not
   itself a forward, regardless of match_mode.
+* ``require_channel`` is the same kind of gate for the *sender side*: only a
+  channel-originated message earns the hop (a native channel post in A, or a
+  forward whose origin is a channel). A message written by a normal user fails
+  the gate and is delivered directly — which is what keeps the user's own name
+  in B's "Forwarded from" header while channel content gets branded. The two
+  gates compose, so ``require_forward + require_channel`` reads "only content
+  that arrived as a channel forward".
 * ``force_forward`` (default true) is what makes stage 2 a native forward from
   C, which is the only way B can show C in its header.
 """
@@ -43,6 +50,7 @@ __all__ = [
     "channel_id",
     "enabled",
     "force_forward",
+    "is_channel_origin",
     "match_origin",
     "match_keywords",
     "should_hop",
@@ -63,11 +71,12 @@ DEFAULTS: Dict[str, Any] = {
     "keywords": [],
     "match_mode": "any",
     "require_forward": False,
+    "require_channel": False,
     "force_forward": True,
 }
 
 _LIST_KEYS = ("origin_ids", "origin_titles", "keywords")
-_BOOL_KEYS = ("triggers_enabled", "require_forward", "force_forward")
+_BOOL_KEYS = ("triggers_enabled", "require_forward", "require_channel", "force_forward")
 
 
 # --------------------------------------------------------------------------- #
@@ -174,6 +183,30 @@ def _origin_of(payload: Any) -> Dict[str, Any]:
     return origin if isinstance(origin, dict) else {}
 
 
+def is_channel_origin(payload: Any) -> bool:
+    """True when the message *comes from a channel*.
+
+    Two shapes count, because Telegram produces both:
+
+    * the message was **forwarded from a channel** — the forward-origin header
+      names a channel (the origin ``type`` carries "channel"; the pyrogram
+      adapter spells it ``channel``/``MessageForwardOriginChannel`` depending
+      on the client path, so the test is a substring, never an equality);
+    * or the message is a **native channel post in A** — the source chat A is
+      itself a channel (``chat_type == "channel"``), so the sender is the
+      channel rather than a person.
+
+    A message written by a normal user in a group (or forwarded from a user)
+    answers False — that is the point: the ``require_channel`` gate lets user
+    messages keep their own "Forwarded from <user>" header on a direct
+    delivery while channel content takes the branded hop.
+    """
+    origin = _origin_of(payload)
+    if origin and "channel" in str(origin.get("type", "")).lower():
+        return True
+    return str(getattr(payload, "chat_type", "") or "").strip().lower() == "channel"
+
+
 def match_origin(payload: Any, origin_ids: List[str], origin_titles: List[str]) -> bool:
     """Match the *forward origin channel* (Telegram's "Forwarded from" header).
 
@@ -254,6 +287,8 @@ def should_hop(
     # A "require" is a gate and must hold on its own, whatever match_mode says.
     if cfg["require_forward"] and not _origin_of(payload):
         return False, "branding_requires_forward_origin"
+    if cfg["require_channel"] and not is_channel_origin(payload):
+        return False, "branding_requires_channel_origin"
 
     conditions: List[str] = []
     matched: List[str] = []

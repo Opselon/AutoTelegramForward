@@ -1,0 +1,4781 @@
+{
+  "$schema": "pyrogram-surface-v1",
+  "pinned_version": "2.0.106",
+  "source": "docs.pyrogram.org (API Reference) verified against the v2.0.106 tag source",
+  "high_level_methods": [
+    {
+      "name": "invoke",
+      "class": "Invoke",
+      "category": "advanced",
+      "module": "pyrogram.methods.advanced.Invoke",
+      "params": [
+        {
+          "name": "query",
+          "default": "<required>"
+        },
+        {
+          "name": "retries",
+          "default": "Session.MAX_RETRIES"
+        },
+        {
+          "name": "timeout",
+          "default": "Session.WAIT_TIMEOUT"
+        },
+        {
+          "name": "sleep_threshold",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "doc": "Invoke raw Telegram functions.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "resolve_peer",
+      "class": "ResolvePeer",
+      "category": "advanced",
+      "module": "pyrogram.methods.advanced.ResolvePeer",
+      "params": [
+        {
+          "name": "peer_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "Union[raw.base.InputPeer, raw.base.InputUser, raw.base.InputChannel]",
+      "doc": "Get the InputPeer of a known peer id.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "save_file",
+      "class": "SaveFile",
+      "category": "advanced",
+      "module": "pyrogram.methods.advanced.SaveFile",
+      "params": [
+        {
+          "name": "path",
+          "default": "<required>"
+        },
+        {
+          "name": "file_id",
+          "default": null
+        },
+        {
+          "name": "file_part",
+          "default": 0
+        },
+        {
+          "name": "progress",
+          "default": null
+        },
+        {
+          "name": "progress_args",
+          "default": "()"
+        }
+      ],
+      "returns": null,
+      "doc": "Upload a file onto Telegram servers, without actually sending the message to anyone.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "accept_terms_of_service",
+      "class": "AcceptTermsOfService",
+      "category": "auth",
+      "module": "pyrogram.methods.auth.AcceptTermsOfService",
+      "params": [
+        {
+          "name": "terms_of_service_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Accept the given terms of service.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "check_password",
+      "class": "CheckPassword",
+      "category": "auth",
+      "module": "pyrogram.methods.auth.CheckPassword",
+      "params": [
+        {
+          "name": "password",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.User'",
+      "doc": "Check your Two-Step Verification password and log in.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "connect",
+      "class": "Connect",
+      "category": "auth",
+      "module": "pyrogram.methods.auth.Connect",
+      "params": [],
+      "returns": "bool",
+      "doc": "Connect the client to Telegram servers.",
+      "usable_by": "?"
+    },
+    {
+      "name": "disconnect",
+      "class": "Disconnect",
+      "category": "auth",
+      "module": "pyrogram.methods.auth.Disconnect",
+      "params": [],
+      "returns": null,
+      "doc": "Disconnect the client from Telegram servers.",
+      "usable_by": "?"
+    },
+    {
+      "name": "get_password_hint",
+      "class": "GetPasswordHint",
+      "category": "auth",
+      "module": "pyrogram.methods.auth.GetPasswordHint",
+      "params": [],
+      "returns": "str",
+      "doc": "Get your Two-Step Verification password hint.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "initialize",
+      "class": "Initialize",
+      "category": "auth",
+      "module": "pyrogram.methods.auth.Initialize",
+      "params": [],
+      "returns": null,
+      "doc": "Initialize the client by starting up workers.",
+      "usable_by": "?"
+    },
+    {
+      "name": "log_out",
+      "class": "LogOut",
+      "category": "auth",
+      "module": "pyrogram.methods.auth.LogOut",
+      "params": [],
+      "returns": null,
+      "doc": "Log out from Telegram and delete the *\\*.session* file.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "recover_password",
+      "class": "RecoverPassword",
+      "category": "auth",
+      "module": "pyrogram.methods.auth.RecoverPassword",
+      "params": [
+        {
+          "name": "recovery_code",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.User'",
+      "doc": "Recover your password with a recovery code and log in.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "resend_code",
+      "class": "ResendCode",
+      "category": "auth",
+      "module": "pyrogram.methods.auth.ResendCode",
+      "params": [
+        {
+          "name": "phone_number",
+          "default": "<required>"
+        },
+        {
+          "name": "phone_code_hash",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.SentCode'",
+      "doc": "Re-send the confirmation code using a different type.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "send_code",
+      "class": "SendCode",
+      "category": "auth",
+      "module": "pyrogram.methods.auth.SendCode",
+      "params": [
+        {
+          "name": "phone_number",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.SentCode'",
+      "doc": "Send the confirmation code to the given phone number.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "send_recovery_code",
+      "class": "SendRecoveryCode",
+      "category": "auth",
+      "module": "pyrogram.methods.auth.SendRecoveryCode",
+      "params": [],
+      "returns": "str",
+      "doc": "Send a code to your email to recover your password.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "sign_in",
+      "class": "SignIn",
+      "category": "auth",
+      "module": "pyrogram.methods.auth.SignIn",
+      "params": [
+        {
+          "name": "phone_number",
+          "default": "<required>"
+        },
+        {
+          "name": "phone_code_hash",
+          "default": "<required>"
+        },
+        {
+          "name": "phone_code",
+          "default": "<required>"
+        }
+      ],
+      "returns": "Union['types.User', 'types.TermsOfService', bool]",
+      "doc": "Authorize a user in Telegram with a valid confirmation code.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "sign_in_bot",
+      "class": "SignInBot",
+      "category": "auth",
+      "module": "pyrogram.methods.auth.SignInBot",
+      "params": [
+        {
+          "name": "bot_token",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.User'",
+      "doc": "Authorize a bot using its bot token generated by BotFather.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "sign_up",
+      "class": "SignUp",
+      "category": "auth",
+      "module": "pyrogram.methods.auth.SignUp",
+      "params": [
+        {
+          "name": "phone_number",
+          "default": "<required>"
+        },
+        {
+          "name": "phone_code_hash",
+          "default": "<required>"
+        },
+        {
+          "name": "first_name",
+          "default": "<required>"
+        },
+        {
+          "name": "last_name",
+          "default": ""
+        }
+      ],
+      "returns": "'types.User'",
+      "doc": "Register a new user in Telegram.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "terminate",
+      "class": "Terminate",
+      "category": "auth",
+      "module": "pyrogram.methods.auth.Terminate",
+      "params": [],
+      "returns": null,
+      "doc": "Terminate the client by shutting down workers.",
+      "usable_by": "?"
+    },
+    {
+      "name": "answer_callback_query",
+      "class": "AnswerCallbackQuery",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.AnswerCallbackQuery",
+      "params": [
+        {
+          "name": "callback_query_id",
+          "default": "<required>"
+        },
+        {
+          "name": "text",
+          "default": null
+        },
+        {
+          "name": "show_alert",
+          "default": null
+        },
+        {
+          "name": "url",
+          "default": null
+        },
+        {
+          "name": "cache_time",
+          "default": 0
+        }
+      ],
+      "returns": null,
+      "doc": "Send answers to callback queries sent from inline keyboards.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "answer_inline_query",
+      "class": "AnswerInlineQuery",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.AnswerInlineQuery",
+      "params": [
+        {
+          "name": "inline_query_id",
+          "default": "<required>"
+        },
+        {
+          "name": "results",
+          "default": "<required>"
+        },
+        {
+          "name": "cache_time",
+          "default": 300
+        },
+        {
+          "name": "is_gallery",
+          "default": false
+        },
+        {
+          "name": "is_personal",
+          "default": false
+        },
+        {
+          "name": "next_offset",
+          "default": ""
+        },
+        {
+          "name": "switch_pm_text",
+          "default": ""
+        },
+        {
+          "name": "switch_pm_parameter",
+          "default": ""
+        }
+      ],
+      "returns": null,
+      "doc": "Send answers to an inline query.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "answer_web_app_query",
+      "class": "AnswerWebAppQuery",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.AnswerWebAppQuery",
+      "params": [
+        {
+          "name": "web_app_query_id",
+          "default": "<required>"
+        },
+        {
+          "name": "result",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.SentWebAppMessage'",
+      "doc": "Set the result of an interaction with a `Web App <https://core.telegram.org/bots/webapps>`_ and send a",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "delete_bot_commands",
+      "class": "DeleteBotCommands",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.DeleteBotCommands",
+      "params": [
+        {
+          "name": "scope",
+          "default": "types.BotCommandScopeDefault()"
+        },
+        {
+          "name": "language_code",
+          "default": ""
+        }
+      ],
+      "returns": "bool",
+      "doc": "Delete the list of the bot's commands for the given scope and user language.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "get_bot_commands",
+      "class": "GetBotCommands",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.GetBotCommands",
+      "params": [
+        {
+          "name": "scope",
+          "default": "types.BotCommandScopeDefault()"
+        },
+        {
+          "name": "language_code",
+          "default": ""
+        }
+      ],
+      "returns": "List['types.BotCommand']",
+      "doc": "Get the current list of the bot's commands for the given scope and user language.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "get_bot_default_privileges",
+      "class": "GetBotDefaultPrivileges",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.GetBotDefaultPrivileges",
+      "params": [
+        {
+          "name": "for_channels",
+          "default": null
+        }
+      ],
+      "returns": "Optional['types.ChatPrivileges']",
+      "doc": "Get the current default privileges of the bot.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "get_chat_menu_button",
+      "class": "GetChatMenuButton",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.GetChatMenuButton",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": null
+        }
+      ],
+      "returns": "'types.MenuButton'",
+      "doc": "Get the current value of the bot's menu button in a private chat, or the default menu button.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "get_game_high_scores",
+      "class": "GetGameHighScores",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.GetGameHighScores",
+      "params": [
+        {
+          "name": "user_id",
+          "default": "<required>"
+        },
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": null
+        }
+      ],
+      "returns": "List['types.GameHighScore']",
+      "doc": "Get data for high score tables.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "get_inline_bot_results",
+      "class": "GetInlineBotResults",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.GetInlineBotResults",
+      "params": [
+        {
+          "name": "bot",
+          "default": "<required>"
+        },
+        {
+          "name": "query",
+          "default": ""
+        },
+        {
+          "name": "offset",
+          "default": ""
+        },
+        {
+          "name": "latitude",
+          "default": null
+        },
+        {
+          "name": "longitude",
+          "default": null
+        }
+      ],
+      "returns": null,
+      "doc": "Get bot results via inline queries.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "request_callback_answer",
+      "class": "RequestCallbackAnswer",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.RequestCallbackAnswer",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "callback_data",
+          "default": "<required>"
+        },
+        {
+          "name": "timeout",
+          "default": 10
+        }
+      ],
+      "returns": null,
+      "doc": "Request a callback answer from bots.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "send_game",
+      "class": "SendGame",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.SendGame",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "game_short_name",
+          "default": "<required>"
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "'types.Message'",
+      "doc": "Send a game.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "send_inline_bot_result",
+      "class": "SendInlineBotResult",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.SendInlineBotResult",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "query_id",
+          "default": "<required>"
+        },
+        {
+          "name": "result_id",
+          "default": "<required>"
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        }
+      ],
+      "returns": "'raw.base.Updates'",
+      "doc": "Send an inline bot result.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "set_bot_commands",
+      "class": "SetBotCommands",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.SetBotCommands",
+      "params": [
+        {
+          "name": "commands",
+          "default": "<required>"
+        },
+        {
+          "name": "scope",
+          "default": "types.BotCommandScopeDefault()"
+        },
+        {
+          "name": "language_code",
+          "default": ""
+        }
+      ],
+      "returns": "bool",
+      "doc": "Set the list of the bot's commands.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "set_bot_default_privileges",
+      "class": "SetBotDefaultPrivileges",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.SetBotDefaultPrivileges",
+      "params": [
+        {
+          "name": "privileges",
+          "default": null
+        },
+        {
+          "name": "for_channels",
+          "default": null
+        }
+      ],
+      "returns": "bool",
+      "doc": "Change the default privileges requested by the bot when it's added as an administrator to groups or channels.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "set_chat_menu_button",
+      "class": "SetChatMenuButton",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.SetChatMenuButton",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": null
+        },
+        {
+          "name": "menu_button",
+          "default": null
+        }
+      ],
+      "returns": "bool",
+      "doc": "Change the bot's menu button in a private chat, or the default menu button.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "set_game_score",
+      "class": "SetGameScore",
+      "category": "bots",
+      "module": "pyrogram.methods.bots.SetGameScore",
+      "params": [
+        {
+          "name": "user_id",
+          "default": "<required>"
+        },
+        {
+          "name": "score",
+          "default": "<required>"
+        },
+        {
+          "name": "force",
+          "default": null
+        },
+        {
+          "name": "disable_edit_message",
+          "default": null
+        },
+        {
+          "name": "chat_id",
+          "default": null
+        },
+        {
+          "name": "message_id",
+          "default": null
+        }
+      ],
+      "returns": "Union['types.Message', bool]",
+      "doc": "Set the score of the specified user in a game.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "add_chat_members",
+      "class": "AddChatMembers",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.AddChatMembers",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "user_ids",
+          "default": "<required>"
+        },
+        {
+          "name": "forward_limit",
+          "default": 100
+        }
+      ],
+      "returns": "bool",
+      "doc": "Add new chat members to a group, supergroup or channel",
+      "usable_by": "users only"
+    },
+    {
+      "name": "archive_chats",
+      "class": "ArchiveChats",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.ArchiveChats",
+      "params": [
+        {
+          "name": "chat_ids",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Archive one or more chats.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "ban_chat_member",
+      "class": "BanChatMember",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.BanChatMember",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "user_id",
+          "default": "<required>"
+        },
+        {
+          "name": "until_date",
+          "default": "utils.zero_datetime()"
+        }
+      ],
+      "returns": "Union['types.Message', bool]",
+      "doc": "Ban a user from a group, a supergroup or a channel.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "create_channel",
+      "class": "CreateChannel",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.CreateChannel",
+      "params": [
+        {
+          "name": "title",
+          "default": "<required>"
+        },
+        {
+          "name": "description",
+          "default": ""
+        }
+      ],
+      "returns": "'types.Chat'",
+      "doc": "Create a new broadcast channel.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "create_group",
+      "class": "CreateGroup",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.CreateGroup",
+      "params": [
+        {
+          "name": "title",
+          "default": "<required>"
+        },
+        {
+          "name": "users",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.Chat'",
+      "doc": "Create a new basic group.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "create_supergroup",
+      "class": "CreateSupergroup",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.CreateSupergroup",
+      "params": [
+        {
+          "name": "title",
+          "default": "<required>"
+        },
+        {
+          "name": "description",
+          "default": ""
+        }
+      ],
+      "returns": "'types.Chat'",
+      "doc": "Create a new supergroup.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "delete_channel",
+      "class": "DeleteChannel",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.DeleteChannel",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Delete a channel.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "delete_chat_photo",
+      "class": "DeleteChatPhoto",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.DeleteChatPhoto",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Delete a chat photo.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "delete_supergroup",
+      "class": "DeleteSupergroup",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.DeleteSupergroup",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Delete a supergroup.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "delete_user_history",
+      "class": "DeleteUserHistory",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.DeleteUserHistory",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "user_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Delete all messages sent by a certain user in a supergroup.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_chat",
+      "class": "GetChat",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.GetChat",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "Union['types.Chat', 'types.ChatPreview']",
+      "doc": "Get up to date information about a chat.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "get_chat_event_log",
+      "class": "GetChatEventLog",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.GetChatEventLog",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "query",
+          "default": ""
+        },
+        {
+          "name": "offset_id",
+          "default": 0
+        },
+        {
+          "name": "limit",
+          "default": 0
+        },
+        {
+          "name": "filters",
+          "default": null
+        },
+        {
+          "name": "user_ids",
+          "default": null
+        }
+      ],
+      "returns": "Optional[AsyncGenerator['types.ChatEvent', None]]",
+      "doc": "Get the actions taken by chat members and administrators in the last 48h.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_chat_member",
+      "class": "GetChatMember",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.GetChatMember",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "user_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.ChatMember'",
+      "doc": "Get information about one member of a chat.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "get_chat_members",
+      "class": "GetChatMembers",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.GetChatMembers",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "query",
+          "default": ""
+        },
+        {
+          "name": "limit",
+          "default": 0
+        },
+        {
+          "name": "filter",
+          "default": "enums.ChatMembersFilter.SEARCH"
+        }
+      ],
+      "returns": "Optional[AsyncGenerator['types.ChatMember', None]]",
+      "doc": "Get the members list of a chat.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "get_chat_members_count",
+      "class": "GetChatMembersCount",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.GetChatMembersCount",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "int",
+      "doc": "Get the number of members in a chat.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "get_chat_online_count",
+      "class": "GetChatOnlineCount",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.GetChatOnlineCount",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "int",
+      "doc": "Get the number of members that are currently online in a chat.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_dialogs",
+      "class": "GetDialogs",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.GetDialogs",
+      "params": [
+        {
+          "name": "limit",
+          "default": 0
+        }
+      ],
+      "returns": "Optional[AsyncGenerator['types.Dialog', None]]",
+      "doc": "Get a user's dialogs sequentially.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_dialogs_count",
+      "class": "GetDialogsCount",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.GetDialogsCount",
+      "params": [
+        {
+          "name": "pinned_only",
+          "default": false
+        }
+      ],
+      "returns": "int",
+      "doc": "Get the total count of your dialogs.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_nearby_chats",
+      "class": "GetNearbyChats",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.GetNearbyChats",
+      "params": [
+        {
+          "name": "latitude",
+          "default": "<required>"
+        },
+        {
+          "name": "longitude",
+          "default": "<required>"
+        }
+      ],
+      "returns": "List['types.Chat']",
+      "doc": "Get nearby chats.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_send_as_chats",
+      "class": "GetSendAsChats",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.GetSendAsChats",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "List['types.Chat']",
+      "doc": "Get the list of \"send_as\" chats available.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "join_chat",
+      "class": "JoinChat",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.JoinChat",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.Chat'",
+      "doc": "Join a group chat or channel.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "leave_chat",
+      "class": "LeaveChat",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.LeaveChat",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "delete",
+          "default": false
+        }
+      ],
+      "returns": null,
+      "doc": "Leave a group chat or channel.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "mark_chat_unread",
+      "class": "MarkChatUnread",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.MarkChatUnread",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Mark a chat as unread.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "pin_chat_message",
+      "class": "PinChatMessage",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.PinChatMessage",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "disable_notification",
+          "default": false
+        },
+        {
+          "name": "both_sides",
+          "default": false
+        }
+      ],
+      "returns": "'types.Message'",
+      "doc": "Pin a message in a group, channel or your own chat.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "promote_chat_member",
+      "class": "PromoteChatMember",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.PromoteChatMember",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "user_id",
+          "default": "<required>"
+        },
+        {
+          "name": "privileges",
+          "default": null
+        }
+      ],
+      "returns": "bool",
+      "doc": "Promote or demote a user in a supergroup or a channel.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "restrict_chat_member",
+      "class": "RestrictChatMember",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.RestrictChatMember",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "user_id",
+          "default": "<required>"
+        },
+        {
+          "name": "permissions",
+          "default": "<required>"
+        },
+        {
+          "name": "until_date",
+          "default": "utils.zero_datetime()"
+        }
+      ],
+      "returns": "'types.Chat'",
+      "doc": "Restrict a user in a supergroup.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "set_administrator_title",
+      "class": "SetAdministratorTitle",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.SetAdministratorTitle",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "user_id",
+          "default": "<required>"
+        },
+        {
+          "name": "title",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Set a custom title (rank) to an administrator of a supergroup.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "set_chat_description",
+      "class": "SetChatDescription",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.SetChatDescription",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "description",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Change the description of a supergroup or a channel.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "set_chat_permissions",
+      "class": "SetChatPermissions",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.SetChatPermissions",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "permissions",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.Chat'",
+      "doc": "Set default chat permissions for all members.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "set_chat_photo",
+      "class": "SetChatPhoto",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.SetChatPhoto",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "photo",
+          "default": null,
+          "kwonly": true
+        },
+        {
+          "name": "video",
+          "default": null,
+          "kwonly": true
+        },
+        {
+          "name": "video_start_ts",
+          "default": null,
+          "kwonly": true
+        }
+      ],
+      "returns": "bool",
+      "doc": "Set a new chat photo or video (H.264/MPEG-4 AVC video, max 5 seconds).",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "set_chat_protected_content",
+      "class": "SetChatProtectedContent",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.SetChatProtectedContent",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "enabled",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Set the chat protected content setting.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "set_chat_title",
+      "class": "SetChatTitle",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.SetChatTitle",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "title",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Change the title of a chat.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "set_chat_username",
+      "class": "SetChatUsername",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.SetChatUsername",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "username",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Set a channel or a supergroup username.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "set_send_as_chat",
+      "class": "SetSendAsChat",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.SetSendAsChat",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "send_as_chat_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Set the default \"send_as\" chat for a chat.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "set_slow_mode",
+      "class": "SetSlowMode",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.SetSlowMode",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "seconds",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Set the slow mode interval for a chat.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "unarchive_chats",
+      "class": "UnarchiveChats",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.UnarchiveChats",
+      "params": [
+        {
+          "name": "chat_ids",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Unarchive one or more chats.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "unban_chat_member",
+      "class": "UnbanChatMember",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.UnbanChatMember",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "user_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Unban a previously banned user in a supergroup or channel.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "unpin_all_chat_messages",
+      "class": "UnpinAllChatMessages",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.UnpinAllChatMessages",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Use this method to clear the list of pinned messages in a chat.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "unpin_chat_message",
+      "class": "UnpinChatMessage",
+      "category": "chats",
+      "module": "pyrogram.methods.chats.UnpinChatMessage",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": 0
+        }
+      ],
+      "returns": "bool",
+      "doc": "Unpin a message in a group, channel or your own chat.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "add_contact",
+      "class": "AddContact",
+      "category": "contacts",
+      "module": "pyrogram.methods.contacts.AddContact",
+      "params": [
+        {
+          "name": "user_id",
+          "default": "<required>"
+        },
+        {
+          "name": "first_name",
+          "default": "<required>"
+        },
+        {
+          "name": "last_name",
+          "default": ""
+        },
+        {
+          "name": "phone_number",
+          "default": ""
+        },
+        {
+          "name": "share_phone_number",
+          "default": false
+        }
+      ],
+      "returns": null,
+      "doc": "Add an existing Telegram user as contact, even without a phone number.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "delete_contacts",
+      "class": "DeleteContacts",
+      "category": "contacts",
+      "module": "pyrogram.methods.contacts.DeleteContacts",
+      "params": [
+        {
+          "name": "user_ids",
+          "default": "<required>"
+        }
+      ],
+      "returns": "Union['types.User', List['types.User'], None]",
+      "doc": "Delete contacts from your Telegram address book.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_contacts",
+      "class": "GetContacts",
+      "category": "contacts",
+      "module": "pyrogram.methods.contacts.GetContacts",
+      "params": [],
+      "returns": "List['types.User']",
+      "doc": "Get contacts from your Telegram address book.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_contacts_count",
+      "class": "GetContactsCount",
+      "category": "contacts",
+      "module": "pyrogram.methods.contacts.GetContactsCount",
+      "params": [],
+      "returns": "int",
+      "doc": "Get the total count of contacts from your Telegram address book.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "import_contacts",
+      "class": "ImportContacts",
+      "category": "contacts",
+      "module": "pyrogram.methods.contacts.ImportContacts",
+      "params": [
+        {
+          "name": "contacts",
+          "default": "<required>"
+        }
+      ],
+      "returns": null,
+      "doc": "Import contacts to your Telegram address book.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "approve_all_chat_join_requests",
+      "class": "ApproveAllChatJoinRequests",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.ApproveAllChatJoinRequests",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "invite_link",
+          "default": null
+        }
+      ],
+      "returns": "bool",
+      "doc": "Approve all pending join requests in a chat.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "approve_chat_join_request",
+      "class": "ApproveChatJoinRequest",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.ApproveChatJoinRequest",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "user_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Approve a chat join request.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "create_chat_invite_link",
+      "class": "CreateChatInviteLink",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.CreateChatInviteLink",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "name",
+          "default": null
+        },
+        {
+          "name": "expire_date",
+          "default": null
+        },
+        {
+          "name": "member_limit",
+          "default": null
+        },
+        {
+          "name": "creates_join_request",
+          "default": null
+        }
+      ],
+      "returns": "'types.ChatInviteLink'",
+      "doc": "Create an additional invite link for a chat.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "decline_all_chat_join_requests",
+      "class": "DeclineAllChatJoinRequests",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.DeclineAllChatJoinRequests",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "invite_link",
+          "default": null
+        }
+      ],
+      "returns": "bool",
+      "doc": "Decline all pending join requests in a chat.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "decline_chat_join_request",
+      "class": "DeclineChatJoinRequest",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.DeclineChatJoinRequest",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "user_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Decline a chat join request.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "delete_chat_admin_invite_links",
+      "class": "DeleteChatAdminInviteLinks",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.DeleteChatAdminInviteLinks",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "admin_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Delete all revoked invite links of an administrator.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "delete_chat_invite_link",
+      "class": "DeleteChatInviteLink",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.DeleteChatInviteLink",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "invite_link",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Delete an already revoked invite link.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "edit_chat_invite_link",
+      "class": "EditChatInviteLink",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.EditChatInviteLink",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "invite_link",
+          "default": "<required>"
+        },
+        {
+          "name": "name",
+          "default": null
+        },
+        {
+          "name": "expire_date",
+          "default": null
+        },
+        {
+          "name": "member_limit",
+          "default": null
+        },
+        {
+          "name": "creates_join_request",
+          "default": null
+        }
+      ],
+      "returns": "'types.ChatInviteLink'",
+      "doc": "Edit a non-primary invite link.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "export_chat_invite_link",
+      "class": "ExportChatInviteLink",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.ExportChatInviteLink",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.ChatInviteLink'",
+      "doc": "Generate a new primary invite link for a chat; any previously generated primary link is revoked.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "get_chat_admin_invite_links",
+      "class": "GetChatAdminInviteLinks",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.GetChatAdminInviteLinks",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "admin_id",
+          "default": "<required>"
+        },
+        {
+          "name": "revoked",
+          "default": false
+        },
+        {
+          "name": "limit",
+          "default": 0
+        }
+      ],
+      "returns": "Optional[AsyncGenerator['types.ChatInviteLink', None]]",
+      "doc": "Get the invite links created by an administrator in a chat.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_chat_admin_invite_links_count",
+      "class": "GetChatAdminInviteLinksCount",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.GetChatAdminInviteLinksCount",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "admin_id",
+          "default": "<required>"
+        },
+        {
+          "name": "revoked",
+          "default": false
+        }
+      ],
+      "returns": "int",
+      "doc": "Get the count of the invite links created by an administrator in a chat.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_chat_admins_with_invite_links",
+      "class": "GetChatAdminsWithInviteLinks",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.GetChatAdminsWithInviteLinks",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": null,
+      "doc": "Get the list of the administrators that have exported invite links in a chat.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_chat_invite_link",
+      "class": "GetChatInviteLink",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.GetChatInviteLink",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "invite_link",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.ChatInviteLink'",
+      "doc": "Get detailed information about a chat invite link.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "get_chat_invite_link_joiners",
+      "class": "GetChatInviteLinkJoiners",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.GetChatInviteLinkJoiners",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "invite_link",
+          "default": "<required>"
+        },
+        {
+          "name": "limit",
+          "default": 0
+        }
+      ],
+      "returns": "Optional[AsyncGenerator['types.ChatJoiner', None]]",
+      "doc": "Get the members who joined the chat with the invite link.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_chat_invite_link_joiners_count",
+      "class": "GetChatInviteLinkJoinersCount",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.GetChatInviteLinkJoinersCount",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "invite_link",
+          "default": "<required>"
+        }
+      ],
+      "returns": "int",
+      "doc": "Get the count of the members who joined the chat with the invite link.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_chat_join_requests",
+      "class": "GetChatJoinRequests",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.GetChatJoinRequests",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "limit",
+          "default": 0
+        },
+        {
+          "name": "query",
+          "default": ""
+        }
+      ],
+      "returns": "Optional[AsyncGenerator['types.ChatJoiner', None]]",
+      "doc": "Get the pending join requests of a chat.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "revoke_chat_invite_link",
+      "class": "RevokeChatInviteLink",
+      "category": "invite_links",
+      "module": "pyrogram.methods.invite_links.RevokeChatInviteLink",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "invite_link",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.ChatInviteLink'",
+      "doc": "Revoke a previously created invite link.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "copy_media_group",
+      "class": "CopyMediaGroup",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.CopyMediaGroup",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "from_chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "captions",
+          "default": null
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        }
+      ],
+      "returns": "List['types.Message']",
+      "doc": "Copy a media group by providing one of the message ids.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "copy_message",
+      "class": "CopyMessage",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.CopyMessage",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "from_chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "caption",
+          "default": null
+        },
+        {
+          "name": "parse_mode",
+          "default": null
+        },
+        {
+          "name": "caption_entities",
+          "default": null
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "'types.Message'",
+      "doc": "Copy messages of any kind.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "delete_messages",
+      "class": "DeleteMessages",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.DeleteMessages",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_ids",
+          "default": "<required>"
+        },
+        {
+          "name": "revoke",
+          "default": true
+        }
+      ],
+      "returns": "int",
+      "doc": "Delete messages, including service messages.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "download_media",
+      "class": "DownloadMedia",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.DownloadMedia",
+      "params": [
+        {
+          "name": "message",
+          "default": "<required>"
+        },
+        {
+          "name": "file_name",
+          "default": "DEFAULT_DOWNLOAD_DIR"
+        },
+        {
+          "name": "in_memory",
+          "default": false
+        },
+        {
+          "name": "block",
+          "default": true
+        },
+        {
+          "name": "progress",
+          "default": null
+        },
+        {
+          "name": "progress_args",
+          "default": "()"
+        }
+      ],
+      "returns": "Optional[Union[str, BinaryIO]]",
+      "doc": "Download the media from a message.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "edit_inline_caption",
+      "class": "EditInlineCaption",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.EditInlineCaption",
+      "params": [
+        {
+          "name": "inline_message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "caption",
+          "default": "<required>"
+        },
+        {
+          "name": "parse_mode",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "bool",
+      "doc": "Edit the caption of inline media messages.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "edit_inline_media",
+      "class": "EditInlineMedia",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.EditInlineMedia",
+      "params": [
+        {
+          "name": "inline_message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "media",
+          "default": "<required>"
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "bool",
+      "doc": "Edit inline animation, audio, document, photo or video messages.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "edit_inline_reply_markup",
+      "class": "EditInlineReplyMarkup",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.EditInlineReplyMarkup",
+      "params": [
+        {
+          "name": "inline_message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "bool",
+      "doc": "Edit only the reply markup of inline messages sent via the bot (for inline bots).",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "edit_inline_text",
+      "class": "EditInlineText",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.EditInlineText",
+      "params": [
+        {
+          "name": "inline_message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "text",
+          "default": "<required>"
+        },
+        {
+          "name": "parse_mode",
+          "default": null
+        },
+        {
+          "name": "disable_web_page_preview",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "bool",
+      "doc": "Edit the text of inline messages.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "edit_message_caption",
+      "class": "EditMessageCaption",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.EditMessageCaption",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "caption",
+          "default": "<required>"
+        },
+        {
+          "name": "parse_mode",
+          "default": null
+        },
+        {
+          "name": "caption_entities",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "'types.Message'",
+      "doc": "Edit the caption of media messages.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "edit_message_media",
+      "class": "EditMessageMedia",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.EditMessageMedia",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "media",
+          "default": "<required>"
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        },
+        {
+          "name": "file_name",
+          "default": null
+        }
+      ],
+      "returns": "'types.Message'",
+      "doc": "Edit animation, audio, document, photo or video messages.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "edit_message_reply_markup",
+      "class": "EditMessageReplyMarkup",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.EditMessageReplyMarkup",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "'types.Message'",
+      "doc": "Edit only the reply markup of messages sent by the bot.",
+      "usable_by": "bots only"
+    },
+    {
+      "name": "edit_message_text",
+      "class": "EditMessageText",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.EditMessageText",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "text",
+          "default": "<required>"
+        },
+        {
+          "name": "parse_mode",
+          "default": null
+        },
+        {
+          "name": "entities",
+          "default": null
+        },
+        {
+          "name": "disable_web_page_preview",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "'types.Message'",
+      "doc": "Edit the text of messages.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "forward_messages",
+      "class": "ForwardMessages",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.ForwardMessages",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "from_chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_ids",
+          "default": "<required>"
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        }
+      ],
+      "returns": "Union['types.Message', List['types.Message']]",
+      "doc": "Forward messages of any kind.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "get_chat_history",
+      "class": "GetChatHistory",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.GetChatHistory",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "limit",
+          "default": 0
+        },
+        {
+          "name": "offset",
+          "default": 0
+        },
+        {
+          "name": "offset_id",
+          "default": 0
+        },
+        {
+          "name": "offset_date",
+          "default": "utils.zero_datetime()"
+        }
+      ],
+      "returns": "Optional[AsyncGenerator['types.Message', None]]",
+      "doc": "Get messages from a chat history.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_chat_history_count",
+      "class": "GetChatHistoryCount",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.GetChatHistoryCount",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "int",
+      "doc": "Get the total count of messages in a chat.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_custom_emoji_stickers",
+      "class": "GetCustomEmojiStickers",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.GetCustomEmojiStickers",
+      "params": [
+        {
+          "name": "custom_emoji_ids",
+          "default": "<required>"
+        }
+      ],
+      "returns": "List['types.Sticker']",
+      "doc": "Get information about custom emoji stickers by their identifiers.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "get_discussion_message",
+      "class": "GetDiscussionMessage",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.GetDiscussionMessage",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.Message'",
+      "doc": "Get the first discussion message of a channel post or a discussion thread in a group.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_discussion_replies",
+      "class": "GetDiscussionReplies",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.GetDiscussionReplies",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "limit",
+          "default": 0
+        }
+      ],
+      "returns": "Optional[AsyncGenerator['types.Message', None]]",
+      "doc": "Get the message replies of a discussion thread.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_discussion_replies_count",
+      "class": "GetDiscussionRepliesCount",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.GetDiscussionRepliesCount",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "int",
+      "doc": "Get the total count of replies in a discussion thread.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_media_group",
+      "class": "GetMediaGroup",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.GetMediaGroup",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "List['types.Message']",
+      "doc": "Get the media group a message belongs to.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "get_messages",
+      "class": "GetMessages",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.GetMessages",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_ids",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_ids",
+          "default": null
+        },
+        {
+          "name": "replies",
+          "default": 1
+        }
+      ],
+      "returns": "Union['types.Message', List['types.Message']]",
+      "doc": "Get one or more messages from a chat by using message identifiers.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "read_chat_history",
+      "class": "ReadChatHistory",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.ReadChatHistory",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "max_id",
+          "default": 0
+        }
+      ],
+      "returns": "bool",
+      "doc": "Mark a chat's message history as read.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "retract_vote",
+      "class": "RetractVote",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.RetractVote",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.Poll'",
+      "doc": "Retract your vote in a poll.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "search_global",
+      "class": "SearchGlobal",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SearchGlobal",
+      "params": [
+        {
+          "name": "query",
+          "default": ""
+        },
+        {
+          "name": "filter",
+          "default": "enums.MessagesFilter.EMPTY"
+        },
+        {
+          "name": "limit",
+          "default": 0
+        }
+      ],
+      "returns": "Optional[AsyncGenerator['types.Message', None]]",
+      "doc": "Search messages globally from all of your chats.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "search_global_count",
+      "class": "SearchGlobalCount",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SearchGlobalCount",
+      "params": [
+        {
+          "name": "query",
+          "default": ""
+        },
+        {
+          "name": "filter",
+          "default": "enums.MessagesFilter.EMPTY"
+        }
+      ],
+      "returns": "int",
+      "doc": "Get the count of messages resulting from a global search.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "search_messages",
+      "class": "SearchMessages",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SearchMessages",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "query",
+          "default": ""
+        },
+        {
+          "name": "offset",
+          "default": 0
+        },
+        {
+          "name": "filter",
+          "default": "enums.MessagesFilter.EMPTY"
+        },
+        {
+          "name": "limit",
+          "default": 0
+        },
+        {
+          "name": "from_user",
+          "default": null
+        }
+      ],
+      "returns": "Optional[AsyncGenerator['types.Message', None]]",
+      "doc": "Search for text and media messages inside a specific chat.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "search_messages_count",
+      "class": "SearchMessagesCount",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SearchMessagesCount",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "query",
+          "default": ""
+        },
+        {
+          "name": "filter",
+          "default": "enums.MessagesFilter.EMPTY"
+        },
+        {
+          "name": "from_user",
+          "default": null
+        }
+      ],
+      "returns": "int",
+      "doc": "Get the count of messages resulting from a search inside a chat.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "send_animation",
+      "class": "SendAnimation",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendAnimation",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "animation",
+          "default": "<required>"
+        },
+        {
+          "name": "caption",
+          "default": ""
+        },
+        {
+          "name": "unsave",
+          "default": false
+        },
+        {
+          "name": "parse_mode",
+          "default": null
+        },
+        {
+          "name": "caption_entities",
+          "default": null
+        },
+        {
+          "name": "has_spoiler",
+          "default": null
+        },
+        {
+          "name": "duration",
+          "default": 0
+        },
+        {
+          "name": "width",
+          "default": 0
+        },
+        {
+          "name": "height",
+          "default": 0
+        },
+        {
+          "name": "thumb",
+          "default": null
+        },
+        {
+          "name": "file_name",
+          "default": null
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        },
+        {
+          "name": "progress",
+          "default": null
+        },
+        {
+          "name": "progress_args",
+          "default": "()"
+        }
+      ],
+      "returns": "Optional['types.Message']",
+      "doc": "Send animation files (animation or H.264/MPEG-4 AVC video without sound).",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_audio",
+      "class": "SendAudio",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendAudio",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "audio",
+          "default": "<required>"
+        },
+        {
+          "name": "caption",
+          "default": ""
+        },
+        {
+          "name": "parse_mode",
+          "default": null
+        },
+        {
+          "name": "caption_entities",
+          "default": null
+        },
+        {
+          "name": "duration",
+          "default": 0
+        },
+        {
+          "name": "performer",
+          "default": null
+        },
+        {
+          "name": "title",
+          "default": null
+        },
+        {
+          "name": "thumb",
+          "default": null
+        },
+        {
+          "name": "file_name",
+          "default": null
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        },
+        {
+          "name": "progress",
+          "default": null
+        },
+        {
+          "name": "progress_args",
+          "default": "()"
+        }
+      ],
+      "returns": "Optional['types.Message']",
+      "doc": "Send audio files.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_cached_media",
+      "class": "SendCachedMedia",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendCachedMedia",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "file_id",
+          "default": "<required>"
+        },
+        {
+          "name": "caption",
+          "default": ""
+        },
+        {
+          "name": "parse_mode",
+          "default": null
+        },
+        {
+          "name": "caption_entities",
+          "default": null
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "Optional['types.Message']",
+      "doc": "Send any media stored on the Telegram servers using a file_id.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_chat_action",
+      "class": "SendChatAction",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendChatAction",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "action",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Tell the other party that something is happening on your side.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_contact",
+      "class": "SendContact",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendContact",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "phone_number",
+          "default": "<required>"
+        },
+        {
+          "name": "first_name",
+          "default": "<required>"
+        },
+        {
+          "name": "last_name",
+          "default": null
+        },
+        {
+          "name": "vcard",
+          "default": null
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "'types.Message'",
+      "doc": "Send phone contacts.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_dice",
+      "class": "SendDice",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendDice",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "emoji",
+          "default": "🎲"
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "Optional['types.Message']",
+      "doc": "Send a dice with a random value from 1 to 6.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_document",
+      "class": "SendDocument",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendDocument",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "document",
+          "default": "<required>"
+        },
+        {
+          "name": "thumb",
+          "default": null
+        },
+        {
+          "name": "caption",
+          "default": ""
+        },
+        {
+          "name": "parse_mode",
+          "default": null
+        },
+        {
+          "name": "caption_entities",
+          "default": null
+        },
+        {
+          "name": "file_name",
+          "default": null
+        },
+        {
+          "name": "force_document",
+          "default": null
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        },
+        {
+          "name": "progress",
+          "default": null
+        },
+        {
+          "name": "progress_args",
+          "default": "()"
+        }
+      ],
+      "returns": "Optional['types.Message']",
+      "doc": "Send generic files.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_location",
+      "class": "SendLocation",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendLocation",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "latitude",
+          "default": "<required>"
+        },
+        {
+          "name": "longitude",
+          "default": "<required>"
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "'types.Message'",
+      "doc": "Send points on the map.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_media_group",
+      "class": "SendMediaGroup",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendMediaGroup",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "media",
+          "default": "<required>"
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        }
+      ],
+      "returns": "List['types.Message']",
+      "doc": "Send a group of photos or videos as an album.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_message",
+      "class": "SendMessage",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendMessage",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "text",
+          "default": "<required>"
+        },
+        {
+          "name": "parse_mode",
+          "default": null
+        },
+        {
+          "name": "entities",
+          "default": null
+        },
+        {
+          "name": "disable_web_page_preview",
+          "default": null
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "'types.Message'",
+      "doc": "Send text messages.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_photo",
+      "class": "SendPhoto",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendPhoto",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "photo",
+          "default": "<required>"
+        },
+        {
+          "name": "caption",
+          "default": ""
+        },
+        {
+          "name": "parse_mode",
+          "default": null
+        },
+        {
+          "name": "caption_entities",
+          "default": null
+        },
+        {
+          "name": "has_spoiler",
+          "default": null
+        },
+        {
+          "name": "ttl_seconds",
+          "default": null
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        },
+        {
+          "name": "progress",
+          "default": null
+        },
+        {
+          "name": "progress_args",
+          "default": "()"
+        }
+      ],
+      "returns": "Optional['types.Message']",
+      "doc": "Send photos.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_poll",
+      "class": "SendPoll",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendPoll",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "question",
+          "default": "<required>"
+        },
+        {
+          "name": "options",
+          "default": "<required>"
+        },
+        {
+          "name": "is_anonymous",
+          "default": true
+        },
+        {
+          "name": "type",
+          "default": "enums.PollType.REGULAR"
+        },
+        {
+          "name": "allows_multiple_answers",
+          "default": null
+        },
+        {
+          "name": "correct_option_id",
+          "default": null
+        },
+        {
+          "name": "explanation",
+          "default": null
+        },
+        {
+          "name": "explanation_parse_mode",
+          "default": null
+        },
+        {
+          "name": "explanation_entities",
+          "default": null
+        },
+        {
+          "name": "open_period",
+          "default": null
+        },
+        {
+          "name": "close_date",
+          "default": null
+        },
+        {
+          "name": "is_closed",
+          "default": null
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "'types.Message'",
+      "doc": "Send a new poll.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_reaction",
+      "class": "SendReaction",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendReaction",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "emoji",
+          "default": ""
+        },
+        {
+          "name": "big",
+          "default": false
+        }
+      ],
+      "returns": "bool",
+      "doc": "Send a reaction to a message.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "send_sticker",
+      "class": "SendSticker",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendSticker",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "sticker",
+          "default": "<required>"
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        },
+        {
+          "name": "progress",
+          "default": null
+        },
+        {
+          "name": "progress_args",
+          "default": "()"
+        }
+      ],
+      "returns": "Optional['types.Message']",
+      "doc": "Send static .webp or animated .tgs stickers.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_venue",
+      "class": "SendVenue",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendVenue",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "latitude",
+          "default": "<required>"
+        },
+        {
+          "name": "longitude",
+          "default": "<required>"
+        },
+        {
+          "name": "title",
+          "default": "<required>"
+        },
+        {
+          "name": "address",
+          "default": "<required>"
+        },
+        {
+          "name": "foursquare_id",
+          "default": ""
+        },
+        {
+          "name": "foursquare_type",
+          "default": ""
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "'types.Message'",
+      "doc": "Send information about a venue.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_video",
+      "class": "SendVideo",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendVideo",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "video",
+          "default": "<required>"
+        },
+        {
+          "name": "caption",
+          "default": ""
+        },
+        {
+          "name": "parse_mode",
+          "default": null
+        },
+        {
+          "name": "caption_entities",
+          "default": null
+        },
+        {
+          "name": "has_spoiler",
+          "default": null
+        },
+        {
+          "name": "ttl_seconds",
+          "default": null
+        },
+        {
+          "name": "duration",
+          "default": 0
+        },
+        {
+          "name": "width",
+          "default": 0
+        },
+        {
+          "name": "height",
+          "default": 0
+        },
+        {
+          "name": "thumb",
+          "default": null
+        },
+        {
+          "name": "file_name",
+          "default": null
+        },
+        {
+          "name": "supports_streaming",
+          "default": true
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        },
+        {
+          "name": "progress",
+          "default": null
+        },
+        {
+          "name": "progress_args",
+          "default": "()"
+        }
+      ],
+      "returns": "Optional['types.Message']",
+      "doc": "Send video files.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_video_note",
+      "class": "SendVideoNote",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendVideoNote",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "video_note",
+          "default": "<required>"
+        },
+        {
+          "name": "duration",
+          "default": 0
+        },
+        {
+          "name": "length",
+          "default": 1
+        },
+        {
+          "name": "thumb",
+          "default": null
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        },
+        {
+          "name": "progress",
+          "default": null
+        },
+        {
+          "name": "progress_args",
+          "default": "()"
+        }
+      ],
+      "returns": "Optional['types.Message']",
+      "doc": "Send video messages.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "send_voice",
+      "class": "SendVoice",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.SendVoice",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "voice",
+          "default": "<required>"
+        },
+        {
+          "name": "caption",
+          "default": ""
+        },
+        {
+          "name": "parse_mode",
+          "default": null
+        },
+        {
+          "name": "caption_entities",
+          "default": null
+        },
+        {
+          "name": "duration",
+          "default": 0
+        },
+        {
+          "name": "disable_notification",
+          "default": null
+        },
+        {
+          "name": "reply_to_message_id",
+          "default": null
+        },
+        {
+          "name": "schedule_date",
+          "default": null
+        },
+        {
+          "name": "protect_content",
+          "default": null
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        },
+        {
+          "name": "progress",
+          "default": null
+        },
+        {
+          "name": "progress_args",
+          "default": "()"
+        }
+      ],
+      "returns": "Optional['types.Message']",
+      "doc": "Send audio files.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "stop_poll",
+      "class": "StopPoll",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.StopPoll",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "reply_markup",
+          "default": null
+        }
+      ],
+      "returns": "'types.Poll'",
+      "doc": "Stop a poll which was sent by you.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "stream_media",
+      "class": "StreamMedia",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.StreamMedia",
+      "params": [
+        {
+          "name": "message",
+          "default": "<required>"
+        },
+        {
+          "name": "limit",
+          "default": 0
+        },
+        {
+          "name": "offset",
+          "default": 0
+        }
+      ],
+      "returns": "Optional[Union[str, BinaryIO]]",
+      "doc": "Stream the media from a message chunk by chunk.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "vote_poll",
+      "class": "VotePoll",
+      "category": "messages",
+      "module": "pyrogram.methods.messages.VotePoll",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "message_id",
+          "default": "<required>"
+        },
+        {
+          "name": "options",
+          "default": "<required>"
+        }
+      ],
+      "returns": "'types.Poll'",
+      "doc": "Vote a poll.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "change_cloud_password",
+      "class": "ChangeCloudPassword",
+      "category": "password",
+      "module": "pyrogram.methods.password.ChangeCloudPassword",
+      "params": [
+        {
+          "name": "current_password",
+          "default": "<required>"
+        },
+        {
+          "name": "new_password",
+          "default": "<required>"
+        },
+        {
+          "name": "new_hint",
+          "default": ""
+        }
+      ],
+      "returns": "bool",
+      "doc": "Change your Two-Step Verification password (Cloud Password) with a new one.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "enable_cloud_password",
+      "class": "EnableCloudPassword",
+      "category": "password",
+      "module": "pyrogram.methods.password.EnableCloudPassword",
+      "params": [
+        {
+          "name": "password",
+          "default": "<required>"
+        },
+        {
+          "name": "hint",
+          "default": ""
+        },
+        {
+          "name": "email",
+          "default": null
+        }
+      ],
+      "returns": "bool",
+      "doc": "Enable the Two-Step Verification security feature (Cloud Password) on your account.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "remove_cloud_password",
+      "class": "RemoveCloudPassword",
+      "category": "password",
+      "module": "pyrogram.methods.password.RemoveCloudPassword",
+      "params": [
+        {
+          "name": "password",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Turn off the Two-Step Verification security feature (Cloud Password) on your account.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "block_user",
+      "class": "BlockUser",
+      "category": "users",
+      "module": "pyrogram.methods.users.BlockUser",
+      "params": [
+        {
+          "name": "user_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Block a user.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "delete_profile_photos",
+      "class": "DeleteProfilePhotos",
+      "category": "users",
+      "module": "pyrogram.methods.users.DeleteProfilePhotos",
+      "params": [
+        {
+          "name": "photo_ids",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Delete your own profile photos.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_chat_photos",
+      "class": "GetChatPhotos",
+      "category": "users",
+      "module": "pyrogram.methods.users.GetChatPhotos",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        },
+        {
+          "name": "limit",
+          "default": 0
+        }
+      ],
+      "returns": "Optional[AsyncGenerator['types.Photo', None]]",
+      "doc": "Get a chat or a user profile photos sequentially.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "get_chat_photos_count",
+      "class": "GetChatPhotosCount",
+      "category": "users",
+      "module": "pyrogram.methods.users.GetChatPhotosCount",
+      "params": [
+        {
+          "name": "chat_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "int",
+      "doc": "Get the total count of photos for a chat.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "get_common_chats",
+      "class": "GetCommonChats",
+      "category": "users",
+      "module": "pyrogram.methods.users.GetCommonChats",
+      "params": [
+        {
+          "name": "user_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "List['types.Chat']",
+      "doc": "Get the common chats you have with a user.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "get_default_emoji_statuses",
+      "class": "GetDefaultEmojiStatuses",
+      "category": "users",
+      "module": "pyrogram.methods.users.GetDefaultEmojiStatuses",
+      "params": [],
+      "returns": "List['types.EmojiStatus']",
+      "doc": "Get the default emoji statuses.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "get_me",
+      "class": "GetMe",
+      "category": "users",
+      "module": "pyrogram.methods.users.GetMe",
+      "params": [],
+      "returns": "'types.User'",
+      "doc": "Get your own user identity.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "get_users",
+      "class": "GetUsers",
+      "category": "users",
+      "module": "pyrogram.methods.users.GetUsers",
+      "params": [
+        {
+          "name": "user_ids",
+          "default": "<required>"
+        }
+      ],
+      "returns": "Union['types.User', List['types.User']]",
+      "doc": "Get information about a user.",
+      "usable_by": "users+bots"
+    },
+    {
+      "name": "set_emoji_status",
+      "class": "SetEmojiStatus",
+      "category": "users",
+      "module": "pyrogram.methods.users.SetEmojiStatus",
+      "params": [
+        {
+          "name": "emoji_status",
+          "default": null
+        }
+      ],
+      "returns": "bool",
+      "doc": "Set the emoji status.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "set_profile_photo",
+      "class": "SetProfilePhoto",
+      "category": "users",
+      "module": "pyrogram.methods.users.SetProfilePhoto",
+      "params": [
+        {
+          "name": "photo",
+          "default": null,
+          "kwonly": true
+        },
+        {
+          "name": "video",
+          "default": null,
+          "kwonly": true
+        }
+      ],
+      "returns": "bool",
+      "doc": "Set a new profile photo or video (H.264/MPEG-4 AVC video, max 5 seconds).",
+      "usable_by": "users only"
+    },
+    {
+      "name": "set_username",
+      "class": "SetUsername",
+      "category": "users",
+      "module": "pyrogram.methods.users.SetUsername",
+      "params": [
+        {
+          "name": "username",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Set your own username.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "unblock_user",
+      "class": "UnblockUser",
+      "category": "users",
+      "module": "pyrogram.methods.users.UnblockUser",
+      "params": [
+        {
+          "name": "user_id",
+          "default": "<required>"
+        }
+      ],
+      "returns": "bool",
+      "doc": "Unblock a user.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "update_profile",
+      "class": "UpdateProfile",
+      "category": "users",
+      "module": "pyrogram.methods.users.UpdateProfile",
+      "params": [
+        {
+          "name": "first_name",
+          "default": null
+        },
+        {
+          "name": "last_name",
+          "default": null
+        },
+        {
+          "name": "bio",
+          "default": null
+        }
+      ],
+      "returns": "bool",
+      "doc": "Update your profile details such as first name, last name and bio.",
+      "usable_by": "users only"
+    },
+    {
+      "name": "export_session_string",
+      "class": "ExportSessionString",
+      "category": "utilities",
+      "module": "pyrogram.methods.utilities.ExportSessionString",
+      "params": [],
+      "returns": null,
+      "doc": "Export the current authorized session as a serialized string.",
+      "usable_by": "?"
+    },
+    {
+      "name": "restart",
+      "class": "Restart",
+      "category": "utilities",
+      "module": "pyrogram.methods.utilities.Restart",
+      "params": [
+        {
+          "name": "block",
+          "default": true
+        }
+      ],
+      "returns": null,
+      "doc": "Restart the Client.",
+      "usable_by": "?"
+    },
+    {
+      "name": "start",
+      "class": "Start",
+      "category": "utilities",
+      "module": "pyrogram.methods.utilities.Start",
+      "params": [],
+      "returns": null,
+      "doc": "Start the client.",
+      "usable_by": "?"
+    },
+    {
+      "name": "stop",
+      "class": "Stop",
+      "category": "utilities",
+      "module": "pyrogram.methods.utilities.Stop",
+      "params": [
+        {
+          "name": "block",
+          "default": true
+        }
+      ],
+      "returns": null,
+      "doc": "Stop the Client.",
+      "usable_by": "?"
+    }
+  ],
+  "method_count": 163,
+  "categories": [
+    "advanced",
+    "auth",
+    "bots",
+    "chats",
+    "contacts",
+    "invite_links",
+    "messages",
+    "password",
+    "users",
+    "utilities"
+  ],
+  "types": [
+    "Animation",
+    "Audio",
+    "BotCommand",
+    "BotCommandScope",
+    "BotCommandScopeAllChatAdministrators",
+    "BotCommandScopeAllGroupChats",
+    "BotCommandScopeAllPrivateChats",
+    "BotCommandScopeChat",
+    "BotCommandScopeChatAdministrators",
+    "BotCommandScopeChatMember",
+    "BotCommandScopeDefault",
+    "CallbackGame",
+    "CallbackQuery",
+    "Chat",
+    "ChatAdminWithInviteLinks",
+    "ChatEvent",
+    "ChatEventFilter",
+    "ChatInviteLink",
+    "ChatJoinRequest",
+    "ChatJoiner",
+    "ChatMember",
+    "ChatMemberUpdated",
+    "ChatPermissions",
+    "ChatPhoto",
+    "ChatPreview",
+    "ChatPrivileges",
+    "ChatReactions",
+    "ChosenInlineResult",
+    "Contact",
+    "Dialog",
+    "Dice",
+    "Document",
+    "EmojiStatus",
+    "ForceReply",
+    "Game",
+    "GameHighScore",
+    "InlineKeyboardButton",
+    "InlineKeyboardMarkup",
+    "InlineQuery",
+    "InlineQueryResult",
+    "InlineQueryResultAnimation",
+    "InlineQueryResultArticle",
+    "InlineQueryResultAudio",
+    "InlineQueryResultCachedAnimation",
+    "InlineQueryResultCachedAudio",
+    "InlineQueryResultCachedDocument",
+    "InlineQueryResultCachedPhoto",
+    "InlineQueryResultCachedSticker",
+    "InlineQueryResultCachedVideo",
+    "InlineQueryResultCachedVoice",
+    "InlineQueryResultContact",
+    "InlineQueryResultDocument",
+    "InlineQueryResultLocation",
+    "InlineQueryResultPhoto",
+    "InlineQueryResultVenue",
+    "InlineQueryResultVideo",
+    "InlineQueryResultVoice",
+    "InputMedia",
+    "InputMediaAnimation",
+    "InputMediaAudio",
+    "InputMediaDocument",
+    "InputMediaPhoto",
+    "InputMediaVideo",
+    "InputMessageContent",
+    "InputPhoneContact",
+    "InputTextMessageContent",
+    "InviteLinkImporter",
+    "KeyboardButton",
+    "List",
+    "Location",
+    "LoginUrl",
+    "MenuButton",
+    "MenuButtonCommands",
+    "MenuButtonDefault",
+    "MenuButtonWebApp",
+    "Message",
+    "MessageEntity",
+    "MessageReactions",
+    "Object",
+    "Photo",
+    "Poll",
+    "PollOption",
+    "Reaction",
+    "ReplyKeyboardMarkup",
+    "ReplyKeyboardRemove",
+    "Restriction",
+    "SentCode",
+    "SentWebAppMessage",
+    "Sticker",
+    "StrippedThumbnail",
+    "TermsOfService",
+    "Thumbnail",
+    "User",
+    "Venue",
+    "Video",
+    "VideoChatEnded",
+    "VideoChatMembersInvited",
+    "VideoChatScheduled",
+    "VideoChatStarted",
+    "VideoNote",
+    "Voice",
+    "WebAppData",
+    "WebAppInfo",
+    "WebPage"
+  ],
+  "enums": [
+    "ChatAction",
+    "ChatEventAction",
+    "ChatMemberStatus",
+    "ChatMembersFilter",
+    "ChatType",
+    "MessageEntityType",
+    "MessageMediaType",
+    "MessageServiceType",
+    "MessagesFilter",
+    "NextCodeType",
+    "ParseMode",
+    "PollType",
+    "SentCodeType",
+    "UserStatus"
+  ],
+  "handlers": {
+    "classes": [
+      "CallbackQueryHandler",
+      "ChatJoinRequestHandler",
+      "ChatMemberUpdatedHandler",
+      "ChosenInlineResultHandler",
+      "DeletedMessagesHandler",
+      "DisconnectHandler",
+      "EditedMessageHandler",
+      "Handler",
+      "InlineQueryHandler",
+      "MessageHandler",
+      "PollHandler",
+      "RawUpdateHandler",
+      "UserStatusHandler"
+    ],
+    "documented": [
+      "Callback_Query",
+      "Chat_Join_Request",
+      "Chat_Member_Updated",
+      "Chosen_Inline_Result",
+      "Deleted_Messages",
+      "Disconnect",
+      "Edited_Message",
+      "Inline_Query",
+      "Message",
+      "Poll",
+      "Raw_Update",
+      "User_Status"
+    ]
+  },
+  "bound_methods": [
+    "click",
+    "delete",
+    "download",
+    "forward",
+    "copy",
+    "pin",
+    "unpin",
+    "edit",
+    "edit_text",
+    "edit_caption",
+    "edit_media",
+    "edit_reply_markup",
+    "reply",
+    "reply_text",
+    "reply_animation",
+    "reply_audio",
+    "reply_cached_media",
+    "reply_chat_action",
+    "reply_contact",
+    "reply_document",
+    "reply_game",
+    "reply_inline_bot_result",
+    "reply_location",
+    "reply_media_group",
+    "reply_photo",
+    "reply_poll",
+    "reply_sticker",
+    "reply_venue",
+    "reply_video",
+    "reply_video_note",
+    "reply_voice",
+    "get_media_group",
+    "react",
+    "archive",
+    "unarchive",
+    "set_title",
+    "set_description",
+    "set_photo",
+    "ban_member",
+    "unban_member",
+    "restrict_member",
+    "promote_member",
+    "get_member",
+    "get_members",
+    "add_members",
+    "join",
+    "leave",
+    "mark_unread",
+    "set_protected_content",
+    "unpin_all_messages",
+    "block",
+    "unblock",
+    "answer",
+    "approve",
+    "decline"
+  ],
+  "errors": {
+    "count": 455,
+    "names": [
+      "AboutTooLong",
+      "AccessTokenExpired",
+      "AccessTokenInvalid",
+      "ActiveUserRequired",
+      "AdminRankEmojiNotAllowed",
+      "AdminRankInvalid",
+      "AdminsTooMuch",
+      "AlbumPhotosTooMany",
+      "ApiCallError",
+      "ApiIdInvalid",
+      "ApiIdPublishedFlood",
+      "Apicallerror",
+      "ArticleTitleEmpty",
+      "AudioTitleEmpty",
+      "AuthBytesInvalid",
+      "AuthKeyDuplicated",
+      "AuthKeyInvalid",
+      "AuthKeyPermEmpty",
+      "AuthKeyUnregistered",
+      "AuthRestart",
+      "AuthTokenAlreadyAccepted",
+      "AuthTokenExpired",
+      "AuthTokenInvalid",
+      "AutoarchiveNotAvailable",
+      "BadRequest",
+      "BankCardNumberInvalid",
+      "BannedRightsInvalid",
+      "BasePortLocInvalid",
+      "BotChannelsNa",
+      "BotCommandDescriptionInvalid",
+      "BotDomainInvalid",
+      "BotGamesDisabled",
+      "BotGroupsBlocked",
+      "BotInlineDisabled",
+      "BotInvalid",
+      "BotMethodInvalid",
+      "BotMissing",
+      "BotOnesideNotAvail",
+      "BotPaymentsDisabled",
+      "BotPollsDisabled",
+      "BotResponseTimeout",
+      "BotScoreNotModified",
+      "BotsTooMuch",
+      "BroadcastForbidden",
+      "BroadcastIdInvalid",
+      "BroadcastPublicVotersForbidden",
+      "BroadcastRequired",
+      "ButtonDataInvalid",
+      "ButtonTypeInvalid",
+      "ButtonUrlInvalid",
+      "ButtonUserPrivacyRestricted",
+      "CallAlreadyAccepted",
+      "CallAlreadyDeclined",
+      "CallOccupyFailed",
+      "CallPeerInvalid",
+      "CallProtocolFlagsInvalid",
+      "CdnMethodInvalid",
+      "ChannelAddInvalid",
+      "ChannelBanned",
+      "ChannelInvalid",
+      "ChannelPrivate",
+      "ChannelPublicGroupNa",
+      "ChannelTooLarge",
+      "ChannelsAdminPublicTooMuch",
+      "ChannelsTooMuch",
+      "ChatAboutNotModified",
+      "ChatAboutTooLong",
+      "ChatAdminInviteRequired",
+      "ChatAdminRequired",
+      "ChatForbidden",
+      "ChatForwardsRestricted",
+      "ChatIdEmpty",
+      "ChatIdGenerateFailed",
+      "ChatIdInvalid",
+      "ChatInvalid",
+      "ChatInvitePermanent",
+      "ChatLinkExists",
+      "ChatNotModified",
+      "ChatOccupyLocFailed",
+      "ChatOccupyUsernameFailed",
+      "ChatRestricted",
+      "ChatSendGifsForbidden",
+      "ChatSendInlineForbidden",
+      "ChatSendMediaForbidden",
+      "ChatSendPollForbidden",
+      "ChatSendStickersForbidden",
+      "ChatTitleEmpty",
+      "ChatTooBig",
+      "ChatWriteForbidden",
+      "ChpCallFail",
+      "CodeEmpty",
+      "CodeHashInvalid",
+      "CodeInvalid",
+      "ConnectionApiIdInvalid",
+      "ConnectionAppVersionEmpty",
+      "ConnectionDeviceModelEmpty",
+      "ConnectionLangPackInvalid",
+      "ConnectionLayerInvalid",
+      "ConnectionNotInited",
+      "ConnectionSystemEmpty",
+      "ConnectionSystemLangCodeEmpty",
+      "ContactAddMissing",
+      "ContactIdInvalid",
+      "ContactNameEmpty",
+      "ContactReqMissing",
+      "DataInvalid",
+      "DataJsonInvalid",
+      "DataTooLong",
+      "DateEmpty",
+      "DcIdInvalid",
+      "DhGAInvalid",
+      "DocumentInvalid",
+      "EditBotInviteForbidden",
+      "EmailHashExpired",
+      "EmailInvalid",
+      "EmailUnconfirmed",
+      "EmailVerifyExpired",
+      "EmoticonEmpty",
+      "EmoticonInvalid",
+      "EmoticonStickerpackMissing",
+      "EncryptedMessageInvalid",
+      "EncryptionAlreadyAccepted",
+      "EncryptionAlreadyDeclined",
+      "EncryptionDeclined",
+      "EncryptionIdInvalid",
+      "EncryptionOccupyAdminFailed",
+      "EncryptionOccupyFailed",
+      "EntitiesTooLong",
+      "EntityBoundsInvalid",
+      "EntityMentionUserInvalid",
+      "ErrorTextEmpty",
+      "ExpireDateInvalid",
+      "ExportCardInvalid",
+      "ExternalUrlInvalid",
+      "FieldNameEmpty",
+      "FieldNameInvalid",
+      "FileIdInvalid",
+      "FileMigrate",
+      "FilePartEmpty",
+      "FilePartInvalid",
+      "FilePartLengthInvalid",
+      "FilePartMissing",
+      "FilePartSizeChanged",
+      "FilePartSizeInvalid",
+      "FilePartTooBig",
+      "FilePartsInvalid",
+      "FileReferenceEmpty",
+      "FileReferenceExpired",
+      "FileReferenceInvalid",
+      "FilerefUpgradeNeeded",
+      "FilterIdInvalid",
+      "FirstnameInvalid",
+      "Flood",
+      "FloodTestPhoneWait",
+      "FloodWait",
+      "FolderDeacAutofixAll",
+      "FolderIdEmpty",
+      "FolderIdInvalid",
+      "Forbidden",
+      "FreshChangeAdminsForbidden",
+      "FreshChangePhoneForbidden",
+      "FreshResetAuthorisationForbidden",
+      "FromMessageBotDisabled",
+      "FromPeerInvalid",
+      "GameBotInvalid",
+      "GeoPointInvalid",
+      "GifContentTypeInvalid",
+      "GifIdInvalid",
+      "GraphInvalidReload",
+      "GraphOutdatedReload",
+      "GroupCallInvalid",
+      "GroupcallAddParticipantsFailed",
+      "GroupcallSsrcDuplicateMuch",
+      "GroupedIdOccupyFailed",
+      "GroupedMediaInvalid",
+      "HashInvalid",
+      "HistoryGetFailed",
+      "Id",
+      "ImageEngineDown",
+      "ImageProcessFailed",
+      "ImportFileInvalid",
+      "ImportFormatUnrecognized",
+      "ImportIdInvalid",
+      "InlineBotRequired",
+      "InlineResultExpired",
+      "InputConstructorInvalid",
+      "InputFetchError",
+      "InputFetchFail",
+      "InputFilterInvalid",
+      "InputLayerInvalid",
+      "InputMethodInvalid",
+      "InputRequestTooLong",
+      "InputUserDeactivated",
+      "InterdcCallError",
+      "InterdcCallRichError",
+      "InternalServerError",
+      "InviteHashEmpty",
+      "InviteHashExpired",
+      "InviteHashInvalid",
+      "InviteRequestSent",
+      "InviteRevokedMissing",
+      "LangPackInvalid",
+      "LastnameInvalid",
+      "LimitInvalid",
+      "LinkNotModified",
+      "LocationInvalid",
+      "MaxIdInvalid",
+      "MaxQtsInvalid",
+      "Md5ChecksumInvalid",
+      "MediaCaptionTooLong",
+      "MediaEmpty",
+      "MediaInvalid",
+      "MediaNewInvalid",
+      "MediaPrevInvalid",
+      "MegagroupIdInvalid",
+      "MegagroupPrehistoryHidden",
+      "MegagroupRequired",
+      "MemberFetchFailed",
+      "MemberNoLocation",
+      "MemberOccupyPrimaryLocFailed",
+      "MemberOccupyUsernameFailed",
+      "MessageAuthorRequired",
+      "MessageDeleteForbidden",
+      "MessageEditTimeExpired",
+      "MessageEmpty",
+      "MessageIdInvalid",
+      "MessageIdsEmpty",
+      "MessageNotModified",
+      "MessagePollClosed",
+      "MessageTooLong",
+      "MethodInvalid",
+      "MsgIdInvalid",
+      "MsgRangeUnsync",
+      "MsgWaitFailed",
+      "MsgidDecreaseRetry",
+      "MtSendQueueTooLong",
+      "MultiMediaTooLong",
+      "NeedChatInvalid",
+      "NeedMemberInvalid",
+      "NetworkMigrate",
+      "NewSaltInvalid",
+      "NewSettingsInvalid",
+      "NextOffsetInvalid",
+      "No workers running",
+      "NotAcceptable",
+      "OffsetInvalid",
+      "OffsetPeerIdInvalid",
+      "OptionInvalid",
+      "OptionsTooMuch",
+      "PackShortNameInvalid",
+      "PackShortNameOccupied",
+      "PackTitleInvalid",
+      "ParticipantCallFailed",
+      "ParticipantVersionOutdated",
+      "ParticipantsTooFew",
+      "PasswordEmpty",
+      "PasswordHashInvalid",
+      "PasswordMissing",
+      "PasswordRecoveryNa",
+      "PasswordRequired",
+      "PasswordTooFresh",
+      "PaymentProviderInvalid",
+      "PeerFlood",
+      "PeerIdInvalid",
+      "PeerIdNotSupported",
+      "PersistentTimestampEmpty",
+      "PersistentTimestampInvalid",
+      "PersistentTimestampOutdated",
+      "PhoneCodeEmpty",
+      "PhoneCodeExpired",
+      "PhoneCodeHashEmpty",
+      "PhoneCodeInvalid",
+      "PhoneMigrate",
+      "PhoneNumberAppSignupForbidden",
+      "PhoneNumberBanned",
+      "PhoneNumberFlood",
+      "PhoneNumberInvalid",
+      "PhoneNumberOccupied",
+      "PhoneNumberUnoccupied",
+      "PhonePasswordFlood",
+      "PhonePasswordProtected",
+      "PhotoContentTypeInvalid",
+      "PhotoContentUrlEmpty",
+      "PhotoCreateFailed",
+      "PhotoCropFileMissing",
+      "PhotoCropSizeSmall",
+      "PhotoExtInvalid",
+      "PhotoFileMissing",
+      "PhotoIdInvalid",
+      "PhotoInvalid",
+      "PhotoInvalidDimensions",
+      "PhotoSaveFileInvalid",
+      "PhotoThumbUrlEmpty",
+      "PhotoThumbUrlInvalid",
+      "PinRestricted",
+      "PinnedDialogsTooMuch",
+      "PollAnswersInvalid",
+      "PollOptionDuplicate",
+      "PollOptionInvalid",
+      "PollQuestionInvalid",
+      "PollUnsupported",
+      "PollVoteRequired",
+      "PostponedTimeout",
+      "PremiumAccountRequired",
+      "PrivacyKeyInvalid",
+      "PrivacyTooLong",
+      "PrivacyValueInvalid",
+      "PtsChangeEmpty",
+      "QueryIdEmpty",
+      "QueryIdInvalid",
+      "QueryTooShort",
+      "QuizCorrectAnswerInvalid",
+      "QuizCorrectAnswersEmpty",
+      "QuizCorrectAnswersTooMuch",
+      "QuizMultipleInvalid",
+      "RPCError",
+      "RandomIdDuplicate",
+      "RandomIdEmpty",
+      "RandomIdInvalid",
+      "RandomLengthInvalid",
+      "RangesInvalid",
+      "ReactionEmpty",
+      "ReactionInvalid",
+      "ReflectorNotAvailable",
+      "RegIdGenerateFailed",
+      "ReplyMarkupBuyEmpty",
+      "ReplyMarkupGameEmpty",
+      "ReplyMarkupInvalid",
+      "ReplyMarkupTooLong",
+      "ResultIdDuplicate",
+      "ResultIdEmpty",
+      "ResultIdInvalid",
+      "ResultTypeInvalid",
+      "ResultsTooMuch",
+      "RevoteNotAllowed",
+      "RightForbidden",
+      "RpcCallFail",
+      "RpcConnectFailed",
+      "RpcMcgetFail",
+      "RsaDecryptFailed",
+      "ScheduleBotNotAllowed",
+      "ScheduleDateInvalid",
+      "ScheduleDateTooLate",
+      "ScheduleStatusPrivate",
+      "ScheduleTooMuch",
+      "SearchQueryEmpty",
+      "SecondsInvalid",
+      "SeeOther",
+      "SendMessageMediaInvalid",
+      "SendMessageTypeInvalid",
+      "SensitiveChangeForbidden",
+      "ServiceUnavailable",
+      "SessionExpired",
+      "SessionPasswordNeeded",
+      "SessionRevoked",
+      "SessionTooFresh",
+      "SettingsInvalid",
+      "Sha256HashInvalid",
+      "ShortnameOccupyFailed",
+      "SignInFailed",
+      "SlowmodeMultiMsgsDisabled",
+      "SlowmodeWait",
+      "SmsCodeCreateFailed",
+      "SrpIdInvalid",
+      "SrpPasswordChanged",
+      "StartParamEmpty",
+      "StartParamInvalid",
+      "StartParamTooLong",
+      "StatsMigrate",
+      "StickerDocumentInvalid",
+      "StickerEmojiInvalid",
+      "StickerFileInvalid",
+      "StickerIdInvalid",
+      "StickerInvalid",
+      "StickerPngDimensions",
+      "StickerPngNopng",
+      "StickerTgsNotgs",
+      "StickerThumbPngNopng",
+      "StickerVideoNowebm",
+      "StickersEmpty",
+      "StickersTooMuch",
+      "StickersetInvalid",
+      "StickersetNotModified",
+      "StickersetOwnerAnonymous",
+      "StorageCheckFailed",
+      "StoreInvalidScalarType",
+      "TakeoutInitDelay",
+      "TakeoutInvalid",
+      "TakeoutRequired",
+      "TempAuthKeyEmpty",
+      "ThemeFileInvalid",
+      "ThemeFormatInvalid",
+      "ThemeInvalid",
+      "ThemeMimeInvalid",
+      "Timeout",
+      "TmpPasswordDisabled",
+      "TmpPasswordInvalid",
+      "TokenInvalid",
+      "TtlDaysInvalid",
+      "TtlMediaInvalid",
+      "TwofaConfirmWait",
+      "TypeConstructorInvalid",
+      "TypesEmpty",
+      "Unauthorized",
+      "UnknownMethod",
+      "UntilDateInvalid",
+      "UploadNoVolume",
+      "UrlInvalid",
+      "UsageLimitInvalid",
+      "UserAdminInvalid",
+      "UserAlreadyParticipant",
+      "UserBannedInChannel",
+      "UserBlocked",
+      "UserBot",
+      "UserBotInvalid",
+      "UserBotRequired",
+      "UserChannelsTooMuch",
+      "UserCreator",
+      "UserDeactivated",
+      "UserDeactivatedBan",
+      "UserIdInvalid",
+      "UserInvalid",
+      "UserIsBlocked",
+      "UserIsBot",
+      "UserKicked",
+      "UserMigrate",
+      "UserNotMutualContact",
+      "UserNotParticipant",
+      "UserPrivacyRestricted",
+      "UserRestricted",
+      "UsernameInvalid",
+      "UsernameNotModified",
+      "UsernameNotOccupied",
+      "UsernameOccupied",
+      "UserpicUploadRequired",
+      "UsersTooFew",
+      "UsersTooMuch",
+      "VideoContentTypeInvalid",
+      "VideoFileInvalid",
+      "VoiceMessagesForbidden",
+      "VolumeLocNotFound",
+      "WallpaperFileInvalid",
+      "WallpaperInvalid",
+      "WallpaperMimeInvalid",
+      "WcConvertUrlInvalid",
+      "WebdocumentInvalid",
+      "WebdocumentMimeInvalid",
+      "WebdocumentSizeTooBig",
+      "WebdocumentUrlEmpty",
+      "WebdocumentUrlInvalid",
+      "WebpageCurlFailed",
+      "WebpageMediaEmpty",
+      "WorkerBusyTooLongRetry",
+      "WpIdGenerateFailed",
+      "YouBlockedUser"
+    ],
+    "groups": [
+      "303 SEE_OTHER",
+      "400 BAD_REQUEST",
+      "401 UNAUTHORIZED",
+      "403 FORBIDDEN",
+      "406 NOT_ACCEPTABLE",
+      "420 FLOOD",
+      "500 INTERNAL_SERVER_ERROR",
+      "503 SERVICE_UNAVAILABLE"
+    ],
+    "generation": "compiler/errors/compiler.py over compiler/errors/source/*.tsv: strip the _X wildcard, ^2->Two, Pascal-case per word"
+  },
+  "raw_base": {
+    "namespaces": {
+      "Account": {
+        "documented_types": 22
+      },
+      "Auth": {
+        "documented_types": 8
+      },
+      "Bots": {
+        "documented_types": 1
+      },
+      "Channels": {
+        "documented_types": 4
+      },
+      "Chatlists": {
+        "documented_types": 4
+      },
+      "Contacts": {
+        "documented_types": 6
+      },
+      "Help": {
+        "documented_types": 17
+      },
+      "Messages": {
+        "documented_types": 47
+      },
+      "Payments": {
+        "documented_types": 8
+      },
+      "Phone": {
+        "documented_types": 7
+      },
+      "Photos": {
+        "documented_types": 2
+      },
+      "Stats": {
+        "documented_types": 4
+      },
+      "Stickers": {
+        "documented_types": 1
+      },
+      "Storage": {
+        "documented_types": 1
+      },
+      "Updates": {
+        "documented_types": 3
+      },
+      "Upload": {
+        "documented_types": 3
+      },
+      "Users": {
+        "documented_types": 1
+      }
+    },
+    "tl_schema": {
+      "functions": 522,
+      "constructors": 1670,
+      "types": 432
+    },
+    "note": "the raw layer is generated at release build from the TL schema; raw.functions.* / raw.types.* resolve from it"
+  },
+  "type_count": 104,
+  "enum_count": 14
+}

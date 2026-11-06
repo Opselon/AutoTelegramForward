@@ -64,19 +64,22 @@ type pySpec struct {
 // matched it, never that the two stay in lockstep.
 var pythonRegistryExpectations = map[string]pySpec{
 	// ---- content cleanup ------------------------------------------------
-	"header":             {KindStr, "", true},
-	"footer":             {KindStr, "", true},
-	"replacements":       {KindDict, map[string]any{}, true},
-	"link_replacement":   {KindStr, "", true},
-	"clean_usernames":    {KindBool, false, true},
-	"clean_hashtags":     {KindBool, false, true},
-	"clean_phones":       {KindBool, false, true},
-	"clean_buttons":      {KindBool, false, true},
-	"clean_empty_lines":  {KindBool, false, true},
-	"clean_custom_words": {KindList, []any{}, true},
-	"remove_emojis":      {KindBool, false, true},
-	"cleaner_enabled":    {KindBool, false, true},
-	"cleaner_config":     {KindDict, map[string]any{}, true},
+	"header":               {KindStr, "", true},
+	"footer":               {KindStr, "", true},
+	"replacements":         {KindDict, map[string]any{}, true},
+	"link_replacement":     {KindStr, "", true},
+	"link_replace_enabled": {KindBool, false, true},
+	"link_rewrite_map":     {KindDict, map[string]any{}, true},
+	"mention_rewrite_map":  {KindDict, map[string]any{}, true},
+	"clean_usernames":      {KindBool, false, true},
+	"clean_hashtags":       {KindBool, false, true},
+	"clean_phones":         {KindBool, false, true},
+	"clean_buttons":        {KindBool, false, true},
+	"clean_empty_lines":    {KindBool, false, true},
+	"clean_custom_words":   {KindList, []any{}, true},
+	"remove_emojis":        {KindBool, false, true},
+	"cleaner_enabled":      {KindBool, false, true},
+	"cleaner_config":       {KindDict, map[string]any{}, true},
 
 	// ---- media filtering ------------------------------------------------
 	"block_text":          {KindBool, false, true},
@@ -157,6 +160,7 @@ var pythonRegistryExpectations = map[string]pySpec{
 	"branding_keywords":         {KindList, []any{}, true},
 	"branding_match_mode":       {KindStr, "any", true},
 	"branding_require_forward":  {KindBool, false, true},
+	"branding_require_channel":  {KindBool, false, true},
 	"branding_force_forward":    {KindBool, true, true},
 }
 

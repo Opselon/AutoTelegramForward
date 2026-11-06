@@ -22,6 +22,11 @@ type PromptTemplate struct {
 	OwnerUserID        int64
 	CreatedAt          int64
 	UpdatedAt          int64
+	// Enabled is the library enable/disable switch. The delivery read path
+	// (GetTemplate) resolves a disabled template as not found, so the
+	// engine falls back to the task's AI-config prompt; the field is kept
+	// so callers can log which policy applied.
+	Enabled bool
 }
 
 // PromptVersion represents an immutable historical version from prompt_versions.

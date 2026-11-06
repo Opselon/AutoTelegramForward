@@ -9,6 +9,18 @@
 import type { Catalog } from './types'
 
 export const id: Catalog = {
+  "ui_link_rewrite_map_placeholder": "domainlama.com domainbaru.com\nhttps://lama.t.me/x https://baru.t.me/y\n* https://t.me/saya",
+  "ui_mention_rewrite_map_placeholder": "@tokoLama @tokoBaru\n* @utama",
+  "ui_channel_only_hop": "Hanya konten kanal yang di-hop",
+  "ui_channel_only_hop_hint": "Pesan dari pengguna biasa diteruskan langsung dengan nama mereka sendiri; konten kanal diberi merek melalui C.",
+  "ui_link_rewrite_map_hint": "Satu pasang per baris: lama baru — atau * https://t.me/saya untuk menulis ulang semua tautan.",
+  "ui_link_rewrite_map_label": "Peta penulisan ulang tautan",
+  "ui_mention_rewrite_map_hint": "Satu pasang per baris: @tokoLama @tokoBaru — atau * @utama untuk menulis ulang semua @ID.",
+  "ui_mention_rewrite_map_label": "Peta penulisan ulang @sebutan",
+  "ui_only_if_the_message_comes_from_a_channel": "dan hanya jika berasal dari kanal",
+  "ui_replace_any_link_found": "Ganti setiap tautan yang ditemukan",
+  "ui_replace_any_link_found_hint": "Menulis ulang setiap tautan pada teks lewat peta tautan di bawah.",
+  "ui_replace_links_mentions_section": "Ganti tautan & @sebutan",
   "ui_0s_instant": "0 detik (langsung)",
   "ui_1_back_up_this_server": "1. Cadangkan server ini",
   "ui_2_restore_on_this_server": "2. Pulihkan di server ini",
