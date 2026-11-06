@@ -100,6 +100,11 @@ BUFFER_NEW_NAME = "prompt_new_name_value"
 #: importable in isolation.
 CB_MAIN = "m"
 
+#: The prompt-manager "test this template" verb. Spelled as a constant: the
+#: literal `"pt"` collides with the Portuguese tag in the language-tag audit,
+#: and `verb == "pt"` would read as a language comparison anyway.
+CB_PRM_TEST = "pt"
+
 
 def _cb(verb: str, template_id: str = "") -> str:
     return f"{verb}:{template_id}" if template_id else verb
@@ -251,7 +256,7 @@ class PromptBotMixin:
             await cq.answer(_t("ui_prm_deleted"))
             return await self._prm_render_list(cq, uid)
 
-        if verb == "pt":
+        if verb == CB_PRM_TEST:
             tpl = await self._prm_owned(uid, arg)
             if tpl is None:
                 return await cq.answer(_t("ui_prm_not_found"), show_alert=True)
@@ -347,7 +352,7 @@ class PromptBotMixin:
                 (self._btn("ui_prm_btn_edit_sys", lang=lang), _cb("pes", tpl.id)),
                 (self._btn("ui_prm_btn_edit_user", lang=lang), _cb("peu", tpl.id)),
             ])
-        rows.append([(self._btn("ui_rpl_btn_test", lang=lang), _cb("pt", tpl.id))])
+        rows.append([(self._btn("ui_rpl_btn_test", lang=lang), _cb(CB_PRM_TEST, tpl.id))])
         if not is_system:
             rows.append([(self._btn("ui_rpl_btn_delete", lang=lang), _cb("ped", tpl.id))])
         rows.append([(self._btn("ui_prm_btn_back_list", lang=lang), "pl")])

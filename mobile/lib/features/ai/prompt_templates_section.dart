@@ -21,6 +21,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/api_client.dart';
 import '../../core/app_state.dart';
+import '../../core/models.dart';
 import '../../core/prompt_models.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_messages.dart';
