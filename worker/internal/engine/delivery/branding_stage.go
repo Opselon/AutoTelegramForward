@@ -82,6 +82,25 @@ func unsupportedFailure(ferr *telegraph.DeliveryFailure) bool {
 		(ferr.ErrorType == "BOT_METHOD_INVALID" || ferr.ErrorType == "BOT_TRANSPORT_UNAVAILABLE")
 }
 
+// botMediaRefused reports whether a bot-route media copy failed with a
+// permanent Telegram refusal that the account transport may still deliver.
+//
+// The Bot API adapter reports every 400 as TELEGRAM_PERMANENT_ERROR with a
+// BOT_API_* error type (telegram_runtime/adapters/bot_api), so the
+// copy/re-upload classes (FORWARDING_RESTRICTED, PHOTO_EXT_INVALID, …) can
+// never match NeedsReupload() on this route. The legacy Python path
+// explicitly rescued these jobs by re-dispatching them through the account
+// transport (durable_queue.py _on_restricted); without that rescue a
+// restricted source or a target-side media rejection killed the job
+// permanently even though the USER session would deliver it. The account
+// transport applies its own copy→re-upload fallback chain after the handoff.
+func botMediaRefused(ferr *telegraph.DeliveryFailure, fallbackEnabled bool) bool {
+	if ferr == nil || ferr.IsTransient() || !fallbackEnabled {
+		return false
+	}
+	return true
+}
+
 // --- branding stage 1: post the deliverable into C ------------------------- //
 
 // brandingView builds the message-side input the hop decision reads from the

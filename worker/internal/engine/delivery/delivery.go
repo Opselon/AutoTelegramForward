@@ -27,6 +27,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -816,8 +817,8 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.Forwa
 			if p.HasMedia() {
 				id, ferr := e.gateway.BotCopyMessage(callCtx, bt, target, src, srcMsg, "", p.TopicID(), buttons)
 				e.metrics.ObserveRPC("bot_copy_message", 0)
-				if ferr != nil && unsupportedFailure(ferr) {
-					e.jobLogger(j).Warn("bot copy unsupported — falling back to account transport", "reason", ferr.Message)
+				if ferr != nil && (unsupportedFailure(ferr) || botMediaRefused(ferr, p.FallbackEnabled())) {
+					e.jobLogger(j).Warn("bot copy refused the media — falling back to account transport", "reason", ferr.Message)
 					return e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, "", p.TopicID(), j.Payload.DropSourceButtons())
 				}
 				return id, ferr
@@ -829,8 +830,8 @@ func (e *Engine) dispatch(ctx context.Context, j *job.DeliveryJob, r *rule.Forwa
 		if p.HasMedia() {
 			id, ferr := e.gateway.BotCopyMessage(callCtx, bt, target, src, srcMsg, caption, p.TopicID(), buttons)
 			e.metrics.ObserveRPC("bot_copy_message", 0)
-			if ferr != nil && unsupportedFailure(ferr) {
-				e.jobLogger(j).Warn("bot copy unsupported — falling back to account transport", "reason", ferr.Message)
+			if ferr != nil && (unsupportedFailure(ferr) || botMediaRefused(ferr, p.FallbackEnabled())) {
+				e.jobLogger(j).Warn("bot copy refused the media — falling back to account transport", "reason", ferr.Message)
 				return e.gateway.CopyMessage(callCtx, sessionID, target, src, srcMsg, caption, p.TopicID(), j.Payload.DropSourceButtons())
 			}
 			return id, ferr
@@ -1005,26 +1006,41 @@ func (e *Engine) dispatchAlbum(ctx context.Context, j *job.DeliveryJob, albumIDs
 	if ferr == nil && len(ids) > 0 {
 		return firstNonZero(ids), nil
 	}
-	if ferr != nil && !ferr.NeedsReupload() {
-		// The group copy failed for a non-restriction reason: fall through to
+	if ferr != nil && ferr.IsAmbiguous() {
+		// The group copy's outcome is unknown: the upload may have been
+		// accepted by Telegram before the connection died. Re-sending the
+		// album item-by-item would duplicate whatever landed, so record the
+		// ambiguity and let the reconciler decide. (An ambiguous group copy
+		// used to fall straight into the per-item re-upload loop and deliver
+		// the album twice.)
+		e.jobLogger(j).Warn("album group copy outcome ambiguous — refusing to re-upload", "error", ferr.Message)
+		return 0, ferr
+	}
+	if ferr != nil && !p.FallbackEnabled() {
+		// The operator disabled the re-upload fallback: honor the opt-out for
+		// every failure class, not only target-side rejections.
+		return 0, ferr
+	}
+	if ferr != nil {
+		// The group copy failed for a non-ambiguous reason: fall through to
 		// the per-item re-upload (the Python path does the same).
 		e.jobLogger(j).Warn("album group copy failed — falling back to re-upload", "error", ferr.Message)
 	}
-	if ferr != nil && ferr.NeedsReupload() && !p.FallbackEnabled() {
-		return 0, ferr
-	}
-	// Per-item re-upload fallback.
-	var last int64
+	// Per-item re-upload fallback. The mapping keys on the FIRST delivered
+	// item — edit/delete sync and auto-delete act on that id (the Python
+	// path returns res[0].id; returning the last id pointed them at the
+	// wrong message).
+	var first int64
 	for _, itemID := range albumIDs {
 		id, rferr := e.reuploadMedia(ctx, j, src, itemID, caption)
 		if rferr != nil {
 			return 0, rferr
 		}
-		if id > 0 {
-			last = id
+		if id > 0 && first == 0 {
+			first = id
 		}
 	}
-	return last, nil
+	return first, nil
 }
 
 // reuploadMedia is the restricted-source bypass: download the media through
@@ -1051,6 +1067,18 @@ func (e *Engine) reuploadMedia(ctx context.Context, j *job.DeliveryJob, srcChat,
 	if _, ferr := e.gateway.DownloadMedia(ctx, sessionID, srcChat, srcMsg, dest); ferr != nil {
 		return 0, ferr
 	}
+	// The staged file is scratch: every attempt re-downloads it, nothing
+	// reads it after this call returns, and the runtime holds no reference
+	// beyond the send. Remove it whichever way the call ends — success,
+	// failure, timeout, or cancel — so the media dir does not grow with
+	// every retried re-upload (the Python path deletes its temp files the
+	// same way; the Go port dropped that and files piled up on shared-FS
+	// deployments).
+	defer func() {
+		if err := os.Remove(dest.Path); err != nil && !os.IsNotExist(err) {
+			e.jobLogger(j).Info("staged media cleanup failed", "path", dest.Path, "error", err.Error())
+		}
+	}()
 	token, ferr := e.gateway.PrepareMediaUpload(ctx, sessionID, dest, srcChat, srcMsg, p.MediaType())
 	if ferr != nil {
 		return 0, ferr
