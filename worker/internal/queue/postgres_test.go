@@ -497,7 +497,7 @@ func TestPostgresConcurrentFenceClaimSingleWinner(t *testing.T) {
 	}
 }
 
-func TestPostgresDuplicateFenceClaimSameWorkerRedispatches(t *testing.T) {
+func TestPostgresDuplicateFenceClaimSameWorkerNeverRedispatchesLiveLease(t *testing.T) {
 	s := newPGSuite(t)
 	j := pgJob("j1", 100, "-100800")
 	key := pgFenceKey(j)
@@ -510,15 +510,56 @@ func TestPostgresDuplicateFenceClaimSameWorkerRedispatches(t *testing.T) {
 	if first != job.FenceDispatch {
 		t.Fatalf("first claim = %s, want dispatch", first)
 	}
-	// CLAIMED by the SAME worker follows the holder: a crash-recovery replay
-	// by the same worker identity re-dispatches rather than blocking.
+	// Every goroutine in one worker process shares the worker id, so a
+	// same-worker CLAIMED fence means the original dispatch is still
+	// running. Handing the claim back used to double-deliver any job whose
+	// dispatch outlived the 30s job lease (a large album re-upload). The
+	// lease now decides — same worker or not. A crash-recovery replay never
+	// reaches this path: a restarted process runs under a NEW worker id and
+	// a FAILED fence re-claims explicitly.
 	again, _, err := s.store.FenceClaim(context.Background(), key, "w1",
 		float64(time.Now().Add(time.Minute).Unix()))
 	if err != nil {
 		t.Fatalf("reclaim: %v", err)
 	}
-	if again != job.FenceDispatch {
-		t.Fatalf("same-worker reclaim = %s, want dispatch (holder semantics)", again)
+	if again != job.FenceInFlight {
+		t.Fatalf("same-worker live-lease reclaim = %s, want in_flight", again)
+	}
+
+	// Expired lease → stale, never a dispatch opportunity.
+	staleKey := pgFenceKey(pgJob("j2", 101, "-100801"))
+	if _, _, err := s.store.FenceClaim(context.Background(), staleKey, "w1",
+		float64(time.Now().Add(-time.Minute).Unix())); err != nil {
+		t.Fatalf("stale claim: %v", err)
+	}
+	out, _, err := s.store.FenceClaim(context.Background(), staleKey, "w1",
+		float64(time.Now().Add(time.Minute).Unix()))
+	if err != nil {
+		t.Fatalf("claim on expired fence: %v", err)
+	}
+	if out != job.FenceStale {
+		t.Fatalf("same-worker expired-lease claim = %s, want stale", out)
+	}
+
+	// FAILED fences stay re-claimable — the replay path.
+	failedKey := pgFenceKey(pgJob("j3", 102, "-100802"))
+	if _, _, err := s.store.FenceClaim(context.Background(), failedKey, "w1",
+		float64(time.Now().Add(time.Minute).Unix())); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if err := s.store.FenceRecordOutcome(context.Background(), failedKey, "w1", "FAILED", "transient"); err != nil {
+		t.Fatalf("record outcome: %v", err)
+	}
+	replay, row, err := s.store.FenceClaim(context.Background(), failedKey, "w1",
+		float64(time.Now().Add(time.Minute).Unix()))
+	if err != nil {
+		t.Fatalf("reclaim after FAILED: %v", err)
+	}
+	if replay != job.FenceDispatch {
+		t.Fatalf("FAILED reclaim = %s, want dispatch", replay)
+	}
+	if row == nil || row.Attempts != 1 {
+		t.Fatalf("FAILED reclaim attempts = %+v, want 1", row)
 	}
 }
 
