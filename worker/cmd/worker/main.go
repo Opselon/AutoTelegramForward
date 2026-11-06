@@ -53,6 +53,7 @@ import (
 	"atf/worker/internal/telegraph"
 	"atf/worker/internal/telegraph/fakegateway"
 	"atf/worker/internal/telegraph/grpcclient"
+	"atf/worker/internal/telegraph/unconfigured"
 )
 
 // ContractVersion is the Telegram Gateway contract this build speaks. It
@@ -174,10 +175,25 @@ func run() (runErr error) {
 	default:
 		client, err := grpcclient.New(cfg.TelegramRuntimeAddr, cfg.CoreRPCToken, workerID(), 60*time.Second)
 		if err != nil {
-			return err
+			if !cfg.WorkerEnabled {
+				// The documented contract: an empty token refuses to
+				// start only an ENABLED worker. A disabled one exists to
+				// report health — the strangler-fig guarantee that the
+				// Python Core owns execution until the operator moves the
+				// boundary — so it boots with the health-only gateway
+				// instead of restart-looping with a dark /ops endpoint
+				// (the crash loop the v2.5.0 clean-install gate caught).
+				log.Warn("Telegram runtime client unconfigured — running health-only; enable the worker only after configuring it",
+					"error", err,
+					"telegram_runtime", cfg.TelegramRuntimeAddr)
+				gateway = unconfigured.New(err.Error())
+			} else {
+				return err
+			}
+		} else {
+			defer client.Close()
+			gateway = client
 		}
-		defer client.Close()
-		gateway = client
 	}
 
 	rules, err := openRuleStore(context.Background(), cfg)
