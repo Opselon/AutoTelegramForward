@@ -4,6 +4,9 @@
 name: Temporary dart format
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - "mobile/**"
 permissions:
   contents: write
 jobs:
