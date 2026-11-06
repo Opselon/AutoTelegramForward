@@ -63,6 +63,7 @@ const toolbarStyle: React.CSSProperties = {
 }
 
 const chipStyle = (active: boolean): React.CSSProperties => ({
+  minHeight: 44,
   padding: '6px 12px',
   borderRadius: 999,
   border: `1px solid ${active ? 'var(--color-info)' : 'var(--color-border)'}`,

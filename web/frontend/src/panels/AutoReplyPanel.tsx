@@ -47,12 +47,20 @@ const labelStyle: React.CSSProperties = { fontSize: '0.78rem', fontWeight: 600, 
 const hintStyle: React.CSSProperties = { fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', lineHeight: 1.4 }
 const inputStyle: React.CSSProperties = {
   width: '100%',
+  minHeight: 44,
   padding: '8px 10px',
   borderRadius: 10,
   border: '1px solid var(--color-border-strong)',
   background: 'var(--color-surface-inset)',
   color: 'var(--color-text)',
   fontSize: 'var(--type-sm)',
+}
+const checkboxLabelStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 10,
+  minHeight: 44,
+  cursor: 'pointer',
 }
 
 function fmtTime(ts: number): string {
@@ -652,27 +660,31 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
             </div>
 
             <div style={{ ...rowStyle, marginTop: 10 }}>
-              <div>
-                <div style={labelStyle}>{t('ui_ar_memory')}</div>
-                <div style={hintStyle}>{t('ui_ar_memory_hint')}</div>
-              </div>
-              <input
-                type="checkbox"
-                checked={!!settings.memory_enabled}
-                onChange={(e) => saveSettings({ memory_enabled: e.target.checked })}
-              />
+              <label style={checkboxLabelStyle}>
+                <input
+                  type="checkbox"
+                  checked={!!settings.memory_enabled}
+                  onChange={(e) => saveSettings({ memory_enabled: e.target.checked })}
+                />
+                <div>
+                  <div style={labelStyle}>{t('ui_ar_memory')}</div>
+                  <div style={hintStyle}>{t('ui_ar_memory_hint')}</div>
+                </div>
+              </label>
             </div>
 
             <div style={{ ...rowStyle }}>
-              <div>
-                <div style={labelStyle}>{t('ui_ar_ignore_bots')}</div>
-                <div style={hintStyle}>{t('ui_ar_ignore_bots_hint')}</div>
-              </div>
-              <input
-                type="checkbox"
-                checked={!!settings.ignore_bots}
-                onChange={(e) => saveSettings({ ignore_bots: e.target.checked })}
-              />
+              <label style={checkboxLabelStyle}>
+                <input
+                  type="checkbox"
+                  checked={!!settings.ignore_bots}
+                  onChange={(e) => saveSettings({ ignore_bots: e.target.checked })}
+                />
+                <div>
+                  <div style={labelStyle}>{t('ui_ar_ignore_bots')}</div>
+                  <div style={hintStyle}>{t('ui_ar_ignore_bots_hint')}</div>
+                </div>
+              </label>
             </div>
           </div>
 
@@ -830,15 +842,17 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
             </div>
 
             <div style={{ ...rowStyle, marginTop: 10 }}>
-              <div>
-                <div style={labelStyle}>{t('ui_ar_typing')}</div>
-                <div style={hintStyle}>{t('ui_ar_typing_hint')}</div>
-              </div>
-              <input
-                type="checkbox"
-                checked={!!settings.typing_simulation}
-                onChange={(e) => saveSettings({ typing_simulation: e.target.checked })}
-              />
+              <label style={checkboxLabelStyle}>
+                <input
+                  type="checkbox"
+                  checked={!!settings.typing_simulation}
+                  onChange={(e) => saveSettings({ typing_simulation: e.target.checked })}
+                />
+                <div>
+                  <div style={labelStyle}>{t('ui_ar_typing')}</div>
+                  <div style={hintStyle}>{t('ui_ar_typing_hint')}</div>
+                </div>
+              </label>
             </div>
             {settings.typing_simulation && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginTop: 10 }}>
@@ -1393,7 +1407,7 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
             {jobs.length === 0 ? (
               <p style={hintStyle}>{t('ui_ar_jobs_empty')}</p>
             ) : (
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--type-sm)' }}>
+              <table className="responsive-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--type-sm)' }}>
                 <thead>
                   <tr style={{ textAlign: isRtl ? 'right' : 'left', color: 'var(--color-text-muted)' }}>
                     <th style={{ padding: '6px 8px' }}>{t('ui_ar_col_chat')}</th>
@@ -1407,18 +1421,18 @@ export default function AutoReplyPanel({ d }: { d: DashboardCtx }) {
                 <tbody>
                   {jobs.map((job) => (
                     <tr key={job.id} style={{ borderTop: '1px solid var(--color-border)' }}>
-                      <td style={{ padding: '8px' }}>
-                        <div style={{ color: 'var(--color-text)' }}>{job.chat_title || job.chat_id}</div>
-                        <div style={hintStyle}>{job.inbound_text}</div>
-                        {job.error && <div style={{ color: 'var(--color-danger)', fontSize: 'var(--type-xs)' }}>{job.error}</div>}
+                      <td style={{ padding: '8px' }} data-label={t('ui_ar_col_chat')}>
+                        <div style={{ color: 'var(--color-text)', overflowWrap: 'anywhere' }}>{job.chat_title || job.chat_id}</div>
+                        <div style={{ ...hintStyle, overflowWrap: 'anywhere' }}>{job.inbound_text}</div>
+                        {job.error && <div style={{ color: 'var(--color-danger)', fontSize: 'var(--type-xs)', overflowWrap: 'anywhere' }}>{job.error}</div>}
                       </td>
-                      <td style={{ padding: '8px', color: statusColor(job.status), fontWeight: 700 }}>{job.status}</td>
-                      <td style={{ padding: '8px' }}>
+                      <td style={{ padding: '8px', color: statusColor(job.status), fontWeight: 700 }} data-label={t('ui_status')}>{job.status}</td>
+                      <td style={{ padding: '8px' }} data-label={t('ui_ar_col_attempt')}>
                         {job.attempt}/{job.max_attempts}
                       </td>
-                      <td style={{ padding: '8px' }}>{job.latency_ms ? `${job.latency_ms} ms` : '—'}</td>
-                      <td style={{ padding: '8px' }}>{fmtTime(job.sent_at || job.created_at)}</td>
-                      <td style={{ padding: '8px' }}>
+                      <td style={{ padding: '8px' }} data-label={t('ui_ar_col_latency')}>{job.latency_ms ? `${job.latency_ms} ms` : '—'}</td>
+                      <td style={{ padding: '8px' }} data-label={t('ui_ar_col_time')}>{fmtTime(job.sent_at || job.created_at)}</td>
+                      <td style={{ padding: '8px' }} data-label={t('ui_actions')}>
                         <div style={{ display: 'flex', gap: 6 }}>
                           {(job.status === 'DEAD_LETTER' || job.status === 'FAILED') && (
                             <button className="btn" style={{ fontSize: 'var(--type-xs)' }} onClick={() => retryJob(job.id)}>

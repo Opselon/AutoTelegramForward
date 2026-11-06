@@ -442,7 +442,7 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
               <span
                 className="ops-chip"
                 style={stale
-                  ? { background: 'var(--color-warning, #c9a227)', color: 'var(--color-button-fg)' }
+                  ? { background: 'var(--color-warning)', color: 'var(--color-button-fg)' }
                   : { background: 'var(--color-info)', color: 'var(--color-button-fg)' }}
                 title={stale ? t('ui_stale_data_hint') : t('ui_last_update_hint')}
               >
@@ -567,10 +567,10 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
             <label className="ops-filter" style={{ display: 'inline-flex', gap: 6, alignItems: 'center', cursor: 'pointer' }} title={t('ui_task_sort_hint')}>
               {t('ui_task_sort')}
               <select
+                className="ops-select"
                 value={taskSort}
                 onChange={(e) => setTaskSort(e.target.value as TaskSortKey)}
                 aria-label={t('ui_task_sort')}
-                style={{ background: 'transparent', border: 'none', outline: 'none' }}
               >
                 <option value="throughput">{t('ui_task_sort_throughput')}</option>
                 <option value="failed">{t('ui_task_sort_failed')}</option>
@@ -592,7 +592,7 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
         </div>
         {sortedTasks.length > 0 ? (
           <div className="ops-console" style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+            <table className="responsive-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
               <thead>
                 <tr style={{ textAlign: 'left', color: 'var(--color-text-muted)' }}>
                   <th style={{ padding: '4px 8px' }}>{t('ui_task')}</th>
@@ -613,23 +613,31 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
                         key={row.rule_id}
                         style={{ cursor: 'pointer', borderTop: '1px solid var(--color-border)' }}
                         onClick={() => setExpandedTask(open ? null : row.rule_id)}
+                        tabIndex={0}
+                        aria-expanded={open}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            setExpandedTask(open ? null : row.rule_id)
+                          }
+                        }}
                         title={t('ui_click_for_the_feature_breakdown')}
                       >
-                        <td style={{ padding: '4px 8px' }}>
+                        <td data-label={t('ui_task')} style={{ padding: '4px 8px' }}>
                           {open ? <ChevronDown size={12} /> : <ChevronRight />}
                           <code style={{ marginLeft: 4 }}>{row.rule_id.slice(0, 12)}</code>
                         </td>
-                        <td style={{ padding: '4px 8px' }}>
+                        <td data-label={t('ui_state')} style={{ padding: '4px 8px' }}>
                           <span style={{ color: row.enabled ? 'var(--color-success)' : 'var(--color-text-muted)' }}>
                             {row.enabled ? t('ui_enabled') : t('ui_disabled')}
                           </span>
                         </td>
-                        <td style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>
+                        <td data-label={t('ui_delivered_failed')} style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>
                           {row.delivered} / <span style={{ color: row.failed ? 'var(--color-danger)' : 'inherit' }}>{row.failed}</span>
                         </td>
-                        <td style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>{row.pending}</td>
-                        <td style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>{row.throughput_per_min.toFixed(1)}{t('ui_per_min')} {fmtMs(row.latency_ms_avg)}</td>
-                        <td style={{ padding: '4px 8px' }}>
+                        <td data-label={t('ui_pending')} style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>{row.pending}</td>
+                        <td data-label={t('ui_throughput')} style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>{row.throughput_per_min.toFixed(1)}{t('ui_per_min')} {fmtMs(row.latency_ms_avg)}</td>
+                        <td data-label={t('ui_features')} style={{ padding: '4px 8px' }}>
                           {/* features is optional in the backend's task row:
                               the panel renders the columns it HAS and must
                               not crash the whole DevOps section because one
@@ -642,7 +650,7 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
                               .join(' ') || '—'
                           })()}
                         </td>
-                        <td style={{ padding: '4px 8px', maxWidth: 260, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={row.last_error ?? undefined}>
+                        <td data-label={t('ui_last_error')} style={{ padding: '4px 8px', whiteSpace: 'normal', overflowWrap: 'anywhere' }} title={row.last_error ?? undefined}>
                           {row.last_error ?? <span style={{ color: 'var(--color-success)' }}>{t('ui_ok')}</span>}
                         </td>
                       </tr>
@@ -651,6 +659,13 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
                           <td colSpan={7} style={{ padding: '8px 8px 12px 28px' }}>
                             <div>{t('ui_source')} <code>{row.source}</code> {t('ui_arrow_to')} <code>{row.target}</code></div>
                             <div>{t('ui_retries_label')} {row.retries} {t('ui_worker_label')} {row.worker_id || '—'} {t('ui_last_success_label')} {row.last_success_at ?? '—'}</div>
+                            {/* The full error is readable here too: the cell in
+                                the summary row wraps now instead of truncating,
+                                but the expanded view keeps it alongside the
+                                rest of the row's detail. */}
+                            <div style={{ overflowWrap: 'anywhere' }}>
+                              {t('ui_last_error')}: {row.last_error ?? <span style={{ color: 'var(--color-success)' }}>{t('ui_ok')}</span>}
+                            </div>
                             <div>
                               {row.features
                                 ? `${t('ui_filter_label')} ${String(row.features.filter)} · ${t('ui_replacement_label')} ${String(row.features.replacement)} · ${t('ui_ai_label')} ${String(row.features.ai)} · ${t('ui_cleaner_label')} ${String(row.features.cleaner)} · ${t('ui_header_label')} ${String(row.features.header)} · ${t('ui_footer_label')} ${String(row.features.footer)} · ${t('ui_media_label')} ${String(row.features.media)} · ${t('ui_fallback_label')} ${String(row.features.fallback)}`
@@ -706,7 +721,7 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
                 <span style={{ color: e.retryable ? 'var(--color-warning)' : 'var(--color-text-muted)', minWidth: 70 }}>
                   {e.retryable ? t('ui_retry_label', { count: e.retry_count }) : t('ui_permanent')}
                 </span>
-                <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={e.message}>{e.message}</span>
+                <span style={{ flex: 1, whiteSpace: 'normal', overflowWrap: 'anywhere' }} title={e.message}>{e.message}</span>
                 {e.count && e.count > 1 ? (
                   <span className="ops-levelchip" title={t('ui_repeated_times_since', { count: e.count, since: e.first_seen ?? '' })}>×{e.count}</span>
                 ) : null}

@@ -28,7 +28,7 @@ const SEVERITIES: Severity[] = ['ERROR', 'WARN', 'INFO', 'DEBUG']
 function sevTone(sev?: string): string {
   switch (sev) {
     case 'ERROR': return 'var(--color-danger)'
-    case 'WARN': return 'var(--color-warning, #c9a227)'
+    case 'WARN': return 'var(--color-warning)'
     case 'DEBUG': return 'var(--color-text-muted)'
     default: return 'var(--color-info)'
   }
@@ -310,7 +310,7 @@ export default function WorkerLogCenter({ lang }: { lang: UiLang }) {
                     ) : null}
                     <button
                       type="button"
-                      className="ops-filter"
+                      className="btn btn--ghost btn--sm"
                       onClick={(e) => {
                         e.stopPropagation()
                         copySanitized(entry)

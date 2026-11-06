@@ -382,8 +382,23 @@ export function RuleModal({
       title={form.id ? t('ui_edit_forward_rule') : t('ui_new_forward_rule')}
       onClose={onClose}
       width={760}
+      footer={
+        /* Pinned action bar: rendered by the shell outside the scrollable
+           body, so Save stays reachable on a phone no matter how long the
+           editor grows. The submit button lives outside the <form> element
+           now — `form=` re-associates it so submit still works. */
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button type="button" onClick={onClose} className="btn btn-secondary">
+            {t('ui_cancel')}
+          </button>
+          <button type="submit" form="rule-modal-form" disabled={saving || hasLoop || !hasEndpoints} className="btn btn-primary">
+            <Check size={16} aria-hidden="true" />
+            <span>{t('ui_save_rule')}</span>
+          </button>
+        </div>
+      }
     >
-      <form onSubmit={submit}>
+      <form onSubmit={submit} id="rule-modal-form">
         {/* ---------------------------------------------------- endpoints */}
         <section className="rule-section">
           <div className="rule-section__title">{t('ui_endpoints')}</div>
@@ -820,16 +835,6 @@ export function RuleModal({
             <span>{t('ui_fail_open_sends_the_original_text_if_ai_fails_and_logs_the_fallb')}</span>
           </p>
         </section>
-
-        <div className="modal-sheet-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24 }}>
-          <button type="button" onClick={onClose} className="btn btn-secondary">
-            {t('ui_cancel')}
-          </button>
-          <button type="submit" disabled={saving || hasLoop || !hasEndpoints} className="btn btn-primary">
-            <Check size={16} aria-hidden="true" />
-            <span>{t('ui_save_rule')}</span>
-          </button>
-        </div>
       </form>
     </ModalShell>
   )

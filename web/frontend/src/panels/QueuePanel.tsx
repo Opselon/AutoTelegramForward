@@ -2,7 +2,7 @@
  * The delivery queue and the dead-letter queue.
  */
 import { Activity, Clock, Plus, RefreshCw, Trash2 } from 'lucide-react'
-import { Button, EmptyState, PageHeader } from '../components/ui/Primitives'
+import { Button, EmptyState, PageHeader, SkeletonRows } from '../components/ui/Primitives'
 import { DeliveryTimeline } from '../components/DeliveryTimeline'
 import type { DashboardCtx } from '../App'
 
@@ -67,7 +67,9 @@ export default function QueuePanel({ d }: { d: DashboardCtx }) {
                       <span>{t('ui_recent_delivery_jobs')}</span>
                     </h3>
 
-                    {queueJobs.length === 0 ? (
+                    {d.loading && queueJobs.length === 0 && dlqJobs.length === 0 ? (
+                      <SkeletonRows rows={4} lang={lang} />
+                    ) : queueJobs.length === 0 ? (
                       <EmptyState
                         title={t('ui_empty_title')}
                         description={t('ui_no_pending_jobs_in_queue')}
@@ -138,7 +140,7 @@ export default function QueuePanel({ d }: { d: DashboardCtx }) {
                                 <span>{t('ui_retry')}</span>
                               </button>
                             </div>
-                            <div style={{ color: 'var(--color-text)', fontSize: 'var(--type-xs)' }}>{dlq.last_error}</div>
+                            <div style={{ color: 'var(--color-text)', fontSize: 'var(--type-xs)', overflowWrap: 'anywhere' }}>{dlq.last_error}</div>
                           </div>
                         ))}
                       </div>

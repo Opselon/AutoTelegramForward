@@ -36,6 +36,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { Menu, MoreHorizontal, PanelLeftClose, PanelLeftOpen, X } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { makeT, type UiLang } from '../locales/engine'
+import { haptic } from '../haptics'
 
 export type TabId =
   | 'system'
@@ -131,7 +132,12 @@ export function MobileNav({
           type="button"
           className={`mobile-nav__item${active === item.id ? ' is-active' : ''}`}
           aria-current={active === item.id ? 'page' : undefined}
-          onClick={() => onSelect(item.id)}
+          onClick={() => {
+            // A light tick when the destination actually changes; silence on
+            // re-tapping the tab you are already on.
+            if (active !== item.id) haptic('light')
+            onSelect(item.id)
+          }}
         >
           <span className="mobile-nav__icon" aria-hidden="true">
             {item.icon}
@@ -145,7 +151,10 @@ export function MobileNav({
       <button
         type="button"
         className="mobile-nav__item"
-        onClick={onOpenDrawer}
+        onClick={() => {
+          haptic('light')
+          onOpenDrawer()
+        }}
         aria-haspopup="dialog"
         aria-controls="app-navigation"
       >
@@ -304,6 +313,7 @@ export function Navigation({
         className={`nav-item${active === item.id ? ' is-active' : ''}`}
         aria-current={active === item.id ? 'page' : undefined}
         onClick={() => {
+          if (active !== item.id) haptic('light')
           onSelect(item.id)
           close()
         }}
@@ -341,6 +351,20 @@ export function Navigation({
         className={`app-sidebar${open ? ' is-open' : ''}${collapsed ? ' is-collapsed' : ''}`}
         aria-label={t('ui_nav_primary')}
       >
+        {/* Phone affordance: the drawer closes from inside itself, not only
+            via the header trigger or the scrim. CSS shows this row only
+            while the rail is a drawer (below 1024px). */}
+        <div className="drawer-head">
+          <p className="drawer-head__title">{t('ui_nav_primary')}</p>
+          <button
+            type="button"
+            className="btn btn--ghost btn--icon btn--sm"
+            aria-label={t('ui_close_navigation')}
+            onClick={close}
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
         <nav className="app-sidebar__nav">
           {rows}
           {onCollapsedChange ? (

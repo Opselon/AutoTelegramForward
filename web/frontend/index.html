@@ -3,9 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <!-- interactive-widget=resizes-content: on Android the on-screen keyboard
+         shrinks the viewport (like iOS), so bottom sheets and the tab bar
+         reflow above it instead of the keyboard covering the form. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
     <meta name="theme-color" content="#070b15" />
     <meta name="color-scheme" content="dark light" />
+    <!-- Installed/standalone web-app chrome: the dashboard runs as its own
+         app on a phone home screen with a translucent status bar, so the
+         safe-area insets do the framing (see index.css --safe-*). -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ATF Gateway" />
+    <meta name="application-name" content="ATF Gateway" />
     <title>AutoTelegramForward PRO | Smart Gateway & Control Panel</title>
     <!-- The shell pins lang/dir/theme from stored preferences before the first
          paint (src/main.tsx). This element no longer claims Persian: that

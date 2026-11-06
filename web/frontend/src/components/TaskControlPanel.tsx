@@ -314,7 +314,7 @@ export function TaskControlPanel({ rule, lang = 'en', onRulePatch, onSaved }: Pr
     padding: '8px 10px',
     fontSize: 'var(--type-xs)',
   }
-  const hint: React.CSSProperties = { fontSize: '11px', color: 'var(--color-text-muted)', marginTop: '2px' }
+  const hint: React.CSSProperties = { fontSize: 'var(--type-xs)', color: 'var(--color-text-muted)', marginTop: '2px' }
 
   /**
    * Add several chats at once from the browser.
@@ -628,7 +628,7 @@ function ChatListEditor({
         <span style={{ fontSize: 'var(--type-sm)', fontWeight: 700, color: 'var(--color-text)' }}>{title}</span>
         <span
           style={{
-            fontSize: '11px',
+            fontSize: 'var(--type-xs)',
             color: 'var(--color-info)',
             backgroundColor: 'var(--color-info-soft)',
             borderRadius: 'var(--radius-full)',
@@ -659,6 +659,8 @@ function ChatListEditor({
               fontSize: 'var(--type-xs)',
               color: 'var(--color-text)',
               flex: 1,
+              minWidth: 0,
+              overflowWrap: 'anywhere',
               direction: 'ltr',
               textAlign: isRtl ? 'right' : 'left',
             }}
@@ -666,7 +668,7 @@ function ChatListEditor({
             {entry}
           </span>
           {idx === 0 && (
-            <span style={{ fontSize: '10px', color: 'var(--color-success)', fontWeight: 600 }}>
+            <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-success)', fontWeight: 600 }}>
               {primaryLabel}
             </span>
           )}
@@ -674,13 +676,18 @@ function ChatListEditor({
             type="button"
             onClick={() => onRemove(entry)}
             disabled={!canRemove}
+            aria-label={canRemove ? t('ui_remove_name', { name: entry }) : removeDisabledHint}
             title={canRemove ? t('ui_remove_name', { name: entry }) : removeDisabledHint}
             style={{
               background: 'none',
               border: 'none',
               cursor: canRemove ? 'pointer' : 'not-allowed',
               color: canRemove ? 'var(--color-danger)' : 'var(--color-text-muted)',
-              display: 'flex',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 44,
+              minWidth: 44,
             }}
           >
             <X size={14} />
@@ -717,6 +724,7 @@ function ChatListEditor({
             border: '1px solid var(--color-border-strong)',
             borderRadius: 'var(--radius-sm)',
             padding: '8px 12px',
+            minHeight: 44,
             fontSize: 'var(--type-xs)',
             fontWeight: 600,
             cursor: draft.trim() ? 'pointer' : 'not-allowed',
@@ -733,7 +741,7 @@ function ChatListEditor({
             gap: '6px',
             alignItems: 'center',
             color: 'var(--color-danger-text)',
-            fontSize: '11px',
+            fontSize: 'var(--type-xs)',
             marginTop: '6px',
           }}
         >
@@ -760,7 +768,8 @@ function ChatListEditor({
           borderRadius: 'var(--radius-sm)',
           color: 'var(--color-info)',
           padding: '7px 10px',
-          fontSize: '11px',
+          minHeight: 44,
+          fontSize: 'var(--type-xs)',
           cursor: 'pointer',
           width: '100%',
           justifyContent: 'center',
@@ -844,13 +853,13 @@ function SettingRow({
           {SETTING_LABELS[spec.key]?.[lang] ?? spec.label}
         </span>
         {changed && (
-          <span style={{ fontSize: '9px', color: 'var(--color-warning)', fontWeight: 700 }}>{t('ui_edited')}</span>
+          <span style={{ fontSize: 'var(--type-xs)', color: 'var(--color-warning)', fontWeight: 700 }}>{t('ui_edited')}</span>
         )}
         {badge && !changed && (
           <span
             title={t(badge.titleKey)}
             style={{
-              fontSize: '9px',
+              fontSize: 'var(--type-xs)',
               color: badge.color,
               backgroundColor: badge.background,
               // badge.color is a var() token, so the old `${color}33` hex-alpha
@@ -873,12 +882,16 @@ function SettingRow({
             disabled={resetting}
             title={t('ui_use_the_default_for_this_setting')}
             style={{
-              fontSize: '9px',
+              fontSize: 'var(--type-xs)',
               color: resetting ? 'var(--color-text-muted)' : 'var(--color-info)',
               background: 'none',
               border: '1px solid var(--color-border-strong)',
               borderRadius: '4px',
-              padding: '1px 5px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              minHeight: 44,
+              minWidth: 44,
               cursor: resetting ? 'default' : 'pointer',
             }}
           >
@@ -895,8 +908,21 @@ function SettingRow({
   )
 
   if (spec.kind === 'bool') {
+    // A <label> wraps the whole row: the switch itself keeps its 42x22 visual,
+    // but the entire row is the touch target and clicking the label text
+    // toggles the same control (the label forwards activation to the button).
     return (
-      <div style={rowStyle}>
+      <label
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          padding: '7px 0',
+          borderBottom: '1px solid var(--color-border)',
+          minHeight: 44,
+          cursor: 'pointer',
+        }}
+      >
         {label}
         <button
           type="button"
@@ -926,7 +952,7 @@ function SettingRow({
             }}
           />
         </button>
-      </div>
+      </label>
     )
   }
 
@@ -969,7 +995,7 @@ function SettingRow({
     return (
       <div style={{ ...rowStyle, alignItems: 'flex-start' }}>
         {label}
-        <div style={{ maxWidth: '58%', flex: 1, minWidth: 0 }}>
+        <div style={{ maxWidth: '100%', flex: 1, minWidth: 0 }}>
           <BotRouteField
             lang={lang}
             bots={bots}
@@ -1082,7 +1108,7 @@ function ListEditor({ spec, value, lang, inputStyle, hintStyle, onChange }: List
                 border: '1px solid var(--color-border-strong)',
                 borderRadius: 'var(--radius-full)',
                 padding: '2px 6px 2px 10px',
-                fontSize: '11px',
+                fontSize: 'var(--type-xs)',
                 color: 'var(--color-text)',
               }}
               dir="ltr"
@@ -1091,13 +1117,18 @@ function ListEditor({ spec, value, lang, inputStyle, hintStyle, onChange }: List
               <button
                 type="button"
                 onClick={() => removeAt(idx)}
+                aria-label={t('ui_remove_name', { name: entry })}
                 title={t('ui_remove_name', { name: entry })}
                 style={{
                   background: 'none',
                   border: 'none',
                   cursor: 'pointer',
                   color: 'var(--color-danger)',
-                  display: 'flex',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  minHeight: 44,
+                  minWidth: 44,
                   padding: 0,
                 }}
               >
@@ -1138,6 +1169,7 @@ function ListEditor({ spec, value, lang, inputStyle, hintStyle, onChange }: List
             border: '1px solid var(--color-border-strong)',
             borderRadius: 'var(--radius-sm)',
             padding: '8px 12px',
+            minHeight: 44,
             fontSize: 'var(--type-xs)',
             fontWeight: 600,
             cursor: draft.trim() ? 'pointer' : 'not-allowed',
@@ -1157,7 +1189,7 @@ function ListEditor({ spec, value, lang, inputStyle, hintStyle, onChange }: List
             gap: '6px',
             alignItems: 'center',
             color: 'var(--color-danger-text)',
-            fontSize: '11px',
+            fontSize: 'var(--type-xs)',
             marginTop: '4px',
           }}
         >

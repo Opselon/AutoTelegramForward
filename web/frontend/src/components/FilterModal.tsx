@@ -182,8 +182,23 @@ export function FilterModal({ open, lang, filter, onClose, onSaved, showToast }:
       title={filter ? t('ui_content_filter_rule') : t('ui_new_filter_rule')}
       onClose={onClose}
       width={680}
+      footer={
+        /* Pinned action bar, rendered by the shell outside the scrollable
+           body — Save stays above the safe area on a phone. `form=` keeps
+           the submit button associated with the <form> it now sits outside
+           of. */
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button type="button" onClick={onClose} className="btn btn-secondary">
+            {t('ui_cancel')}
+          </button>
+          <button type="submit" form="filter-modal-form" disabled={saving} className="btn btn-primary">
+            <Check size={16} aria-hidden="true" />
+            <span>{t('ui_save_filter')}</span>
+          </button>
+        </div>
+      }
     >
-      <form onSubmit={submit}>
+      <form onSubmit={submit} id="filter-modal-form">
         <div className="rule-modal-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           <div className="field">
             <label className="field__label" htmlFor="filter-name">
@@ -348,16 +363,6 @@ export function FilterModal({ open, lang, filter, onClose, onSaved, showToast }:
             </div>
           )}
         </section>
-
-        <div className="modal-sheet-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 24 }}>
-          <button type="button" onClick={onClose} className="btn btn-secondary">
-            {t('ui_cancel')}
-          </button>
-          <button type="submit" disabled={saving} className="btn btn-primary">
-            <Check size={16} aria-hidden="true" />
-            <span>{t('ui_save_filter')}</span>
-          </button>
-        </div>
       </form>
     </ModalShell>
   )

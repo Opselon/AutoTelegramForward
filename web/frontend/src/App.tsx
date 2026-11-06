@@ -24,6 +24,7 @@ import {
 import { api } from './api'
 import { isAccepted, purgedCount, refusalReason } from './actionResult'
 import { describeSaveFailure } from './providerKey'
+import { haptic } from './haptics'
 import { ensureLangLoaded, isLangLoaded, isRtlLang, makeT, preferredLang, rememberLang, type UiLang } from './locales/engine'
 import { LanguagePicker } from './components/LanguagePicker'
 import type { ForwardRule, Session, AIConfig, AIProviderInfo, SaveAIConfigRequest, PromptTemplate, FilterRule, DeliveryJob, DeadLetterJob, DeliveryStats, RuleLiveStat, RecentError, GatewaySystemInfo, SimulateResponse, StatsResponse, LogItem, LogStats, ServicesHealthResponse, PVResponderConfig, DiagnosticsResponse, MeInfo } from './types'
@@ -334,6 +335,9 @@ function useDashboard(me?: MeInfo) {
   // another cancels the older timers instead of being closed early by them.
   const toastTimers = useRef<Array<number>>([])
   const showToast = useCallback((msg: string, tone: 'success' | 'danger' = 'success') => {
+    // Success reads as success, failure as failure — in the hand as well as
+    // on screen (no-op outside Telegram Mini App).
+    haptic(tone === 'danger' ? 'error' : 'success')
     for (const id of toastTimers.current) window.clearTimeout(id)
     toastTimers.current = []
     setToast({ message: msg, tone })
@@ -371,6 +375,9 @@ function useDashboard(me?: MeInfo) {
   const [confirmBusy, setConfirmBusy] = useState(false)
   const requestConfirm = useCallback(
     (title: string, run: () => Promise<void> | void, body?: string) => {
+      // A double-notification for a destructive gate is the point: the dialog
+      // carries the meaning on screen, the haptic carries it in the hand.
+      haptic('warning')
       setPendingConfirm({ title, body, run })
     },
     [],
@@ -1756,8 +1763,22 @@ export function App({ me }: { me?: MeInfo } = {}) {
           title={t('ui_ai_engine_configuration')}
           width={580}
           onClose={() => setIsAiModalOpen(false)}
+          footer={
+            /* Pinned action bar: Save stays above the phone safe area even
+               with the keyboard open. `form=` keeps submit associated with
+               the form the button now sits outside of. */
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+              <button type="button" onClick={() => setIsAiModalOpen(false)} className="btn btn-secondary">
+                {t('ui_cancel')}
+              </button>
+              <button type="submit" form="ai-config-form" className="btn btn-primary">
+                <Check size={16} aria-hidden="true" />
+                <span>{t('ui_save')}</span>
+              </button>
+            </div>
+          }
         >
-          <form onSubmit={handleSaveAI} className="ai-form">
+          <form onSubmit={handleSaveAI} className="ai-form" id="ai-config-form">
             <Field label={`${t('ui_configuration_name')} *`} htmlFor="ai-config-name">
               <input
                 id="ai-config-name"
@@ -1868,15 +1889,6 @@ export function App({ me }: { me?: MeInfo } = {}) {
               />
             </Field>
 
-            <div className="ai-form__actions">
-              <button type="button" onClick={() => setIsAiModalOpen(false)} className="btn btn-secondary">
-                {t('ui_cancel')}
-              </button>
-              <button type="submit" className="btn btn-primary">
-                <Check size={16} aria-hidden="true" />
-                <span>{t('ui_save')}</span>
-              </button>
-            </div>
           </form>
         </ModalShell>
         )

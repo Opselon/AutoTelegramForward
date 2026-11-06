@@ -98,6 +98,31 @@ export function DiagnosticsPanel({
         </div>
       )}
 
+      {/* The chips only carry their detail in a tooltip; on a phone there is no
+          hover, so any service that has one also renders it as visible text
+          under the chip row (the detail is response data, not copy). */}
+      {report && report.services?.some((s) => s.detail) && (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 2,
+            marginTop: 6,
+            fontSize: 'var(--type-xs)',
+            color: 'var(--color-text-muted)',
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {report.services
+            .filter((s) => s.detail)
+            .map((s) => (
+              <span key={s.name}>
+                {s.name}: {s.detail}
+              </span>
+            ))}
+        </div>
+      )}
+
       {report && findings.length === 0 ? (
         <p className="preflight-ok">
           {t('ui_no_problems_found_every_task_is_healthy')}

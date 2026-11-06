@@ -235,10 +235,8 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                         <div
                           className="ops-node__sub"
                           style={{
-                            maxWidth: 320,
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
+                            whiteSpace: 'normal',
+                            overflowWrap: 'anywhere',
                           }}
                         >
                           {s.detail}
@@ -479,7 +477,7 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                   type="button"
                   onClick={() => setSearchDraft('')}
                   className="btn btn--ghost btn--icon btn--sm"
-                  style={{ position: 'absolute', insetInlineEnd: 4, minInlineSize: 32, minBlockSize: 32 }}
+                  style={{ position: 'absolute', insetInlineEnd: 4 }}
                   aria-label={t('ui_cancel')}
                   title={t('ui_cancel')}
                 >
@@ -607,15 +605,8 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
             <input
               type="number" min={0} max={720} step={1} value={purgeWindowH}
               onChange={(e) => setPurgeWindowH(Math.max(0, Math.min(720, Number(e.target.value) || 0)))}
-              style={{
-                inlineSize: 64,
-                background: 'var(--color-surface-inset)',
-                color: 'var(--color-text)',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-sm)',
-                padding: '4px 6px',
-                fontSize: 'var(--type-xs)',
-              }}
+              className="input-field"
+              style={{ width: 72 }}
             />
             {t('ui_h')}
           </label>
@@ -772,7 +763,10 @@ export default function DevopsPanel({ d }: { d: DashboardCtx }) {
                         flexShrink: 0,
                         display: 'flex',
                         alignItems: 'center',
+                        justifyContent: 'center',
                         gap: 4,
+                        minHeight: 44,
+                        minWidth: 44,
                         fontSize: 'var(--type-xs)',
                       }}
                       aria-label={t('ui_copy_log_line')}

@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { RefreshCw, AlertTriangle, ChevronDown, ChevronRight, Check, Loader2 } from 'lucide-react'
 import { api } from '../api'
+import { ConfirmDialog } from './ConfirmDialog'
 import { isWorkerUnreachable, type WorkerIncident } from '../workerOps'
 import { makeT, type UiLang } from '../locales/engine'
 
@@ -67,6 +68,8 @@ export function IncidentCenter({ lang }: { lang: UiLang }) {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [acking, setAcing] = useState<string | null>(null)
   const [lastUpdate, setLastUpdate] = useState<number | null>(null)
+  // Acknowledging gates through the shared alertdialog, not window.confirm.
+  const [pendingAck, setPendingAck] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     try {
@@ -198,7 +201,7 @@ export function IncidentCenter({ lang }: { lang: UiLang }) {
                     ×{inc.count}
                   </span>
                   {inc.recoveries > 0 ? (
-                    <span style={{ fontSize: '0.75rem', color: 'var(--color-warning, #c9a227)' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-warning)' }}>
                       {t('ui_incident_recoveries', { n: inc.recoveries })}
                     </span>
                   ) : null}
@@ -234,7 +237,7 @@ export function IncidentCenter({ lang }: { lang: UiLang }) {
                       })}
                     </div>
                     {inc.acked_by ? (
-                      <div style={{ fontSize: '0.75rem', color: 'var(--color-warning, #c9a227)' }}>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--color-warning)' }}>
                         {t('ui_incident_acked_by', { who: inc.acked_by, at: fmtTs(inc.acked_at) })}
                       </div>
                     ) : null}
@@ -242,10 +245,10 @@ export function IncidentCenter({ lang }: { lang: UiLang }) {
                       <div>
                         <button
                           type="button"
-                          className="ops-filter"
+                          className="btn btn--ghost btn--sm"
                           onClick={(e) => {
                             e.stopPropagation()
-                            if (window.confirm(t('ui_incident_ack_confirm'))) void ack(inc.id)
+                            setPendingAck(inc.id)
                           }}
                           disabled={acking === inc.id}
                         >
@@ -261,6 +264,20 @@ export function IncidentCenter({ lang }: { lang: UiLang }) {
           })}
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingAck !== null}
+        lang={lang}
+        title={t('ui_incident_ack_confirm')}
+        confirmLabel={t('ui_yes')}
+        cancelLabel={t('ui_cancel')}
+        onConfirm={() => {
+          const id = pendingAck
+          setPendingAck(null)
+          if (id) void ack(id)
+        }}
+        onCancel={() => setPendingAck(null)}
+      />
     </div>
   )
 }

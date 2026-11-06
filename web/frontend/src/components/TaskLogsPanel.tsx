@@ -51,7 +51,13 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
   const [copied, setCopied] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
 
+  // `makeT` hands back a fresh closure on every call, so binding it here and
+  // listing `t` in `load`'s deps re-created the callback (and re-ran the
+  // fetch effect) on every render — an infinite update loop that React only
+  // recovered from by bailing out. Resolve the translator inside the
+  // callback instead: `lang` is a stable string, so the deps stay honest.
   const load = useCallback(async () => {
+    const t = makeT(lang)
     setLoading(true)
     setError(null)
     try {
@@ -70,7 +76,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
     } finally {
       setLoading(false)
     }
-  }, [ruleId, levels, appliedSearch, hours, offset, pageSize, order, t])
+  }, [ruleId, lang, levels, appliedSearch, hours, offset, pageSize, order])
 
   useEffect(() => {
     void load()
@@ -138,6 +144,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
         }
         style={{
           padding: '3px 10px',
+          minHeight: 44,
           borderRadius: 'var(--radius-full)',
           fontSize: 'var(--type-xs)',
           fontWeight: 700,
@@ -158,6 +165,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
     color: 'var(--color-text)',
     borderRadius: 'var(--radius-sm)',
     padding: '6px 10px',
+    minHeight: 44,
     fontSize: 'var(--type-xs)',
   }
 
@@ -185,7 +193,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
           onKeyDown={(e) => {
             if (e.key === 'Enter') setAppliedSearch(search.trim())
           }}
-          style={{ ...controls, minWidth: 190, flex: 1 }}
+          style={{ ...controls, flex: 1 }}
         />
         <button
           type="button"
@@ -263,7 +271,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
           type="button"
           onClick={() => setOffset(Math.max(0, offset - pageSize))}
           disabled={offset === 0 || loading}
-          style={{ ...controls, padding: '3px 10px', cursor: offset === 0 ? 'not-allowed' : 'pointer' }}
+          style={{ ...controls, padding: '3px 10px', minWidth: 44, cursor: offset === 0 ? 'not-allowed' : 'pointer' }}
         >
           <ChevronUp size={12} style={{ verticalAlign: 'middle' }} /> {t('ui_newer')}
         </button>
@@ -274,6 +282,7 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
           style={{
             ...controls,
             padding: '3px 10px',
+            minWidth: 44,
             cursor: page?.has_more ? 'pointer' : 'not-allowed',
           }}
         >
@@ -344,7 +353,8 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
                   <button
                     type="button"
                     onClick={() => toggle(key)}
-                    style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', padding: 0, marginTop: 2 }}
+                    aria-label={t('ui_show_detail')}
+                    style={{ background: 'none', border: 'none', color: 'var(--color-text-muted)', cursor: 'pointer', padding: 0, marginTop: 2, minHeight: 44, minWidth: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                     title={t('ui_show_detail')}
                   >
                     {isOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -374,7 +384,8 @@ export function TaskLogsPanel({ ruleId, lang = 'en' }: Props) {
                   <button
                     type="button"
                     onClick={() => void copyRow(item, key)}
-                    style={{ background: 'none', border: 'none', color: copied === key ? 'var(--color-success)' : 'var(--color-text-muted)', cursor: 'pointer', padding: 0 }}
+                    aria-label={t('ui_copy_row')}
+                    style={{ background: 'none', border: 'none', color: copied === key ? 'var(--color-success)' : 'var(--color-text-muted)', cursor: 'pointer', padding: 0, minHeight: 44, minWidth: 44, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                     title={t('ui_copy_row')}
                   >
                     <Copy size={11} />

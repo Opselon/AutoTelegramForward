@@ -41,6 +41,9 @@ export function AdminPanel({ lang }: Props) {
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
   const [extensions, setExtensions] = useState<any[]>([])
   const [actionError, setActionError] = useState<string | null>(null)
+  // Any of the five mount loaders failing surfaces through the panel's
+  // existing error note instead of silently rendering an empty section.
+  const [loadError, setLoadError] = useState(false)
 
   const loadOverview = async () => {
     try {
@@ -48,6 +51,7 @@ export function AdminPanel({ lang }: Props) {
       setOverview(data)
     } catch (e: any) {
       console.error(e)
+      setLoadError(true)
     }
   }
 
@@ -58,6 +62,7 @@ export function AdminPanel({ lang }: Props) {
       setTotalUsers(data?.total || 0)
     } catch (e: any) {
       console.error(e)
+      setLoadError(true)
     }
   }
 
@@ -70,6 +75,7 @@ export function AdminPanel({ lang }: Props) {
       setRegOpen(data?.registration_open ?? true)
     } catch (e: any) {
       console.error(e)
+      setLoadError(true)
     }
   }
 
@@ -79,6 +85,7 @@ export function AdminPanel({ lang }: Props) {
       setAdmins(data?.admins || [])
     } catch (e: any) {
       console.error(e)
+      setLoadError(true)
     }
   }
 
@@ -88,6 +95,7 @@ export function AdminPanel({ lang }: Props) {
       setExtensions(data?.extensions || [])
     } catch (e: any) {
       console.error(e)
+      setLoadError(true)
     }
   }
 
@@ -231,6 +239,7 @@ export function AdminPanel({ lang }: Props) {
 
       {/* Sub navigation */}
       <div
+        className="no-scrollbar"
         style={{
           display: 'flex',
           gap: 8,
@@ -326,6 +335,12 @@ export function AdminPanel({ lang }: Props) {
         </div>
       )}
 
+      {loadError && !actionError && (
+        <div className="p-note p-note--danger" style={{ marginBottom: 16 }}>
+          {t('ui_error_loading_dashboard_data')}
+        </div>
+      )}
+
       {/* SECTION: Overview */}
       {activeSection === 'overview' && (
         <div>
@@ -389,7 +404,7 @@ export function AdminPanel({ lang }: Props) {
           </h3>
 
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: isRtl ? 'right' : 'left', fontSize: '0.88rem' }}>
+            <table className="responsive-table" style={{ width: '100%', borderCollapse: 'collapse', textAlign: isRtl ? 'right' : 'left', fontSize: '0.88rem' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--color-border)', color: 'var(--color-text-muted)' }}>
                   <th style={{ padding: '10px 12px' }}>{t('ui_admin_user_id')}</th>
@@ -404,12 +419,12 @@ export function AdminPanel({ lang }: Props) {
                   const isSuspended = u.status === 'suspended'
                   return (
                     <tr key={u.user_id} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      <td style={{ padding: '12px', fontFamily: 'monospace', color: 'var(--color-text)' }}>
+                      <td data-label={t('ui_admin_user_id')} style={{ padding: '12px', fontFamily: 'monospace', color: 'var(--color-text)' }}>
                         {u.user_id} {u.is_admin ? <span className="badge badge-vip">{t('ui_role_admin')}</span> : null}
                       </td>
-                      <td style={{ padding: '12px', color: 'var(--color-text)' }}>{u.username ? `@${u.username}` : '—'}</td>
-                      <td style={{ padding: '12px', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>{u.plan}</td>
-                      <td style={{ padding: '12px' }}>
+                      <td data-label={t('ui_username')} style={{ padding: '12px', color: 'var(--color-text)' }}>{u.username ? `@${u.username}` : '—'}</td>
+                      <td data-label={t('ui_plan')} style={{ padding: '12px', color: 'var(--color-text-muted)', textTransform: 'uppercase' }}>{u.plan}</td>
+                      <td data-label={t('ui_status')} style={{ padding: '12px' }}>
                         <span
                           style={{
                             display: 'inline-block',
@@ -424,7 +439,7 @@ export function AdminPanel({ lang }: Props) {
                           {isSuspended ? (t('ui_suspended')) : (t('ui_active'))}
                         </span>
                       </td>
-                      <td style={{ padding: '12px' }}>
+                      <td data-label={t('ui_actions')} style={{ padding: '12px' }}>
                         {!u.is_admin && (
                           <button
                             onClick={() => handleToggleUserStatus(u.user_id, u.status)}

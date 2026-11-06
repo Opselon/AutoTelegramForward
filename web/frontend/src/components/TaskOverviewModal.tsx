@@ -34,6 +34,7 @@ import { ADDONS, OVERVIEW_ADDONS } from '../addons'
 import { TaskControlPanel } from './TaskControlPanel'
 import { TaskLogsPanel } from './TaskLogsPanel'
 import { api } from '../api'
+import { haptic } from '../haptics'
 
 /*
  * v30 — Whitelist / Blacklist management.
@@ -69,12 +70,16 @@ interface WordEntry {
   kind: EntryKind
 }
 
-/** Compact borderless action button used on a list entry's action row. */
+/** Compact borderless action button used on a list entry's action row. The
+    title doubles as the accessible name — an icon-only control without one
+    is invisible to a screen reader — and the CSS keeps a 44px touch target
+    on phones while the glyph stays compact. */
 function IconButton({ title, onClick, children }: { title: string; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       type="button"
       title={title}
+      aria-label={title}
       onClick={onClick}
       className="tom-iconbtn"
     >
@@ -132,6 +137,9 @@ export function TaskOverviewModal({
   const [saving, setSaving] = useState(false)
   const [isEditingName, setIsEditingName] = useState(false)
   const [showTopicPrompt, setShowTopicPrompt] = useState(false)
+  // Inline source/target editor (replaces the blocking window.prompt, which
+  // several in-app browsers suppress — the tap would silently do nothing).
+  const [chatEdit, setChatEdit] = useState<{ field: 'source' | 'target'; value: string } | null>(null)
 
   // Subview input states for v2.0 cards
   const [newReplaceFrom, setNewReplaceFrom] = useState('')
@@ -589,12 +597,29 @@ export function TaskOverviewModal({
     }))
   }
 
+  /** Commit the inline source/target editor: same write the old window.prompt
+      did — id and display name move together — then close the row. */
+  const applyChatEdit = () => {
+    if (!chatEdit) return
+    const value = chatEdit.value.trim()
+    if (value) {
+      setDraft((prev) =>
+        chatEdit.field === 'source'
+          ? { ...prev, source_chat_id: value, source_chat_name: value }
+          : { ...prev, target_chat_id: value, target_chat_name: value },
+      )
+    }
+    setChatEdit(null)
+  }
+
   const handleSaveAndClose = async () => {
     setSaving(true)
     try {
       await onSave(draft)
+      haptic('success')
       onClose()
     } catch (err) {
+      haptic('error')
       console.error('Failed to save task settings:', err)
     } finally {
       setSaving(false)
@@ -810,19 +835,56 @@ export function TaskOverviewModal({
                 </select>
               </div>
 
-              {/* Edit Task Section: 4 Distinct Action Buttons (Screen 1 & 5) */}
+              {/* Edit Task Section: 4 Distinct Action Buttons (Screen 1 & 5).
+                  Source/target edits open the inline editor row below — a
+                  blocking window.prompt is suppressed by several in-app
+                  browsers and would silently swallow the tap. */}
               <div>
                 <div className="tom-overline">
                   {t('ui_edit_task')}
                 </div>
+                {chatEdit && (
+                  <div className="tom-card" style={{ marginBlockEnd: 'var(--space-2)' }}>
+                    <label className="tom-overline tom-overline--block" htmlFor="tom-chat-edit-input">
+                      {chatEdit.field === 'source'
+                        ? t('ui_enter_source_chat_id_or_title')
+                        : t('ui_enter_target_chat_id_or_title')}
+                    </label>
+                    <input
+                      id="tom-chat-edit-input"
+                      type="text"
+                      value={chatEdit.value}
+                      onChange={(e) => setChatEdit({ ...chatEdit, value: e.target.value })}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') applyChatEdit()
+                        if (e.key === 'Escape') setChatEdit(null)
+                      }}
+                      className="tom-input"
+                      style={{ marginBlock: 'var(--space-2)' }}
+                    />
+                    <div className="tom-inline">
+                      <button
+                        type="button"
+                        onClick={() => setChatEdit(null)}
+                        className="btn tom-footerbtn"
+                      >
+                        {t('ui_cancel')}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={applyChatEdit}
+                        className="btn btn--primary tom-footerbtn"
+                      >
+                        {t('ui_save')}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="tom-grid2 tom-mb-2">
                   {/* Green Button: Edit Source */}
                   <button
                     type="button"
-                    onClick={() => {
-                      const newSrc = prompt(t('ui_enter_source_chat_id_or_title'), draft.source_chat_id)
-                      if (newSrc) setDraft({ ...draft, source_chat_id: newSrc, source_chat_name: newSrc })
-                    }}
+                    onClick={() => setChatEdit({ field: 'source', value: draft.source_chat_id || '' })}
                     className="btn btn--primary tom-action"
                   >
                     {t('ui_edit_source')}
@@ -831,10 +893,7 @@ export function TaskOverviewModal({
                   {/* Red Button: Edit Target */}
                   <button
                     type="button"
-                    onClick={() => {
-                      const newDst = prompt(t('ui_enter_target_chat_id_or_title'), draft.target_chat_id)
-                      if (newDst) setDraft({ ...draft, target_chat_id: newDst, target_chat_name: newDst })
-                    }}
+                    onClick={() => setChatEdit({ field: 'target', value: draft.target_chat_id || '' })}
                     className="btn btn--danger tom-action"
                   >
                     {t('ui_edit_target')}
@@ -912,9 +971,15 @@ export function TaskOverviewModal({
                   className="tom-row tom-mb-3"
                 >
                   <span className="tom-sectitle">{t('ui_features')}</span>
-                  <span className="tom-linklike">
+                  {/* A real control, not a look-alike span: it opens the addon
+                      overview, the same place the "view all" link goes. */}
+                  <button
+                    type="button"
+                    onClick={() => setCurrentTab('all_addons')}
+                    className="tom-linklike"
+                  >
                     {t('ui_explain')} &gt;
-                  </span>
+                  </button>
                 </div>
 
                 {/* 5 Toggle Pills matching screenshot (top half of Features) */}
@@ -994,7 +1059,8 @@ export function TaskOverviewModal({
                       onClick: () => setCurrentTab('every_n'),
                     },
                   ].map((card) => (
-                    <div
+                    <button
+                      type="button"
                       key={card.title}
                       onClick={card.onClick}
                       className="tom-opt"
@@ -1006,7 +1072,7 @@ export function TaskOverviewModal({
                         </div>
                       </div>
                       <div className="tom-micro">{card.status}</div>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -1058,15 +1124,22 @@ export function TaskOverviewModal({
                     {t('ui_view_all_18')} <ChevronRight size={14} />
                   </button>
                 </div>
+                {/* The unlock hint is visible copy, not a hover-only title:
+                    on a phone there is no hover to reveal it. */}
+                <p className="tom-sub tom-mb-3" style={{ marginBlockStart: 0 }}>
+                  {t('ui_unlock_premium_features_with_credits')}
+                </p>
 
                 {/* 2x3 Grid of Addons matching reference Image 4 */}
                 <div className="tom-grid2">
                   {OVERVIEW_ADDONS.map((item) => {
                     const isEnabled = draft.paid_addons?.[item.key] ?? false
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={item.key}
                         onClick={() => handleAddonToggle(item.key)}
+                        aria-pressed={isEnabled}
                         className={'tom-opt tom-opt--addon' + (isEnabled ? ' is-on' : '')}
                       >
                         <div className="tom-opt__head">
@@ -1083,7 +1156,7 @@ export function TaskOverviewModal({
                         <div className="tom-opt__label">
                           {t(item.labelKey)}
                         </div>
-                      </div>
+                      </button>
                     )
                   })}
                 </div>
@@ -1806,6 +1879,19 @@ export function TaskOverviewModal({
               </div>
             </div>
           )}
+          {/* Live logs and runtime controls are panel *content*: they belong
+              in the scrollable body. They used to render inside the footer,
+              between Cancel and Save — the fixed-height shell clipped them
+              and pushed Save out of reach on a phone. */}
+          {currentTab === 'logs' && <TaskLogsPanel ruleId={draft.id} lang={lang} />}
+
+          {currentTab === 'control' && (
+            <TaskControlPanel
+              rule={draft}
+              lang={lang}
+              onRulePatch={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
+            />
+          )}
         </div>
 
         {/* Bottom Action Footer */}
@@ -1819,15 +1905,6 @@ export function TaskOverviewModal({
           >
             {t('ui_cancel')}
           </button>
-          {currentTab === 'logs' && <TaskLogsPanel ruleId={draft.id} lang={lang} />}
-
-          {currentTab === 'control' && (
-            <TaskControlPanel
-              rule={draft}
-              lang={lang}
-              onRulePatch={(patch) => setDraft((prev) => ({ ...prev, ...patch }))}
-            />
-          )}
 
           <button
             type="button"
