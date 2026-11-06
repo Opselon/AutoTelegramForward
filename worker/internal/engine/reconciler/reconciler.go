@@ -64,7 +64,17 @@ func New(store Store, workerID string, grace, interval time.Duration, log Logger
 // code 12; the Python runtime's server raises NotImplementedError for a
 // method it does not register, and the Go client surfaces it as
 // `code = Unimplemented desc = Unexpected <class 'NotImplementedError'>…`.
-var provableMarkers = []string{"code = Unimplemented"}
+//
+// A dial-phase Unavailable is equally safe: when the client's transport
+// failed *while dialing* (`transport: Error while dialing: dial tcp …`),
+// no HTTP/2 stream ever existed, so no request byte reached the runtime and
+// no handler can have run. A bare `code = Unavailable` is NOT on the list —
+// a transport that dies mid-call after Telegram accepted the upload reports
+// the same code, and closing that would duplicate the delivery.
+var provableMarkers = []string{
+	"code = Unimplemented",
+	"Error while dialing",
+}
 
 // provablyUnexecuted reports whether the recorded failure proves the RPC
 // never executed a Telegram operation. Anything not on this list stays
@@ -90,8 +100,8 @@ func (r *Reconciler) RunOnce(ctx context.Context) (resolved, remaining int, err 
 			remaining++
 			continue
 		}
-		reason := "reconciled: the runtime rejected the RPC (Unimplemented) before any handler ran — " +
-			"no Telegram operation was attempted, so the message cannot be in the target; original: " +
+		reason := "reconciled: the runtime rejected the RPC before any handler ran (no Telegram " +
+			"operation was attempted, so the message cannot be in the target); original: " +
 			truncate(f.LastError, 200)
 		ok, rerr := r.store.ReconcileUnknown(ctx, f.Key, r.workerID, reason)
 		if rerr != nil {
