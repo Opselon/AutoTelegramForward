@@ -213,7 +213,7 @@ services:
       start_period: 40s
 
   # PostgreSQL delivery store for the Go Worker. Profile-gated on `worker`
-  # for the same reason worker-store-init is: a stock deployment runs on
+  # because it is only ever an opt-in: a stock deployment runs on
   # SQLite and must not gain a database it never asked for. An operator opts
   # the durable queue onto PostgreSQL by setting ATF_DATABASE_URL on the
   # worker (and the Core, which owns the schema bootstrap).
@@ -244,15 +244,25 @@ services:
       retries: 20
     profiles: ["worker"]
 
-  # One-time preparation of the shared delivery store for the non-root
-  # worker. The Core creates atf.db as root; the worker (uid 100) must be
-  # able to write its claim updates to the SAME file. This runs only under
-  # the `worker` profile (i.e. when the operator opts into the Go Worker),
-  # so a stock deployment never sees it.
+  # Preparation of the shared delivery store for the non-root worker.
+  # The Core creates atf.db as root; the worker (uid 100) must be able to
+  # write its claim updates to the SAME file. This runs on EVERY `compose
+  # up` — the worker container itself is not profile-gated (it always runs
+  # to report health; only execution is gated by ATF_WORKER_ENABLED), so a
+  # stock deployment needs this too. It waits for the core to be healthy
+  # because on a fresh volume atf.db does not exist until the core creates
+  # it: an init that ran earlier would chgrp an empty directory and leave
+  # the newly created file root-owned — the exact crash loop
+  # ("probe write: attempt to write a readonly database") that failed the
+  # v2.5.0 clean-install gate. Idempotent: a second run is a no-op, so
+  # re-running after a Core restart is safe.
   worker-store-init:
     image: alpine:3.22
     container_name: atf-worker-store-init
     restart: "no"
+    depends_on:
+      core:
+        condition: service_healthy
     volumes:
       - atf-data:/data
     # chgrp to the worker's gid (101 in the alpine image, from `addgroup -S`)
@@ -261,7 +271,6 @@ services:
     command: >
       sh -c "chgrp -R 101 /data && chmod -R g+w /data || true;
              echo 'shared store prepared for the atf group'"
-    profiles: ["worker"]
 
   # Go execution engine (business execution plane). OFF by default:
   # ATF_WORKER_ENABLED must be set (AND ATF_CORE_RPC_TOKEN must be non-empty)
@@ -344,6 +353,11 @@ services:
     depends_on:
       core:
         condition: service_healthy
+      # The store init must have chgrp'd/chmod'd atf.db before this
+      # container's probe write — without the wait the worker fail-closes
+      # on a root-owned database and restart-loops forever.
+      worker-store-init:
+        condition: service_completed_successfully
       # `required: false` is what makes the profile gate work: when the
       # `worker` profile is off, postgres does not exist and compose skips
       # this dependency instead of failing; when the profile is on, the
