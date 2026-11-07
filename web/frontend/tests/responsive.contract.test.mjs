@@ -214,7 +214,18 @@ for (const lang of LANGS) {
 ok('bottom-nav height token exists', /--nav-h:\s*\d+px/.test(layer))
 ok('touch-target token exists', /--tap-min:\s*44px/.test(layer))
 ok('safe-area tokens are declared', /--safe-t:/.test(layer) && /--safe-b:/.test(layer))
-ok('body opts out of pull-to-refresh', layer.includes('overscroll-behavior-y: none'))
+/* The page's scroll must never be suppressed at the root: the legacy
+   `body { overflow-x: hidden }` makes body a scroll container, so an
+   `overscroll-behavior-y: none` on html/body REFUSES to chain scrolling to
+   <html> and the whole page becomes unscrollable by touch and wheel.
+   (`overscroll-behavior: contain` on real scrollable surfaces — sheets,
+   their bodies — is fine and stays.) Comments are stripped before the
+   assertion so the regression note above the old rule cannot fool it. */
+const layerWithoutComments = layer.replace(/\/\*[\s\S]*?\*\//g, '')
+ok(
+  'root scroll chaining is not suppressed (html/body overscroll none)',
+  !/(^|[}\s])(?:html|body)\s*\{[^{}]*overscroll-behavior-y:\s*none/.test(layerWithoutComments),
+)
 ok('controls opt out of the double-tap-zoom wait', layer.includes('touch-action: manipulation'))
 ok('the WebKit tap highlight is suppressed', layer.includes('-webkit-tap-highlight-color: transparent'))
 

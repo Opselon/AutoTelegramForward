@@ -5978,11 +5978,13 @@ html {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* A pull-to-refresh at the top of a dashboard reloads the whole SPA and
-   drops scroll position; the shell has its own Refresh control. */
-body {
-  overscroll-behavior-y: none;
-}
+/* NOTE: never put `overscroll-behavior-y: none` on body — the legacy
+   `body { overflow-x: hidden }` makes body a scroll container itself
+   (computed overflow-y: auto), and a no-overscroll body then REFUSES to
+   chain scrolling up to <html>, the actual scroller: the whole page
+   becomes unscrollable by touch AND wheel (reproduced and bisected rule
+   by rule in the in-app browser, 2026-11). Pull-to-refresh stays a
+   browser affordance; the shell has its own Refresh control too. */
 
 /* Kill the 300ms double-tap-zoom wait on controls (and double-tap zoom on
    them, which mistyped as a "tap twice to toggle" bug on phones). */
