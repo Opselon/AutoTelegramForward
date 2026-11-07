@@ -151,7 +151,9 @@ function Chip({
   return (
     <span className="ops-chip" title={title} style={{ color }}>
       {ok === null ? '—' : ok ? <CheckCircle2 size={13} /> : <XCircle size={13} />}
-      <span style={{ marginLeft: 5 }}>{label}</span>
+      {/* Logical margin: in RTL the gap must follow the icon, not the physical
+          left edge (the chip read as glued to the icon in Persian). */}
+      <span style={{ marginInlineStart: 5 }}>{label}</span>
     </span>
   )
 }
@@ -487,12 +489,12 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
         {queue ? (
           <>
             <div className="ops-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))' }}>
-              <Metric icon={<Send size={14} />} label={t('ui_delivered')} value={String(queue.delivered)} />
-              <Metric icon={<Activity size={14} />} label={t('ui_processing')} value={String(queue.processing)} />
-              <Metric icon={<Timer size={14} />} label={t('ui_pending')} value={String(queue.pending)} hint={queue.oldest_pending_age_seconds > 0 ? t('ui_oldest_old', { age: fmtUptime(queue.oldest_pending_age_seconds) }) : t('ui_empty')} />
-              <Metric icon={<AlertTriangle size={14} />} label={t('ui_retry_pending')} value={String(queue.retry_pending)} />
-              <Metric icon={<XCircle size={14} />} label={t('ui_failed')} value={String(queue.failed)} />
-              <Metric icon={<XCircle size={14} />} label={t('ui_dead_letter')} value={String(queue.dead_letter)} />
+              <Metric icon={<Send size={14} />} label={t('ui_delivered')} value={num(queue.delivered)} />
+              <Metric icon={<Activity size={14} />} label={t('ui_processing')} value={num(queue.processing)} />
+              <Metric icon={<Timer size={14} />} label={t('ui_pending')} value={num(queue.pending)} hint={queue.oldest_pending_age_seconds > 0 ? t('ui_oldest_old', { age: fmtUptime(queue.oldest_pending_age_seconds) }) : t('ui_empty')} />
+              <Metric icon={<AlertTriangle size={14} />} label={t('ui_retry_pending')} value={num(queue.retry_pending)} />
+              <Metric icon={<XCircle size={14} />} label={t('ui_failed')} value={num(queue.failed)} />
+              <Metric icon={<XCircle size={14} />} label={t('ui_dead_letter')} value={num(queue.dead_letter)} />
               <Metric icon={<Gauge size={14} />} label={t('ui_jobs_per_second')} value={(queue.jobs_per_second ?? 0).toFixed(1)} />
               <Metric
                 icon={<Gauge size={14} />}
@@ -509,7 +511,7 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
                   ? t('ui_throughput_history_partial', { mins: queue.throughput_history_minutes })
                   : t('ui_throughput_windows_hint')}
               />
-              <Metric icon={<Database size={14} />} label={t('ui_backpressure')} value={String(queue.capacity)} hint={t('ui_queue_capacity_ceiling')} />
+              <Metric icon={<Database size={14} />} label={t('ui_backpressure')} value={num(queue.capacity)} hint={t('ui_queue_capacity_ceiling')} />
             </div>
             <div style={{ marginTop: 10 }}>
               <div style={{ display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -531,10 +533,10 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
                   })}
                 </div>
                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                  <Metric icon={<AlertTriangle size={14} />} label={t('ui_diag_stuck_claimed')} value={String(queue.diagnostics.stuck_claimed)} />
-                  <Metric icon={<Timer size={14} />} label={t('ui_diag_stuck_pending')} value={String(queue.diagnostics.stuck_pending)} />
-                  <Metric icon={<XCircle size={14} />} label={t('ui_diag_poison_jobs')} value={String(queue.diagnostics.poison_jobs)} />
-                  <Metric icon={<Activity size={14} />} label={t('ui_diag_retry_storm')} value={String(queue.diagnostics.retry_storm)} />
+                  <Metric icon={<AlertTriangle size={14} />} label={t('ui_diag_stuck_claimed')} value={num(queue.diagnostics.stuck_claimed)} />
+                  <Metric icon={<Timer size={14} />} label={t('ui_diag_stuck_pending')} value={num(queue.diagnostics.stuck_pending)} />
+                  <Metric icon={<XCircle size={14} />} label={t('ui_diag_poison_jobs')} value={num(queue.diagnostics.poison_jobs)} />
+                  <Metric icon={<Activity size={14} />} label={t('ui_diag_retry_storm')} value={num(queue.diagnostics.retry_storm)} />
                 </div>
               </div>
             ) : null}
@@ -633,10 +635,10 @@ export default function WorkerControlCenter({ lang }: { lang: UiLang }): React.J
                           </span>
                         </td>
                         <td data-label={t('ui_delivered_failed')} style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>
-                          {row.delivered} / <span style={{ color: row.failed ? 'var(--color-danger)' : 'inherit' }}>{row.failed}</span>
+                          {num(row.delivered)} / <span style={{ color: row.failed ? 'var(--color-danger)' : 'inherit' }}>{num(row.failed)}</span>
                         </td>
-                        <td data-label={t('ui_pending')} style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>{row.pending}</td>
-                        <td data-label={t('ui_throughput')} style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>{row.throughput_per_min.toFixed(1)}{t('ui_per_min')} {fmtMs(row.latency_ms_avg)}</td>
+                        <td data-label={t('ui_pending')} style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>{num(row.pending)}</td>
+                        <td data-label={t('ui_throughput')} style={{ padding: '4px 8px', fontVariantNumeric: 'tabular-nums' }}>{Number.isFinite(row.throughput_per_min) ? row.throughput_per_min.toFixed(1) : "0.0"}{t('ui_per_min')} {fmtMs(row.latency_ms_avg)}</td>
                         <td data-label={t('ui_features')} style={{ padding: '4px 8px' }}>
                           {/* features is optional in the backend's task row:
                               the panel renders the columns it HAS and must
@@ -750,7 +752,10 @@ function Metric({
   title?: string
 }) {
   return (
-    <div className="ops-chip ops-chip--info" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: 2 }} title={title}>
+    /* display:flex is load-bearing: as a bare grid item the chip blockifies,
+       the inline flexDirection/alignItems go inert, and the value lands on
+       the wrong inline edge in RTL (label right, number far left). */
+    <div className="ops-chip ops-chip--info" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }} title={title}>
       <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
         {icon} {label}
       </span>
@@ -758,6 +763,13 @@ function Metric({
       {hint ? <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>{hint}</span> : null}
     </div>
   )
+}
+
+/** The server may omit a counter it does not track yet; a missing number is a
+    zero, never the string "undefined" painted into a KPI tile. */
+function num(value: unknown): string {
+  const n = Number(value)
+  return Number.isFinite(n) ? String(n) : '0'
 }
 
 function ChevronRight() {

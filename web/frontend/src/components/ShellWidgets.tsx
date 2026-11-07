@@ -183,7 +183,9 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
   const t = makeT(lang)
   const [selected, setSelected] = useState<PromptTemplate | null>(null)
   const [form, setForm] = useState({ name: '', description: '', system_prompt: '', user_prompt_template: '{text}', target_language: 'auto' })
-  const [testText, setTestText] = useState('💎 XAUUSD SIGNAL: BUY NOW @ 2655 | TP 2680 | SL 2640 https://t.me/signal #gold')
+  // The test message starts empty: the operator sends their own text, no
+  // prefilled sample ships in the bundle.
+  const [testText, setTestText] = useState('')
   const [testResult, setTestResult] = useState<TestPromptResponse | null>(null)
   const [testing, setTesting] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -389,7 +391,8 @@ export function PromptEditorPanel({ prompts, aiConfigs, onSaved, onToast, lang }
               <FlaskConical size={13} aria-hidden="true" /> {t('ui_prompt_test_no_message_sent')}
             </div>
             <textarea className="input-field" style={{ width: '100%', minHeight: 60, marginBottom: 8, fontSize: '0.78rem' }}
-              value={testText} onChange={(e) => setTestText(e.target.value)} />
+              value={testText} onChange={(e) => setTestText(e.target.value)}
+              placeholder={t('ui_prompt_test_no_message_sent')} />
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <button
                 onClick={handleTest}

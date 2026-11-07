@@ -118,7 +118,7 @@ export function IncidentCenter({ lang }: { lang: UiLang }) {
         <span className="ops-head__title">{t('ui_incident_center')}</span>
         <span className="ops-head__meta">
           <select
-            className="ops-filter"
+            className="ops-select"
             value={stateFilter}
             onChange={(e) => {
               setStateFilter(e.target.value as StateFilter)
@@ -139,7 +139,7 @@ export function IncidentCenter({ lang }: { lang: UiLang }) {
           ) : null}
           <button
             type="button"
-            className="ops-filter"
+            className="btn btn--ghost btn--sm"
             onClick={() => {
               setLoading(true)
               void refresh()
