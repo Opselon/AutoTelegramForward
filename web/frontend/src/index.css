@@ -5955,9 +5955,10 @@ body {
 /* ==================================================================== */
 
 :root {
-  /* Bottom tab bar content height (56px item + 2 x 4px padding). The shell
-     reserves this plus the safe area so fixed bars never cover content. */
-  --nav-h: 64px;
+  /* Bottom tab bar content height (58px item + 2 x 4px padding + margin for
+     two-line labels). The shell reserves this plus the safe area so fixed
+     bars never cover content. */
+  --nav-h: 68px;
   /* Touch target floor; mirrors the 44px contract in a reusable token. */
   --tap-min: 44px;
   /* Bottom-sheet top corners read larger than a card. */
@@ -6202,7 +6203,7 @@ button,
 
   .mobile-nav__item {
     position: relative;
-    min-block-size: 56px;
+    min-block-size: 58px;
     gap: var(--space-1);
     padding: var(--space-1);
     border-radius: var(--radius-md);
@@ -6210,6 +6211,20 @@ button,
       color var(--motion-fast) var(--ease-out),
       background-color var(--motion-fast) var(--ease-out),
       transform var(--motion-fast) var(--ease-out);
+  }
+
+  /* Long labels (Persian destinations are wordy) wrap to two tight lines
+     instead of truncating mid-word — a clipped label reads as a different
+     destination, which is worse than a taller bar. */
+  .mobile-nav__label {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
   }
 
   /* The active destination reads before the label does: a brand-gradient
@@ -6385,4 +6400,47 @@ button,
   .nav-scrim {
     background: color-mix(in srgb, var(--color-bg) 90%, transparent);
   }
+}
+
+/* ==================================================================== */
+/* Motion & legibility round (2026-11, second pass)                      */
+/* ==================================================================== */
+
+/* Panel content enters with one quiet rise, staggered a beat per section.
+   @starting-style drives it with zero JS; a browser without support just
+   renders the panel, exactly as before. */
+.panel-host > * {
+  transition:
+    opacity var(--motion-base) var(--ease-out),
+    transform var(--motion-base) var(--ease-out);
+}
+
+.panel-host > *:nth-child(2) { transition-delay: 40ms; }
+.panel-host > *:nth-child(3) { transition-delay: 80ms; }
+.panel-host > *:nth-child(4) { transition-delay: 120ms; }
+.panel-host > *:nth-child(n + 5) { transition-delay: 160ms; }
+
+@starting-style {
+  .panel-host > * {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel-host > * {
+    transition: none !important;
+    transition-delay: 0ms !important;
+  }
+}
+
+/* Numbers embedded in RTL text must read as numbers: bidi reorders "0%"
+   and digit runs into scrambled fragments (the classic "0Ⅎ" on Persian
+   dashboards). Isolate every pure-numeric reading in LTR. */
+.ops-chip strong,
+.ops-stat__value,
+.ops-metric strong {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
 }

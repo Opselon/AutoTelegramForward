@@ -294,11 +294,13 @@ function useDashboard(me?: MeInfo) {
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false)
   const [filterModalRule, setFilterModalRule] = useState<FilterRule | null>(null)
 
-  // Simulator State
-  const [simText, setSimText] = useState('💎 VIP SIGNAL: BUY XAUUSD @ 2655 | TP1: 2680 | SL: 2640')
-  const [simOriginChatId, setSimOriginChatId] = useState('-1001111111111')
-  const [simOriginTitle, setSimOriginTitle] = useState('Forex VIP Channel')
-  const [simOriginUser, setSimOriginUser] = useState('vip_forex_signals')
+  // Simulator state: every field starts empty — the placeholders teach the
+  // shape, and nothing fake ships prefilled (the message, ids and titles the
+  // operator sees here are the ones they typed or the ones the server holds).
+  const [simText, setSimText] = useState('')
+  const [simOriginChatId, setSimOriginChatId] = useState('')
+  const [simOriginTitle, setSimOriginTitle] = useState('')
+  const [simOriginUser, setSimOriginUser] = useState('')
   const [simHasMedia, setSimHasMedia] = useState(false)
   const [simIsProtected, setSimIsProtected] = useState(true)
   const [simSelectedRuleId, setSimSelectedRuleId] = useState<string>('')

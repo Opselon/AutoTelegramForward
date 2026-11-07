@@ -52,8 +52,12 @@ export function isRtlLang(lang: string | null | undefined): boolean {
 }
 
 /** Register catalogs that were loaded eagerly (the static test entry point). */
+let registryVersion = 1
+
 export function registerCatalogs(catalogs: Partial<Record<UiLang, Catalog>>): void {
   Object.assign(registry, catalogs)
+  // Every landing catalog invalidates cached `t` bindings — see makeT.
+  registryVersion += 1
 }
 
 /** The catalog in memory for `lang`, or undefined when it has not arrived yet. */
@@ -164,21 +168,25 @@ export function t(
  * all 458 of them. A catalog key is language-neutral, so the call sites do not
  * change when a language is added.
  *
- * One closure per language code, cached: `t` resolves through the registry at
- * call time, so a cached binding reads a mid-session catalog reload exactly
- * like a fresh one — the language only changes when `code` does. Identity
- * stability matters because components bind `makeT(lang)` in render and list
- * `t` in effect/callback deps; a fresh closure per render re-ran those effects
- * on every pass (an infinite fetch loop the console only whispered about).
+ * One closure per language code *per registry version*, cached. Identity
+ * stability matters because components bind `makeT(lang)` during render and
+ * list `t` in effect/callback deps — a fresh closure per render re-ran those
+ * effects on every pass (an infinite fetch loop). But the binding must ALSO
+ * change identity when a catalog chunk lands mid-session: memoized consumers
+ * (the shell's nav labels) key their own memos on `t`, so a stale identity
+ * would pin pre-load English strings on screen. Hence the version stamp:
+ * stable within a registry version, new after every load. The lookup itself
+ * still reads the registry at call time, so a mid-session RE-load of the same
+ * language renders fresh strings through either identity.
  */
-const translateCache = new Map<string, Translate>()
+const translateCache = new Map<string, { at: number; translate: Translate }>()
 
 export function makeT(lang: string | null | undefined): Translate {
   const code = normalizeLang(lang)
-  let bound = translateCache.get(code)
-  if (!bound) {
-    bound = (key: string, params?: Record<string, string | number>) => t(key, params, code)
-    translateCache.set(code, bound)
-  }
+  const cached = translateCache.get(code)
+  if (cached && cached.at === registryVersion) return cached.translate
+  const bound: Translate = (key: string, params?: Record<string, string | number>) =>
+    t(key, params, code)
+  translateCache.set(code, { at: registryVersion, translate: bound })
   return bound
 }

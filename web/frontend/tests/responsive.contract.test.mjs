@@ -211,7 +211,7 @@ for (const lang of LANGS) {
    640px — the dialog rendered in page flow), bottom sheets with a drag
    handle, a bottom tab bar with a reserved height, and touch-first
    interaction defaults. */
-ok('bottom-nav height token exists', /--nav-h:\s*64px/.test(layer))
+ok('bottom-nav height token exists', /--nav-h:\s*\d+px/.test(layer))
 ok('touch-target token exists', /--tap-min:\s*44px/.test(layer))
 ok('safe-area tokens are declared', /--safe-t:/.test(layer) && /--safe-b:/.test(layer))
 ok('body opts out of pull-to-refresh', layer.includes('overscroll-behavior-y: none'))

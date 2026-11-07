@@ -171,7 +171,7 @@ export default function WorkerLogCenter({ lang }: { lang: UiLang }) {
           ) : null}
           <button
             type="button"
-            className="ops-filter"
+            className="btn btn--ghost btn--sm"
             onClick={() => setLive((v) => !v)}
             aria-pressed={live}
             aria-label={t('ui_live_tail')}
@@ -181,7 +181,7 @@ export default function WorkerLogCenter({ lang }: { lang: UiLang }) {
           </button>
           <button
             type="button"
-            className="ops-filter"
+            className="btn btn--ghost btn--sm"
             onClick={() => fetchPage({ offset: 0 })}
             disabled={loading}
             aria-label={t('ui_refresh')}
@@ -191,7 +191,7 @@ export default function WorkerLogCenter({ lang }: { lang: UiLang }) {
           </button>
           <button
             type="button"
-            className="ops-filter"
+            className="btn btn--ghost btn--sm"
             onClick={exportCsv}
             disabled={!rows || rows.length === 0}
             aria-label={t('ui_export_csv')}
@@ -218,7 +218,7 @@ export default function WorkerLogCenter({ lang }: { lang: UiLang }) {
           </button>
         ))}
         <select
-          className="ops-filter"
+          className="ops-select"
           value={service}
           onChange={(e) => setService(e.target.value)}
           aria-label={t('ui_component')}
@@ -352,7 +352,7 @@ export default function WorkerLogCenter({ lang }: { lang: UiLang }) {
             {hasMore ? (
               <button
                 type="button"
-                className="ops-filter"
+                className="btn btn--ghost btn--sm"
                 onClick={() => fetchPage({ offset: offset + rows.length, append: true })}
                 disabled={loading}
               >

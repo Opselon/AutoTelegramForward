@@ -627,9 +627,12 @@ export function TaskOverviewModal({
   }
 
 
-  const taskName = draft.name || `af_route_lab_${(draft.id || '').slice(0, 4)}`
-  const sourceName = draft.source_chat_name || draft.source_chat_id || 'AF Route Lab Source'
-  const targetName = draft.target_chat_name || draft.target_chat_id || 'AF Route Lab Target'
+  // No invented names: when the server has not given this task (or its
+  // endpoints) a name yet, the header shows the honest fallback, not a
+  // demo label.
+  const taskName = draft.name || (draft.id ? draft.id.slice(0, 8) : t('ui_source'))
+  const sourceName = draft.source_chat_name || draft.source_chat_id || t('ui_source')
+  const targetName = draft.target_chat_name || draft.target_chat_id || t('ui_target')
   const isRunning = draft.is_active
   const debugOn = draft.debug_mode ?? false
 

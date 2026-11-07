@@ -58,12 +58,23 @@ export default function SimulatorPanel({ d }: { d: DashboardCtx }) {
                           {t('ui_empty_title')}
                         </option>
                       )}
-                      {ruleList.map((r) => (
-                        <option key={r.id} value={r.id}>
-                          {r.source_chat_name || r.source_chat_id} ➔ {r.target_chat_name || r.target_chat_id} (
-                          {r.use_intermediate ? t('ui_vip_hop_via_c') : r.forward_mode})
-                        </option>
-                      ))}
+                      {ruleList.map((r) => {
+                        // Prefer the operator's own task name: raw channel ids
+                        // are digit/hyphen runs that bidi scrambles inside an
+                        // RTL select ("0 ➔ …"). The name is what the operator
+                        // typed; ids stay visible in the rules panel where
+                        // they render isolated. The source tag and the route
+                        // mode share ONE parenthesised tail, so a task without
+                        // a source name never renders an empty "()".
+                        const name = r.name
+                          ? `${r.name}${r.source_chat_name || r.source_chat_id ? ` (${(r.source_chat_name || r.source_chat_id).slice(0, 18)})` : ''}`
+                          : `${r.source_chat_name || r.source_chat_id} ➔ ${r.target_chat_name || r.target_chat_id}`
+                        return (
+                          <option key={r.id} value={r.id}>
+                            {name} ({r.use_intermediate ? t('ui_vip_hop_via_c') : r.forward_mode})
+                          </option>
+                        )
+                      })}
                     </select>
                   </div>
 
