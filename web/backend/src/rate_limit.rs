@@ -58,7 +58,9 @@ impl RateLimiter {
                 len_at_last_prune: 0,
             }),
             refill_per_sec: rps,
-            burst: burst as f64,
+            // u32 -> f64 is exact for every burst value; From over `as` keeps
+            // the widening intent visible.
+            burst: f64::from(burst),
         }
     }
 

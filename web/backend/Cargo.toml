@@ -2,6 +2,8 @@
 name = "atf-web-backend"
 version = "2.1.0"
 edition = "2021"
+# std::io::Error::other (1.74) is the newest std API this crate relies on.
+rust-version = "1.74"
 
 [dependencies]
 axum = { version = "0.7", features = ["macros"] }
@@ -18,3 +20,12 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 rust-embed = "8.5"
 mime_guess = "2.0"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+
+# Deployed binary: fat LTO + one codegen unit shrinks and speeds the gateway;
+# `strip` drops symbol tables from the release artifact. `panic = "abort"` is
+# deliberately NOT set — tokio catches a panicking connection task, and one
+# malformed request must never abort the whole process.
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
