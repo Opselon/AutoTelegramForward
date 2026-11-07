@@ -61,12 +61,16 @@ const GATEWAY_OWNED_RESPONSE_HEADERS: [HeaderName; 4] = [
 const GATEWAY_OWNED_CORS_PREFIXES: [&str; 2] = ["access-control-", "timing-allow-origin"];
 
 /// Remove hop-by-hop headers plus any named in a `Connection` header.
+/// `Connection` may legally repeat (one value per header), and every value
+/// names headers — so all values are scanned, not just the first.
 pub fn strip_hop_by_hop(headers: &mut HeaderMap) {
     let mut extra: Vec<HeaderName> = Vec::new();
-    if let Some(Ok(connection)) = headers.get(header::CONNECTION).map(|v| v.to_str()) {
-        for name in connection.split(',') {
-            if let Ok(parsed) = name.trim().parse::<HeaderName>() {
-                extra.push(parsed);
+    for connection in headers.get_all(header::CONNECTION) {
+        if let Ok(names) = connection.to_str() {
+            for name in names.split(',') {
+                if let Ok(parsed) = name.trim().parse::<HeaderName>() {
+                    extra.push(parsed);
+                }
             }
         }
     }
@@ -264,6 +268,11 @@ async fn proxy_request(
     // the inbound header says content-length — forwarding both is a hyper
     // error. The bytes are identical; only the framing vocabulary changes.
     forward_headers.remove(header::CONTENT_LENGTH);
+    // The correlation id is re-asserted below with the resolved value (the
+    // client's id when sane, ours otherwise); the client's original copies
+    // must not survive alongside it, or the upstream sees the id twice.
+    forward_headers.remove("x-correlation-id");
+    forward_headers.remove("x-request-id");
 
     // ---- body: refuse oversized up front, stream the rest -----------------
     let content_length = req_headers
@@ -378,6 +387,10 @@ async fn proxy_request(
             out_headers.remove(&name);
         }
     }
+    // Same for the correlation headers: the upstream's echo of our id (or the
+    // client's original) is dropped, then exactly one resolved id is asserted.
+    out_headers.remove("x-correlation-id");
+    out_headers.remove("x-request-id");
 
     let mut response_builder = Response::builder()
         .status(status)
@@ -449,6 +462,31 @@ mod tests {
         }
         assert!(headers.get("x-correlation-id").is_some());
         assert!(headers.get("content-type").is_some());
+    }
+
+    #[test]
+    fn repeated_connection_headers_all_contribute_named_headers() {
+        // RFC 7230 allows Connection to repeat; a named header in the *second*
+        // value must be stripped just like one in the first.
+        let mut headers = header_map(&[("Content-Type", "application/json")]);
+        headers.append(
+            HeaderName::from_static("connection"),
+            HeaderValue::from_static("keep-alive"),
+        );
+        headers.append(
+            HeaderName::from_static("connection"),
+            HeaderValue::from_static("x-second-value"),
+        );
+        headers.insert(
+            HeaderName::from_static("x-second-value"),
+            HeaderValue::from_static("secret"),
+        );
+        strip_hop_by_hop(&mut headers);
+        assert!(headers.get("connection").is_none());
+        assert!(
+            headers.get("x-second-value").is_none(),
+            "a header named by the second Connection value must not survive"
+        );
     }
 
     #[test]

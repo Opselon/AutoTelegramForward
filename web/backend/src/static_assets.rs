@@ -69,7 +69,11 @@ pub fn serve(uri: Uri, csp: &str) -> Response {
             if path != "index.html" && mime.type_() == "text" && mime.subtype() == "html" {
                 builder = builder.header("X-Frame-Options", "DENY");
             }
-            builder.body(axum::body::Body::from(content.data)).unwrap()
+            // Invariant: every header value above is a compile-time literal,
+            // so builder construction cannot fail.
+            builder
+                .body(axum::body::Body::from(content.data))
+                .expect("static response parts are valid literals")
         }
         None => {
             // Never return index.html for missing assets/files with extension
@@ -77,9 +81,10 @@ pub fn serve(uri: Uri, csp: &str) -> Response {
             // masquerade as a valid page (and must not echo the requested
             // path back, either).
             if path.starts_with(FINGERPRINTED_PREFIX) || path.contains('.') {
+                // Invariant: static header literals only.
                 return security_headers(Response::builder().status(StatusCode::NOT_FOUND), csp)
                     .body(axum::body::Body::from("Not found"))
-                    .unwrap();
+                    .expect("static response parts are valid literals");
             }
             // SPA fallback: deep links render index.html with NO CACHE.
             match FrontendAssets::get("index.html") {
@@ -90,7 +95,7 @@ pub fn serve(uri: Uri, csp: &str) -> Response {
                     csp,
                 )
                 .body(axum::body::Body::from(content.data))
-                .unwrap(),
+                .expect("static response parts are valid literals"),
                 None => (
                     StatusCode::NOT_FOUND,
                     Html("<h1>404 Not Found</h1><p>Embedded frontend assets missing.</p>"),
